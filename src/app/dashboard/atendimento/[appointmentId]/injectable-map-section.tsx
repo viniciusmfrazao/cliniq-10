@@ -176,6 +176,11 @@ export default function InjectableMapSection({ patient, appointmentId, products,
 
         console.log('Salvando produto:', product?.name, 'Units:', totalProductUnits)
 
+        // Determinar tipo baseado na categoria do produto
+        const productType = product?.category?.toLowerCase().includes('preenchimento') || 
+                           product?.category?.toLowerCase().includes('filler') 
+                           ? 'filler' : 'toxin'
+
         const insertData = {
           clinic_id: clinicId,
           patient_id: patient.id,
@@ -186,7 +191,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           total_units: totalProductUnits,
           stock_deducted: false,
           application_date: new Date().toISOString().split('T')[0],
-          type: 'botox'
+          type: productType
         }
 
         console.log('Dados para inserir:', JSON.stringify(insertData, null, 2))
