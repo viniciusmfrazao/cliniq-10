@@ -230,15 +230,27 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
 
   // Registrar check-in do paciente
   async function handleCheckIn(appointmentId: string) {
+    const apt = appointments.find(a => a.id === appointmentId)
+    
     const { error } = await supabase
       .from('appointments')
       .update({ 
         checked_in_at: new Date().toISOString(),
-        status: 'confirmed' // Confirma automaticamente ao fazer check-in
+        status: 'confirmed'
       })
       .eq('id', appointmentId)
     
     if (!error) {
+      // Enviar notificação para o profissional
+      if (apt?.professional_id) {
+        await supabase.from('notifications').insert({
+          user_id: apt.professional_id,
+          type: 'check_in',
+          title: `${apt.patients?.name || 'Paciente'} chegou!`,
+          message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${apt.procedures?.name || 'Consulta'}`,
+          link: `/dashboard/atendimento/${appointmentId}`
+        })
+      }
       router.refresh()
     }
   }

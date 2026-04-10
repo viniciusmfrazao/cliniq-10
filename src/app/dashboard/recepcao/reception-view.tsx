@@ -62,6 +62,10 @@ export default function ReceptionView({ appointments, professionals }: Props) {
   // Registrar check-in
   async function handleCheckIn(appointmentId: string) {
     setLoadingId(appointmentId)
+    
+    // Buscar dados do agendamento para a notificação
+    const apt = appointments.find(a => a.id === appointmentId)
+    
     const { error } = await supabase
       .from('appointments')
       .update({ 
@@ -70,7 +74,17 @@ export default function ReceptionView({ appointments, professionals }: Props) {
       })
       .eq('id', appointmentId)
     
-    if (!error) {
+    if (!error && apt?.professional_id) {
+      // Enviar notificação para o profissional
+      await supabase.from('notifications').insert({
+        clinic_id: apt.patients?.id ? undefined : undefined, // será pego pela RLS
+        user_id: apt.professional_id,
+        type: 'check_in',
+        title: `${apt.patients?.name || 'Paciente'} chegou!`,
+        message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${apt.procedures?.name || 'Consulta'}`,
+        link: `/dashboard/atendimento/${appointmentId}`
+      })
+      
       router.refresh()
     }
     setLoadingId(null)

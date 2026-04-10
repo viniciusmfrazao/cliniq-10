@@ -11,7 +11,6 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Injetaveis',     href: '/dashboard/injetaveis',   icon: 'syringe',   roles: ['admin','doctor','esthetician'] },
   { label: 'Estoque',        href: '/dashboard/estoque',      icon: 'box',       roles: ['admin','doctor','esthetician'] },
   { label: 'Eva IA',         href: '/dashboard/eva',          icon: 'sparkles',  roles: ['admin','doctor','esthetician','receptionist'] },
-  { label: 'Chat Equipe',    href: '/dashboard/chat',         icon: 'message',   roles: ['admin','doctor','esthetician','receptionist'] },
   { label: 'WhatsApp',       href: '/dashboard/whatsapp',     icon: 'message',   roles: ['admin','receptionist'] },
   { label: 'CRM',            href: '/dashboard/crm',          icon: 'target',    roles: ['admin','receptionist'] },
   { label: 'Documentos',     href: '/dashboard/documentos',   icon: 'file',      roles: ['admin','doctor','esthetician','receptionist'] },

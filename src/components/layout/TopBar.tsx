@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
+import NotificationBell from '@/components/ui/NotificationBell'
 
-type Props = { clinicName: string; userName: string; trialDaysLeft: number }
+type Props = { clinicName: string; userName: string; trialDaysLeft: number; userId?: string }
 
-export default function TopBar({ clinicName, userName, trialDaysLeft }: Props) {
+export default function TopBar({ clinicName, userName, trialDaysLeft, userId }: Props) {
   const pathname = usePathname()
   const current = NAV_ITEMS.find(i => i.href === '/dashboard' ? pathname === i.href : pathname.startsWith(i.href))
 
@@ -31,9 +32,7 @@ export default function TopBar({ clinicName, userName, trialDaysLeft }: Props) {
       </div>
       
       <div className="flex items-center gap-2">
-        <button className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-xl transition-all">
-          <Icon name="bell" className="w-5 h-5" />
-        </button>
+        {userId && <NotificationBell userId={userId} />}
         <Link 
           href="/dashboard/config" 
           className="w-10 h-10 gradient-bg rounded-2xl flex items-center justify-center shadow-lg"

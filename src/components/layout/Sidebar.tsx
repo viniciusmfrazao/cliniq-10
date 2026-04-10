@@ -7,16 +7,9 @@ import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
 
-type Props = { 
-  clinicName: string
-  userName: string
-  userRole: string
-  trialDaysLeft: number
-  userId: string
-  clinicId: string
-}
+type Props = { clinicName: string; userName: string; userRole: string; trialDaysLeft: number; userId?: string }
 
-export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId, clinicId }: Props) {
+export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -108,12 +101,6 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
 
       {/* User Section */}
       <div className="p-4 border-t border-white/10">
-        {/* Notificações */}
-        <div className="flex items-center justify-between mb-3 px-3">
-          <span className="text-xs text-white/50 font-medium">Notificações</span>
-          <NotificationBell userId={userId} clinicId={clinicId} />
-        </div>
-        
         <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-white/5 backdrop-blur-xl">
           <div className="w-11 h-11 gradient-bg rounded-xl flex items-center justify-center shadow-lg">
             <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
@@ -122,13 +109,20 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
             <p className="text-sm font-semibold text-white truncate">{userName}</p>
             <p className="text-xs text-white/50 capitalize">{userRole}</p>
           </div>
-          <button 
-            onClick={logout} 
-            className="p-2.5 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all" 
-            title="Sair"
-          >
-            <Icon name="logout" className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {userId && (
+              <div className="[&_button]:text-white/50 [&_button:hover]:text-white [&_button:hover]:bg-white/10">
+                <NotificationBell userId={userId} />
+              </div>
+            )}
+            <button 
+              onClick={logout} 
+              className="p-2.5 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all" 
+              title="Sair"
+            >
+              <Icon name="logout" className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </aside>
