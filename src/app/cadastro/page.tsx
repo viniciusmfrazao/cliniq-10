@@ -22,31 +22,59 @@ export default function CadastroPage() {
     setLoading(true)
     setError('')
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: form.email, password: form.password,
-    })
+    try {
+      // 1. Criar usuario no Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: form.email, 
+        password: form.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        }
+      })
 
-    if (authError || !authData.user) {
-      setError(authError?.message || 'Erro ao criar conta.')
+      if (authError) {
+        setError(authError.message)
+        setLoading(false)
+        return
+      }
+
+      if (!authData.user) {
+        setError('Erro ao criar usuario. Tente novamente.')
+        setLoading(false)
+        return
+      }
+
+      // 2. Criar clinica e vincular usuario
+      const { error: fnError } = await supabase.rpc('create_clinic_with_admin', {
+        p_clinic_name: form.clinicName,
+        p_slug: slugify(form.clinicName),
+        p_user_id: authData.user.id,
+        p_user_name: form.name,
+        p_user_email: form.email,
+      })
+
+      if (fnError) {
+        console.error('Erro RPC:', fnError)
+        setError(`Erro ao criar clinica: ${fnError.message}`)
+        setLoading(false)
+        return
+      }
+
+      // 3. Verificar se precisa confirmar email
+      if (authData.session) {
+        // Usuario ja logado, redirecionar
+        router.push('/dashboard?welcome=1')
+        router.refresh()
+      } else {
+        // Precisa confirmar email
+        setError('Verifique seu email para confirmar a conta.')
+        setLoading(false)
+      }
+    } catch (err) {
+      console.error('Erro:', err)
+      setError('Erro inesperado. Tente novamente.')
       setLoading(false)
-      return
     }
-
-    const { error: fnError } = await supabase.rpc('create_clinic_with_admin', {
-      p_clinic_name: form.clinicName,
-      p_slug: slugify(form.clinicName),
-      p_user_id: authData.user.id,
-      p_user_name: form.name,
-      p_user_email: form.email,
-    })
-
-    if (fnError) {
-      setError('Erro ao configurar sua clinica. Tente novamente.')
-      setLoading(false)
-      return
-    }
-
-    router.push('/dashboard?welcome=1')
   }
 
   return (
