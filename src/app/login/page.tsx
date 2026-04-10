@@ -46,8 +46,9 @@ export default function LoginPage() {
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
             <button type="submit" disabled={loading} className="btn-primary">{loading ? 'Entrando...' : 'Entrar'}</button>
           </form>
-          <div className="mt-4 text-center">
-            <Link href="/cadastro" className="text-sm text-brand-600 hover:underline">Criar conta gratis - 14 dias</Link>
+          <div className="mt-4 text-center space-y-2">
+            <Link href="/esqueci-senha" className="text-sm text-slate-500 hover:text-slate-700 block">Esqueci minha senha</Link>
+            <Link href="/cadastro" className="text-sm text-brand-600 hover:underline block">Criar conta gratis - 14 dias</Link>
           </div>
         </div>
       </div>
