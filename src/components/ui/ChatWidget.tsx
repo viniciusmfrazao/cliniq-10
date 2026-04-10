@@ -45,20 +45,42 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
 
   useEffect(() => {
     loadUnreadCounts()
-    
-    // Atualiza a cada 3 segundos
-    const interval = setInterval(loadUnreadCounts, 3000)
-    return () => clearInterval(interval)
-  }, [currentUserId])
+
+    // Realtime subscription for new messages
+    const channel = supabase
+      .channel(`chat-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `receiver_id=eq.${currentUserId}`
+        },
+        (payload) => {
+          const newMsg = payload.new as Message
+          if (selectedUser?.id === newMsg.sender_id) {
+            setMessages(prev => [...prev, newMsg])
+            markMessagesAsRead(newMsg.sender_id)
+          } else {
+            setUnreadCounts(prev => ({
+              ...prev,
+              [newMsg.sender_id]: (prev[newMsg.sender_id] || 0) + 1
+            }))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUserId, selectedUser])
 
   useEffect(() => {
     if (selectedUser) {
       loadMessages(selectedUser.id)
       markMessagesAsRead(selectedUser.id)
-      
-      // Atualiza mensagens a cada 3 segundos quando conversa aberta
-      const interval = setInterval(() => loadMessages(selectedUser.id), 3000)
-      return () => clearInterval(interval)
     }
   }, [selectedUser])
 

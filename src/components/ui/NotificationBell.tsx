@@ -30,10 +30,27 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
   useEffect(() => {
     loadNotifications()
-    
-    // Atualiza a cada 5 segundos
-    const interval = setInterval(loadNotifications, 5000)
-    return () => clearInterval(interval)
+
+    // Realtime subscription
+    const channel = supabase
+      .channel(`notifications-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`
+        },
+        (payload) => {
+          setNotifications(prev => [payload.new as Notification, ...prev])
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [userId])
 
   async function loadNotifications() {
