@@ -47,15 +47,8 @@ export default async function PacientesPage({
       </div>
 
       {/* Alerta de cadastros pendentes */}
-      {incompletePatients.length > 0 && (
-        <Link 
-          href={searchParams.filter === 'pendentes' ? '/dashboard/pacientes' : '/dashboard/pacientes?filter=pendentes'}
-          className={`mb-4 p-4 rounded-xl flex items-center justify-between transition-colors ${
-            searchParams.filter === 'pendentes' 
-              ? 'bg-amber-100 border-2 border-amber-400' 
-              : 'bg-amber-50 border border-amber-200 hover:bg-amber-100'
-          }`}
-        >
+      {incompletePatients.length > 0 && !searchParams.filter && (
+        <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center">
               <Icon name="bell" className="w-5 h-5 text-amber-700" />
@@ -65,17 +58,11 @@ export default async function PacientesPage({
                 {incompletePatients.length} cadastro{incompletePatients.length > 1 ? 's' : ''} pendente{incompletePatients.length > 1 ? 's' : ''}
               </p>
               <p className="text-sm text-amber-700">
-                Pacientes sem CPF ou data de nascimento
+                Pacientes sem CPF ou data de nascimento - use o filtro "Pendentes" para ver
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-amber-700">
-            <span className="text-sm font-medium">
-              {searchParams.filter === 'pendentes' ? 'Ver todos' : 'Ver pendentes'}
-            </span>
-            <Icon name="chevronRight" className="w-4 h-4" />
-          </div>
-        </Link>
+        </div>
       )}
 
       <div className="card p-4 mb-4">
