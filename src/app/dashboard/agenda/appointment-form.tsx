@@ -53,10 +53,15 @@ export default function AppointmentForm({
 
   const [patients, setPatients] = useState(initialPatients)
   const [showNewPatient, setShowNewPatient] = useState(false)
+  
+  // Auto-seleciona profissional se só tem um
+  const defaultProfessionalId = appointment?.professional_id || 
+    (professionals.length === 1 ? professionals[0].id : '')
+  
   const [form, setForm] = useState({
     patient_id: appointment?.patient_id || defaultPatientId || '',
     procedure_id: appointment?.procedure_id || '',
-    professional_id: appointment?.professional_id || '',
+    professional_id: defaultProfessionalId,
     room_id: appointment?.room_id || '',
     date: appointment ? appointment.start_time.split('T')[0] : defaultStartDate,
     start_time: appointment ? appointment.start_time.split('T')[1].slice(0, 5) : defaultStartTime,
@@ -89,13 +94,25 @@ export default function AppointmentForm({
     setLoading(true)
     setError('')
 
+    // Validação obrigatória
+    if (!form.patient_id) {
+      setError('Selecione um paciente')
+      setLoading(false)
+      return
+    }
+    if (!form.professional_id) {
+      setError('Selecione um profissional responsável')
+      setLoading(false)
+      return
+    }
+
     const startTime = new Date(`${form.date}T${form.start_time}:00`)
     const endTime = new Date(startTime.getTime() + parseInt(form.duration) * 60000)
 
     const appointmentData = {
       clinic_id: clinicId,
       patient_id: form.patient_id,
-      professional_id: form.professional_id || null,
+      professional_id: form.professional_id,
       procedure_id: form.procedure_id || null,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
@@ -161,18 +178,21 @@ export default function AppointmentForm({
       </div>
 
       <div>
-        <label className="label">Profissional *</label>
+        <label className="label">Profissional responsável *</label>
         <select
-          className="input"
+          className={`input ${!form.professional_id ? 'border-amber-300 bg-amber-50 focus:ring-amber-500' : ''}`}
           value={form.professional_id}
           onChange={e => update('professional_id', e.target.value)}
           required
         >
-          <option value="">Selecione o profissional</option>
+          <option value="">⚠️ Selecione quem vai atender</option>
           {professionals.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
+        {!form.professional_id && (
+          <p className="text-xs text-amber-600 mt-1">Obrigatório: selecione o profissional responsável</p>
+        )}
       </div>
 
       <div>
