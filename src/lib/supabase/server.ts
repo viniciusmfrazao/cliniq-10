@@ -14,7 +14,9 @@ export function createClient() {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             )
-          } catch {}
+          } catch {
+            // Cookies can only be set in a Server Action or Route Handler
+          }
         },
       },
     }
