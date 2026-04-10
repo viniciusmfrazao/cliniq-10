@@ -73,6 +73,15 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
       ...form,
       clinic_id: userData?.clinic_id,
       birth_date: form.birth_date || null,
+      gender: form.gender || null,
+      email: form.email || null,
+      phone: form.phone || null,
+      cpf: form.cpf || null,
+      address: form.address || null,
+      city: form.city || null,
+      state: form.state || null,
+      zip_code: form.zip_code || null,
+      notes: form.notes || null,
     }
 
     let result
