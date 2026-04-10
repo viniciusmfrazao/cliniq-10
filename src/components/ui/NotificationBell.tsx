@@ -21,6 +21,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
+  // Proteção contra userId inválido
+  if (!userId) {
+    return null
+  }
+
   const unreadCount = notifications.filter(n => !n.read_at).length
 
   useEffect(() => {
@@ -51,14 +56,18 @@ export default function NotificationBell({ userId }: { userId: string }) {
   }, [userId])
 
   async function loadNotifications() {
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(20)
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(20)
 
-    if (data) setNotifications(data)
+      if (!error && data) setNotifications(data)
+    } catch (e) {
+      console.log('Erro ao carregar notificações:', e)
+    }
     setLoading(false)
   }
 

@@ -35,8 +35,13 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
+  // Proteção contra dados inválidos
+  if (!currentUserId || !clinicId) {
+    return null
+  }
+
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
-  const otherUsers = users.filter(u => u.id !== currentUserId)
+  const otherUsers = (users || []).filter(u => u.id !== currentUserId)
 
   useEffect(() => {
     loadUnreadCounts()
@@ -85,31 +90,39 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
   }, [messages])
 
   async function loadUnreadCounts() {
-    const { data } = await supabase
-      .from('chat_messages')
-      .select('sender_id')
-      .eq('receiver_id', currentUserId)
-      .is('read_at', null)
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('sender_id')
+        .eq('receiver_id', currentUserId)
+        .is('read_at', null)
 
-    if (data) {
-      const counts: Record<string, number> = {}
-      data.forEach(msg => {
-        counts[msg.sender_id] = (counts[msg.sender_id] || 0) + 1
-      })
-      setUnreadCounts(counts)
+      if (!error && data) {
+        const counts: Record<string, number> = {}
+        data.forEach(msg => {
+          counts[msg.sender_id] = (counts[msg.sender_id] || 0) + 1
+        })
+        setUnreadCounts(counts)
+      }
+    } catch (e) {
+      console.log('Erro ao carregar contagem:', e)
     }
   }
 
-  async function loadMessages(userId: string) {
+  async function loadMessages(otherUserId: string) {
     setLoading(true)
-    const { data } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUserId})`)
-      .order('created_at', { ascending: true })
-      .limit(100)
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`)
+        .order('created_at', { ascending: true })
+        .limit(100)
 
-    if (data) setMessages(data)
+      if (!error && data) setMessages(data)
+    } catch (e) {
+      console.log('Erro ao carregar mensagens:', e)
+    }
     setLoading(false)
   }
 
