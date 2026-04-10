@@ -31,8 +31,8 @@ export default function NotificationBell({ userId }: { userId: string }) {
   useEffect(() => {
     loadNotifications()
     
-    // Atualiza a cada 30 segundos
-    const interval = setInterval(loadNotifications, 30000)
+    // Atualiza a cada 5 segundos
+    const interval = setInterval(loadNotifications, 5000)
     return () => clearInterval(interval)
   }, [userId])
 

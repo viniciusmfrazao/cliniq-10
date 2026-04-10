@@ -46,8 +46,8 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
   useEffect(() => {
     loadUnreadCounts()
     
-    // Atualiza a cada 10 segundos
-    const interval = setInterval(loadUnreadCounts, 10000)
+    // Atualiza a cada 3 segundos
+    const interval = setInterval(loadUnreadCounts, 3000)
     return () => clearInterval(interval)
   }, [currentUserId])
 
@@ -55,6 +55,10 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
     if (selectedUser) {
       loadMessages(selectedUser.id)
       markMessagesAsRead(selectedUser.id)
+      
+      // Atualiza mensagens a cada 3 segundos quando conversa aberta
+      const interval = setInterval(() => loadMessages(selectedUser.id), 3000)
+      return () => clearInterval(interval)
     }
   }, [selectedUser])
 
