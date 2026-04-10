@@ -85,8 +85,6 @@ export default function AppointmentForm({
       clinic_id: clinicId,
       patient_id: form.patient_id,
       procedure_id: form.procedure_id || null,
-      professional_id: form.professional_id || null,
-      room_id: form.room_id || null,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       notes: form.notes || null,
@@ -185,34 +183,6 @@ export default function AppointmentForm({
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="label">Profissional</label>
-          <select
-            className="input"
-            value={form.professional_id}
-            onChange={e => update('professional_id', e.target.value)}
-          >
-            <option value="">Selecione (opcional)</option>
-            {professionals.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label">Sala</label>
-          <select
-            className="input"
-            value={form.room_id}
-            onChange={e => update('room_id', e.target.value)}
-          >
-            <option value="">Selecione (opcional)</option>
-            {rooms.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
 
       {isEditing && (
         <div>

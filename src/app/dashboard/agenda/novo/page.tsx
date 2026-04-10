@@ -21,20 +21,18 @@ export default async function NovoAgendamentoPage({
     .from('procedures')
     .select('id, name, duration_minutes, price')
     .eq('clinic_id', userData?.clinic_id)
-    .eq('active', true)
     .order('name')
 
   const { data: professionals } = await supabase
     .from('users')
     .select('id, name')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician'])
+    .in('role', ['admin', 'professional'])
 
   const { data: rooms } = await supabase
     .from('rooms')
     .select('id, name')
     .eq('clinic_id', userData?.clinic_id)
-    .eq('active', true)
 
   return (
     <div className="max-w-2xl mx-auto">

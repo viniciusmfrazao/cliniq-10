@@ -11,23 +11,15 @@ type Appointment = {
   notes: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
-  users: { id: string; name: string } | null
-}
-
-type Professional = {
-  id: string
-  name: string
 }
 
 type Props = {
   appointments: Appointment[]
   viewMode: string
   selectedDate: string
-  professionals: Professional[]
-  selectedProfessional: string
 }
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 7h - 19h
+const HOURS = Array.from({ length: 13 }, (_, i) => i + 7)
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
   scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Agendado' },
@@ -38,82 +30,54 @@ const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string }>
   no_show: { bg: 'bg-red-100', text: 'text-red-700', label: 'Nao compareceu' },
 }
 
-export default function AgendaView({ appointments, viewMode, selectedDate, professionals, selectedProfessional }: Props) {
-  // Visao Dia
+export default function AgendaView({ appointments, viewMode, selectedDate }: Props) {
+  // Visao Dia - Lista simples
   if (viewMode === 'day') {
-    const displayProfessionals = selectedProfessional === 'all' 
-      ? professionals 
-      : professionals.filter(p => p.id === selectedProfessional)
-
     return (
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <div className="min-w-[600px]">
-            {/* Header com profissionais */}
-            <div className="flex border-b border-slate-100">
-              <div className="w-16 flex-shrink-0 p-3 bg-slate-50" />
-              {displayProfessionals.map(prof => (
-                <div 
-                  key={prof.id} 
-                  className="flex-1 p-3 text-center border-l border-slate-100 bg-slate-50"
-                >
-                  <div className="w-8 h-8 mx-auto rounded-full gradient-bg flex items-center justify-center mb-1">
-                    <span className="text-white text-xs font-bold">{prof.name.charAt(0)}</span>
-                  </div>
-                  <p className="text-xs font-medium text-slate-700 truncate">{prof.name}</p>
-                </div>
-              ))}
+        {appointments.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-100 flex items-center justify-center">
+              <Icon name="calendar" className="w-8 h-8 text-slate-400" />
             </div>
-
-            {/* Grid de horarios */}
-            {HOURS.map(hour => (
-              <div key={hour} className="flex border-b border-slate-50 min-h-[60px]">
-                <div className="w-16 flex-shrink-0 p-2 text-xs text-slate-400 font-medium text-right pr-3 bg-slate-50/50">
-                  {hour}:00
-                </div>
-                {displayProfessionals.map(prof => {
-                  const hourAppointments = appointments.filter(apt => {
-                    const aptHour = new Date(apt.start_time).getHours()
-                    return aptHour === hour && apt.users?.id === prof.id
-                  })
-
-                  return (
-                    <div 
-                      key={prof.id} 
-                      className="flex-1 p-1 border-l border-slate-50 relative"
-                    >
-                      {hourAppointments.map(apt => {
-                        const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
-                        return (
-                          <Link
-                            key={apt.id}
-                            href={`/dashboard/atendimento/${apt.id}`}
-                            className={`block p-2 rounded-lg ${status.bg} hover:opacity-80 transition-opacity mb-1`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-slate-600">
-                                {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${status.bg} ${status.text}`}>
-                                {status.label}
-                              </span>
-                            </div>
-                            <p className={`text-sm font-semibold ${status.text} truncate mt-1`}>
-                              {apt.patients?.name}
-                            </p>
-                            <p className="text-xs text-slate-500 truncate">
-                              {apt.procedures?.name || 'Consulta'}
-                            </p>
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
+            <p className="text-slate-600 font-medium">Nenhum agendamento neste dia</p>
+            <Link href="/dashboard/agenda/novo" className="btn-primary w-auto px-6 inline-flex items-center gap-2 mt-4">
+              <Icon name="plus" className="w-4 h-4" />
+              Novo agendamento
+            </Link>
           </div>
-        </div>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {appointments.map((apt, idx) => {
+              const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+              return (
+                <Link
+                  key={apt.id}
+                  href={`/dashboard/atendimento/${apt.id}`}
+                  className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="w-16 text-center">
+                    <p className="text-lg font-bold text-slate-900">
+                      {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {apt.end_time && new Date(apt.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <div className={`w-1.5 h-12 rounded-full ${idx === 0 ? 'gradient-bg' : 'bg-slate-200'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{apt.patients?.name || 'Paciente'}</p>
+                    <p className="text-sm text-slate-500 truncate">{apt.procedures?.name || 'Consulta'}</p>
+                  </div>
+                  <span className={`text-xs px-3 py-1.5 rounded-xl font-medium ${status.bg} ${status.text}`}>
+                    {status.label}
+                  </span>
+                  <Icon name="chevronRight" className="w-5 h-5 text-slate-300" />
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </div>
     )
   }
@@ -135,7 +99,6 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <div className="min-w-[700px]">
-            {/* Header com dias da semana */}
             <div className="grid grid-cols-7 border-b border-slate-100">
               {weekDays.map((day, idx) => {
                 const isToday = day.toDateString() === new Date().toDateString()
@@ -155,7 +118,6 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
               })}
             </div>
 
-            {/* Agendamentos por dia */}
             <div className="grid grid-cols-7 min-h-[400px]">
               {weekDays.map((day, idx) => {
                 const dayStr = day.toISOString().split('T')[0]
@@ -216,7 +178,7 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
   const startPadding = firstDay.getDay()
   const totalDays = lastDay.getDate()
 
-  const calendarDays = [
+  const calendarDays: (number | null)[] = [
     ...Array(startPadding).fill(null),
     ...Array.from({ length: totalDays }, (_, i) => i + 1)
   ]
@@ -227,7 +189,6 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
 
   return (
     <div className="card overflow-hidden">
-      {/* Header dias da semana */}
       <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-100">
         {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].map(day => (
           <div key={day} className="p-3 text-center text-xs font-semibold text-slate-500 uppercase">
@@ -236,7 +197,6 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
         ))}
       </div>
 
-      {/* Dias do mes */}
       <div className="grid grid-cols-7">
         {calendarDays.map((day, idx) => {
           if (day === null) {

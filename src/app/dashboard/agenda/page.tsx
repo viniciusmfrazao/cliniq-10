@@ -58,24 +58,17 @@ export default async function AgendaPage({
     .order('name')
 
   // Buscar agendamentos
-  let query = supabase
+  const { data: appointments } = await supabase
     .from('appointments')
     .select(`
       *,
       patients(id, name, phone, photo_url),
-      procedures(name, duration_minutes, price),
-      users(id, name)
+      procedures(name, duration_minutes, price)
     `)
     .eq('clinic_id', userData?.clinic_id)
     .gte('start_time', startDate)
     .lte('start_time', endDate)
     .order('start_time')
-
-  if (selectedProfessional !== 'all') {
-    query = query.eq('user_id', selectedProfessional)
-  }
-
-  const { data: appointments } = await query
 
   // Estatisticas do dia
   const today = new Date().toISOString().split('T')[0]
@@ -163,8 +156,6 @@ export default async function AgendaPage({
         appointments={appointments || []}
         viewMode={viewMode}
         selectedDate={selectedDate}
-        professionals={professionals || []}
-        selectedProfessional={selectedProfessional}
       />
     </div>
   )
