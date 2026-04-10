@@ -4,11 +4,19 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
+import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
 
-type Props = { clinicName: string; userName: string; userRole: string; trialDaysLeft: number }
+type Props = { 
+  clinicName: string
+  userName: string
+  userRole: string
+  trialDaysLeft: number
+  userId: string
+  clinicId: string
+}
 
-export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft }: Props) {
+export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId, clinicId }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -100,6 +108,12 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft 
 
       {/* User Section */}
       <div className="p-4 border-t border-white/10">
+        {/* Notificações */}
+        <div className="flex items-center justify-between mb-3 px-3">
+          <span className="text-xs text-white/50 font-medium">Notificações</span>
+          <NotificationBell userId={userId} clinicId={clinicId} />
+        </div>
+        
         <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-white/5 backdrop-blur-xl">
           <div className="w-11 h-11 gradient-bg rounded-xl flex items-center justify-center shadow-lg">
             <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
