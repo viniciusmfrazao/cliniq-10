@@ -4,7 +4,7 @@ import AppointmentForm from '../appointment-form'
 export default async function NovoAgendamentoPage({ 
   searchParams 
 }: { 
-  searchParams: { patient?: string; date?: string; time?: string } 
+  searchParams: { patient?: string; date?: string; time?: string; professional?: string } 
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -50,6 +50,7 @@ export default async function NovoAgendamentoPage({
           defaultPatientId={searchParams.patient}
           defaultDate={searchParams.date}
           defaultTime={searchParams.time}
+          defaultProfessionalId={searchParams.professional}
         />
       </div>
     </div>

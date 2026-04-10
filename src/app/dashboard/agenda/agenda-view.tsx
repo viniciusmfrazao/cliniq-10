@@ -14,18 +14,22 @@ type Appointment = {
   procedures: { name: string; duration_minutes: number; price: number } | null
 }
 
+type Professional = {
+  id: string
+  name: string
+  role: string
+}
+
 type Props = {
   appointments: Appointment[]
   viewMode: string
   selectedDate: string
+  professionals: Professional[]
+  selectedProfessional: string
 }
 
-// Horários disponíveis (7h às 20h, intervalos de 30min)
-const TIME_SLOTS = Array.from({ length: 27 }, (_, i) => {
-  const hour = Math.floor(i / 2) + 7
-  const minute = (i % 2) * 30
-  return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-})
+// Horários de 7h às 20h em intervalos de 1 hora para a visualização (clique abre com horário exato)
+const HOUR_SLOTS = Array.from({ length: 14 }, (_, i) => i + 7)
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; border: string; label: string }> = {
   scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', label: 'Agendado' },
@@ -33,25 +37,32 @@ const STATUS_CONFIG: Record<string, { bg: string; text: string; border: string; 
   in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300', label: 'Em atendimento' },
   completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', label: 'Realizado' },
   cancelled: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Cancelado' },
-  no_show: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Nao compareceu' },
+  no_show: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Não compareceu' },
 }
 
-export default function AgendaView({ appointments, viewMode, selectedDate }: Props) {
-  // Criar mapa de horários ocupados
-  const occupiedSlots = new Map<string, Appointment>()
-  appointments.forEach(apt => {
-    const time = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    occupiedSlots.set(time, apt)
-  })
+// Cores para os profissionais
+const PROFESSIONAL_COLORS = [
+  'from-violet-500 to-purple-500',
+  'from-blue-500 to-cyan-500',
+  'from-emerald-500 to-teal-500',
+  'from-rose-500 to-pink-500',
+  'from-amber-500 to-orange-500',
+]
 
-  // Visao Dia - Grade de horários
+export default function AgendaView({ appointments, viewMode, selectedDate, professionals, selectedProfessional }: Props) {
+  // Filtrar profissionais para exibição
+  const displayProfessionals = selectedProfessional === 'all' 
+    ? professionals 
+    : professionals.filter(p => p.id === selectedProfessional)
+
+  // Visao Dia - Colunas por profissional
   if (viewMode === 'day') {
     return (
       <div className="card overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-slate-600">
-              {appointments.length} agendamento{appointments.length !== 1 ? 's' : ''} neste dia
+              {appointments.length} agendamento{appointments.length !== 1 ? 's' : ''} • {displayProfessionals.length} profissional{displayProfessionals.length !== 1 ? 'is' : ''}
             </p>
             <Link 
               href={`/dashboard/agenda/novo?date=${selectedDate}`}
@@ -63,65 +74,96 @@ export default function AgendaView({ appointments, viewMode, selectedDate }: Pro
           </div>
         </div>
         
-        <div className="divide-y divide-slate-100">
-          {TIME_SLOTS.map(time => {
-            const apt = occupiedSlots.get(time)
-            const [hour] = time.split(':').map(Number)
-            const isLunchTime = hour === 12
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: displayProfessionals.length > 1 ? `${displayProfessionals.length * 200 + 80}px` : '100%' }}>
+            {/* Header com profissionais */}
+            <div className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-10">
+              <div className="w-20 flex-shrink-0 p-3 text-center border-r border-slate-200">
+                <p className="text-xs font-semibold text-slate-500 uppercase">Hora</p>
+              </div>
+              {displayProfessionals.map((prof, idx) => (
+                <div 
+                  key={prof.id}
+                  className="flex-1 min-w-[180px] p-3 text-center border-r border-slate-200 last:border-r-0"
+                >
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r ${PROFESSIONAL_COLORS[idx % PROFESSIONAL_COLORS.length]} text-white text-sm font-medium`}>
+                    <Icon name="user" className="w-3 h-3" />
+                    {prof.name.split(' ')[0]}
+                  </div>
+                </div>
+              ))}
+            </div>
             
-            if (apt) {
-              const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
-              const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.birth_date)
+            {/* Grade de horários */}
+            {HOUR_SLOTS.map(hour => {
+              const timeStr = `${hour.toString().padStart(2, '0')}:00`
+              const isLunchTime = hour === 12
               
               return (
-                <Link
-                  key={time}
-                  href={`/dashboard/atendimento/${apt.id}`}
-                  className={`flex items-center gap-4 p-3 hover:bg-slate-50 transition-colors border-l-4 ${status.border}`}
-                >
-                  <div className="w-14 text-center flex-shrink-0">
-                    <p className="text-sm font-bold text-slate-900">{time}</p>
+                <div key={hour} className={`flex border-b border-slate-100 ${isLunchTime ? 'bg-amber-50/30' : ''}`}>
+                  {/* Coluna de hora */}
+                  <div className="w-20 flex-shrink-0 p-2 text-center border-r border-slate-100 bg-slate-50">
+                    <p className={`text-sm font-semibold ${isLunchTime ? 'text-amber-600' : 'text-slate-600'}`}>
+                      {timeStr}
+                    </p>
+                    {isLunchTime && <p className="text-xs text-amber-500">🍽️</p>}
                   </div>
-                  <div className={`flex-1 p-3 rounded-xl ${status.bg}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-900">{apt.patients?.name || 'Paciente'}</p>
-                        {isPatientIncomplete && (
-                          <span className="w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
-                            <Icon name="bell" className="w-3 h-3 text-white" />
-                          </span>
+                  
+                  {/* Colunas dos profissionais */}
+                  {displayProfessionals.map((prof, profIdx) => {
+                    // Encontrar agendamentos desse profissional nessa hora
+                    const hourAppointments = appointments.filter(apt => {
+                      const aptHour = new Date(apt.start_time).getHours()
+                      return apt.professional_id === prof.id && aptHour === hour
+                    })
+                    
+                    return (
+                      <div 
+                        key={prof.id}
+                        className="flex-1 min-w-[180px] p-1.5 border-r border-slate-100 last:border-r-0 min-h-[70px]"
+                      >
+                        {hourAppointments.length > 0 ? (
+                          <div className="space-y-1">
+                            {hourAppointments.map(apt => {
+                              const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+                              const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                              const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.birth_date)
+                              
+                              return (
+                                <Link
+                                  key={apt.id}
+                                  href={`/dashboard/atendimento/${apt.id}`}
+                                  className={`block p-2 rounded-lg ${status.bg} hover:opacity-80 transition-opacity border-l-4 ${status.border}`}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="text-xs font-bold text-slate-700">{aptTime}</span>
+                                    {isPatientIncomplete && (
+                                      <span className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
+                                        <Icon name="bell" className="w-2 h-2 text-white" />
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm font-semibold text-slate-900 truncate">{apt.patients?.name || 'Paciente'}</p>
+                                  <p className="text-xs text-slate-500 truncate">{apt.procedures?.name || 'Consulta'}</p>
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <Link
+                            href={`/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}`}
+                            className="h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 rounded-lg hover:border-violet-300 hover:bg-violet-50 transition-colors group"
+                          >
+                            <Icon name="plus" className="w-4 h-4 text-slate-300 group-hover:text-violet-500" />
+                          </Link>
                         )}
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-lg font-medium ${status.text} bg-white/50`}>
-                        {status.label}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-600 mt-1">{apt.procedures?.name || 'Consulta'}</p>
-                  </div>
-                  <Icon name="chevronRight" className="w-5 h-5 text-slate-300 flex-shrink-0" />
-                </Link>
+                    )
+                  })}
+                </div>
               )
-            }
-            
-            // Slot vazio - clicável para criar agendamento
-            return (
-              <Link
-                key={time}
-                href={`/dashboard/agenda/novo?date=${selectedDate}&time=${time}`}
-                className={`flex items-center gap-4 p-3 hover:bg-violet-50 transition-colors group ${isLunchTime ? 'bg-amber-50/50' : ''}`}
-              >
-                <div className="w-14 text-center flex-shrink-0">
-                  <p className={`text-sm font-medium ${isLunchTime ? 'text-amber-600' : 'text-slate-400'}`}>{time}</p>
-                </div>
-                <div className="flex-1 p-3 border-2 border-dashed border-slate-200 rounded-xl group-hover:border-violet-300 group-hover:bg-violet-50 transition-colors">
-                  <p className="text-sm text-slate-400 group-hover:text-violet-600">
-                    {isLunchTime ? '🍽️ Horário de almoço' : 'Clique para agendar'}
-                  </p>
-                </div>
-                <Icon name="plus" className="w-5 h-5 text-slate-300 group-hover:text-violet-500 flex-shrink-0" />
-              </Link>
-            )
-          })}
+            })}
+          </div>
         </div>
       </div>
     )

@@ -156,6 +156,8 @@ export default async function AgendaPage({
         appointments={appointments || []}
         viewMode={viewMode}
         selectedDate={selectedDate}
+        professionals={professionals || []}
+        selectedProfessional={selectedProfessional}
       />
     </div>
   )
