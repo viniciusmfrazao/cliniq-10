@@ -30,29 +30,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
   useEffect(() => {
     loadNotifications()
-
-    // Realtime subscription
-    const channel = supabase
-      .channel('notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload) => {
-          setNotifications(prev => [payload.new as Notification, ...prev])
-          // Play sound for new notification
-          playNotificationSound()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    
+    // Atualiza a cada 30 segundos
+    const interval = setInterval(loadNotifications, 30000)
+    return () => clearInterval(interval)
   }, [userId])
 
   async function loadNotifications() {
@@ -94,14 +75,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
     setNotifications(prev =>
       prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() }))
     )
-  }
-
-  function playNotificationSound() {
-    try {
-      const audio = new Audio('/notification.mp3')
-      audio.volume = 0.5
-      audio.play().catch(() => {})
-    } catch {}
   }
 
   function getTimeAgo(date: string): string {

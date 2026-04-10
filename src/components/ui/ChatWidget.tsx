@@ -45,38 +45,11 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
 
   useEffect(() => {
     loadUnreadCounts()
-
-    // Realtime subscription for new messages
-    const channel = supabase
-      .channel('chat_messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `receiver_id=eq.${currentUserId}`
-        },
-        (payload) => {
-          const newMsg = payload.new as Message
-          if (selectedUser?.id === newMsg.sender_id) {
-            setMessages(prev => [...prev, newMsg])
-            markMessagesAsRead(newMsg.sender_id)
-          } else {
-            setUnreadCounts(prev => ({
-              ...prev,
-              [newMsg.sender_id]: (prev[newMsg.sender_id] || 0) + 1
-            }))
-            playNotificationSound()
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [currentUserId, selectedUser])
+    
+    // Atualiza a cada 10 segundos
+    const interval = setInterval(loadUnreadCounts, 10000)
+    return () => clearInterval(interval)
+  }, [currentUserId])
 
   useEffect(() => {
     if (selectedUser) {
@@ -157,14 +130,6 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
       setMessages(prev => [...prev, data])
       setNewMessage('')
     }
-  }
-
-  function playNotificationSound() {
-    try {
-      const audio = new Audio('/notification.mp3')
-      audio.volume = 0.3
-      audio.play().catch(() => {})
-    } catch {}
   }
 
   function formatTime(date: string): string {
