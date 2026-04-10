@@ -15,30 +15,63 @@ type Lead = {
   status: string
   interest: string | null
   procedure_id: string | null
+  estimated_value: number | null
   assigned_to: string | null
   notes: string | null
+  tags: string[] | null
   next_contact_at: string | null
+  last_contact_at: string | null
   converted_at: string | null
   lost_reason: string | null
+  // WhatsApp
+  whatsapp_chat_id: string | null
+  last_whatsapp_at: string | null
+  whatsapp_opt_in: boolean
+  // Eva IA
+  ai_score: number | null
+  ai_priority: string | null
+  ai_suggested_action: string | null
+  ai_sentiment: string | null
   created_at: string
+  updated_at: string
+}
+
+type CRMSettings = {
+  custom_stages: { id: string; label: string; color: string; order: number }[]
+  custom_sources: { id: string; label: string; icon: string }[]
+  whatsapp_auto_reply: boolean
+  whatsapp_welcome_message: string | null
+  eva_auto_analyze: boolean
+  eva_auto_suggest: boolean
+}
+
+type MessageTemplate = {
+  id: string
+  name: string
+  type: string
+  channel: string
+  content: string
+  trigger_stage: string | null
 }
 
 type Props = {
   leads: Lead[]
-  procedures: { id: string; name: string }[]
+  procedures: { id: string; name: string; price: number }[]
   users: { id: string; name: string }[]
   clinicId: string
+  settings: CRMSettings | null
+  templates: MessageTemplate[]
 }
 
-const STAGES = [
-  { id: 'new', label: 'Novo Lead', color: 'bg-slate-100 text-slate-700', icon: 'userPlus' },
-  { id: 'contacted', label: 'Contatado', color: 'bg-blue-100 text-blue-700', icon: 'phone' },
-  { id: 'scheduled', label: 'Agendou', color: 'bg-amber-100 text-amber-700', icon: 'calendar' },
-  { id: 'converted', label: 'Convertido', color: 'bg-emerald-100 text-emerald-700', icon: 'check' },
-  { id: 'lost', label: 'Perdido', color: 'bg-red-100 text-red-700', icon: 'x' },
+const DEFAULT_STAGES = [
+  { id: 'new', label: 'Novo Lead', color: 'slate', order: 0 },
+  { id: 'contacted', label: 'Contatado', color: 'blue', order: 1 },
+  { id: 'scheduled', label: 'Agendou', color: 'amber', order: 2 },
+  { id: 'converted', label: 'Convertido', color: 'emerald', order: 3 },
+  { id: 'lost', label: 'Perdido', color: 'red', order: 4 },
 ]
 
-const SOURCES = [
+const DEFAULT_SOURCES = [
   { id: 'instagram', label: 'Instagram', icon: '📸' },
   { id: 'whatsapp', label: 'WhatsApp', icon: '💬' },
   { id: 'indication', label: 'Indicação', icon: '👥' },
@@ -48,13 +81,43 @@ const SOURCES = [
   { id: 'other', label: 'Outro', icon: '📌' },
 ]
 
-export default function CRMView({ leads, procedures, users, clinicId }: Props) {
+const STAGE_ICONS: Record<string, string> = {
+  new: 'userPlus',
+  contacted: 'phone',
+  scheduled: 'calendar',
+  converted: 'check',
+  lost: 'x'
+}
+
+const STAGE_COLORS: Record<string, string> = {
+  slate: 'bg-slate-100 text-slate-700',
+  blue: 'bg-blue-100 text-blue-700',
+  amber: 'bg-amber-100 text-amber-700',
+  emerald: 'bg-emerald-100 text-emerald-700',
+  red: 'bg-red-100 text-red-700',
+  violet: 'bg-violet-100 text-violet-700',
+  pink: 'bg-pink-100 text-pink-700',
+  cyan: 'bg-cyan-100 text-cyan-700',
+}
+
+const AI_PRIORITY_CONFIG = {
+  hot: { label: '🔥 Quente', color: 'bg-red-100 text-red-700' },
+  warm: { label: '☀️ Morno', color: 'bg-amber-100 text-amber-700' },
+  cold: { label: '❄️ Frio', color: 'bg-blue-100 text-blue-700' },
+}
+
+export default function CRMView({ leads, procedures, users, clinicId, settings, templates }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const [showNewLead, setShowNewLead] = useState(false)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [filter, setFilter] = useState<string>('all')
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Usar configurações customizadas ou padrão
+  const STAGES = settings?.custom_stages || DEFAULT_STAGES
+  const SOURCES = settings?.custom_sources || DEFAULT_SOURCES
 
   // Stats
   const stats = {
@@ -66,7 +129,11 @@ export default function CRMView({ leads, procedures, users, clinicId }: Props) {
     lost: leads.filter(l => l.status === 'lost').length,
     conversionRate: leads.length > 0 
       ? Math.round((leads.filter(l => l.status === 'converted').length / leads.filter(l => ['converted', 'lost'].includes(l.status)).length) * 100) || 0
-      : 0
+      : 0,
+    // Eva IA stats
+    hotLeads: leads.filter(l => l.ai_priority === 'hot').length,
+    estimatedValue: leads.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
+    pendingContact: leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date()).length
   }
 
   // Filtrar leads
@@ -116,35 +183,64 @@ export default function CRMView({ leads, procedures, users, clinicId }: Props) {
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">Gerencie seus leads e oportunidades</p>
         </div>
-        <button
-          onClick={() => setShowNewLead(true)}
-          className="btn-primary w-auto px-4 flex items-center gap-2"
-        >
-          <Icon name="plus" className="w-4 h-4" />
-          Novo Lead
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Configurações do CRM"
+          >
+            <Icon name="settings" className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setShowNewLead(true)}
+            className="btn-primary w-auto px-4 flex items-center gap-2"
+          >
+            <Icon name="plus" className="w-4 h-4" />
+            Novo Lead
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
         <div className="card p-3">
           <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
-          <p className="text-xs text-slate-500">Total</p>
+          <p className="text-xs text-slate-500">Total Leads</p>
         </div>
-        {STAGES.slice(0, 4).map(stage => (
-          <button
-            key={stage.id}
-            onClick={() => setFilter(filter === stage.id ? 'all' : stage.id)}
-            className={`card p-3 text-left transition-all ${filter === stage.id ? 'ring-2 ring-violet-400' : 'hover:bg-slate-50'}`}
-          >
-            <p className="text-2xl font-bold text-slate-900">{stats[stage.id as keyof typeof stats]}</p>
-            <p className="text-xs text-slate-500">{stage.label}</p>
-          </button>
-        ))}
+        
+        {stats.hotLeads > 0 && (
+          <div className="card p-3 bg-gradient-to-br from-red-50 to-orange-50">
+            <p className="text-2xl font-bold text-red-600">{stats.hotLeads} 🔥</p>
+            <p className="text-xs text-red-600">Leads Quentes</p>
+          </div>
+        )}
+        
+        {stats.pendingContact > 0 && (
+          <div className="card p-3 bg-gradient-to-br from-amber-50 to-yellow-50 ring-2 ring-amber-300">
+            <p className="text-2xl font-bold text-amber-600">{stats.pendingContact}</p>
+            <p className="text-xs text-amber-600">Contato Pendente</p>
+          </div>
+        )}
+        
+        <button
+          onClick={() => setFilter(filter === 'new' ? 'all' : 'new')}
+          className={`card p-3 text-left transition-all ${filter === 'new' ? 'ring-2 ring-violet-400' : 'hover:bg-slate-50'}`}
+        >
+          <p className="text-2xl font-bold text-slate-900">{stats.new}</p>
+          <p className="text-xs text-slate-500">Novos</p>
+        </button>
+        
         <div className="card p-3 bg-gradient-to-br from-emerald-50 to-teal-50">
           <p className="text-2xl font-bold text-emerald-600">{stats.conversionRate}%</p>
           <p className="text-xs text-emerald-600">Conversão</p>
         </div>
+        
+        {stats.estimatedValue > 0 && (
+          <div className="card p-3 bg-gradient-to-br from-violet-50 to-purple-50">
+            <p className="text-lg font-bold text-violet-600">R$ {stats.estimatedValue.toLocaleString('pt-BR')}</p>
+            <p className="text-xs text-violet-600">Valor Estimado</p>
+          </div>
+        )}
       </div>
 
       {/* View Toggle */}
@@ -185,11 +281,15 @@ export default function CRMView({ leads, procedures, users, clinicId }: Props) {
       {/* Kanban View */}
       {viewMode === 'kanban' && (
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {STAGES.filter(s => s.id !== 'lost').map(stage => (
+          {STAGES.filter(s => s.id !== 'lost').map(stage => {
+            const stageColor = STAGE_COLORS[stage.color] || STAGE_COLORS.slate
+            const stageIcon = STAGE_ICONS[stage.id] || 'circle'
+            
+            return (
             <div key={stage.id} className="flex-shrink-0 w-72">
-              <div className={`p-3 rounded-t-xl ${stage.color} flex items-center justify-between`}>
+              <div className={`p-3 rounded-t-xl ${stageColor} flex items-center justify-between`}>
                 <div className="flex items-center gap-2">
-                  <Icon name={stage.icon} className="w-4 h-4" />
+                  <Icon name={stageIcon} className="w-4 h-4" />
                   <span className="font-semibold text-sm">{stage.label}</span>
                 </div>
                 <span className="text-xs font-bold bg-white/50 px-2 py-0.5 rounded-full">
@@ -197,62 +297,99 @@ export default function CRMView({ leads, procedures, users, clinicId }: Props) {
                 </span>
               </div>
               <div className="bg-slate-100 rounded-b-xl p-2 min-h-[400px] space-y-2">
-                {leadsByStage[stage.id]?.map(lead => (
-                  <div
-                    key={lead.id}
-                    onClick={() => setSelectedLead(lead)}
-                    className="bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="font-semibold text-slate-900 truncate">{lead.name}</p>
-                      <span className="text-xs text-slate-400 flex-shrink-0">{getTimeAgo(lead.created_at)}</span>
-                    </div>
-                    {lead.phone && (
-                      <p className="text-xs text-slate-500 mb-1">{lead.phone}</p>
-                    )}
-                    {lead.interest && (
-                      <span className="inline-block text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full mb-2">
-                        {lead.interest}
-                      </span>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-400">
-                        {SOURCES.find(s => s.id === lead.source)?.icon} {SOURCES.find(s => s.id === lead.source)?.label}
-                      </span>
-                      {stage.id !== 'converted' && (
-                        <div className="flex gap-1">
-                          {stage.id === 'new' && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'contacted') }}
-                              className="p-1 text-blue-500 hover:bg-blue-50 rounded"
-                              title="Marcar como contatado"
-                            >
-                              <Icon name="phone" className="w-4 h-4" />
-                            </button>
+                {leadsByStage[stage.id]?.map(lead => {
+                  const source = SOURCES.find(s => s.id === lead.source)
+                  const aiPriority = lead.ai_priority ? AI_PRIORITY_CONFIG[lead.ai_priority as keyof typeof AI_PRIORITY_CONFIG] : null
+                  const needsContact = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
+                  
+                  return (
+                    <div
+                      key={lead.id}
+                      onClick={() => setSelectedLead(lead)}
+                      className={`bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer ${needsContact ? 'ring-2 ring-amber-400' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="font-semibold text-slate-900 truncate">{lead.name}</p>
+                          {aiPriority && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${aiPriority.color}`} title="Classificação Eva IA">
+                              {lead.ai_priority === 'hot' ? '🔥' : lead.ai_priority === 'warm' ? '☀️' : '❄️'}
+                            </span>
                           )}
-                          {stage.id === 'contacted' && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'scheduled') }}
-                              className="p-1 text-amber-500 hover:bg-amber-50 rounded"
-                              title="Marcar como agendou"
-                            >
-                              <Icon name="calendar" className="w-4 h-4" />
-                            </button>
-                          )}
-                          {stage.id === 'scheduled' && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'converted') }}
-                              className="p-1 text-emerald-500 hover:bg-emerald-50 rounded"
-                              title="Marcar como convertido"
-                            >
-                              <Icon name="check" className="w-4 h-4" />
-                            </button>
-                          )}
+                        </div>
+                        <span className="text-xs text-slate-400 flex-shrink-0">{getTimeAgo(lead.created_at)}</span>
+                      </div>
+                      {lead.phone && (
+                        <p className="text-xs text-slate-500 mb-1">{lead.phone}</p>
+                      )}
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {lead.interest && (
+                          <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
+                            {lead.interest}
+                          </span>
+                        )}
+                        {lead.estimated_value && (
+                          <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                            R$ {lead.estimated_value.toLocaleString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                      {/* Eva IA suggestion */}
+                      {lead.ai_suggested_action && (
+                        <div className="mb-2 p-2 bg-violet-50 rounded-lg border border-violet-200">
+                          <p className="text-xs text-violet-700 flex items-center gap-1">
+                            <Icon name="sparkles" className="w-3 h-3" />
+                            {lead.ai_suggested_action}
+                          </p>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-400">
+                          {source?.icon} {source?.label}
+                        </span>
+                        {stage.id !== 'converted' && (
+                          <div className="flex gap-1">
+                            {stage.id === 'new' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'contacted') }}
+                                className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                                title="Marcar como contatado"
+                              >
+                                <Icon name="phone" className="w-4 h-4" />
+                              </button>
+                            )}
+                            {stage.id === 'contacted' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'scheduled') }}
+                                className="p-1 text-amber-500 hover:bg-amber-50 rounded"
+                                title="Marcar como agendou"
+                              >
+                                <Icon name="calendar" className="w-4 h-4" />
+                              </button>
+                            )}
+                            {stage.id === 'scheduled' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'converted') }}
+                                className="p-1 text-emerald-500 hover:bg-emerald-50 rounded"
+                                title="Marcar como convertido"
+                              >
+                                <Icon name="check" className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {needsContact && (
+                        <div className="mt-2 pt-2 border-t border-amber-200">
+                          <p className="text-xs text-amber-600 flex items-center gap-1">
+                            <Icon name="bell" className="w-3 h-3" />
+                            Contato pendente!
+                          </p>
                         </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
                 {(!leadsByStage[stage.id] || leadsByStage[stage.id].length === 0) && (
                   <div className="text-center py-8 text-slate-400">
                     <Icon name="inbox" className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -261,7 +398,7 @@ export default function CRMView({ leads, procedures, users, clinicId }: Props) {
                 )}
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 

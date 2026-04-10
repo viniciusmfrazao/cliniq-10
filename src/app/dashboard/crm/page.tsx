@@ -13,7 +13,7 @@ export default async function CRMPage() {
     .eq('id', user.id)
     .single()
 
-  // Buscar leads
+  // Buscar leads com interações recentes
   const { data: leads } = await supabase
     .from('leads')
     .select('*')
@@ -23,7 +23,7 @@ export default async function CRMPage() {
   // Buscar procedimentos para o select
   const { data: procedures } = await supabase
     .from('procedures')
-    .select('id, name')
+    .select('id, name, price')
     .eq('clinic_id', userData?.clinic_id)
     .order('name')
 
@@ -34,12 +34,28 @@ export default async function CRMPage() {
     .eq('clinic_id', userData?.clinic_id)
     .order('name')
 
+  // Buscar configurações do CRM
+  const { data: settings } = await supabase
+    .from('crm_settings')
+    .select('*')
+    .eq('clinic_id', userData?.clinic_id)
+    .single()
+
+  // Buscar templates de mensagens
+  const { data: templates } = await supabase
+    .from('crm_message_templates')
+    .select('*')
+    .eq('clinic_id', userData?.clinic_id)
+    .eq('active', true)
+
   return (
     <CRMView 
       leads={leads || []}
       procedures={procedures || []}
       users={users || []}
       clinicId={userData?.clinic_id || ''}
+      settings={settings}
+      templates={templates || []}
     />
   )
 }
