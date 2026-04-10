@@ -193,8 +193,11 @@ export default function InjectableMapSection({ patient, appointmentId, products,
             appointment_id: appointmentId,
             product_id: productId,
             product_name: product?.name || 'Produto',
+            product_brand: product?.brand || null,
             total_units: totalProductUnits,
-            stock_deducted: false
+            stock_deducted: false,
+            application_date: new Date().toISOString().split('T')[0],
+            type: 'botox'
           })
           .select()
           .single()
