@@ -23,6 +23,7 @@ type Product = {
   id: string
   name: string
   brand: string | null
+  category: string | null
   current_stock: number
   unit: string
   batch_number: string | null
