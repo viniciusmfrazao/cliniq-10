@@ -1,3 +1,6 @@
 ﻿{
-  "rootDirectory": "apps/web"
+  "rootDirectory": "apps/web",
+  "framework": "nextjs",
+  "buildCommand": "cd ../.. && yarn workspace @cliniq/web build",
+  "installCommand": "cd ../.. && yarn install"
 }
