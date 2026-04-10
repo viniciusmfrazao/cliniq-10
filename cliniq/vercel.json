@@ -1,0 +1,6 @@
+{
+  "buildCommand": "yarn workspace @cliniq/web build",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "yarn install",
+  "framework": "nextjs"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "cliniq",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "yarn workspace @cliniq/web dev",
+    "build": "yarn workspace @cliniq/web build"
+  },
+  "packageManager": "yarn@1.22.22"
+}
