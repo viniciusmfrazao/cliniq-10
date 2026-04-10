@@ -9,6 +9,7 @@ type Appointment = {
   end_time: string | null
   status: string
   notes: string | null
+  professional_id: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
 }
@@ -19,73 +20,109 @@ type Props = {
   selectedDate: string
 }
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 7)
+// Horários disponíveis (7h às 20h, intervalos de 30min)
+const TIME_SLOTS = Array.from({ length: 27 }, (_, i) => {
+  const hour = Math.floor(i / 2) + 7
+  const minute = (i % 2) * 30
+  return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+})
 
-const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
-  scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Agendado' },
-  confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Confirmado' },
-  in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Em atendimento' },
-  completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Realizado' },
-  cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelado' },
-  no_show: { bg: 'bg-red-100', text: 'text-red-700', label: 'Nao compareceu' },
+const STATUS_CONFIG: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', label: 'Agendado' },
+  confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', label: 'Confirmado' },
+  in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300', label: 'Em atendimento' },
+  completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', label: 'Realizado' },
+  cancelled: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Cancelado' },
+  no_show: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Nao compareceu' },
 }
 
 export default function AgendaView({ appointments, viewMode, selectedDate }: Props) {
-  // Visao Dia - Lista simples
+  // Criar mapa de horários ocupados
+  const occupiedSlots = new Map<string, Appointment>()
+  appointments.forEach(apt => {
+    const time = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    occupiedSlots.set(time, apt)
+  })
+
+  // Visao Dia - Grade de horários
   if (viewMode === 'day') {
     return (
       <div className="card overflow-hidden">
-        {appointments.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-100 flex items-center justify-center">
-              <Icon name="calendar" className="w-8 h-8 text-slate-400" />
-            </div>
-            <p className="text-slate-600 font-medium">Nenhum agendamento neste dia</p>
-            <Link href="/dashboard/agenda/novo" className="btn-primary w-auto px-6 inline-flex items-center gap-2 mt-4">
+        <div className="p-4 border-b border-slate-100 bg-slate-50">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-600">
+              {appointments.length} agendamento{appointments.length !== 1 ? 's' : ''} neste dia
+            </p>
+            <Link 
+              href={`/dashboard/agenda/novo?date=${selectedDate}`}
+              className="text-sm text-violet-600 font-medium hover:underline flex items-center gap-1"
+            >
               <Icon name="plus" className="w-4 h-4" />
-              Novo agendamento
+              Novo
             </Link>
           </div>
-        ) : (
-          <div className="divide-y divide-slate-50">
-            {appointments.map((apt, idx) => {
+        </div>
+        
+        <div className="divide-y divide-slate-100">
+          {TIME_SLOTS.map(time => {
+            const apt = occupiedSlots.get(time)
+            const [hour] = time.split(':').map(Number)
+            const isLunchTime = hour === 12
+            
+            if (apt) {
               const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
               const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.birth_date)
+              
               return (
                 <Link
-                  key={apt.id}
+                  key={time}
                   href={`/dashboard/atendimento/${apt.id}`}
-                  className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors"
+                  className={`flex items-center gap-4 p-3 hover:bg-slate-50 transition-colors border-l-4 ${status.border}`}
                 >
-                  <div className="w-16 text-center">
-                    <p className="text-lg font-bold text-slate-900">
-                      {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {apt.end_time && new Date(apt.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                  <div className="w-14 text-center flex-shrink-0">
+                    <p className="text-sm font-bold text-slate-900">{time}</p>
                   </div>
-                  <div className={`w-1.5 h-12 rounded-full ${idx === 0 ? 'gradient-bg' : 'bg-slate-200'}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-slate-900 truncate">{apt.patients?.name || 'Paciente'}</p>
-                      {isPatientIncomplete && (
-                        <span className="flex-shrink-0 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
-                          <Icon name="bell" className="w-3 h-3 text-white" />
-                        </span>
-                      )}
+                  <div className={`flex-1 p-3 rounded-xl ${status.bg}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{apt.patients?.name || 'Paciente'}</p>
+                        {isPatientIncomplete && (
+                          <span className="w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
+                            <Icon name="bell" className="w-3 h-3 text-white" />
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-lg font-medium ${status.text} bg-white/50`}>
+                        {status.label}
+                      </span>
                     </div>
-                    <p className="text-sm text-slate-500 truncate">{apt.procedures?.name || 'Consulta'}</p>
+                    <p className="text-sm text-slate-600 mt-1">{apt.procedures?.name || 'Consulta'}</p>
                   </div>
-                  <span className={`text-xs px-3 py-1.5 rounded-xl font-medium ${status.bg} ${status.text}`}>
-                    {status.label}
-                  </span>
-                  <Icon name="chevronRight" className="w-5 h-5 text-slate-300" />
+                  <Icon name="chevronRight" className="w-5 h-5 text-slate-300 flex-shrink-0" />
                 </Link>
               )
-            })}
-          </div>
-        )}
+            }
+            
+            // Slot vazio - clicável para criar agendamento
+            return (
+              <Link
+                key={time}
+                href={`/dashboard/agenda/novo?date=${selectedDate}&time=${time}`}
+                className={`flex items-center gap-4 p-3 hover:bg-violet-50 transition-colors group ${isLunchTime ? 'bg-amber-50/50' : ''}`}
+              >
+                <div className="w-14 text-center flex-shrink-0">
+                  <p className={`text-sm font-medium ${isLunchTime ? 'text-amber-600' : 'text-slate-400'}`}>{time}</p>
+                </div>
+                <div className="flex-1 p-3 border-2 border-dashed border-slate-200 rounded-xl group-hover:border-violet-300 group-hover:bg-violet-50 transition-colors">
+                  <p className="text-sm text-slate-400 group-hover:text-violet-600">
+                    {isLunchTime ? '🍽️ Horário de almoço' : 'Clique para agendar'}
+                  </p>
+                </div>
+                <Icon name="plus" className="w-5 h-5 text-slate-300 group-hover:text-violet-500 flex-shrink-0" />
+              </Link>
+            )
+          })}
+        </div>
       </div>
     )
   }

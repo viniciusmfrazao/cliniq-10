@@ -19,6 +19,7 @@ type Props = {
   rooms: Room[]
   defaultPatientId?: string
   defaultDate?: string
+  defaultTime?: string
   appointment?: {
     id: string
     patient_id: string
@@ -40,6 +41,7 @@ export default function AppointmentForm({
   rooms,
   defaultPatientId,
   defaultDate,
+  defaultTime,
   appointment
 }: Props) {
   const router = useRouter()
@@ -47,7 +49,7 @@ export default function AppointmentForm({
   const isEditing = !!appointment
 
   const defaultStartDate = defaultDate || new Date().toISOString().split('T')[0]
-  const defaultStartTime = '09:00'
+  const defaultStartTime = defaultTime || '09:00'
 
   const [patients, setPatients] = useState(initialPatients)
   const [showNewPatient, setShowNewPatient] = useState(false)

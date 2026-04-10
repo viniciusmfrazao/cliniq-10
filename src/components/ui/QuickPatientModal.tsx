@@ -16,7 +16,6 @@ export default function QuickPatientModal({ clinicId, onPatientCreated, onClose 
   const [form, setForm] = useState({
     name: '',
     phone: '',
-    birth_date: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -38,7 +37,6 @@ export default function QuickPatientModal({ clinicId, onPatientCreated, onClose 
         clinic_id: clinicId,
         name: form.name.trim(),
         phone: form.phone || null,
-        birth_date: form.birth_date || null,
       })
       .select('id, name')
       .single()
@@ -141,7 +139,7 @@ export default function QuickPatientModal({ clinicId, onPatientCreated, onClose 
           </div>
 
           <div>
-            <label className="label">WhatsApp *</label>
+            <label className="label">WhatsApp</label>
             <input
               type="tel"
               className="input"
@@ -149,18 +147,6 @@ export default function QuickPatientModal({ clinicId, onPatientCreated, onClose 
               value={form.phone}
               onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))}
             />
-            <p className="text-xs text-slate-400 mt-1">Para contato e confirmação</p>
-          </div>
-
-          <div>
-            <label className="label">Data de nascimento</label>
-            <input
-              type="date"
-              className="input"
-              value={form.birth_date}
-              onChange={e => setForm(prev => ({ ...prev, birth_date: e.target.value }))}
-            />
-            <p className="text-xs text-slate-400 mt-1">Opcional agora, obrigatório na chegada</p>
           </div>
 
           {error && (
