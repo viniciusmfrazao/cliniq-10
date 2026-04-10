@@ -5,6 +5,9 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('AttendanceHeader')
 
 type Props = {
   appointment: {
@@ -90,17 +93,109 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   }
 
   const finishAttendance = async () => {
-    if (!confirm('Finalizar este atendimento?')) return
+    if (!confirm('Finalizar este atendimento?\n\nO estoque dos injetáveis será descontado.')) return
     setLoading(true)
     
-    await supabase
-      .from('appointments')
-      .update({ status: 'completed' })
-      .eq('id', appointment.id)
-    
-    setStatus('completed')
-    setLoading(false)
-    router.push('/dashboard/agenda')
+    try {
+      log.info('Finalizando atendimento', { appointmentId: appointment.id })
+
+      // 1. Buscar aplicações de injetáveis que ainda não tiveram estoque descontado
+      const { data: applications, error: fetchError } = await supabase
+        .from('injectable_applications')
+        .select('id, product_id, product_name, total_units')
+        .eq('appointment_id', appointment.id)
+        .eq('stock_deducted', false)
+
+      if (fetchError) {
+        log.error('Erro ao buscar aplicações', fetchError)
+        throw fetchError
+      }
+
+      log.info('Aplicações encontradas', { count: applications?.length || 0 })
+
+      // 2. Para cada aplicação, descontar do estoque
+      if (applications && applications.length > 0) {
+        for (const app of applications) {
+          log.info('Descontando estoque', { 
+            productId: app.product_id, 
+            productName: app.product_name,
+            units: app.total_units 
+          })
+
+          // Buscar estoque atual do produto
+          const { data: product, error: productError } = await supabase
+            .from('products')
+            .select('id, current_stock, name')
+            .eq('id', app.product_id)
+            .single()
+
+          if (productError) {
+            log.warn('Produto não encontrado, pulando', { productId: app.product_id })
+            continue
+          }
+
+          const newStock = Math.max(0, (product.current_stock || 0) - app.total_units)
+
+          // Atualizar estoque do produto
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({ current_stock: newStock })
+            .eq('id', app.product_id)
+
+          if (updateError) {
+            log.error('Erro ao atualizar estoque', updateError, { productId: app.product_id })
+          } else {
+            log.info('Estoque atualizado', { 
+              productId: app.product_id,
+              estoqueAnterior: product.current_stock,
+              estoqueNovo: newStock,
+              descontado: app.total_units
+            })
+          }
+
+          // Registrar movimentação de estoque
+          await supabase.from('stock_movements').insert({
+            clinic_id: clinicId,
+            product_id: app.product_id,
+            type: 'saida',
+            quantity: app.total_units,
+            previous_stock: product.current_stock,
+            new_stock: newStock,
+            reason: `Atendimento - ${app.product_name}`,
+            appointment_id: appointment.id,
+            patient_id: patient.id
+          })
+
+          // Marcar aplicação como descontada
+          await supabase
+            .from('injectable_applications')
+            .update({ stock_deducted: true })
+            .eq('id', app.id)
+        }
+
+        log.info('Estoque descontado com sucesso', { totalAplicacoes: applications.length })
+      }
+
+      // 3. Finalizar o atendimento
+      const { error: updateError } = await supabase
+        .from('appointments')
+        .update({ status: 'completed' })
+        .eq('id', appointment.id)
+
+      if (updateError) {
+        log.error('Erro ao finalizar atendimento', updateError)
+        throw updateError
+      }
+
+      log.info('Atendimento finalizado com sucesso')
+      setStatus('completed')
+      router.push('/dashboard/agenda')
+    } catch (err) {
+      log.error('Erro ao finalizar atendimento', err)
+      alert('Erro ao finalizar atendimento. Verifique os logs.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const age = calculateAge(patient.birth_date)
