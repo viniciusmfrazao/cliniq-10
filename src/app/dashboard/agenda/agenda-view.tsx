@@ -9,7 +9,7 @@ type Appointment = {
   end_time: string | null
   status: string
   notes: string | null
-  patients: { id: string; name: string; phone: string | null; photo_url: string | null } | null
+  patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
 }
 
@@ -50,6 +50,7 @@ export default function AgendaView({ appointments, viewMode, selectedDate }: Pro
           <div className="divide-y divide-slate-50">
             {appointments.map((apt, idx) => {
               const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+              const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.birth_date)
               return (
                 <Link
                   key={apt.id}
@@ -66,7 +67,14 @@ export default function AgendaView({ appointments, viewMode, selectedDate }: Pro
                   </div>
                   <div className={`w-1.5 h-12 rounded-full ${idx === 0 ? 'gradient-bg' : 'bg-slate-200'}`} />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 truncate">{apt.patients?.name || 'Paciente'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-slate-900 truncate">{apt.patients?.name || 'Paciente'}</p>
+                      {isPatientIncomplete && (
+                        <span className="flex-shrink-0 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
+                          <Icon name="bell" className="w-3 h-3 text-white" />
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-slate-500 truncate">{apt.procedures?.name || 'Consulta'}</p>
                   </div>
                   <span className={`text-xs px-3 py-1.5 rounded-xl font-medium ${status.bg} ${status.text}`}>

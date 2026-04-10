@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 import AppointmentActions from './actions'
 
 export default async function AppointmentDetailPage({ params }: { params: { id: string } }) {
@@ -12,7 +13,7 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
     .from('appointments')
     .select(`
       *,
-      patients(id, name, phone, email),
+      patients(id, name, phone, email, cpf, birth_date),
       procedures(id, name, price),
       users(id, name),
       rooms(id, name, color)
@@ -65,6 +66,10 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
     no_show: 'bg-red-100 text-red-700',
   }
 
+  // Verificar se cadastro do paciente está completo
+  const patient = appointment.patients as { id: string; name: string; phone: string | null; email: string | null; cpf: string | null; birth_date: string | null } | null
+  const isPatientIncomplete = patient && (!patient.cpf || !patient.birth_date)
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="flex items-start justify-between mb-6">
@@ -83,6 +88,33 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
           {statusLabel[appointment.status]}
         </span>
       </div>
+
+      {/* Alerta de cadastro incompleto */}
+      {isPatientIncomplete && (
+        <Link 
+          href={`/dashboard/pacientes/${patient.id}`}
+          className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between hover:bg-amber-100 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center">
+              <Icon name="bell" className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <p className="font-semibold text-amber-900">Cadastro pendente</p>
+              <p className="text-sm text-amber-700">
+                Complete o cadastro de <strong>{patient.name}</strong> 
+                {!patient.cpf && !patient.birth_date && ' (CPF e data de nascimento)'}
+                {!patient.cpf && patient.birth_date && ' (CPF)'}
+                {patient.cpf && !patient.birth_date && ' (data de nascimento)'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-amber-700">
+            <span className="text-sm font-medium">Completar</span>
+            <Icon name="chevronRight" className="w-4 h-4" />
+          </div>
+        </Link>
+      )}
 
       <div className="card p-6 mb-6">
         <div className="grid grid-cols-2 gap-6">
