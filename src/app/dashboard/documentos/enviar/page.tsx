@@ -11,8 +11,14 @@ export default async function EnviarDocumentoPage({ searchParams }: { searchPara
 
   const { data: userData } = await supabase
     .from('users')
-    .select('clinic_id, clinics(name)')
+    .select('clinic_id')
     .eq('id', user.id)
+    .single()
+
+  const { data: clinic } = await supabase
+    .from('clinics')
+    .select('name')
+    .eq('id', userData?.clinic_id)
     .single()
 
   const { data: templates } = await supabase
@@ -42,7 +48,7 @@ export default async function EnviarDocumentoPage({ searchParams }: { searchPara
 
       <SendDocumentForm
         clinicId={userData?.clinic_id || ''}
-        clinicName={(userData?.clinics as { name: string } | null)?.name || ''}
+        clinicName={clinic?.name || ''}
         templates={templates || []}
         patients={patients || []}
         userId={user.id}
