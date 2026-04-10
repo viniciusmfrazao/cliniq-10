@@ -11,7 +11,7 @@ type Props = {
     id: string
     start_time: string
     status: string
-    procedures: { name: string } | null
+    procedures: { name: string }[] | { name: string } | null
   }>
   medicalRecords: Array<{
     id: string
@@ -284,7 +284,7 @@ export default function MedicalRecordSection({
                   {pastAppointments.map(apt => (
                     <div key={apt.id} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
                       <span className="text-sm text-slate-700">
-                        {(apt.procedures as { name: string } | null)?.name || 'Consulta'}
+                        {Array.isArray(apt.procedures) ? apt.procedures[0]?.name : apt.procedures?.name || 'Consulta'}
                       </span>
                       <span className="text-xs text-slate-400">
                         {new Date(apt.start_time).toLocaleDateString('pt-BR')}
