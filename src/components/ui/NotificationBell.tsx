@@ -28,8 +28,8 @@ export default function NotificationBell({ userId }: { userId: string }) {
     
     loadNotifications()
 
-    // Polling a cada 15 segundos (mais estável que WebSocket)
-    const interval = setInterval(loadNotifications, 15000)
+    // Polling a cada 5 segundos
+    const interval = setInterval(loadNotifications, 5000)
 
     return () => {
       clearInterval(interval)

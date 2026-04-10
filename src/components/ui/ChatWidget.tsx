@@ -43,8 +43,8 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
     
     loadUnreadCounts()
 
-    // Polling a cada 10 segundos (mais estável que WebSocket)
-    const interval = setInterval(loadUnreadCounts, 10000)
+    // Polling a cada 5 segundos
+    const interval = setInterval(loadUnreadCounts, 5000)
 
     return () => {
       clearInterval(interval)
@@ -57,10 +57,10 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
     loadMessages(selectedUser.id)
     markMessagesAsRead(selectedUser.id)
 
-    // Polling de mensagens a cada 5 segundos quando em conversa
+    // Polling de mensagens a cada 2 segundos quando em conversa
     const interval = setInterval(() => {
       loadMessages(selectedUser.id)
-    }, 5000)
+    }, 2000)
 
     return () => {
       clearInterval(interval)
