@@ -84,6 +84,7 @@ export default function AppointmentForm({
     const appointmentData = {
       clinic_id: clinicId,
       patient_id: form.patient_id,
+      professional_id: form.professional_id || null,
       procedure_id: form.procedure_id || null,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
@@ -125,6 +126,21 @@ export default function AppointmentForm({
         >
           <option value="">Selecione o paciente</option>
           {patients.map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="label">Profissional *</label>
+        <select
+          className="input"
+          value={form.professional_id}
+          onChange={e => update('professional_id', e.target.value)}
+          required
+        >
+          <option value="">Selecione o profissional</option>
+          {professionals.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
