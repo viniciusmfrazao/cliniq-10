@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
+import Icon from '@/components/ui/Icon'
 
 type Props = { clinicName: string; userName: string; trialDaysLeft: number }
 
@@ -11,20 +12,32 @@ export default function TopBar({ clinicName, userName, trialDaysLeft }: Props) {
   const current = NAV_ITEMS.find(i => i.href === '/dashboard' ? pathname === i.href : pathname.startsWith(i.href))
 
   return (
-    <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100 flex-shrink-0">
+    <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100 flex-shrink-0 sticky top-0 z-40">
       <div className="flex items-center gap-3">
-        <div className="w-7 h-7 bg-brand-600 rounded-lg flex items-center justify-center">
-          <span className="text-white text-xs font-bold">C</span>
+        <div className="w-9 h-9 gradient-bg rounded-xl flex items-center justify-center shadow-md">
+          <span className="text-white text-sm font-bold">C</span>
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-900">{current?.label || clinicName}</p>
+          <p className="text-sm font-bold text-slate-900">{current?.label || clinicName}</p>
           {trialDaysLeft > 0 && trialDaysLeft <= 14 && (
-            <Link href="/planos" className="text-xs text-amber-600">Trial: {trialDaysLeft} dias</Link>
+            <Link href="/planos" className="text-xs text-purple-600 font-medium flex items-center gap-1">
+              <Icon name="zap" className="w-3 h-3" />
+              {trialDaysLeft} dias de trial
+            </Link>
           )}
         </div>
       </div>
-      <div className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center">
-        <span className="text-brand-700 text-sm font-semibold">{userName.charAt(0).toUpperCase()}</span>
+      
+      <div className="flex items-center gap-2">
+        <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+          <Icon name="bell" className="w-5 h-5" />
+        </button>
+        <Link 
+          href="/dashboard/config" 
+          className="w-9 h-9 gradient-bg rounded-xl flex items-center justify-center shadow-md"
+        >
+          <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
+        </Link>
       </div>
     </header>
   )

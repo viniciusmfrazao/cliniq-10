@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ClinicSettings from './clinic-settings'
 import PermissionsSettings from './permissions-settings'
+import ThemeSelector from './theme-selector'
 
 export default async function ConfigPage() {
   const supabase = createClient()
@@ -36,17 +37,22 @@ export default async function ConfigPage() {
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Configuracoes</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Gerencie sua clinica e permissoes</p>
+        <p className="text-sm text-slate-500 mt-0.5">Gerencie sua clinica e personalize o sistema</p>
       </div>
 
       <div className="space-y-6">
         <div className="card p-6">
-          <h2 className="text-sm font-semibold text-slate-900 mb-4">Dados da clinica</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-4">🎨 Tema do sistema</h2>
+          <ThemeSelector />
+        </div>
+
+        <div className="card p-6">
+          <h2 className="text-sm font-semibold text-slate-900 mb-4">🏥 Dados da clinica</h2>
           <ClinicSettings clinic={clinic} />
         </div>
 
         <div className="card p-6">
-          <h2 className="text-sm font-semibold text-slate-900 mb-4">Permissoes por funcao</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-4">🔐 Permissoes por funcao</h2>
           <PermissionsSettings clinicId={currentUser.clinic_id} permissions={permissions || []} />
         </div>
       </div>
