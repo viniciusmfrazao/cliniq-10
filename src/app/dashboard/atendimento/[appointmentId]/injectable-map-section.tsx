@@ -46,6 +46,18 @@ const REGIONS = [
   'Malar D', 'Malar E', 'Têmpora D', 'Têmpora E'
 ]
 
+// Cores para diferenciar produtos no mapa
+const PRODUCT_COLORS = [
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#f97316', // orange
+  '#10b981', // emerald
+  '#3b82f6', // blue
+  '#ef4444', // red
+  '#eab308', // yellow
+  '#6366f1', // indigo
+]
+
 export default function InjectableMapSection({ patient, appointmentId, products, currentInjections, clinicId }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [points, setPoints] = useState<Point[]>([])
@@ -114,6 +126,25 @@ export default function InjectableMapSection({ patient, appointmentId, products,
   }
 
   const totalUnits = points.reduce((acc, p) => acc + p.units, 0)
+
+  // Obter cor para cada produto
+  const productColorMap = new Map<string, string>()
+  const getProductColor = (productId: string) => {
+    if (!productColorMap.has(productId)) {
+      productColorMap.set(productId, PRODUCT_COLORS[productColorMap.size % PRODUCT_COLORS.length])
+    }
+    return productColorMap.get(productId) || PRODUCT_COLORS[0]
+  }
+
+  // Resumo por produto
+  const productSummary = points.reduce((acc, p) => {
+    if (!acc[p.product_id]) {
+      acc[p.product_id] = { name: p.product_name, units: 0, points: 0, color: getProductColor(p.product_id) }
+    }
+    acc[p.product_id].units += p.units
+    acc[p.product_id].points += 1
+    return acc
+  }, {} as Record<string, { name: string; units: number; points: number; color: string }>)
 
   const saveInjections = async () => {
     if (points.length === 0) {
@@ -189,6 +220,38 @@ export default function InjectableMapSection({ patient, appointmentId, products,
       </div>
 
       <div className="p-4">
+        {/* Alerta se não há produtos */}
+        {products.length === 0 && (
+          <div className="mb-4 p-4 bg-amber-50 rounded-xl">
+            <div className="flex items-center gap-3">
+              <Icon name="bell" className="w-5 h-5 text-amber-600" />
+              <div>
+                <p className="font-medium text-amber-800">Nenhum produto de injetável disponível</p>
+                <p className="text-sm text-amber-600">Cadastre produtos na categoria "injetavel" no estoque.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Legenda de produtos (quando há pontos) */}
+        {Object.keys(productSummary).length > 0 && (
+          <div className="mb-4 p-3 bg-slate-50 rounded-xl">
+            <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Produtos em uso:</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.values(productSummary).map((prod, i) => (
+                <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg shadow-sm">
+                  <span 
+                    className="w-3 h-3 rounded-full" 
+                    style={{ backgroundColor: prod.color }}
+                  />
+                  <span className="text-sm font-medium text-slate-700">{prod.name}</span>
+                  <span className="text-xs text-slate-500">({prod.units}U)</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* SVG Face Map Profissional */}
         <div className="relative bg-gradient-to-b from-slate-50 to-slate-100 rounded-xl p-4 mb-4">
           <FaceMap ref={svgRef} onClick={handleSvgClick} showRegions={true}>
@@ -215,16 +278,17 @@ export default function InjectableMapSection({ patient, appointmentId, products,
               })
             )}
 
-            {/* Pontos novos */}
+            {/* Pontos novos - com cor por produto */}
             {points.map((point) => {
               const coords = toSvgCoords(point.x, point.y)
+              const color = getProductColor(point.product_id)
               return (
                 <g key={point.id} onClick={(e) => { e.stopPropagation(); setSelectedPoint(point); }}>
                   <circle 
                     cx={coords.x} 
                     cy={coords.y} 
                     r="12" 
-                    fill="var(--color-primary)" 
+                    fill={color}
                     stroke="white" 
                     strokeWidth="3"
                     className="cursor-pointer hover:opacity-80 transition-opacity"
@@ -258,10 +322,14 @@ export default function InjectableMapSection({ patient, appointmentId, products,
         {/* Lista de pontos adicionados */}
         {points.length > 0 && (
           <div className="space-y-2 mb-4">
-            <h4 className="text-sm font-semibold text-slate-700">Pontos adicionados:</h4>
+            <h4 className="text-sm font-semibold text-slate-700">Pontos adicionados ({points.length}):</h4>
             {points.map(point => (
-              <div key={point.id} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
-                <div>
+              <div key={point.id} className="flex items-center gap-3 py-2 px-3 bg-slate-50 rounded-lg">
+                <span 
+                  className="w-4 h-4 rounded-full flex-shrink-0" 
+                  style={{ backgroundColor: getProductColor(point.product_id) }}
+                />
+                <div className="flex-1 min-w-0">
                   <span className="font-medium text-slate-900">{point.region}</span>
                   <span className="text-sm text-slate-500 ml-2">
                     {point.product_name} • {point.units}U
@@ -269,7 +337,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
                 </div>
                 <button
                   onClick={() => removePoint(point.id)}
-                  className="text-red-500 hover:text-red-700"
+                  className="text-red-500 hover:text-red-700 flex-shrink-0"
                 >
                   <Icon name="x" className="w-4 h-4" />
                 </button>
@@ -347,18 +415,44 @@ export default function InjectableMapSection({ patient, appointmentId, products,
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Produto</label>
-                <select
-                  value={formData.product_id}
-                  onChange={e => setFormData({ ...formData, product_id: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"
-                >
-                  <option value="">Selecione...</option>
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.current_stock} em estoque)
-                    </option>
-                  ))}
-                </select>
+                {products.length === 0 ? (
+                  <p className="text-sm text-amber-600 p-3 bg-amber-50 rounded-xl">
+                    Nenhum produto disponível. Cadastre no estoque.
+                  </p>
+                ) : (
+                  <select
+                    value={formData.product_id}
+                    onChange={e => setFormData({ ...formData, product_id: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"
+                  >
+                    <option value="">Selecione o produto...</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.brand ? `(${p.brand})` : ''} - {p.current_stock} {p.unit}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {formData.product_id && (
+                  <div className="mt-2 text-xs text-slate-500">
+                    {(() => {
+                      const p = products.find(x => x.id === formData.product_id)
+                      if (!p) return null
+                      return (
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="w-2 h-2 rounded-full" 
+                            style={{ backgroundColor: getProductColor(p.id) }}
+                          />
+                          <span>Lote: {p.batch_number || 'N/A'}</span>
+                          {p.expiry_date && (
+                            <span>• Val: {new Date(p.expiry_date).toLocaleDateString('pt-BR')}</span>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
               </div>
 
               <div>
