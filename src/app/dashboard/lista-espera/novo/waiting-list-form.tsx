@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Icon from '@/components/ui/Icon'
+import QuickPatientModal from '@/components/ui/QuickPatientModal'
 
 type Props = {
   clinicId: string
@@ -20,10 +22,12 @@ const DAYS = [
   { value: 'sabado', label: 'Sábado' },
 ]
 
-export default function WaitingListForm({ clinicId, patients, procedures, professionals }: Props) {
+export default function WaitingListForm({ clinicId, patients: initialPatients, procedures, professionals }: Props) {
   const router = useRouter()
   const supabase = createClient()
   
+  const [patients, setPatients] = useState(initialPatients)
+  const [showNewPatient, setShowNewPatient] = useState(false)
   const [form, setForm] = useState({
     patient_id: '',
     procedure_id: '',
@@ -35,6 +39,11 @@ export default function WaitingListForm({ clinicId, patients, procedures, profes
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const handleNewPatient = (patient: { id: string; name: string }) => {
+    setPatients(prev => [...prev, patient].sort((a, b) => a.name.localeCompare(b.name)))
+    setForm(prev => ({ ...prev, patient_id: patient.id }))
+  }
 
   const update = (field: string, value: string | string[]) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -83,10 +92,28 @@ export default function WaitingListForm({ clinicId, patients, procedures, profes
   }
 
   return (
+    <>
+    {showNewPatient && (
+      <QuickPatientModal
+        clinicId={clinicId}
+        onPatientCreated={handleNewPatient}
+        onClose={() => setShowNewPatient(false)}
+      />
+    )}
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Paciente */}
       <div>
-        <label className="label">Paciente *</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="label mb-0">Paciente *</label>
+          <button
+            type="button"
+            onClick={() => setShowNewPatient(true)}
+            className="text-xs text-violet-600 hover:text-violet-700 font-medium flex items-center gap-1"
+          >
+            <Icon name="plus" className="w-3 h-3" />
+            Novo paciente
+          </button>
+        </div>
         <select
           className="input"
           value={form.patient_id}
@@ -223,5 +250,6 @@ export default function WaitingListForm({ clinicId, patients, procedures, profes
         </button>
       </div>
     </form>
+    </>
   )
 }

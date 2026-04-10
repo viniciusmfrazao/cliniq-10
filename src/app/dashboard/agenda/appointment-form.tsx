@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Icon from '@/components/ui/Icon'
+import QuickPatientModal from '@/components/ui/QuickPatientModal'
 
 type Patient = { id: string; name: string }
 type Procedure = { id: string; name: string; duration_minutes: number; price: number }
@@ -32,7 +34,7 @@ type Props = {
 
 export default function AppointmentForm({ 
   clinicId, 
-  patients, 
+  patients: initialPatients, 
   procedures, 
   professionals, 
   rooms,
@@ -47,6 +49,8 @@ export default function AppointmentForm({
   const defaultStartDate = defaultDate || new Date().toISOString().split('T')[0]
   const defaultStartTime = '09:00'
 
+  const [patients, setPatients] = useState(initialPatients)
+  const [showNewPatient, setShowNewPatient] = useState(false)
   const [form, setForm] = useState({
     patient_id: appointment?.patient_id || defaultPatientId || '',
     procedure_id: appointment?.procedure_id || '',
@@ -60,6 +64,11 @@ export default function AppointmentForm({
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const handleNewPatient = (patient: { id: string; name: string }) => {
+    setPatients(prev => [...prev, patient].sort((a, b) => a.name.localeCompare(b.name)))
+    setForm(prev => ({ ...prev, patient_id: patient.id }))
+  }
 
   const update = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -115,9 +124,27 @@ export default function AppointmentForm({
   }
 
   return (
+    <>
+    {showNewPatient && (
+      <QuickPatientModal
+        clinicId={clinicId}
+        onPatientCreated={handleNewPatient}
+        onClose={() => setShowNewPatient(false)}
+      />
+    )}
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="label">Paciente *</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="label mb-0">Paciente *</label>
+          <button
+            type="button"
+            onClick={() => setShowNewPatient(true)}
+            className="text-xs text-violet-600 hover:text-violet-700 font-medium flex items-center gap-1"
+          >
+            <Icon name="plus" className="w-3 h-3" />
+            Novo paciente
+          </button>
+        </div>
         <select
           className="input"
           value={form.patient_id}
@@ -245,5 +272,6 @@ export default function AppointmentForm({
         </button>
       </div>
     </form>
+    </>
   )
 }
