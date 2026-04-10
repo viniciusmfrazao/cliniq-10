@@ -1,14 +1,11 @@
+@"
 import type { Metadata, Viewport } from 'next'
-import { Geist } from 'next/font/google'
 import './globals.css'
-
-const font = Geist({ variable: '--font-sans', subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Cliniq',
   description: 'Gestão para clínicas de estética',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Cliniq' },
 }
 
 export const viewport: Viewport = {
@@ -18,9 +15,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className={`${font.variable} font-sans antialiased bg-slate-50 text-slate-900`}>
+      <body style={{ fontFamily: 'system-ui, sans-serif' }}>
         {children}
       </body>
     </html>
   )
 }
+"@ | Out-File -FilePath "src\app\layout.tsx" -Encoding utf8 -NoNewline
