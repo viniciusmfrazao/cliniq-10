@@ -22,58 +22,76 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft 
   }
 
   return (
-    <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-100 h-screen flex-shrink-0">
+    <aside className="hidden md:flex flex-col w-72 sidebar-gradient h-screen flex-shrink-0 relative overflow-hidden">
+      {/* Decorative circles */}
+      <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="absolute bottom-20 left-0 w-32 h-32 bg-white/5 rounded-full -translate-x-1/2" />
+      
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center shadow-lg shadow-purple-200">
-            <span className="text-white text-lg font-bold">C</span>
+      <div className="px-6 py-6 relative">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center shadow-lg animate-pulse-glow">
+            <span className="text-white text-xl font-black">C</span>
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-900 truncate">{clinicName}</p>
-            <p className="text-xs text-slate-400 font-medium">Cliniq Pro</p>
+            <p className="text-white font-bold text-lg truncate">{clinicName}</p>
+            <p className="text-white/50 text-xs font-medium">Cliniq Pro</p>
           </div>
         </div>
       </div>
 
       {/* Trial Banner */}
       {trialDaysLeft > 0 && trialDaysLeft <= 14 && (
-        <div className="mx-3 mt-3 px-4 py-3 gradient-bg rounded-xl text-white">
-          <div className="flex items-center gap-2">
-            <Icon name="zap" className="w-4 h-4" />
-            <span className="text-sm font-semibold">{trialDaysLeft} dias restantes</span>
+        <div className="mx-4 mb-4 px-4 py-3 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20">
+          <div className="flex items-center gap-2 text-white">
+            <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center animate-float">
+              <Icon name="zap" className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-sm font-bold">{trialDaysLeft} dias restantes</p>
+              <Link href="/planos" className="text-xs text-white/70 hover:text-white">
+                Fazer upgrade →
+              </Link>
+            </div>
           </div>
-          <Link href="/planos" className="text-xs text-white/80 hover:text-white underline mt-1 inline-block">
-            Fazer upgrade →
-          </Link>
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-1">
-        {nav.map(item => {
+      <nav className="flex-1 px-4 py-2 overflow-y-auto space-y-1">
+        {nav.map((item, idx) => {
           const active = isActive(item.href)
           return (
             <Link 
               key={item.href} 
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              className={`group flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-300 ${
                 active 
-                  ? 'gradient-bg text-white shadow-lg shadow-purple-200' 
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  ? 'bg-white text-slate-900 shadow-lg' 
+                  : 'text-white/70 hover:bg-white/10 hover:text-white'
               }`}
+              style={{ animationDelay: `${idx * 50}ms` }}
             >
-              <Icon 
-                name={item.icon} 
-                className={`w-5 h-5 flex-shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} 
-              />
-              <span>{item.label}</span>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                active 
+                  ? 'gradient-bg shadow-lg' 
+                  : 'bg-white/10 group-hover:bg-white/20'
+              }`}>
+                <Icon 
+                  name={item.icon} 
+                  className={`w-5 h-5 ${active ? 'text-white' : 'text-white/80'}`} 
+                />
+              </div>
+              <span className="flex-1">{item.label}</span>
               {item.label === 'Eva IA' && (
-                <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  active ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-600'
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${
+                  active ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-white/20 text-white'
                 }`}>
                   IA
                 </span>
+              )}
+              {active && (
+                <div className="w-2 h-2 rounded-full gradient-bg animate-pulse-glow" />
               )}
             </Link>
           )
@@ -81,18 +99,18 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft 
       </nav>
 
       {/* User Section */}
-      <div className="px-3 py-4 border-t border-slate-100">
-        <div className="flex items-center gap-3 px-3 py-2">
-          <div className="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center flex-shrink-0">
+      <div className="p-4 border-t border-white/10">
+        <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-white/5 backdrop-blur-xl">
+          <div className="w-11 h-11 gradient-bg rounded-xl flex items-center justify-center shadow-lg">
             <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-900 truncate">{userName}</p>
-            <p className="text-xs text-slate-400 capitalize">{userRole}</p>
+            <p className="text-sm font-semibold text-white truncate">{userName}</p>
+            <p className="text-xs text-white/50 capitalize">{userRole}</p>
           </div>
           <button 
             onClick={logout} 
-            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all" 
+            className="p-2.5 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all" 
             title="Sair"
           >
             <Icon name="logout" className="w-5 h-5" />

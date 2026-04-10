@@ -26,114 +26,146 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50 flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Background decorations */}
-      <div className="absolute top-0 left-0 w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-soft" />
-      <div className="absolute bottom-0 right-0 w-96 h-96 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-soft" style={{ animationDelay: '1s' }} />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse-soft" style={{ animationDelay: '2s' }} />
-      
-      <div className="w-full max-w-sm relative">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 gradient-bg rounded-2xl mb-4 shadow-xl shadow-purple-200 animate-float">
-            <span className="text-white text-2xl font-bold">C</span>
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900">Cliniq</h1>
-          <p className="text-sm text-slate-500 mt-2">Gestao inteligente para sua clinica</p>
+    <div className="min-h-screen flex relative overflow-hidden">
+      {/* Left Panel - Decorative */}
+      <div className="hidden lg:flex flex-1 gradient-bg relative items-center justify-center p-12">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-glow" />
+          <div className="absolute bottom-20 right-20 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse-glow" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-white/5 rounded-full blur-2xl" />
         </div>
-
-        <div className="card p-6 shadow-xl">
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="label">Email</label>
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                  <Icon name="mail" className="w-5 h-5" />
-                </div>
-                <input 
-                  className="input pl-11" 
-                  type="email" 
-                  placeholder="voce@clinica.com" 
-                  value={email} 
-                  onChange={e => setEmail(e.target.value)} 
-                  required 
-                />
+        
+        <div className="relative text-white max-w-md">
+          <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-3xl flex items-center justify-center mb-8 animate-float">
+            <span className="text-4xl font-black">C</span>
+          </div>
+          <h1 className="text-5xl font-black mb-4 leading-tight">
+            Gestao inteligente para sua clinica
+          </h1>
+          <p className="text-white/70 text-lg">
+            Simplifique sua rotina com a plataforma mais completa para clinicas de estetica.
+          </p>
+          
+          <div className="mt-12 flex gap-4">
+            {['Agenda', 'Pacientes', 'Injetaveis', 'Estoque'].map((item, i) => (
+              <div 
+                key={item}
+                className="px-4 py-2 bg-white/10 backdrop-blur rounded-xl text-sm font-medium animate-slide-up"
+                style={{ animationDelay: `${i * 100}ms` }}
+              >
+                {item}
               </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right Panel - Form */}
+      <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 via-white to-slate-100">
+        <div className="w-full max-w-md">
+          {/* Mobile logo */}
+          <div className="lg:hidden text-center mb-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 gradient-bg rounded-3xl mb-4 shadow-xl animate-pulse-glow">
+              <span className="text-white text-2xl font-black">C</span>
             </div>
-            <div>
-              <label className="label">Senha</label>
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                  <Icon name="lock" className="w-5 h-5" />
-                </div>
-                <input 
-                  className="input pl-11 pr-11" 
-                  type={showPassword ? 'text' : 'password'} 
-                  placeholder="********" 
-                  value={password} 
-                  onChange={e => setPassword(e.target.value)} 
-                  required 
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <Icon name={showPassword ? 'eyeOff' : 'eye'} className="w-5 h-5" />
-                </button>
-              </div>
+            <h1 className="text-3xl font-black text-slate-900">Cliniq</h1>
+          </div>
+
+          <div className="card p-8">
+            <div className="mb-8">
+              <h2 className="text-2xl font-black text-slate-900">Bem-vindo de volta!</h2>
+              <p className="text-slate-500 mt-2">Entre para acessar sua clinica</p>
             </div>
 
-            {error && (
-              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-                <Icon name="x" className="w-4 h-4 flex-shrink-0" />
-                <p>{error}</p>
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label className="label">Email</label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                    <Icon name="mail" className="w-5 h-5" />
+                  </div>
+                  <input 
+                    className="input pl-12" 
+                    type="email" 
+                    placeholder="voce@clinica.com" 
+                    value={email} 
+                    onChange={e => setEmail(e.target.value)} 
+                    required 
+                  />
+                </div>
               </div>
-            )}
+              <div>
+                <label className="label">Senha</label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                    <Icon name="lock" className="w-5 h-5" />
+                  </div>
+                  <input 
+                    className="input pl-12 pr-12" 
+                    type={showPassword ? 'text' : 'password'} 
+                    placeholder="••••••••" 
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    required 
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <Icon name={showPassword ? 'eyeOff' : 'eye'} className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
 
-            <button 
-              type="submit" 
-              disabled={loading} 
-              className="btn-primary flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Entrando...
-                </>
-              ) : (
-                <>
-                  Entrar
-                  <Icon name="arrowRight" className="w-4 h-4" />
-                </>
+              {error && (
+                <div className="flex items-center gap-3 text-sm text-red-600 bg-red-50 border-2 border-red-100 rounded-2xl px-4 py-3">
+                  <Icon name="x" className="w-5 h-5 flex-shrink-0" />
+                  <p className="font-medium">{error}</p>
+                </div>
               )}
-            </button>
-          </form>
 
-          <div className="mt-6 pt-6 border-t border-slate-100">
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className="btn-primary flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Entrando...
+                  </>
+                ) : (
+                  <>
+                    Entrar
+                    <Icon name="arrowRight" className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-8 pt-8 border-t-2 border-slate-100">
+              <Link 
+                href="/esqueci-senha" 
+                className="text-sm text-slate-500 hover:text-slate-700 flex items-center justify-center gap-2 font-medium"
+              >
+                <Icon name="unlock" className="w-4 h-4" />
+                Esqueci minha senha
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-8 text-center">
+            <p className="text-slate-500 mb-2">Ainda nao tem conta?</p>
             <Link 
-              href="/esqueci-senha" 
-              className="text-sm text-slate-500 hover:text-slate-700 flex items-center justify-center gap-2 mb-4"
+              href="/cadastro" 
+              className="inline-flex items-center gap-2 gradient-text font-bold hover:opacity-80 transition-opacity"
             >
-              <Icon name="unlock" className="w-4 h-4" />
-              Esqueci minha senha
+              <Icon name="sparkles" className="w-5 h-5" />
+              Criar conta gratis - 14 dias de trial
             </Link>
           </div>
         </div>
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-slate-500 mb-2">Ainda nao tem conta?</p>
-          <Link 
-            href="/cadastro" 
-            className="inline-flex items-center gap-2 gradient-text font-semibold text-sm hover:opacity-80"
-          >
-            <Icon name="sparkles" className="w-4 h-4" />
-            Criar conta gratis - 14 dias de trial
-          </Link>
-        </div>
-
-        <p className="text-center text-xs text-slate-400 mt-8">
-          © 2026 Cliniq. Todos os direitos reservados.
-        </p>
       </div>
     </div>
   )

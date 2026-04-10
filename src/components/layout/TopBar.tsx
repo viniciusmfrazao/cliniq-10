@@ -12,29 +12,31 @@ export default function TopBar({ clinicName, userName, trialDaysLeft }: Props) {
   const current = NAV_ITEMS.find(i => i.href === '/dashboard' ? pathname === i.href : pathname.startsWith(i.href))
 
   return (
-    <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100 flex-shrink-0 sticky top-0 z-40">
+    <header className="md:hidden flex items-center justify-between px-4 py-4 glass flex-shrink-0 sticky top-0 z-40">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 gradient-bg rounded-xl flex items-center justify-center shadow-md">
-          <span className="text-white text-sm font-bold">C</span>
+        <div className="w-10 h-10 gradient-bg rounded-2xl flex items-center justify-center shadow-lg animate-pulse-glow">
+          <span className="text-white text-sm font-black">C</span>
         </div>
         <div>
           <p className="text-sm font-bold text-slate-900">{current?.label || clinicName}</p>
           {trialDaysLeft > 0 && trialDaysLeft <= 14 && (
-            <Link href="/planos" className="text-xs text-purple-600 font-medium flex items-center gap-1">
-              <Icon name="zap" className="w-3 h-3" />
-              {trialDaysLeft} dias de trial
+            <Link href="/planos" className="flex items-center gap-1">
+              <span className="text-xs gradient-text font-semibold flex items-center gap-1">
+                <Icon name="zap" className="w-3 h-3" />
+                {trialDaysLeft} dias
+              </span>
             </Link>
           )}
         </div>
       </div>
       
       <div className="flex items-center gap-2">
-        <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+        <button className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-xl transition-all">
           <Icon name="bell" className="w-5 h-5" />
         </button>
         <Link 
           href="/dashboard/config" 
-          className="w-9 h-9 gradient-bg rounded-xl flex items-center justify-center shadow-md"
+          className="w-10 h-10 gradient-bg rounded-2xl flex items-center justify-center shadow-lg"
         >
           <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
         </Link>

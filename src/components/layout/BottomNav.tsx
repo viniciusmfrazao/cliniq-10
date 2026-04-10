@@ -12,29 +12,31 @@ export default function BottomNav({ userRole }: { userRole: string }) {
 
   return (
     <nav 
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 z-50"
+      className="md:hidden fixed bottom-0 left-0 right-0 glass z-50"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="flex items-center justify-around px-2 py-1">
+      <div className="flex items-center justify-around px-2 py-2">
         {items.map(item => {
           const active = isActive(item.href)
           return (
             <Link 
               key={item.href} 
               href={item.href}
-              className="flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all"
+              className="flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all"
             >
-              <div className={`p-2 rounded-xl transition-all ${
+              <div className={`p-2.5 rounded-2xl transition-all duration-300 ${
                 active 
-                  ? 'gradient-bg shadow-lg shadow-purple-200' 
-                  : 'bg-transparent'
-              }`}>
+                  ? 'gradient-bg shadow-lg scale-110' 
+                  : 'bg-transparent hover:bg-slate-100'
+              }`}
+              style={active ? { boxShadow: '0 4px 15px color-mix(in srgb, var(--primary) 40%, transparent)' } : {}}
+              >
                 <Icon 
                   name={item.icon} 
                   className={`w-5 h-5 ${active ? 'text-white' : 'text-slate-400'}`} 
                 />
               </div>
-              <span className={`text-[10px] font-semibold ${
+              <span className={`text-[10px] font-bold transition-colors ${
                 active ? 'gradient-text' : 'text-slate-400'
               }`}>
                 {item.label}
