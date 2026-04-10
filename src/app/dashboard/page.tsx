@@ -14,6 +14,46 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const h = new Date().getHours()
   const greeting = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'
 
+  // KPIs reais
+  const today = new Date().toISOString().split('T')[0]
+  const startOfDay = `${today}T00:00:00`
+  const endOfDay = `${today}T23:59:59`
+
+  const { count: appointmentsToday } = await supabase
+    .from('appointments')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+    .gte('start_time', startOfDay)
+    .lte('start_time', endOfDay)
+    .neq('status', 'cancelled')
+
+  const { count: totalPatients } = await supabase
+    .from('patients')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+
+  const { count: waitingList } = await supabase
+    .from('waiting_list')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+    .eq('status', 'waiting')
+
+  // Proximas consultas do dia
+  const { data: nextAppointments } = await supabase
+    .from('appointments')
+    .select(`
+      *,
+      patients(name),
+      procedures(name)
+    `)
+    .eq('clinic_id', userData?.clinic_id)
+    .gte('start_time', new Date().toISOString())
+    .lte('start_time', endOfDay)
+    .neq('status', 'cancelled')
+    .neq('status', 'completed')
+    .order('start_time')
+    .limit(5)
+
   return (
     <div className="max-w-2xl mx-auto md:max-w-none">
       {searchParams.welcome === '1' && (
@@ -41,48 +81,86 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       )}
 
       <div className="grid grid-cols-2 gap-3 mb-6 md:grid-cols-4">
-        {[
-          { label: 'Consultas hoje', value: '0', sub: 'agendadas' },
-          { label: 'Pacientes', value: '0', sub: 'cadastrados' },
-          { label: 'WhatsApp', value: '0', sub: 'conversas abertas' },
-          { label: 'Estoque', value: '0', sub: 'alertas' },
-        ].map(k => (
-          <div key={k.label} className="card p-4">
-            <p className="text-xs text-slate-400 font-medium">{k.label}</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{k.value}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{k.sub}</p>
-          </div>
-        ))}
+        <Link href="/dashboard/agenda" className="card p-4 hover:shadow-md transition-shadow">
+          <p className="text-xs text-slate-400 font-medium">Consultas hoje</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{appointmentsToday || 0}</p>
+          <p className="text-xs text-slate-400 mt-0.5">agendadas</p>
+        </Link>
+        <Link href="/dashboard/pacientes" className="card p-4 hover:shadow-md transition-shadow">
+          <p className="text-xs text-slate-400 font-medium">Pacientes</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{totalPatients || 0}</p>
+          <p className="text-xs text-slate-400 mt-0.5">cadastrados</p>
+        </Link>
+        <div className="card p-4">
+          <p className="text-xs text-slate-400 font-medium">Lista de espera</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{waitingList || 0}</p>
+          <p className="text-xs text-slate-400 mt-0.5">aguardando</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-slate-400 font-medium">Estoque</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">0</p>
+          <p className="text-xs text-slate-400 mt-0.5">alertas</p>
+        </div>
       </div>
 
       <div className="mb-6">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Acoes rapidas</p>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {[
-            { label: 'Novo agendamento', href: '/dashboard/agenda',     color: 'bg-brand-50 text-brand-700 border-brand-100' },
-            { label: 'Novo paciente',    href: '/dashboard/pacientes',  color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-            { label: 'Abrir prontuario', href: '/dashboard/prontuario', color: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
-            { label: 'Falar com Eva',    href: '/dashboard/eva',        color: 'bg-violet-50 text-violet-700 border-violet-100' },
-          ].map(a => (
-            <Link key={a.href} href={a.href} className={`border rounded-xl p-4 text-sm font-medium transition-all hover:opacity-80 active:scale-95 ${a.color}`}>
-              {a.label}
-            </Link>
-          ))}
+          <Link href="/dashboard/agenda/novo" className="border rounded-xl p-4 text-sm font-medium transition-all hover:opacity-80 active:scale-95 bg-brand-50 text-brand-700 border-brand-100">
+            Novo agendamento
+          </Link>
+          <Link href="/dashboard/pacientes/novo" className="border rounded-xl p-4 text-sm font-medium transition-all hover:opacity-80 active:scale-95 bg-emerald-50 text-emerald-700 border-emerald-100">
+            Novo paciente
+          </Link>
+          <Link href="/dashboard/procedimentos" className="border rounded-xl p-4 text-sm font-medium transition-all hover:opacity-80 active:scale-95 bg-cyan-50 text-cyan-700 border-cyan-100">
+            Procedimentos
+          </Link>
+          <Link href="/dashboard/eva" className="border rounded-xl p-4 text-sm font-medium transition-all hover:opacity-80 active:scale-95 bg-violet-50 text-violet-700 border-violet-100">
+            Falar com Eva
+          </Link>
         </div>
       </div>
 
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold text-slate-900">Agenda de hoje</p>
-          <Link href="/dashboard/agenda" className="text-xs text-brand-600 font-medium">Ver tudo</Link>
+          <p className="text-sm font-semibold text-slate-900">Proximas consultas</p>
+          <Link href="/dashboard/agenda" className="text-xs text-brand-600 font-medium">Ver agenda</Link>
         </div>
-        <div className="flex flex-col items-center justify-center py-8 text-center">
-          <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-            <span className="text-slate-400 text-xl">📅</span>
+        
+        {!nextAppointments || nextAppointments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+              <span className="text-slate-400 text-xl">📅</span>
+            </div>
+            <p className="text-sm text-slate-500">Nenhuma consulta restante hoje</p>
+            <Link href="/dashboard/agenda/novo" className="mt-3 text-xs text-brand-600 font-medium">Agendar consulta</Link>
           </div>
-          <p className="text-sm text-slate-500">Nenhuma consulta hoje</p>
-          <Link href="/dashboard/agenda" className="mt-3 text-xs text-brand-600 font-medium">Agendar consulta</Link>
-        </div>
+        ) : (
+          <div className="space-y-2">
+            {nextAppointments.map(apt => (
+              <Link 
+                key={apt.id} 
+                href={`/dashboard/agenda/${apt.id}`}
+                className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{apt.patients?.name}</p>
+                  <p className="text-xs text-slate-500">{apt.procedures?.name || 'Consulta'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-slate-900">
+                    {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    apt.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {apt.status === 'confirmed' ? 'Confirmado' : 'Agendado'}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,0 +1,263 @@
+'use client'
+
+import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+
+type Patient = { id: string; name: string }
+type Procedure = { id: string; name: string; duration_minutes: number; price: number }
+type Professional = { id: string; name: string }
+type Room = { id: string; name: string }
+
+type Props = {
+  clinicId: string
+  patients: Patient[]
+  procedures: Procedure[]
+  professionals: Professional[]
+  rooms: Room[]
+  defaultPatientId?: string
+  defaultDate?: string
+  appointment?: {
+    id: string
+    patient_id: string
+    procedure_id: string | null
+    professional_id: string | null
+    room_id: string | null
+    start_time: string
+    end_time: string
+    notes: string | null
+    status: string
+  }
+}
+
+export default function AppointmentForm({ 
+  clinicId, 
+  patients, 
+  procedures, 
+  professionals, 
+  rooms,
+  defaultPatientId,
+  defaultDate,
+  appointment
+}: Props) {
+  const router = useRouter()
+  const supabase = createClient()
+  const isEditing = !!appointment
+
+  const defaultStartDate = defaultDate || new Date().toISOString().split('T')[0]
+  const defaultStartTime = '09:00'
+
+  const [form, setForm] = useState({
+    patient_id: appointment?.patient_id || defaultPatientId || '',
+    procedure_id: appointment?.procedure_id || '',
+    professional_id: appointment?.professional_id || '',
+    room_id: appointment?.room_id || '',
+    date: appointment ? appointment.start_time.split('T')[0] : defaultStartDate,
+    start_time: appointment ? appointment.start_time.split('T')[1].slice(0, 5) : defaultStartTime,
+    duration: '30',
+    notes: appointment?.notes || '',
+    status: appointment?.status || 'scheduled',
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const update = (field: string, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+    
+    // Auto-preencher duracao quando selecionar procedimento
+    if (field === 'procedure_id' && value) {
+      const proc = procedures.find(p => p.id === value)
+      if (proc) {
+        setForm(prev => ({ ...prev, duration: proc.duration_minutes.toString() }))
+      }
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    const startTime = new Date(`${form.date}T${form.start_time}:00`)
+    const endTime = new Date(startTime.getTime() + parseInt(form.duration) * 60000)
+
+    const appointmentData = {
+      clinic_id: clinicId,
+      patient_id: form.patient_id,
+      procedure_id: form.procedure_id || null,
+      professional_id: form.professional_id || null,
+      room_id: form.room_id || null,
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      notes: form.notes || null,
+      status: form.status,
+    }
+
+    let result
+    if (isEditing) {
+      result = await supabase
+        .from('appointments')
+        .update(appointmentData)
+        .eq('id', appointment.id)
+    } else {
+      result = await supabase
+        .from('appointments')
+        .insert(appointmentData)
+    }
+
+    if (result.error) {
+      setError(result.error.message)
+      setLoading(false)
+      return
+    }
+
+    router.push(`/dashboard/agenda?date=${form.date}`)
+    router.refresh()
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="label">Paciente *</label>
+        <select
+          className="input"
+          value={form.patient_id}
+          onChange={e => update('patient_id', e.target.value)}
+          required
+        >
+          <option value="">Selecione o paciente</option>
+          {patients.map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="label">Procedimento</label>
+        <select
+          className="input"
+          value={form.procedure_id}
+          onChange={e => update('procedure_id', e.target.value)}
+        >
+          <option value="">Selecione (opcional)</option>
+          {procedures.map(p => (
+            <option key={p.id} value={p.id}>{p.name} ({p.duration_minutes} min)</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="label">Data *</label>
+          <input
+            type="date"
+            className="input"
+            value={form.date}
+            onChange={e => update('date', e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="label">Horario *</label>
+          <input
+            type="time"
+            className="input"
+            value={form.start_time}
+            onChange={e => update('start_time', e.target.value)}
+            required
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="label">Duracao (minutos)</label>
+        <select
+          className="input"
+          value={form.duration}
+          onChange={e => update('duration', e.target.value)}
+        >
+          <option value="15">15 min</option>
+          <option value="30">30 min</option>
+          <option value="45">45 min</option>
+          <option value="60">1 hora</option>
+          <option value="90">1h 30min</option>
+          <option value="120">2 horas</option>
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="label">Profissional</label>
+          <select
+            className="input"
+            value={form.professional_id}
+            onChange={e => update('professional_id', e.target.value)}
+          >
+            <option value="">Selecione (opcional)</option>
+            {professionals.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Sala</label>
+          <select
+            className="input"
+            value={form.room_id}
+            onChange={e => update('room_id', e.target.value)}
+          >
+            <option value="">Selecione (opcional)</option>
+            {rooms.map(r => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {isEditing && (
+        <div>
+          <label className="label">Status</label>
+          <select
+            className="input"
+            value={form.status}
+            onChange={e => update('status', e.target.value)}
+          >
+            <option value="scheduled">Agendado</option>
+            <option value="confirmed">Confirmado</option>
+            <option value="in_progress">Em atendimento</option>
+            <option value="completed">Realizado</option>
+            <option value="cancelled">Cancelado</option>
+            <option value="no_show">Faltou</option>
+          </select>
+        </div>
+      )}
+
+      <div>
+        <label className="label">Observacoes</label>
+        <textarea
+          className="input min-h-[80px]"
+          placeholder="Anotacoes sobre o agendamento..."
+          value={form.notes}
+          onChange={e => update('notes', e.target.value)}
+        />
+      </div>
+
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+      )}
+
+      <div className="flex gap-3">
+        <button type="submit" disabled={loading} className="btn-primary">
+          {loading ? 'Salvando...' : isEditing ? 'Salvar alteracoes' : 'Agendar'}
+        </button>
+        <button 
+          type="button" 
+          onClick={() => router.back()} 
+          className="btn-secondary"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  )
+}
