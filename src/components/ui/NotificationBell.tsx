@@ -24,29 +24,15 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const unreadCount = notifications.filter(n => !n.read_at).length
 
   useEffect(() => {
-    // Proteção contra userId inválido
     if (!userId) return
+    
     loadNotifications()
 
-    // Realtime subscription
-    const channel = supabase
-      .channel(`notifications-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload) => {
-          setNotifications(prev => [payload.new as Notification, ...prev])
-        }
-      )
-      .subscribe()
+    // Polling a cada 15 segundos (mais estável que WebSocket)
+    const interval = setInterval(loadNotifications, 15000)
 
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(interval)
     }
   }, [userId])
 

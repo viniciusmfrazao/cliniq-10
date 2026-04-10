@@ -39,45 +39,31 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
   const otherUsers = (users || []).filter(u => u.id !== currentUserId)
 
   useEffect(() => {
-    // Proteção contra dados inválidos
     if (!currentUserId || !clinicId) return
+    
     loadUnreadCounts()
 
-    // Realtime subscription for new messages
-    const channel = supabase
-      .channel(`chat-${currentUserId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `receiver_id=eq.${currentUserId}`
-        },
-        (payload) => {
-          const newMsg = payload.new as Message
-          if (selectedUser?.id === newMsg.sender_id) {
-            setMessages(prev => [...prev, newMsg])
-            markMessagesAsRead(newMsg.sender_id)
-          } else {
-            setUnreadCounts(prev => ({
-              ...prev,
-              [newMsg.sender_id]: (prev[newMsg.sender_id] || 0) + 1
-            }))
-          }
-        }
-      )
-      .subscribe()
+    // Polling a cada 10 segundos (mais estável que WebSocket)
+    const interval = setInterval(loadUnreadCounts, 10000)
 
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(interval)
     }
-  }, [currentUserId, selectedUser])
+  }, [currentUserId, clinicId])
 
   useEffect(() => {
-    if (selectedUser) {
+    if (!selectedUser) return
+    
+    loadMessages(selectedUser.id)
+    markMessagesAsRead(selectedUser.id)
+
+    // Polling de mensagens a cada 5 segundos quando em conversa
+    const interval = setInterval(() => {
       loadMessages(selectedUser.id)
-      markMessagesAsRead(selectedUser.id)
+    }, 5000)
+
+    return () => {
+      clearInterval(interval)
     }
   }, [selectedUser])
 
