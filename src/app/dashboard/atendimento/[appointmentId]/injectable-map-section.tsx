@@ -72,6 +72,11 @@ export default function InjectableMapSection({ patient, appointmentId, products,
   const [activeProduct, setActiveProduct] = useState<string>('')
   const [unitsPerClick, setUnitsPerClick] = useState(1)
   const [isMarkingMode, setIsMarkingMode] = useState(false)
+  
+  // Modo manual (entrada direta de unidades)
+  const [manualMode, setManualMode] = useState(false)
+  const [manualUnits, setManualUnits] = useState('')
+  const [manualNotes, setManualNotes] = useState('')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -148,7 +153,67 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     return acc
   }, {} as Record<string, { name: string; units: number; points: number; color: string }>)
 
-  // Salvar aplicações
+  // Salvar entrada manual (sem marcar pontos no mapa)
+  const saveManualEntry = async () => {
+    const units = parseInt(manualUnits)
+    if (!activeProduct || !units || units <= 0) {
+      alert('Selecione um produto e informe a quantidade de unidades')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+    
+    const product = products.find(p => p.id === activeProduct)
+    console.log('=== SALVANDO ENTRADA MANUAL ===')
+    console.log('Produto:', product?.name, 'Unidades:', units)
+
+    try {
+      const productType = product?.category?.toLowerCase().includes('preenchimento') || 
+                         product?.category?.toLowerCase().includes('filler') 
+                         ? 'filler' : 'toxin'
+
+      const { data: application, error: appError } = await supabase
+        .from('injectable_applications')
+        .insert({
+          clinic_id: clinicId,
+          patient_id: patient.id,
+          appointment_id: appointmentId,
+          product_id: activeProduct,
+          product_name: product?.name || 'Produto',
+          product_brand: product?.brand || null,
+          total_units: units,
+          stock_deducted: false,
+          application_date: new Date().toISOString().split('T')[0],
+          type: productType,
+          notes: manualNotes || null
+        })
+        .select()
+        .single()
+
+      if (appError) {
+        console.error('Erro ao salvar entrada manual:', appError)
+        alert(`Erro: ${appError.message}`)
+        setError(appError.message)
+        return
+      }
+
+      console.log('Entrada manual salva!', application?.id)
+      alert(`✓ ${units} unidades de ${product?.name} registradas com sucesso!`)
+      
+      setManualUnits('')
+      setManualNotes('')
+      setManualMode(false)
+      router.refresh()
+    } catch (err) {
+      console.error('Erro:', err)
+      alert('Erro ao salvar. Veja o console.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Salvar aplicações (com pontos no mapa)
   const saveInjections = async () => {
     if (points.length === 0) return
     
@@ -219,12 +284,11 @@ export default function InjectableMapSection({ patient, appointmentId, products,
 
         console.log('=== APLICAÇÃO CRIADA ===', application?.id)
 
-        // Criar pontos
+        // Criar pontos (sem region - campo não existe na tabela)
         const pointsData = productPoints.map(p => ({
           application_id: application.id,
           x: p.x,
           y: p.y,
-          region: p.region,
           units: p.units
         }))
 
@@ -233,20 +297,11 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           .insert(pointsData)
 
         if (pointsError) {
-          log.error('Erro ao criar pontos na tabela injectable_points', pointsError, {
-            applicationId: application.id,
-            numPoints: pointsData.length,
-            errorCode: pointsError.code,
-            errorDetails: pointsError.details,
-            errorHint: pointsError.hint
-          })
-          throw new Error(`Erro ao salvar pontos: ${pointsError.message}`)
+          console.error('Erro ao criar pontos:', pointsError)
+          setError(`Erro ao salvar pontos: ${pointsError.message}`)
+        } else {
+          console.log('Pontos criados com sucesso:', pointsData.length)
         }
-
-        log.info('Pontos criados com sucesso', { 
-          applicationId: application.id,
-          numPoints: pointsData.length 
-        })
       }
 
       log.info('Todas as aplicações salvas com sucesso')
@@ -272,18 +327,39 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     <div className="card overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-slate-100">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-slate-900">Mapa de Injetáveis</h3>
-            <p className="text-xs text-slate-500">
-              {isMarkingMode ? 'Clique no rosto para adicionar pontos' : 'Configure e ative o modo de marcação'}
-            </p>
-          </div>
-          {points.length > 0 && (
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-900">Registro de Injetáveis</h3>
+          {(points.length > 0 || manualUnits) && (
             <span className="text-lg font-bold text-violet-600">
-              {totalUnits}U
+              {manualMode ? (manualUnits || 0) : totalUnits}U
             </span>
           )}
+        </div>
+        
+        {/* Tabs: Mapa / Manual */}
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+          <button
+            onClick={() => { setManualMode(false); setIsMarkingMode(false) }}
+            className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
+              !manualMode 
+                ? 'bg-white text-violet-700 shadow-sm' 
+                : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            <Icon name="edit" className="w-4 h-4 inline mr-1" />
+            Marcar no Mapa
+          </button>
+          <button
+            onClick={() => { setManualMode(true); setIsMarkingMode(false) }}
+            className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
+              manualMode 
+                ? 'bg-white text-violet-700 shadow-sm' 
+                : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            <Icon name="edit3" className="w-4 h-4 inline mr-1" />
+            Entrada Manual
+          </button>
         </div>
       </div>
 
@@ -295,6 +371,90 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           </div>
         )}
 
+        {/* === MODO MANUAL === */}
+        {manualMode ? (
+          <div className="space-y-4">
+            <div className="p-4 bg-gradient-to-br from-violet-50 to-pink-50 rounded-xl space-y-4">
+              <p className="text-sm text-slate-600">
+                Informe diretamente a quantidade de unidades utilizadas
+              </p>
+
+              {/* Seletor de Produto */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Produto *</label>
+                {products.length === 0 ? (
+                  <p className="text-sm text-amber-600 p-2 bg-amber-50 rounded-lg">
+                    Cadastre produtos no estoque primeiro
+                  </p>
+                ) : (
+                  <select
+                    value={activeProduct}
+                    onChange={e => setActiveProduct(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:border-violet-500 outline-none"
+                  >
+                    <option value="">Selecione o produto...</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.brand ? `(${p.brand})` : ''} - {p.current_stock} {p.unit || 'un'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Quantidade de unidades */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Quantidade de unidades *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={manualUnits}
+                  onChange={e => setManualUnits(e.target.value)}
+                  placeholder="Ex: 52"
+                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:border-violet-500 outline-none"
+                />
+              </div>
+
+              {/* Observações */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Observações (opcional)</label>
+                <textarea
+                  value={manualNotes}
+                  onChange={e => setManualNotes(e.target.value)}
+                  placeholder="Ex: Aplicação em região frontal e glabela"
+                  rows={2}
+                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:border-violet-500 outline-none resize-none"
+                />
+              </div>
+
+              {/* Botão salvar manual */}
+              <button
+                onClick={saveManualEntry}
+                disabled={saving || !activeProduct || !manualUnits}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                {saving ? (
+                  <span className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
+                ) : (
+                  <>
+                    <Icon name="check" className="w-4 h-4" />
+                    Registrar {manualUnits || 0} unidades
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Alerta */}
+            <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-xl">
+              <Icon name="bell" className="w-4 h-4 text-amber-600 mt-0.5" />
+              <p className="text-xs text-amber-700">
+                O estoque será descontado automaticamente ao finalizar o atendimento
+              </p>
+            </div>
+          </div>
+        ) : (
+        /* === MODO MAPA === */
+        <>
         {/* Configuração do produto */}
         <div className="p-4 bg-slate-50 rounded-xl space-y-3">
           <div className="flex items-center justify-between">
@@ -535,6 +695,8 @@ export default function InjectableMapSection({ patient, appointmentId, products,
               )}
             </button>
           </>
+        )}
+        </>
         )}
 
         {/* Aplicações já salvas */}
