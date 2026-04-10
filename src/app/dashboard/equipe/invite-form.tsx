@@ -5,10 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 const ROLES = [
-  { value: 'doctor', label: 'Medico(a)' },
-  { value: 'esthetician', label: 'Esteticista' },
+  { value: 'admin', label: 'Administrador' },
+  { value: 'professional', label: 'Profissional (Médico/Esteticista)' },
   { value: 'receptionist', label: 'Recepcionista' },
-  { value: 'viewer', label: 'Visualizador' },
 ]
 
 export default function InviteForm({ clinicId }: { clinicId: string }) {
@@ -55,7 +54,8 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
     })
 
     if (dbError) {
-      setError('Erro ao adicionar membro. Email ja pode estar em uso.')
+      console.error('Erro ao inserir usuário:', dbError)
+      setError(`Erro: ${dbError.message}`)
       setLoading(false)
       return
     }
