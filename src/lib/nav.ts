@@ -3,6 +3,7 @@ export type NavItem = { label: string; href: string; icon: string; roles: string
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Inicio',         href: '/dashboard',              icon: 'home',      roles: ['admin','doctor','esthetician','receptionist','viewer'] },
   { label: 'Agenda',         href: '/dashboard/agenda',       icon: 'calendar',  roles: ['admin','doctor','esthetician','receptionist'] },
+  { label: 'Lista de Espera',href: '/dashboard/lista-espera', icon: 'clock',     roles: ['admin','doctor','esthetician','receptionist'] },
   { label: 'Pacientes',      href: '/dashboard/pacientes',    icon: 'users',     roles: ['admin','doctor','esthetician','receptionist'] },
   { label: 'Procedimentos',  href: '/dashboard/procedimentos',icon: 'clipboard', roles: ['admin','doctor','esthetician'] },
   { label: 'Prontuario',     href: '/dashboard/prontuario',   icon: 'file',      roles: ['admin','doctor','esthetician'] },
