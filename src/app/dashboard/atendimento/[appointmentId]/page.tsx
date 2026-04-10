@@ -60,24 +60,14 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .order('created_at', { ascending: false })
     .limit(10)
 
-  // Todos os produtos com estoque (para uso no mapa de injetáveis)
-  const { data: allProducts } = await supabase
+  // TODOS os produtos com estoque disponível (sem filtro de categoria)
+  const { data: productsForMap } = await supabase
     .from('products')
     .select('id, name, brand, current_stock, unit, batch_number, expiry_date, category')
     .eq('clinic_id', userData?.clinic_id)
     .gt('current_stock', 0)
+    .order('category')
     .order('name')
-
-  // Filtrar produtos injetáveis (prioridade) ou mostrar todos se não houver
-  const injectableCategories = ['injetavel', 'toxina', 'preenchedor', 'bioestimulador', 'filler']
-  const injectableProducts = allProducts?.filter(p => 
-    injectableCategories.some(cat => p.category?.toLowerCase().includes(cat))
-  )
-  
-  // Se não encontrar produtos de injetáveis, usar todos os produtos como fallback
-  const productsForMap = (injectableProducts && injectableProducts.length > 0) 
-    ? injectableProducts 
-    : allProducts
 
   // Aplicacoes de injetaveis deste atendimento
   const { data: currentInjections } = await supabase

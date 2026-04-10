@@ -394,19 +394,31 @@ export default function InjectableMapSection({ patient, appointmentId, products,
 
       {/* Modal para adicionar ponto */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-slide-up">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Adicionar ponto</h3>
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowModal(false)
+              setTempPoint(null)
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Adicionar ponto de aplicação</h3>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Região</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Região anatômica</label>
                 <select
                   value={formData.region}
                   onChange={e => setFormData({ ...formData, region: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-violet-500 outline-none transition-colors"
                 >
-                  <option value="">Selecione...</option>
+                  <option value="">Selecione a região...</option>
                   {REGIONS.map(r => (
                     <option key={r} value={r}>{r}</option>
                   ))}
@@ -414,69 +426,90 @@ export default function InjectableMapSection({ patient, appointmentId, products,
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Produto</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Produto ({products.length} disponíveis)
+                </label>
                 {products.length === 0 ? (
-                  <p className="text-sm text-amber-600 p-3 bg-amber-50 rounded-xl">
-                    Nenhum produto disponível. Cadastre no estoque.
-                  </p>
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                    <p className="text-sm font-medium text-amber-800">Nenhum produto com estoque</p>
+                    <p className="text-xs text-amber-600 mt-1">Cadastre produtos no módulo de Estoque</p>
+                  </div>
                 ) : (
                   <select
                     value={formData.product_id}
                     onChange={e => setFormData({ ...formData, product_id: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-violet-500 outline-none transition-colors"
                   >
                     <option value="">Selecione o produto...</option>
                     {products.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.name} {p.brand ? `(${p.brand})` : ''} - {p.current_stock} {p.unit}
+                        {p.name} {p.brand ? `(${p.brand})` : ''} - {p.current_stock} {p.unit || 'un'}
                       </option>
                     ))}
                   </select>
                 )}
-                {formData.product_id && (
-                  <div className="mt-2 text-xs text-slate-500">
-                    {(() => {
-                      const p = products.find(x => x.id === formData.product_id)
-                      if (!p) return null
-                      return (
-                        <div className="flex items-center gap-2">
-                          <span 
-                            className="w-2 h-2 rounded-full" 
-                            style={{ backgroundColor: getProductColor(p.id) }}
-                          />
-                          <span>Lote: {p.batch_number || 'N/A'}</span>
-                          {p.expiry_date && (
-                            <span>• Val: {new Date(p.expiry_date).toLocaleDateString('pt-BR')}</span>
-                          )}
-                        </div>
-                      )
-                    })()}
-                  </div>
-                )}
+                {formData.product_id && (() => {
+                  const p = products.find(x => x.id === formData.product_id)
+                  if (!p) return null
+                  return (
+                    <div className="mt-2 p-2 bg-slate-50 rounded-lg">
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <span 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: getProductColor(p.id) }}
+                        />
+                        <span className="font-medium">{p.name}</span>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        Lote: {p.batch_number || 'N/A'}
+                        {p.expiry_date && ` • Validade: ${new Date(p.expiry_date).toLocaleDateString('pt-BR')}`}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Unidades</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.units}
-                  onChange={e => setFormData({ ...formData, units: parseInt(e.target.value) || 1 })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Quantidade (unidades)</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, units: Math.max(1, formData.units - 1) })}
+                    className="w-12 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 transition-colors"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.units}
+                    onChange={e => setFormData({ ...formData, units: Math.max(1, parseInt(e.target.value) || 1) })}
+                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg font-bold focus:bg-white focus:border-violet-500 outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, units: formData.units + 1 })}
+                    className="w-12 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
 
             <div className="flex gap-3 mt-6">
               <button
+                type="button"
                 onClick={() => { setShowModal(false); setTempPoint(null); }}
-                className="flex-1 btn-secondary"
+                className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-colors"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={addPoint}
-                className="flex-1 btn-primary"
+                disabled={!formData.region || !formData.product_id}
+                className="flex-1 py-3 px-4 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-colors"
               >
                 Adicionar
               </button>
