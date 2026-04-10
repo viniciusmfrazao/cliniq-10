@@ -35,15 +35,12 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
-  // Proteção contra dados inválidos
-  if (!currentUserId || !clinicId) {
-    return null
-  }
-
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
   const otherUsers = (users || []).filter(u => u.id !== currentUserId)
 
   useEffect(() => {
+    // Proteção contra dados inválidos
+    if (!currentUserId || !clinicId) return
     loadUnreadCounts()
 
     // Realtime subscription for new messages
@@ -178,6 +175,9 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
     esthetician: 'Esteticista',
     receptionist: 'Recepção',
   }
+
+  // Proteção após os hooks
+  if (!currentUserId || !clinicId) return null
 
   return (
     <div className="fixed bottom-4 right-4 z-50">

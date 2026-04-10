@@ -21,14 +21,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  // Proteção contra userId inválido
-  if (!userId) {
-    return null
-  }
-
   const unreadCount = notifications.filter(n => !n.read_at).length
 
   useEffect(() => {
+    // Proteção contra userId inválido
+    if (!userId) return
     loadNotifications()
 
     // Realtime subscription
@@ -112,6 +109,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
     alert: { icon: 'bell', color: 'text-amber-500 bg-amber-100' },
     info: { icon: 'info', color: 'text-slate-500 bg-slate-100' },
   }
+
+  // Proteção após os hooks
+  if (!userId) return null
 
   return (
     <div className="relative">
