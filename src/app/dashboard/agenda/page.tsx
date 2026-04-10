@@ -63,7 +63,8 @@ export default async function AgendaPage({
     .select(`
       *,
       patients(id, name, phone, photo_url, cpf, birth_date),
-      procedures(name, duration_minutes, price)
+      procedures(name, duration_minutes, price),
+      professional:users!appointments_professional_id_fkey(id, name)
     `)
     .eq('clinic_id', userData?.clinic_id)
     .gte('start_time', startDate)

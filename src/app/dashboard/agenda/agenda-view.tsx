@@ -13,8 +13,10 @@ type Appointment = {
   status: string
   notes: string | null
   professional_id: string | null
+  checked_in_at: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
+  professional: { id: string; name: string } | null
 }
 
 type Professional = {
@@ -54,11 +56,13 @@ const PROFESSIONAL_COLORS = [
 function AppointmentCard({ 
   apt, 
   onStatusChange,
+  onCheckIn,
   onDragStart,
   compact = false
 }: { 
   apt: Appointment
   onStatusChange: (id: string, status: string) => void
+  onCheckIn: (id: string) => void
   onDragStart?: (e: React.DragEvent, apt: Appointment) => void
   compact?: boolean
 }) {
@@ -68,6 +72,11 @@ function AppointmentCard({
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.birth_date)
   const canConfirm = apt.status === 'scheduled'
   const canCancel = ['scheduled', 'confirmed'].includes(apt.status)
+  const canCheckIn = ['scheduled', 'confirmed'].includes(apt.status) && !apt.checked_in_at
+  const isCheckedIn = !!apt.checked_in_at
+  const checkedInTime = apt.checked_in_at 
+    ? new Date(apt.checked_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : null
 
   return (
     <div 
@@ -79,11 +88,16 @@ function AppointmentCard({
         href={`/dashboard/atendimento/${apt.id}`}
         draggable={!!onDragStart}
         onDragStart={onDragStart ? (e) => onDragStart(e, apt) : undefined}
-        className={`block p-2 rounded-lg ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        className={`block p-2 rounded-lg ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''}`}
       >
         <div className="flex items-center justify-between gap-1">
           <span className="text-xs font-bold text-slate-700">{aptTime}</span>
           <div className="flex items-center gap-1">
+            {isCheckedIn && (
+              <span className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center" title={`Chegou às ${checkedInTime}`}>
+                <Icon name="check" className="w-2 h-2 text-white" />
+              </span>
+            )}
             {isPatientIncomplete && (
               <span className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
                 <Icon name="bell" className="w-2 h-2 text-white" />
@@ -104,21 +118,30 @@ function AppointmentCard({
 
       {/* Preview ao passar o mouse */}
       {showPreview && (
-        <div className="absolute z-50 left-full ml-2 top-0 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-4 animate-in fade-in slide-in-from-left-2 duration-200">
+        <div className="absolute z-50 left-full ml-2 top-0 w-72 bg-white rounded-xl shadow-xl border border-slate-200 p-4 animate-in fade-in slide-in-from-left-2 duration-200">
           <div className="flex items-start gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white font-bold">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${isCheckedIn ? 'bg-gradient-to-br from-emerald-500 to-teal-500' : 'bg-gradient-to-br from-violet-500 to-purple-500'}`}>
               {apt.patients?.name?.charAt(0) || '?'}
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-slate-900 truncate">{apt.patients?.name}</p>
               <p className="text-xs text-slate-500">{apt.patients?.phone || 'Sem telefone'}</p>
             </div>
+            {isCheckedIn && (
+              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-medium">
+                ✓ {checkedInTime}
+              </span>
+            )}
           </div>
           
           <div className="space-y-2 text-xs mb-3">
             <div className="flex justify-between">
               <span className="text-slate-500">Procedimento:</span>
               <span className="font-medium text-slate-700">{apt.procedures?.name || 'Consulta'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Profissional:</span>
+              <span className="font-medium text-slate-700">{apt.professional?.name || '-'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Duração:</span>
@@ -137,33 +160,46 @@ function AppointmentCard({
           </div>
 
           {/* Ações rápidas */}
-          <div className="flex gap-2 pt-2 border-t border-slate-100">
-            {canConfirm && (
+          <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+            {/* Check-in - destaque */}
+            {canCheckIn && (
               <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'confirmed') }}
-                className="flex-1 py-1.5 px-2 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-1"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCheckIn(apt.id) }}
+                className="w-full py-2 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold rounded-lg hover:from-emerald-600 hover:to-teal-600 transition-all flex items-center justify-center gap-2 shadow-md"
               >
-                <Icon name="check" className="w-3 h-3" />
-                Confirmar
+                <Icon name="userCheck" className="w-4 h-4" />
+                Registrar Chegada
               </button>
             )}
-            {canCancel && (
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'cancelled') }}
-                className="flex-1 py-1.5 px-2 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-1"
+            
+            <div className="flex gap-2">
+              {canConfirm && (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'confirmed') }}
+                  className="flex-1 py-1.5 px-2 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-1"
+                >
+                  <Icon name="check" className="w-3 h-3" />
+                  Confirmar
+                </button>
+              )}
+              {canCancel && (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'cancelled') }}
+                  className="flex-1 py-1.5 px-2 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-1"
+                >
+                  <Icon name="x" className="w-3 h-3" />
+                  Cancelar
+                </button>
+              )}
+              <Link
+                href={`/dashboard/atendimento/${apt.id}`}
+                className="flex-1 py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
+                onClick={(e) => e.stopPropagation()}
               >
-                <Icon name="x" className="w-3 h-3" />
-                Cancelar
-              </button>
-            )}
-            <Link
-              href={`/dashboard/atendimento/${apt.id}`}
-              className="flex-1 py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Icon name="eye" className="w-3 h-3" />
-              Abrir
-            </Link>
+                <Icon name="eye" className="w-3 h-3" />
+                Abrir
+              </Link>
+            </div>
           </div>
         </div>
       )}
@@ -185,6 +221,21 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
     const { error } = await supabase
       .from('appointments')
       .update({ status: newStatus })
+      .eq('id', appointmentId)
+    
+    if (!error) {
+      router.refresh()
+    }
+  }
+
+  // Registrar check-in do paciente
+  async function handleCheckIn(appointmentId: string) {
+    const { error } = await supabase
+      .from('appointments')
+      .update({ 
+        checked_in_at: new Date().toISOString(),
+        status: 'confirmed' // Confirma automaticamente ao fazer check-in
+      })
       .eq('id', appointmentId)
     
     if (!error) {
@@ -366,6 +417,7 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
                                 key={apt.id}
                                 apt={apt}
                                 onStatusChange={handleStatusChange}
+                                onCheckIn={handleCheckIn}
                                 onDragStart={handleDragStart}
                               />
                             ))}
@@ -482,6 +534,7 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
                             key={apt.id}
                             apt={apt}
                             onStatusChange={handleStatusChange}
+                            onCheckIn={handleCheckIn}
                             onDragStart={handleDragStart}
                             compact
                           />
