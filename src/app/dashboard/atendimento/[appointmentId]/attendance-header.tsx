@@ -97,7 +97,8 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
     setLoading(true)
     
     try {
-      log.info('Finalizando atendimento', { appointmentId: appointment.id })
+      console.log('=== FINALIZANDO ATENDIMENTO ===')
+      console.log('Appointment ID:', appointment.id)
 
       // 1. Buscar aplicações de injetáveis que ainda não tiveram estoque descontado
       const { data: applications, error: fetchError } = await supabase
@@ -106,21 +107,23 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
         .eq('appointment_id', appointment.id)
         .eq('stock_deducted', false)
 
+      console.log('Aplicações encontradas:', applications)
+      console.log('Erro ao buscar:', fetchError)
+
       if (fetchError) {
-        log.error('Erro ao buscar aplicações', fetchError)
+        alert(`Erro ao buscar aplicações: ${fetchError.message}`)
         throw fetchError
       }
 
-      log.info('Aplicações encontradas', { count: applications?.length || 0 })
+      if (!applications || applications.length === 0) {
+        console.log('NENHUMA APLICAÇÃO ENCONTRADA para este atendimento')
+        alert('Nenhuma aplicação de injetável encontrada para descontar.\n\nVerifique se você salvou os pontos no mapa.')
+      } else {
+        console.log(`${applications.length} aplicações para descontar`)
 
-      // 2. Para cada aplicação, descontar do estoque
-      if (applications && applications.length > 0) {
+        // 2. Para cada aplicação, descontar do estoque
         for (const app of applications) {
-          log.info('Descontando estoque', { 
-            productId: app.product_id, 
-            productName: app.product_name,
-            units: app.total_units 
-          })
+          console.log('Processando aplicação:', app)
 
           // Buscar estoque atual do produto
           const { data: product, error: productError } = await supabase
@@ -130,11 +133,13 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
             .single()
 
           if (productError) {
-            log.warn('Produto não encontrado, pulando', { productId: app.product_id })
+            console.log('Erro ao buscar produto:', productError)
             continue
           }
 
-          const newStock = Math.max(0, (product.current_stock || 0) - app.total_units)
+          console.log('Produto encontrado:', product)
+          const newStock = Math.max(0, (product.current_stock || 0) - (app.total_units || 0))
+          console.log(`Estoque: ${product.current_stock} -> ${newStock} (descontando ${app.total_units})`)
 
           // Atualizar estoque do produto
           const { error: updateError } = await supabase
@@ -143,37 +148,41 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
             .eq('id', app.product_id)
 
           if (updateError) {
-            log.error('Erro ao atualizar estoque', updateError, { productId: app.product_id })
+            console.error('Erro ao atualizar estoque:', updateError)
+            alert(`Erro ao atualizar estoque: ${updateError.message}`)
           } else {
-            log.info('Estoque atualizado', { 
-              productId: app.product_id,
-              estoqueAnterior: product.current_stock,
-              estoqueNovo: newStock,
-              descontado: app.total_units
-            })
+            console.log('Estoque atualizado com sucesso!')
           }
 
           // Registrar movimentação de estoque
-          await supabase.from('stock_movements').insert({
+          const { error: movError } = await supabase.from('stock_movements').insert({
             clinic_id: clinicId,
             product_id: app.product_id,
             type: 'saida',
-            quantity: app.total_units,
-            previous_stock: product.current_stock,
+            quantity: app.total_units || 0,
+            previous_stock: product.current_stock || 0,
             new_stock: newStock,
             reason: `Atendimento - ${app.product_name}`,
             appointment_id: appointment.id,
             patient_id: patient.id
           })
 
+          if (movError) {
+            console.error('Erro ao registrar movimentação:', movError)
+          }
+
           // Marcar aplicação como descontada
-          await supabase
+          const { error: markError } = await supabase
             .from('injectable_applications')
             .update({ stock_deducted: true })
             .eq('id', app.id)
+
+          if (markError) {
+            console.error('Erro ao marcar como descontada:', markError)
+          }
         }
 
-        log.info('Estoque descontado com sucesso', { totalAplicacoes: applications.length })
+        alert(`Estoque descontado!\n\n${applications.length} aplicação(ões) processada(s).`)
       }
 
       // 3. Finalizar o atendimento
@@ -183,16 +192,16 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
         .eq('id', appointment.id)
 
       if (updateError) {
-        log.error('Erro ao finalizar atendimento', updateError)
+        alert(`Erro ao finalizar: ${updateError.message}`)
         throw updateError
       }
 
-      log.info('Atendimento finalizado com sucesso')
+      console.log('=== ATENDIMENTO FINALIZADO ===')
       setStatus('completed')
       router.push('/dashboard/agenda')
     } catch (err) {
-      log.error('Erro ao finalizar atendimento', err)
-      alert('Erro ao finalizar atendimento. Verifique os logs.')
+      console.error('Erro geral:', err)
+      alert('Erro ao finalizar atendimento. Veja o console.')
     } finally {
       setLoading(false)
     }
