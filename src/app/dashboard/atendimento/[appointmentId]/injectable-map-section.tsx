@@ -154,11 +154,11 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     setSaving(true)
     setError(null)
     
-    log.info('Iniciando salvamento de aplicações', { 
-      totalPoints: points.length, 
-      appointmentId,
-      patientId: patient.id 
-    })
+    console.log('=== INICIANDO SALVAMENTO ===')
+    console.log('Pontos:', points.length)
+    console.log('Clinic ID:', clinicId)
+    console.log('Patient ID:', patient.id)
+    console.log('Appointment ID:', appointmentId)
 
     try {
       // Agrupar por produto
@@ -168,54 +168,50 @@ export default function InjectableMapSection({ patient, appointmentId, products,
         return acc
       }, {} as Record<string, Point[]>)
 
-      log.info('Produtos agrupados', { 
-        totalProdutos: Object.keys(byProduct).length,
-        produtos: Object.keys(byProduct)
-      })
+      console.log('Produtos agrupados:', Object.keys(byProduct).length)
 
       for (const [productId, productPoints] of Object.entries(byProduct)) {
         const product = products.find(p => p.id === productId)
         const totalProductUnits = productPoints.reduce((a, p) => a + p.units, 0)
 
-        log.info('Salvando aplicação', { 
-          productId, 
-          productName: product?.name,
-          totalUnits: totalProductUnits,
-          numPoints: productPoints.length 
-        })
+        console.log('Salvando produto:', product?.name, 'Units:', totalProductUnits)
+
+        const insertData = {
+          clinic_id: clinicId,
+          patient_id: patient.id,
+          appointment_id: appointmentId,
+          product_id: productId,
+          product_name: product?.name || 'Produto',
+          product_brand: product?.brand || null,
+          total_units: totalProductUnits,
+          stock_deducted: false,
+          application_date: new Date().toISOString().split('T')[0],
+          type: 'botox'
+        }
+
+        console.log('Dados para inserir:', JSON.stringify(insertData, null, 2))
 
         // Criar aplicação
         const { data: application, error: appError } = await supabase
           .from('injectable_applications')
-          .insert({
-            clinic_id: clinicId,
-            patient_id: patient.id,
-            appointment_id: appointmentId,
-            product_id: productId,
-            product_name: product?.name || 'Produto',
-            product_brand: product?.brand || null,
-            total_units: totalProductUnits,
-            stock_deducted: false,
-            application_date: new Date().toISOString().split('T')[0],
-            type: 'botox'
-          })
+          .insert(insertData)
           .select()
           .single()
 
         if (appError) {
-          log.error('Erro ao criar aplicação na tabela injectable_applications', appError, {
-            productId,
-            clinicId,
-            patientId: patient.id,
-            appointmentId,
-            errorCode: appError.code,
-            errorDetails: appError.details,
-            errorHint: appError.hint
-          })
-          throw new Error(`Erro ao salvar aplicação: ${appError.message}`)
+          console.error('=== ERRO AO SALVAR APLICAÇÃO ===')
+          console.error('Código:', appError.code)
+          console.error('Mensagem:', appError.message)
+          console.error('Detalhes:', appError.details)
+          console.error('Hint:', appError.hint)
+          
+          const errorMsg = `ERRO: ${appError.code} - ${appError.message}\nDetalhes: ${appError.details || 'N/A'}\nDica: ${appError.hint || 'N/A'}`
+          setError(errorMsg)
+          alert(errorMsg)
+          throw new Error(errorMsg)
         }
 
-        log.info('Aplicação criada com sucesso', { applicationId: application.id })
+        console.log('=== APLICAÇÃO CRIADA ===', application?.id)
 
         // Criar pontos
         const pointsData = productPoints.map(p => ({
