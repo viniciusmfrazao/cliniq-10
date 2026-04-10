@@ -6,8 +6,10 @@ import { useRouter } from 'next/navigation'
 
 const ROLES = [
   { value: 'admin', label: 'Administrador' },
-  { value: 'professional', label: 'Profissional (Médico/Esteticista)' },
+  { value: 'doctor', label: 'Médico(a)' },
+  { value: 'esthetician', label: 'Esteticista' },
   { value: 'receptionist', label: 'Recepcionista' },
+  { value: 'viewer', label: 'Visualizador' },
 ]
 
 export default function InviteForm({ clinicId }: { clinicId: string }) {

@@ -54,7 +54,7 @@ export default async function AgendaPage({
     .from('users')
     .select('id, name, role')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'professional'])
+    .in('role', ['admin', 'doctor', 'esthetician'])
     .order('name')
 
   // Buscar agendamentos
