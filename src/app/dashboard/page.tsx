@@ -18,13 +18,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     <div className="max-w-2xl mx-auto md:max-w-none">
       {searchParams.welcome === '1' && (
         <div className="mb-6 p-4 bg-brand-600 rounded-2xl text-white">
-          <p className="font-semibold text-lg">Bem-vinda ao Cliniq! 🎉</p>
+          <p className="font-semibold text-lg">Bem-vinda ao Cliniq!</p>
           <p className="text-brand-200 text-sm mt-1">{trialDaysLeft} dias de trial gratuito.</p>
         </div>
       )}
 
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">{greeting}, {firstName} 👋</h1>
+        <h1 className="text-xl font-bold text-slate-900">{greeting}, {firstName}</h1>
         <p className="text-sm text-slate-500 mt-0.5">
           {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
@@ -56,12 +56,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       </div>
 
       <div className="mb-6">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Ações rápidas</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Acoes rapidas</p>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[
             { label: 'Novo agendamento', href: '/dashboard/agenda',     color: 'bg-brand-50 text-brand-700 border-brand-100' },
             { label: 'Novo paciente',    href: '/dashboard/pacientes',  color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-            { label: 'Abrir prontuário', href: '/dashboard/prontuario', color: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+            { label: 'Abrir prontuario', href: '/dashboard/prontuario', color: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
             { label: 'Falar com Eva',    href: '/dashboard/eva',        color: 'bg-violet-50 text-violet-700 border-violet-100' },
           ].map(a => (
             <Link key={a.href} href={a.href} className={`border rounded-xl p-4 text-sm font-medium transition-all hover:opacity-80 active:scale-95 ${a.color}`}>

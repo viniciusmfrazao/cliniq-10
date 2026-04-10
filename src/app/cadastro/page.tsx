@@ -41,7 +41,7 @@ export default function CadastroPage() {
     })
 
     if (fnError) {
-      setError('Erro ao configurar sua clínica. Tente novamente.')
+      setError('Erro ao configurar sua clinica. Tente novamente.')
       setLoading(false)
       return
     }
@@ -57,13 +57,13 @@ export default function CadastroPage() {
             <span className="text-white text-xl font-bold">C</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Criar conta</h1>
-          <p className="text-sm text-slate-500 mt-1">14 dias grátis · sem cartão</p>
+          <p className="text-sm text-slate-500 mt-1">14 dias gratis - sem cartao</p>
         </div>
         <div className="card p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Nome da clínica</label>
-              <input className="input" type="text" placeholder="Clínica Bella" value={form.clinicName} onChange={e => update('clinicName', e.target.value)} required />
+              <label className="label">Nome da clinica</label>
+              <input className="input" type="text" placeholder="Clinica Bella" value={form.clinicName} onChange={e => update('clinicName', e.target.value)} required />
             </div>
             <div>
               <label className="label">Seu nome</label>
@@ -75,19 +75,19 @@ export default function CadastroPage() {
             </div>
             <div>
               <label className="label">Senha</label>
-              <input className="input" type="password" placeholder="Mínimo 8 caracteres" value={form.password} onChange={e => update('password', e.target.value)} required minLength={8} />
+              <input className="input" type="password" placeholder="Minimo 8 caracteres" value={form.password} onChange={e => update('password', e.target.value)} required minLength={8} />
             </div>
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
             <button type="submit" disabled={loading} className="btn-primary">
-              {loading ? 'Criando sua conta...' : 'Começar gratuitamente'}
+              {loading ? 'Criando sua conta...' : 'Comecar gratuitamente'}
             </button>
           </form>
           <div className="mt-4 text-center">
-            <Link href="/login" className="text-sm text-slate-500 hover:text-slate-700">Já tenho conta</Link>
+            <Link href="/login" className="text-sm text-slate-500 hover:text-slate-700">Ja tenho conta</Link>
           </div>
         </div>
         <p className="text-center text-xs text-slate-400 mt-4">
-          Ao criar sua conta você concorda com os Termos de Uso.
+          Ao criar sua conta voce concorda com os Termos de Uso.
         </p>
       </div>
     </div>

@@ -10,7 +10,7 @@ export default function PlanosPage({ searchParams }: { searchParams: { trial_exp
 
         {searchParams.trial_expirado === '1' && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
-            <p className="text-sm font-medium text-amber-800">Seu período de trial encerrou.</p>
+            <p className="text-sm font-medium text-amber-800">Seu periodo de trial encerrou.</p>
             <p className="text-xs text-amber-600 mt-1">Escolha um plano para continuar usando o Cliniq.</p>
           </div>
         )}
@@ -21,19 +21,19 @@ export default function PlanosPage({ searchParams }: { searchParams: { trial_exp
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-8">
           {[
             {
-              name: 'Starter', price: 'R$ 197', period: '/mês',
+              name: 'Starter', price: 'R$ 197', period: '/mes',
               highlight: false,
-              features: ['Agenda inteligente', 'Cadastro de pacientes', 'Prontuário básico', '1 profissional'],
+              features: ['Agenda inteligente', 'Cadastro de pacientes', 'Prontuario basico', '1 profissional'],
             },
             {
-              name: 'Pro', price: 'R$ 397', period: '/mês',
+              name: 'Pro', price: 'R$ 397', period: '/mes',
               highlight: true,
-              features: ['Tudo do Starter', 'Mapa de Injetáveis', 'Estoque inteligente', 'Docs ICP-Brasil', 'Eva IA + WhatsApp', '5 profissionais'],
+              features: ['Tudo do Starter', 'Mapa de Injetaveis', 'Estoque inteligente', 'Docs ICP-Brasil', 'Eva IA + WhatsApp', '5 profissionais'],
             },
             {
-              name: 'Clinic+', price: 'R$ 797', period: '/mês',
+              name: 'Clinic+', price: 'R$ 797', period: '/mes',
               highlight: false,
-              features: ['Tudo do Pro', 'Voz + Transcrição', 'Avaliação Facial IA', 'Secretária 24h', 'Ilimitado'],
+              features: ['Tudo do Pro', 'Voz + Transcricao', 'Avaliacao Facial IA', 'Secretaria 24h', 'Ilimitado'],
             },
           ].map(plan => (
             <div key={plan.name} className={`card p-6 ${plan.highlight ? 'border-2 border-brand-400 ring-2 ring-brand-100' : ''}`}>

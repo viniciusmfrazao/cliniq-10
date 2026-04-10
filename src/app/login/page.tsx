@@ -41,13 +41,13 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="label">Senha</label>
-              <input className="input" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+              <input className="input" type="password" placeholder="********" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
             <button type="submit" disabled={loading} className="btn-primary">{loading ? 'Entrando...' : 'Entrar'}</button>
           </form>
           <div className="mt-4 text-center">
-            <Link href="/cadastro" className="text-sm text-brand-600 hover:underline">Criar conta grátis — 14 dias</Link>
+            <Link href="/cadastro" className="text-sm text-brand-600 hover:underline">Criar conta gratis - 14 dias</Link>
           </div>
         </div>
       </div>
