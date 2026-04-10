@@ -1,92 +1,171 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 import AgendaView from './agenda-view'
 import AgendaFilters from './agenda-filters'
 
 export default async function AgendaPage({ 
   searchParams 
 }: { 
-  searchParams: { date?: string; professional?: string; room?: string } 
+  searchParams: { date?: string; view?: string; professional?: string } 
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  if (!user) redirect('/login')
 
+  const { data: userData } = await supabase
+    .from('users')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+
+  // Data selecionada ou hoje
   const selectedDate = searchParams.date || new Date().toISOString().split('T')[0]
-  const startOfDay = `${selectedDate}T00:00:00`
-  const endOfDay = `${selectedDate}T23:59:59`
+  const viewMode = searchParams.view || 'day'
+  const selectedProfessional = searchParams.professional || 'all'
 
-  // Buscar agendamentos do dia
-  let query = supabase
-    .from('appointments')
-    .select(`
-      *,
-      patients(id, name, phone),
-      procedures(id, name, duration_minutes),
-      users(id, name),
-      rooms(id, name, color)
-    `)
-    .eq('clinic_id', userData?.clinic_id)
-    .gte('start_time', startOfDay)
-    .lte('start_time', endOfDay)
-    .order('start_time')
+  // Calcular range de datas baseado na view
+  let startDate: string
+  let endDate: string
 
-  if (searchParams.professional) {
-    query = query.eq('professional_id', searchParams.professional)
+  if (viewMode === 'day') {
+    startDate = `${selectedDate}T00:00:00`
+    endDate = `${selectedDate}T23:59:59`
+  } else if (viewMode === 'week') {
+    const date = new Date(selectedDate)
+    const dayOfWeek = date.getDay()
+    const start = new Date(date)
+    start.setDate(date.getDate() - dayOfWeek)
+    const end = new Date(start)
+    end.setDate(start.getDate() + 6)
+    startDate = `${start.toISOString().split('T')[0]}T00:00:00`
+    endDate = `${end.toISOString().split('T')[0]}T23:59:59`
+  } else {
+    const date = new Date(selectedDate)
+    const start = new Date(date.getFullYear(), date.getMonth(), 1)
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0)
+    startDate = `${start.toISOString().split('T')[0]}T00:00:00`
+    endDate = `${end.toISOString().split('T')[0]}T23:59:59`
   }
-  if (searchParams.room) {
-    query = query.eq('room_id', searchParams.room)
-  }
 
-  const { data: appointments } = await query
-
-  // Buscar profissionais e salas para filtros
+  // Buscar profissionais da clinica
   const { data: professionals } = await supabase
     .from('users')
     .select('id, name, role')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician'])
+    .in('role', ['admin', 'professional'])
+    .order('name')
 
-  const { data: rooms } = await supabase
-    .from('rooms')
-    .select('*')
+  // Buscar agendamentos
+  let query = supabase
+    .from('appointments')
+    .select(`
+      *,
+      patients(id, name, phone, photo_url),
+      procedures(name, duration_minutes, price),
+      users(id, name)
+    `)
     .eq('clinic_id', userData?.clinic_id)
-    .eq('active', true)
+    .gte('start_time', startDate)
+    .lte('start_time', endDate)
+    .order('start_time')
+
+  if (selectedProfessional !== 'all') {
+    query = query.eq('user_id', selectedProfessional)
+  }
+
+  const { data: appointments } = await query
+
+  // Estatisticas do dia
+  const today = new Date().toISOString().split('T')[0]
+  const todayStart = `${today}T00:00:00`
+  const todayEnd = `${today}T23:59:59`
+
+  const { count: todayTotal } = await supabase
+    .from('appointments')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+    .gte('start_time', todayStart)
+    .lte('start_time', todayEnd)
+    .neq('status', 'cancelled')
+
+  const { count: todayConfirmed } = await supabase
+    .from('appointments')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+    .gte('start_time', todayStart)
+    .lte('start_time', todayEnd)
+    .eq('status', 'confirmed')
+
+  const { count: todayCompleted } = await supabase
+    .from('appointments')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+    .gte('start_time', todayStart)
+    .lte('start_time', todayEnd)
+    .eq('status', 'completed')
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-7xl mx-auto">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Agenda</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
-              weekday: 'long', 
-              day: 'numeric', 
-              month: 'long' 
-            })}
-          </p>
+          <p className="text-sm text-slate-500 mt-0.5">Gerencie seus agendamentos</p>
         </div>
-        <Link href="/dashboard/agenda/novo" className="btn-primary w-auto px-4">
-          + Novo agendamento
+        <Link href="/dashboard/agenda/novo" className="btn-primary w-auto px-4 flex items-center gap-2">
+          <Icon name="plus" className="w-4 h-4" />
+          Novo Agendamento
         </Link>
       </div>
 
-      <div className="card p-4 mb-4">
-        <AgendaFilters 
-          selectedDate={selectedDate}
-          professionals={professionals || []}
-          rooms={rooms || []}
-          currentProfessional={searchParams.professional}
-          currentRoom={searchParams.room}
-        />
+      {/* Stats do dia */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+            <Icon name="calendar" className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-slate-900">{todayTotal || 0}</p>
+            <p className="text-xs text-slate-500">Hoje</p>
+          </div>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+            <Icon name="check" className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-slate-900">{todayConfirmed || 0}</p>
+            <p className="text-xs text-slate-500">Confirmados</p>
+          </div>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <Icon name="award" className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-slate-900">{todayCompleted || 0}</p>
+            <p className="text-xs text-slate-500">Realizados</p>
+          </div>
+        </div>
       </div>
 
-      <div className="card">
-        <AgendaView 
-          appointments={appointments || []} 
-          selectedDate={selectedDate}
-        />
-      </div>
+      {/* Filtros */}
+      <AgendaFilters 
+        currentDate={selectedDate}
+        currentView={viewMode}
+        currentProfessional={selectedProfessional}
+        professionals={professionals || []}
+      />
+
+      {/* Agenda */}
+      <AgendaView 
+        appointments={appointments || []}
+        viewMode={viewMode}
+        selectedDate={selectedDate}
+        professionals={professionals || []}
+        selectedProfessional={selectedProfessional}
+      />
     </div>
   )
 }

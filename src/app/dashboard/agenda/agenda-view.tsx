@@ -1,129 +1,281 @@
 'use client'
 
 import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 
 type Appointment = {
   id: string
   start_time: string
-  end_time: string
+  end_time: string | null
   status: string
   notes: string | null
-  patients: { id: string; name: string; phone: string | null } | null
-  procedures: { id: string; name: string; duration_minutes: number } | null
+  patients: { id: string; name: string; phone: string | null; photo_url: string | null } | null
+  procedures: { name: string; duration_minutes: number; price: number } | null
   users: { id: string; name: string } | null
-  rooms: { id: string; name: string; color: string } | null
+}
+
+type Professional = {
+  id: string
+  name: string
+}
+
+type Props = {
+  appointments: Appointment[]
+  viewMode: string
+  selectedDate: string
+  professionals: Professional[]
+  selectedProfessional: string
 }
 
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 7h - 19h
 
-const STATUS_COLORS: Record<string, string> = {
-  scheduled: 'bg-slate-100 border-slate-200 text-slate-700',
-  confirmed: 'bg-blue-50 border-blue-200 text-blue-700',
-  in_progress: 'bg-amber-50 border-amber-200 text-amber-700',
-  completed: 'bg-green-50 border-green-200 text-green-700',
-  cancelled: 'bg-red-50 border-red-200 text-red-700 line-through',
-  no_show: 'bg-red-50 border-red-200 text-red-700',
+const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
+  scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Agendado' },
+  confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Confirmado' },
+  in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Em atendimento' },
+  completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Realizado' },
+  cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelado' },
+  no_show: { bg: 'bg-red-100', text: 'text-red-700', label: 'Nao compareceu' },
 }
 
-export default function AgendaView({ 
-  appointments, 
-  selectedDate 
-}: { 
-  appointments: Appointment[]
-  selectedDate: string 
-}) {
-  function getAppointmentPosition(apt: Appointment) {
-    const start = new Date(apt.start_time)
-    const end = new Date(apt.end_time)
-    const startHour = start.getHours() + start.getMinutes() / 60
-    const endHour = end.getHours() + end.getMinutes() / 60
-    const top = (startHour - 7) * 60 // 60px por hora
-    const height = (endHour - startHour) * 60
-    return { top, height: Math.max(height, 30) }
-  }
+export default function AgendaView({ appointments, viewMode, selectedDate, professionals, selectedProfessional }: Props) {
+  // Visao Dia
+  if (viewMode === 'day') {
+    const displayProfessionals = selectedProfessional === 'all' 
+      ? professionals 
+      : professionals.filter(p => p.id === selectedProfessional)
 
-  if (appointments.length === 0) {
     return (
-      <div className="p-8 text-center">
-        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-          <span className="text-2xl">📅</span>
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className="min-w-[600px]">
+            {/* Header com profissionais */}
+            <div className="flex border-b border-slate-100">
+              <div className="w-16 flex-shrink-0 p-3 bg-slate-50" />
+              {displayProfessionals.map(prof => (
+                <div 
+                  key={prof.id} 
+                  className="flex-1 p-3 text-center border-l border-slate-100 bg-slate-50"
+                >
+                  <div className="w-8 h-8 mx-auto rounded-full gradient-bg flex items-center justify-center mb-1">
+                    <span className="text-white text-xs font-bold">{prof.name.charAt(0)}</span>
+                  </div>
+                  <p className="text-xs font-medium text-slate-700 truncate">{prof.name}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Grid de horarios */}
+            {HOURS.map(hour => (
+              <div key={hour} className="flex border-b border-slate-50 min-h-[60px]">
+                <div className="w-16 flex-shrink-0 p-2 text-xs text-slate-400 font-medium text-right pr-3 bg-slate-50/50">
+                  {hour}:00
+                </div>
+                {displayProfessionals.map(prof => {
+                  const hourAppointments = appointments.filter(apt => {
+                    const aptHour = new Date(apt.start_time).getHours()
+                    return aptHour === hour && apt.users?.id === prof.id
+                  })
+
+                  return (
+                    <div 
+                      key={prof.id} 
+                      className="flex-1 p-1 border-l border-slate-50 relative"
+                    >
+                      {hourAppointments.map(apt => {
+                        const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+                        return (
+                          <Link
+                            key={apt.id}
+                            href={`/dashboard/atendimento/${apt.id}`}
+                            className={`block p-2 rounded-lg ${status.bg} hover:opacity-80 transition-opacity mb-1`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-slate-600">
+                                {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${status.bg} ${status.text}`}>
+                                {status.label}
+                              </span>
+                            </div>
+                            <p className={`text-sm font-semibold ${status.text} truncate mt-1`}>
+                              {apt.patients?.name}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                              {apt.procedures?.name || 'Consulta'}
+                            </p>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
         </div>
-        <p className="text-sm text-slate-500">Nenhum agendamento para este dia</p>
-        <Link href="/dashboard/agenda/novo" className="text-sm text-brand-600 font-medium mt-2 inline-block">
-          Criar agendamento
-        </Link>
       </div>
     )
   }
 
-  return (
-    <div className="relative overflow-x-auto">
-      <div className="min-w-[600px]">
-        {/* Header de horas */}
-        <div className="flex border-b border-slate-100">
-          <div className="w-16 flex-shrink-0" />
-          {HOURS.map(hour => (
-            <div key={hour} className="flex-1 text-center py-2 text-xs text-slate-400 border-l border-slate-50">
-              {hour}:00
-            </div>
-          ))}
-        </div>
+  // Visao Semana
+  if (viewMode === 'week') {
+    const date = new Date(selectedDate + 'T12:00:00')
+    const dayOfWeek = date.getDay()
+    const weekStart = new Date(date)
+    weekStart.setDate(date.getDate() - dayOfWeek)
 
-        {/* Grid de agendamentos */}
-        <div className="relative" style={{ height: `${HOURS.length * 60}px` }}>
-          {/* Linhas de hora */}
-          {HOURS.map((hour, i) => (
-            <div 
-              key={hour} 
-              className="absolute left-0 right-0 border-t border-slate-50"
-              style={{ top: `${i * 60}px` }}
-            >
-              <span className="absolute left-2 -top-2 text-xs text-slate-300 bg-white px-1">
-                {hour}:00
-              </span>
-            </div>
-          ))}
+    const weekDays = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart)
+      d.setDate(weekStart.getDate() + i)
+      return d
+    })
 
-          {/* Agendamentos */}
-          {appointments.map(apt => {
-            const pos = getAppointmentPosition(apt)
-            const colorClass = STATUS_COLORS[apt.status] || STATUS_COLORS.scheduled
-
-            return (
-              <Link
-                key={apt.id}
-                href={`/dashboard/agenda/${apt.id}`}
-                className={`absolute left-20 right-4 rounded-lg border p-2 transition-all hover:shadow-md ${colorClass}`}
-                style={{ top: `${pos.top}px`, height: `${pos.height}px` }}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">
-                      {apt.patients?.name || 'Paciente'}
+    return (
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className="min-w-[700px]">
+            {/* Header com dias da semana */}
+            <div className="grid grid-cols-7 border-b border-slate-100">
+              {weekDays.map((day, idx) => {
+                const isToday = day.toDateString() === new Date().toDateString()
+                return (
+                  <div 
+                    key={idx} 
+                    className={`p-3 text-center border-l first:border-l-0 border-slate-100 ${isToday ? 'bg-purple-50' : 'bg-slate-50'}`}
+                  >
+                    <p className="text-xs text-slate-500 uppercase">
+                      {day.toLocaleDateString('pt-BR', { weekday: 'short' })}
                     </p>
-                    <p className="text-xs truncate opacity-75">
-                      {apt.procedures?.name || 'Consulta'}
-                      {apt.users?.name ? ` • ${apt.users.name}` : ''}
+                    <p className={`text-lg font-bold ${isToday ? 'gradient-text' : 'text-slate-900'}`}>
+                      {day.getDate()}
                     </p>
                   </div>
-                  {apt.rooms && (
-                    <span 
-                      className="text-xs px-1.5 py-0.5 rounded text-white flex-shrink-0"
-                      style={{ backgroundColor: apt.rooms.color }}
-                    >
-                      {apt.rooms.name}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs mt-1 opacity-60">
-                  {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                  {' - '}
-                  {new Date(apt.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </Link>
-            )
-          })}
+                )
+              })}
+            </div>
+
+            {/* Agendamentos por dia */}
+            <div className="grid grid-cols-7 min-h-[400px]">
+              {weekDays.map((day, idx) => {
+                const dayStr = day.toISOString().split('T')[0]
+                const dayAppointments = appointments.filter(apt => 
+                  apt.start_time.startsWith(dayStr)
+                )
+                const isToday = day.toDateString() === new Date().toDateString()
+
+                return (
+                  <div 
+                    key={idx} 
+                    className={`p-2 border-l first:border-l-0 border-slate-100 ${isToday ? 'bg-purple-50/30' : ''}`}
+                  >
+                    {dayAppointments.length === 0 ? (
+                      <p className="text-xs text-slate-300 text-center py-4">-</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {dayAppointments.slice(0, 5).map(apt => {
+                          const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+                          return (
+                            <Link
+                              key={apt.id}
+                              href={`/dashboard/atendimento/${apt.id}`}
+                              className={`block p-2 rounded-lg ${status.bg} hover:opacity-80 transition-opacity`}
+                            >
+                              <p className="text-xs font-medium text-slate-600">
+                                {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              <p className={`text-xs font-semibold ${status.text} truncate`}>
+                                {apt.patients?.name}
+                              </p>
+                            </Link>
+                          )
+                        })}
+                        {dayAppointments.length > 5 && (
+                          <p className="text-xs text-slate-400 text-center">
+                            +{dayAppointments.length - 5} mais
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
+      </div>
+    )
+  }
+
+  // Visao Mes
+  const date = new Date(selectedDate + 'T12:00:00')
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const startPadding = firstDay.getDay()
+  const totalDays = lastDay.getDate()
+
+  const calendarDays = [
+    ...Array(startPadding).fill(null),
+    ...Array.from({ length: totalDays }, (_, i) => i + 1)
+  ]
+
+  while (calendarDays.length % 7 !== 0) {
+    calendarDays.push(null)
+  }
+
+  return (
+    <div className="card overflow-hidden">
+      {/* Header dias da semana */}
+      <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-100">
+        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].map(day => (
+          <div key={day} className="p-3 text-center text-xs font-semibold text-slate-500 uppercase">
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Dias do mes */}
+      <div className="grid grid-cols-7">
+        {calendarDays.map((day, idx) => {
+          if (day === null) {
+            return <div key={idx} className="p-2 min-h-[100px] bg-slate-50/50 border-b border-r border-slate-100" />
+          }
+
+          const dayDate = new Date(year, month, day)
+          const dayStr = dayDate.toISOString().split('T')[0]
+          const dayAppointments = appointments.filter(apt => apt.start_time.startsWith(dayStr))
+          const isToday = dayDate.toDateString() === new Date().toDateString()
+
+          return (
+            <div 
+              key={idx} 
+              className={`p-2 min-h-[100px] border-b border-r border-slate-100 ${isToday ? 'bg-purple-50' : ''}`}
+            >
+              <p className={`text-sm font-semibold mb-1 ${isToday ? 'gradient-text' : 'text-slate-700'}`}>
+                {day}
+              </p>
+              <div className="space-y-1">
+                {dayAppointments.slice(0, 3).map(apt => {
+                  const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+                  return (
+                    <Link
+                      key={apt.id}
+                      href={`/dashboard/atendimento/${apt.id}`}
+                      className={`block px-1.5 py-0.5 rounded text-xs truncate ${status.bg} ${status.text} hover:opacity-80`}
+                    >
+                      {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} {apt.patients?.name?.split(' ')[0]}
+                    </Link>
+                  )
+                })}
+                {dayAppointments.length > 3 && (
+                  <p className="text-xs text-slate-400">+{dayAppointments.length - 3}</p>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
