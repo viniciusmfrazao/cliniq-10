@@ -480,6 +480,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           clinicId={clinicId}
           procedures={procedures}
           users={users}
+          sources={SOURCES}
           onClose={() => setShowNewLead(false)}
           onSuccess={() => { setShowNewLead(false); router.refresh() }}
         />
@@ -491,6 +492,8 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           lead={selectedLead}
           procedures={procedures}
           users={users}
+          sources={SOURCES}
+          stages={STAGES}
           onClose={() => setSelectedLead(null)}
           onUpdate={() => { setSelectedLead(null); router.refresh() }}
         />
@@ -500,10 +503,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 }
 
 // Modal de Novo Lead
-function NewLeadModal({ clinicId, procedures, users, onClose, onSuccess }: {
+function NewLeadModal({ clinicId, procedures, users, sources, onClose, onSuccess }: {
   clinicId: string
   procedures: { id: string; name: string }[]
   users: { id: string; name: string }[]
+  sources: { id: string; label: string; icon: string }[]
   onClose: () => void
   onSuccess: () => void
 }) {
@@ -585,7 +589,7 @@ function NewLeadModal({ clinicId, procedures, users, onClose, onSuccess }: {
               value={form.source}
               onChange={e => setForm(prev => ({ ...prev, source: e.target.value }))}
             >
-              {SOURCES.map(s => (
+              {sources.map(s => (
                 <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
               ))}
             </select>
@@ -630,10 +634,12 @@ function NewLeadModal({ clinicId, procedures, users, onClose, onSuccess }: {
 }
 
 // Modal de Detalhes do Lead
-function LeadDetailModal({ lead, procedures, users, onClose, onUpdate }: {
+function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, onUpdate }: {
   lead: Lead
   procedures: { id: string; name: string }[]
   users: { id: string; name: string }[]
+  sources: { id: string; label: string; icon: string }[]
+  stages: { id: string; label: string; color: string; order: number }[]
   onClose: () => void
   onUpdate: () => void
 }) {
@@ -693,8 +699,8 @@ function LeadDetailModal({ lead, procedures, users, onClose, onUpdate }: {
     }
   }
 
-  const stage = STAGES.find(s => s.id === lead.status)
-  const source = SOURCES.find(s => s.id === lead.source)
+  const stage = stages.find(s => s.id === lead.status)
+  const source = sources.find(s => s.id === lead.source)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -741,7 +747,7 @@ function LeadDetailModal({ lead, procedures, users, onClose, onUpdate }: {
               value={form.status}
               onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
             >
-              {STAGES.map(s => (
+              {stages.map(s => (
                 <option key={s.id} value={s.id}>{s.label}</option>
               ))}
             </select>
