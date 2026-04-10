@@ -1,10 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
-import Icon from '@/components/ui/Icon'
 import AttendanceHeader from './attendance-header'
 import MedicalRecordSection from './medical-record-section'
 import InjectableMapSection from './injectable-map-section'
+import ProductsUsedSection from './products-used-section'
 import ReturnScheduler from './return-scheduler'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
@@ -75,6 +74,12 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .select('*, injectable_points(*), products(name)')
     .eq('appointment_id', params.appointmentId)
 
+  // Produtos já usados neste atendimento
+  const { data: usedProducts } = await supabase
+    .from('appointment_products')
+    .select('*, products(name, unit)')
+    .eq('appointment_id', params.appointmentId)
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header Fixo */}
@@ -98,7 +103,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
             professionalId={user.id}
           />
 
-          {/* Coluna Direita - Mapa de Injetaveis */}
+          {/* Coluna Direita - Mapa de Injetaveis + Produtos */}
           <div className="space-y-6">
             <InjectableMapSection
               patient={patient}
@@ -106,6 +111,15 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               products={productsForMap || []}
               currentInjections={currentInjections || []}
               clinicId={userData?.clinic_id || ''}
+            />
+
+            {/* Produtos Utilizados (seringas, fios, materiais) */}
+            <ProductsUsedSection
+              appointmentId={params.appointmentId}
+              patientId={patient.id}
+              clinicId={userData?.clinic_id || ''}
+              products={productsForMap || []}
+              usedProducts={usedProducts || []}
             />
 
             {/* Agendamento de Retorno */}
