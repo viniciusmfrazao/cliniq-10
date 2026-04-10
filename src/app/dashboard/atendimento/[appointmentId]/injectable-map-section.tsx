@@ -5,6 +5,9 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import FaceMap from '@/components/ui/FaceMap'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('InjectableMap')
 
 type Point = {
   id: string
@@ -150,6 +153,12 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     
     setSaving(true)
     setError(null)
+    
+    log.info('Iniciando salvamento de aplicações', { 
+      totalPoints: points.length, 
+      appointmentId,
+      patientId: patient.id 
+    })
 
     try {
       // Agrupar por produto
@@ -159,9 +168,21 @@ export default function InjectableMapSection({ patient, appointmentId, products,
         return acc
       }, {} as Record<string, Point[]>)
 
+      log.info('Produtos agrupados', { 
+        totalProdutos: Object.keys(byProduct).length,
+        produtos: Object.keys(byProduct)
+      })
+
       for (const [productId, productPoints] of Object.entries(byProduct)) {
         const product = products.find(p => p.id === productId)
         const totalProductUnits = productPoints.reduce((a, p) => a + p.units, 0)
+
+        log.info('Salvando aplicação', { 
+          productId, 
+          productName: product?.name,
+          totalUnits: totalProductUnits,
+          numPoints: productPoints.length 
+        })
 
         // Criar aplicação
         const { data: application, error: appError } = await supabase
@@ -179,9 +200,19 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           .single()
 
         if (appError) {
-          console.error('Erro ao criar aplicação:', appError)
-          throw new Error(`Erro ao salvar: ${appError.message}`)
+          log.error('Erro ao criar aplicação na tabela injectable_applications', appError, {
+            productId,
+            clinicId,
+            patientId: patient.id,
+            appointmentId,
+            errorCode: appError.code,
+            errorDetails: appError.details,
+            errorHint: appError.hint
+          })
+          throw new Error(`Erro ao salvar aplicação: ${appError.message}`)
         }
+
+        log.info('Aplicação criada com sucesso', { applicationId: application.id })
 
         // Criar pontos
         const pointsData = productPoints.map(p => ({
@@ -197,17 +228,34 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           .insert(pointsData)
 
         if (pointsError) {
-          console.error('Erro ao criar pontos:', pointsError)
+          log.error('Erro ao criar pontos na tabela injectable_points', pointsError, {
+            applicationId: application.id,
+            numPoints: pointsData.length,
+            errorCode: pointsError.code,
+            errorDetails: pointsError.details,
+            errorHint: pointsError.hint
+          })
           throw new Error(`Erro ao salvar pontos: ${pointsError.message}`)
         }
+
+        log.info('Pontos criados com sucesso', { 
+          applicationId: application.id,
+          numPoints: pointsData.length 
+        })
       }
 
+      log.info('Todas as aplicações salvas com sucesso')
       setPoints([])
       setIsMarkingMode(false)
       router.refresh()
     } catch (err) {
-      console.error('Erro geral:', err)
-      setError(err instanceof Error ? err.message : 'Erro ao salvar aplicações')
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido ao salvar aplicações'
+      log.error('Falha ao salvar aplicações', err, {
+        appointmentId,
+        patientId: patient.id,
+        totalPoints: points.length
+      })
+      setError(errorMessage)
     } finally {
       setSaving(false)
     }

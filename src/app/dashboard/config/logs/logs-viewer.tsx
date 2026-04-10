@@ -32,40 +32,103 @@ export default function LogsViewer({ initialLogs }: { initialLogs: LogEntry[] })
     const originalError = console.error
     const originalWarn = console.warn
 
-    console.log = (...args) => {
-      logs.unshift({
+    const formatArg = (arg: unknown): string => {
+      if (arg === null) return 'null'
+      if (arg === undefined) return 'undefined'
+      if (typeof arg === 'object') {
+        try {
+          return JSON.stringify(arg, null, 2)
+        } catch {
+          return String(arg)
+        }
+      }
+      return String(arg)
+    }
+
+    const parseLogMessage = (args: unknown[]): ClientLog => {
+      const firstArg = args[0]
+      let level = 'info'
+      let context: Record<string, unknown> | undefined
+      
+      // Detectar formato do nosso logger
+      if (typeof firstArg === 'string') {
+        if (firstArg.includes('[ERROR]')) level = 'error'
+        else if (firstArg.includes('[WARN]')) level = 'warn'
+        else if (firstArg.includes('[DEBUG]')) level = 'debug'
+      }
+
+      // Se tiver contexto (segundo argumento objeto)
+      if (args.length > 1 && typeof args[1] === 'object' && args[1] !== null) {
+        const secondArg = args[1] as Record<string, unknown>
+        if (secondArg.Context || secondArg.context) {
+          context = (secondArg.Context || secondArg.context) as Record<string, unknown>
+        }
+      }
+
+      return {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '),
-      })
-      setClientLogs([...logs].slice(0, 100))
+        level,
+        message: args.map(formatArg).join(' '),
+        context
+      }
+    }
+
+    console.log = (...args) => {
+      const logEntry = parseLogMessage(args)
+      logs.unshift(logEntry)
+      setClientLogs([...logs].slice(0, 200))
       originalLog.apply(console, args)
     }
 
     console.error = (...args) => {
-      logs.unshift({
-        timestamp: new Date().toISOString(),
-        level: 'error',
-        message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '),
-      })
-      setClientLogs([...logs].slice(0, 100))
+      const logEntry = parseLogMessage(args)
+      logEntry.level = 'error'
+      logs.unshift(logEntry)
+      setClientLogs([...logs].slice(0, 200))
       originalError.apply(console, args)
     }
 
     console.warn = (...args) => {
-      logs.unshift({
-        timestamp: new Date().toISOString(),
-        level: 'warn',
-        message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '),
-      })
-      setClientLogs([...logs].slice(0, 100))
+      const logEntry = parseLogMessage(args)
+      logEntry.level = 'warn'
+      logs.unshift(logEntry)
+      setClientLogs([...logs].slice(0, 200))
       originalWarn.apply(console, args)
     }
+
+    // Capturar erros não tratados
+    const handleError = (event: ErrorEvent) => {
+      logs.unshift({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        message: `Erro não tratado: ${event.message}`,
+        context: {
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno
+        }
+      })
+      setClientLogs([...logs].slice(0, 200))
+    }
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      logs.unshift({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        message: `Promise rejeitada: ${event.reason}`,
+      })
+      setClientLogs([...logs].slice(0, 200))
+    }
+
+    window.addEventListener('error', handleError)
+    window.addEventListener('unhandledrejection', handleUnhandledRejection)
 
     return () => {
       console.log = originalLog
       console.error = originalError
       console.warn = originalWarn
+      window.removeEventListener('error', handleError)
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection)
     }
   }, [])
 
