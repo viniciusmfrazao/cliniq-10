@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
+import FaceMap from '@/components/ui/FaceMap'
 
 type Point = {
   id: string
@@ -40,8 +41,9 @@ type Props = {
 
 const REGIONS = [
   'Testa', 'Glabela', 'Periorbital D', 'Periorbital E', 
-  'Nariz', 'Zigomático D', 'Zigomático E', 'Labio Superior',
-  'Labio Inferior', 'Mento', 'Mandíbula D', 'Mandíbula E'
+  'Nariz', 'Zigomático D', 'Zigomático E', 'Nasolabial D', 'Nasolabial E',
+  'Lábio Superior', 'Lábio Inferior', 'Mento', 'Mandíbula D', 'Mandíbula E',
+  'Malar D', 'Malar E', 'Têmpora D', 'Têmpora E'
 ]
 
 export default function InjectableMapSection({ patient, appointmentId, products, currentInjections, clinicId }: Props) {
@@ -67,6 +69,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     if (!svgRef.current) return
 
     const rect = svgRef.current.getBoundingClientRect()
+    // Coordenadas em % do SVG (0-100)
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
 
@@ -74,6 +77,12 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     setFormData({ region: '', product_id: '', units: 1 })
     setShowModal(true)
   }
+
+  // Converter coordenadas % para viewBox do FaceMap (0-300 x 0-400)
+  const toSvgCoords = (x: number, y: number) => ({
+    x: (x / 100) * 300,
+    y: (y / 100) * 400
+  })
 
   const addPoint = () => {
     if (!tempPoint || !formData.region || !formData.product_id) {
@@ -180,93 +189,70 @@ export default function InjectableMapSection({ patient, appointmentId, products,
       </div>
 
       <div className="p-4">
-        {/* SVG Face Map */}
-        <div className="relative bg-slate-50 rounded-xl p-4 mb-4">
-          <svg
-            ref={svgRef}
-            viewBox="0 0 200 280"
-            className="w-full max-w-[300px] mx-auto cursor-crosshair"
-            onClick={handleSvgClick}
-          >
-            {/* Contorno do rosto */}
-            <ellipse cx="100" cy="130" rx="75" ry="95" fill="#fef3e2" stroke="#e5d4c0" strokeWidth="2" />
-            
-            {/* Cabelo */}
-            <path d="M25 130 Q25 40 100 30 Q175 40 175 130" fill="#4a3728" />
-            
-            {/* Sobrancelhas */}
-            <path d="M50 95 Q70 88 85 92" stroke="#4a3728" strokeWidth="3" fill="none" strokeLinecap="round" />
-            <path d="M115 92 Q130 88 150 95" stroke="#4a3728" strokeWidth="3" fill="none" strokeLinecap="round" />
-            
-            {/* Olhos */}
-            <ellipse cx="65" cy="110" rx="15" ry="8" fill="white" stroke="#ccc" />
-            <ellipse cx="135" cy="110" rx="15" ry="8" fill="white" stroke="#ccc" />
-            <circle cx="65" cy="110" r="5" fill="#5c4a3a" />
-            <circle cx="135" cy="110" r="5" fill="#5c4a3a" />
-            
-            {/* Nariz */}
-            <path d="M100 115 L100 145 M92 150 Q100 155 108 150" stroke="#d4b896" strokeWidth="2" fill="none" />
-            
-            {/* Boca */}
-            <path d="M75 175 Q100 190 125 175" stroke="#d4918a" strokeWidth="3" fill="none" strokeLinecap="round" />
-            <path d="M80 175 Q100 182 120 175" fill="#e8a5a0" />
-            
-            {/* Regiões de referência (linhas pontilhadas) */}
-            <line x1="25" y1="80" x2="175" y2="80" stroke="#ddd" strokeDasharray="4" />
-            <line x1="25" y1="130" x2="175" y2="130" stroke="#ddd" strokeDasharray="4" />
-            <line x1="25" y1="160" x2="175" y2="160" stroke="#ddd" strokeDasharray="4" />
-            <line x1="100" y1="35" x2="100" y2="225" stroke="#ddd" strokeDasharray="4" />
-
+        {/* SVG Face Map Profissional */}
+        <div className="relative bg-gradient-to-b from-slate-50 to-slate-100 rounded-xl p-4 mb-4">
+          <FaceMap ref={svgRef} onClick={handleSvgClick} showRegions={true}>
             {/* Pontos existentes deste atendimento */}
             {currentInjections.flatMap(inj => 
-              inj.injectable_points?.map((p, i) => (
-                <g key={`existing-${inj.id}-${i}`}>
-                  <circle 
-                    cx={p.x * 2} 
-                    cy={p.y * 2.8} 
-                    r="6" 
-                    fill="#94a3b8" 
-                    stroke="white" 
-                    strokeWidth="2"
-                  />
-                  <text x={p.x * 2} y={p.y * 2.8 + 3} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">
-                    {p.units}
-                  </text>
-                </g>
-              ))
+              inj.injectable_points?.map((p, i) => {
+                const coords = toSvgCoords(p.x, p.y)
+                return (
+                  <g key={`existing-${inj.id}-${i}`}>
+                    <circle 
+                      cx={coords.x} 
+                      cy={coords.y} 
+                      r="10" 
+                      fill="#64748b" 
+                      stroke="white" 
+                      strokeWidth="2"
+                      filter="url(#softGlow)"
+                    />
+                    <text x={coords.x} y={coords.y + 4} textAnchor="middle" fontSize="10" fill="white" fontWeight="bold">
+                      {p.units}
+                    </text>
+                  </g>
+                )
+              })
             )}
 
             {/* Pontos novos */}
-            {points.map((point, i) => (
-              <g key={point.id} onClick={(e) => { e.stopPropagation(); setSelectedPoint(point); }}>
-                <circle 
-                  cx={point.x * 2} 
-                  cy={point.y * 2.8} 
-                  r="8" 
-                  fill="var(--color-primary)" 
-                  stroke="white" 
-                  strokeWidth="2"
-                  className="cursor-pointer hover:opacity-80 transition-opacity"
-                />
-                <text x={point.x * 2} y={point.y * 2.8 + 3} textAnchor="middle" fontSize="9" fill="white" fontWeight="bold">
-                  {point.units}
-                </text>
-              </g>
-            ))}
+            {points.map((point) => {
+              const coords = toSvgCoords(point.x, point.y)
+              return (
+                <g key={point.id} onClick={(e) => { e.stopPropagation(); setSelectedPoint(point); }}>
+                  <circle 
+                    cx={coords.x} 
+                    cy={coords.y} 
+                    r="12" 
+                    fill="var(--color-primary)" 
+                    stroke="white" 
+                    strokeWidth="3"
+                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                    filter="url(#softGlow)"
+                  />
+                  <text x={coords.x} y={coords.y + 4} textAnchor="middle" fontSize="11" fill="white" fontWeight="bold">
+                    {point.units}
+                  </text>
+                </g>
+              )
+            })}
 
             {/* Ponto temporário */}
-            {tempPoint && (
-              <circle 
-                cx={tempPoint.x * 2} 
-                cy={tempPoint.y * 2.8} 
-                r="6" 
-                fill="var(--color-accent)" 
-                stroke="white" 
-                strokeWidth="2"
-                className="animate-pulse"
-              />
-            )}
-          </svg>
+            {tempPoint && (() => {
+              const coords = toSvgCoords(tempPoint.x, tempPoint.y)
+              return (
+                <circle 
+                  cx={coords.x} 
+                  cy={coords.y} 
+                  r="8" 
+                  fill="var(--color-accent)" 
+                  stroke="white" 
+                  strokeWidth="2"
+                  className="animate-pulse"
+                />
+              )
+            })()}
+          </FaceMap>
         </div>
 
         {/* Lista de pontos adicionados */}
