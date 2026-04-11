@@ -28,8 +28,8 @@ export default function NotificationBell({ userId }: { userId: string }) {
     
     loadNotifications()
 
-    // Polling a cada 5 segundos
-    const interval = setInterval(loadNotifications, 5000)
+    // Polling a cada 30 segundos
+    const interval = setInterval(loadNotifications, 30000)
 
     return () => {
       clearInterval(interval)

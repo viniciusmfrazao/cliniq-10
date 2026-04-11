@@ -74,8 +74,16 @@ const PERMISSION_GROUPS = [
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   admin: ['all'],
   doctor: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
+  biomedic: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
+  nurse: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
   esthetician: ['agenda_view', 'agenda_edit', 'patients_view', 'records_view', 'records_edit', 'stock_view'],
+  physiotherapist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
+  nutritionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
+  psychologist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
   receptionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'crm_view', 'crm_edit'],
+  financial: ['agenda_view', 'patients_view', 'financial_view', 'financial_edit', 'reports_view'],
+  manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view', 'reports_view', 'crm_view', 'crm_edit'],
+  assistant: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit'],
   viewer: ['agenda_view', 'patients_view'],
 }
 
