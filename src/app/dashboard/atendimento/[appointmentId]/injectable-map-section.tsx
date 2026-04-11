@@ -31,7 +31,7 @@ type Product = {
 }
 
 type Props = {
-  patient: { id: string; name: string }
+  patient: { id: string; name: string; gender?: string | null }
   appointmentId: string
   products: Product[]
   currentInjections: Array<{
@@ -287,6 +287,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
         // Criar pontos (usando x_position e y_position como na tabela)
         const pointsData = productPoints.map(p => ({
           application_id: application.id,
+          zone: p.region || detectRegion(p.y),
           x_position: p.x,
           y_position: p.y,
           units: p.units
@@ -566,6 +567,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
               ref={svgRef} 
               onClick={handleMapClick} 
               showRegions={true}
+              gender={patient.gender === 'M' ? 'male' : 'female'}
             >
               {/* Pontos existentes (salvos) */}
               {currentInjections.flatMap(inj => 

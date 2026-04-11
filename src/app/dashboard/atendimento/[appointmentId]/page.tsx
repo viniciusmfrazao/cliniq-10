@@ -33,6 +33,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     email: string | null
     photo_url?: string | null
     notes?: string | null
+    gender?: string | null
   }
 
   const procedure = appointment.procedures as {
