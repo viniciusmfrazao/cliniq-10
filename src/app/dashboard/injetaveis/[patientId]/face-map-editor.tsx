@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import FaceMap from '@/components/ui/FaceMap'
+import Icon from '@/components/ui/Icon'
 
 type Point = {
   id: string
@@ -15,18 +17,39 @@ type Point = {
 }
 
 const ZONES = [
-  { id: 'forehead', name: 'Testa', muscles: ['Frontal'] },
-  { id: 'glabella', name: 'Glabela', muscles: ['Corrugador', 'Procerus'] },
-  { id: 'crow_feet', name: 'Pes de galinha', muscles: ['Orbicular dos olhos'] },
-  { id: 'eyebrow', name: 'Sobrancelha', muscles: ['Orbicular', 'Frontal lateral'] },
-  { id: 'bunny_lines', name: 'Bunny lines', muscles: ['Nasal'] },
-  { id: 'nose', name: 'Nariz', muscles: ['Nasal', 'Depressor do septo'] },
-  { id: 'upper_lip', name: 'Labio superior', muscles: ['Orbicular da boca'] },
-  { id: 'lower_lip', name: 'Labio inferior', muscles: ['Depressor do labio'] },
-  { id: 'chin', name: 'Queixo', muscles: ['Mentual'] },
-  { id: 'marionette', name: 'Marionete', muscles: ['DAO'] },
-  { id: 'jawline', name: 'Mandibula', muscles: ['Masseter'] },
-  { id: 'neck', name: 'Pescoco', muscles: ['Platisma'] },
+  { id: 'forehead', name: 'Testa / Frontal', muscles: ['Frontal'] },
+  { id: 'glabella', name: 'Glabela', muscles: ['Corrugador', 'Procerus', 'Orbicular medial'] },
+  { id: 'crow_feet', name: 'Pés de galinha', muscles: ['Orbicular lateral'] },
+  { id: 'eyebrow', name: 'Sobrancelha', muscles: ['Orbicular', 'Frontal lateral', 'Depressor supercílio'] },
+  { id: 'bunny_lines', name: 'Bunny lines', muscles: ['Nasal transverso'] },
+  { id: 'nose', name: 'Nariz', muscles: ['Nasal', 'Depressor do septo', 'Dilatador da narina'] },
+  { id: 'perioral_upper', name: 'Perioral superior', muscles: ['Orbicular da boca', 'Levantador do lábio'] },
+  { id: 'perioral_lower', name: 'Perioral inferior', muscles: ['Depressor do lábio', 'Mentoniano'] },
+  { id: 'lip', name: 'Lábios', muscles: ['Vermelhão superior', 'Vermelhão inferior', 'Comissura'] },
+  { id: 'chin', name: 'Mento / Queixo', muscles: ['Mentoniano'] },
+  { id: 'marionette', name: 'Marionete', muscles: ['DAO', 'Depressor do ângulo'] },
+  { id: 'nasolabial', name: 'Sulco nasolabial', muscles: ['Zigomático maior', 'Levantador'] },
+  { id: 'malar', name: 'Malar / Zigomático', muscles: ['Zigomático', 'Malar fat pad'] },
+  { id: 'jawline', name: 'Mandíbula', muscles: ['Masseter', 'Ângulo mandibular'] },
+  { id: 'submandibular', name: 'Submandibular', muscles: ['Platisma'] },
+  { id: 'neck', name: 'Pescoço', muscles: ['Platisma', 'Bandas platismais'] },
+  { id: 'temporal', name: 'Temporal', muscles: ['Temporal'] },
+]
+
+const DEPTHS = [
+  { value: 'intradermica', label: 'Intradérmica', color: '#22c55e' },
+  { value: 'subcutanea', label: 'Subcutânea', color: '#3b82f6' },
+  { value: 'supraperiostal', label: 'Supraperiosteal', color: '#8b5cf6' },
+  { value: 'intramuscular', label: 'Intramuscular', color: '#ef4444' },
+]
+
+const TECHNIQUES = [
+  { value: 'bolus', label: 'Bolus', icon: '●' },
+  { value: 'retroinjecao', label: 'Retroinjeção linear', icon: '━' },
+  { value: 'leque', label: 'Leque', icon: '◥' },
+  { value: 'serial', label: 'Pontos seriados', icon: '•••' },
+  { value: 'canula', label: 'Cânula', icon: '⟿' },
+  { value: 'cross', label: 'Cross-hatching', icon: '╳' },
 ]
 
 export default function FaceMapEditor({ 
@@ -39,27 +62,33 @@ export default function FaceMapEditor({
   type: string
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
-  const [selectedPoint, setSelectedPoint] = useState<Point | null>(null)
   const [editingPoint, setEditingPoint] = useState<Point | null>(null)
-  const baseColor = type === 'toxin' ? '#8B5CF6' : '#EC4899'
+  const [view, setView] = useState<'front' | 'side-left' | 'side-right'>('front')
+  const [showMuscles, setShowMuscles] = useState(false)
+  
+  const isToxin = type === 'toxin'
+  const baseColor = isToxin ? '#8B5CF6' : '#EC4899'
+  const gradientFrom = isToxin ? '#8B5CF6' : '#EC4899'
+  const gradientTo = isToxin ? '#6366F1' : '#F43F5E'
 
   function handleSvgClick(e: React.MouseEvent<SVGSVGElement>) {
     if (!svgRef.current) return
     
     const rect = svgRef.current.getBoundingClientRect()
-    const x = ((e.clientX - rect.left) / rect.width) * 100
-    const y = ((e.clientY - rect.top) / rect.height) * 100
+    const viewBox = view === 'front' ? { w: 320, h: 420 } : { w: 280, h: 400 }
+    const x = ((e.clientX - rect.left) / rect.width) * viewBox.w
+    const y = ((e.clientY - rect.top) / rect.height) * viewBox.h
 
     const newPoint: Point = {
       id: Date.now().toString(),
       zone: 'forehead',
       muscle: '',
-      side: 'center',
+      side: x < viewBox.w / 2 ? 'left' : x > viewBox.w / 2 + 10 ? 'right' : 'center',
       x,
       y,
-      units: type === 'toxin' ? 4 : 0.5,
-      depth: '',
-      technique: '',
+      units: isToxin ? 4 : 0.5,
+      depth: isToxin ? 'intramuscular' : 'subcutanea',
+      technique: 'bolus',
     }
 
     setPoints([...points, newPoint])
@@ -78,319 +107,407 @@ export default function FaceMapEditor({
     setEditingPoint(null)
   }
 
+  function duplicatePointMirror(point: Point) {
+    const viewBox = view === 'front' ? { w: 320, h: 420 } : { w: 280, h: 400 }
+    const centerX = viewBox.w / 2
+    const mirroredX = centerX + (centerX - point.x)
+    
+    const newPoint: Point = {
+      ...point,
+      id: Date.now().toString(),
+      x: mirroredX,
+      side: point.side === 'left' ? 'right' : point.side === 'right' ? 'left' : 'center',
+    }
+    
+    setPoints([...points, newPoint])
+  }
+
   const totalUnits = points.reduce((sum, p) => sum + (p.units || 0), 0)
+  const pointsByZone = points.reduce((acc, p) => {
+    acc[p.zone] = (acc[p.zone] || 0) + p.units
+    return acc
+  }, {} as Record<string, number>)
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      {/* Mapa */}
-      <div className="relative">
-        <div className="bg-gradient-to-b from-slate-50 to-slate-100 rounded-2xl p-4">
-          <p className="text-center text-sm text-slate-500 mb-4">
-            Clique no rosto para adicionar pontos de aplicacao
-          </p>
-          
-          <svg 
-            ref={svgRef}
-            viewBox="0 0 300 400" 
-            className="w-full cursor-crosshair"
-            onClick={handleSvgClick}
-          >
-            {/* Fundo */}
-            <defs>
-              <linearGradient id="skinGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#FDE68A" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#FBBF24" stopOpacity="0.1" />
-              </linearGradient>
-              <linearGradient id="hairGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#78350F" />
-                <stop offset="100%" stopColor="#451A03" />
-              </linearGradient>
-            </defs>
-
-            {/* Cabelo */}
-            <ellipse cx="150" cy="80" rx="95" ry="70" fill="url(#hairGrad)" />
-            
-            {/* Rosto */}
-            <path
-              d="M150 50 
-                 C210 50 240 100 240 150
-                 C240 220 220 280 200 320
-                 C180 360 160 380 150 380
-                 C140 380 120 360 100 320
-                 C80 280 60 220 60 150
-                 C60 100 90 50 150 50Z"
-              fill="url(#skinGrad)"
-              stroke="#D4A574"
-              strokeWidth="2"
-            />
-
-            {/* Zonas com hover */}
-            {/* Testa */}
-            <path
-              d="M85 80 C85 60 215 60 215 80 C215 120 200 140 150 140 C100 140 85 120 85 80Z"
-              fill="transparent"
-              stroke="#CBD5E1"
-              strokeWidth="1"
-              strokeDasharray="4"
-              className="hover:fill-purple-100 hover:fill-opacity-50 transition-colors"
-            />
-
-            {/* Glabela */}
-            <rect x="135" y="130" width="30" height="25" rx="5" 
-              fill="transparent" stroke="#CBD5E1" strokeWidth="1" strokeDasharray="4"
-              className="hover:fill-purple-100 hover:fill-opacity-50 transition-colors"
-            />
-
-            {/* Olhos */}
-            <ellipse cx="110" cy="170" rx="25" ry="12" fill="white" stroke="#D4A574" strokeWidth="1" />
-            <ellipse cx="190" cy="170" rx="25" ry="12" fill="white" stroke="#D4A574" strokeWidth="1" />
-            <circle cx="110" cy="170" r="8" fill="#4B5563" />
-            <circle cx="190" cy="170" r="8" fill="#4B5563" />
-            <circle cx="112" cy="168" r="3" fill="white" />
-            <circle cx="192" cy="168" r="3" fill="white" />
-
-            {/* Sobrancelhas */}
-            <path d="M80 155 Q95 145 130 150" fill="none" stroke="#78350F" strokeWidth="3" strokeLinecap="round" />
-            <path d="M220 155 Q205 145 170 150" fill="none" stroke="#78350F" strokeWidth="3" strokeLinecap="round" />
-
-            {/* Nariz */}
-            <path d="M150 160 L150 220 M140 230 Q150 240 160 230" fill="none" stroke="#D4A574" strokeWidth="2" strokeLinecap="round" />
-
-            {/* Boca */}
-            <path d="M120 300 Q150 320 180 300" fill="#E88B8B" stroke="#D4A574" strokeWidth="1" />
-            <path d="M125 300 Q150 290 175 300" fill="none" stroke="#D4A574" strokeWidth="1" />
-
-            {/* Pontos */}
-            {points.map((point) => (
-              <g 
-                key={point.id} 
-                onClick={(e) => { e.stopPropagation(); setEditingPoint(point) }}
-                className="cursor-pointer"
-              >
-                <circle
-                  cx={point.x * 3}
-                  cy={point.y * 4}
-                  r={editingPoint?.id === point.id ? 14 : 10}
-                  fill={baseColor}
-                  fillOpacity={editingPoint?.id === point.id ? 0.3 : 0.2}
-                  className="transition-all"
-                />
-                <circle
-                  cx={point.x * 3}
-                  cy={point.y * 4}
-                  r="8"
-                  fill={baseColor}
-                  stroke={editingPoint?.id === point.id ? '#FFF' : baseColor}
-                  strokeWidth={editingPoint?.id === point.id ? 3 : 2}
-                  className="transition-all"
-                />
-                <text
-                  x={point.x * 3}
-                  y={point.y * 4 + 3}
-                  textAnchor="middle"
-                  fontSize="7"
-                  fontWeight="bold"
-                  fill="white"
-                >
-                  {point.units}
-                </text>
-              </g>
-            ))}
-          </svg>
-        </div>
-
-        {/* Total */}
-        <div className="mt-4 p-4 bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">{points.length} pontos marcados</p>
-            <p className="text-xs text-slate-600">Clique em um ponto para editar</p>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+      {/* Mapa - 3 colunas */}
+      <div className="lg:col-span-3">
+        <div className="bg-gradient-to-b from-slate-50 to-white rounded-2xl border border-slate-200 overflow-hidden">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-white">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-500">Vista:</span>
+              <div className="flex bg-slate-100 rounded-lg p-0.5">
+                {[
+                  { id: 'front', label: 'Frontal' },
+                  { id: 'side-left', label: 'Esq' },
+                  { id: 'side-right', label: 'Dir' },
+                ].map(v => (
+                  <button
+                    key={v.id}
+                    onClick={() => setView(v.id as typeof view)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      view === v.id 
+                        ? 'bg-white text-slate-900 shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => setShowMuscles(!showMuscles)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                showMuscles 
+                  ? 'bg-violet-100 text-violet-700' 
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              <Icon name="layers" className="w-3.5 h-3.5" />
+              Músculos
+            </button>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-purple-700">{totalUnits}</p>
-            <p className="text-xs text-slate-600">{type === 'toxin' ? 'unidades' : 'ml total'}</p>
+
+          {/* Face Map */}
+          <div className="p-4 md:p-6">
+            <p className="text-center text-xs text-slate-400 mb-3">
+              Toque no rosto para adicionar pontos de aplicação
+            </p>
+            
+            <FaceMap
+              ref={svgRef}
+              onClick={handleSvgClick}
+              view={view}
+              showRegions={true}
+              showMuscles={showMuscles}
+            >
+              {/* Renderizar pontos */}
+              {points.map((point) => {
+                const isEditing = editingPoint?.id === point.id
+                const depthColor = DEPTHS.find(d => d.value === point.depth)?.color || baseColor
+                
+                return (
+                  <g 
+                    key={point.id} 
+                    onClick={(e) => { e.stopPropagation(); setEditingPoint(point) }}
+                    className="cursor-pointer"
+                    style={{ filter: isEditing ? 'drop-shadow(0 0 8px rgba(139, 92, 246, 0.5))' : 'none' }}
+                  >
+                    {/* Área de clique expandida */}
+                    <circle
+                      cx={point.x}
+                      cy={point.y}
+                      r={20}
+                      fill="transparent"
+                    />
+                    
+                    {/* Círculo externo (halo) */}
+                    <circle
+                      cx={point.x}
+                      cy={point.y}
+                      r={isEditing ? 16 : 12}
+                      fill={depthColor}
+                      fillOpacity={0.15}
+                      className="transition-all duration-200"
+                    />
+                    
+                    {/* Círculo principal */}
+                    <circle
+                      cx={point.x}
+                      cy={point.y}
+                      r={10}
+                      fill={depthColor}
+                      stroke={isEditing ? '#fff' : depthColor}
+                      strokeWidth={isEditing ? 3 : 2}
+                      className="transition-all duration-200"
+                    />
+                    
+                    {/* Texto das unidades */}
+                    <text
+                      x={point.x}
+                      y={point.y + 3.5}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fontWeight="bold"
+                      fill="white"
+                      style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
+                    >
+                      {isToxin ? point.units : point.units.toFixed(1)}
+                    </text>
+                  </g>
+                )
+              })}
+            </FaceMap>
+          </div>
+
+          {/* Resumo */}
+          <div className="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">{points.length} pontos</p>
+                <p className="text-xs text-slate-500">
+                  {Object.entries(pointsByZone).slice(0, 2).map(([zone, units]) => 
+                    `${ZONES.find(z => z.id === zone)?.name.split(' ')[0] || zone}: ${isToxin ? units + 'U' : units.toFixed(1) + 'ml'}`
+                  ).join(' • ')}
+                  {Object.keys(pointsByZone).length > 2 && ' ...'}
+                </p>
+              </div>
+              <div className="text-right">
+                <p 
+                  className="text-3xl font-black"
+                  style={{ background: `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+                >
+                  {isToxin ? totalUnits : totalUnits.toFixed(1)}
+                </p>
+                <p className="text-xs text-slate-500">{isToxin ? 'unidades' : 'ml total'}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Editor de ponto */}
-      <div>
+      {/* Editor - 2 colunas */}
+      <div className="lg:col-span-2 space-y-4">
         {editingPoint ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-semibold text-slate-900">Editar ponto</h3>
-              <button
-                onClick={() => removePoint(editingPoint.id)}
-                className="text-red-500 hover:text-red-700 text-sm font-medium"
-              >
-                Remover
-              </button>
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold shadow-lg"
+                  style={{ background: `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})` }}
+                >
+                  {isToxin ? editingPoint.units : editingPoint.units.toFixed(1)}
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900">
+                    {ZONES.find(z => z.id === editingPoint.zone)?.name || 'Ponto'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {editingPoint.side === 'left' ? 'Lado esquerdo' : editingPoint.side === 'right' ? 'Lado direito' : 'Centro'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => duplicatePointMirror(editingPoint)}
+                  className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                  title="Espelhar ponto"
+                >
+                  <Icon name="refresh" className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => removePoint(editingPoint.id)}
+                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Remover ponto"
+                >
+                  <Icon name="trash" className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="label">Zona</label>
-                <select
-                  className="input"
-                  value={editingPoint.zone}
-                  onChange={e => updatePoint(editingPoint.id, { zone: e.target.value })}
-                >
-                  {ZONES.map(z => (
-                    <option key={z.id} value={z.id}>{z.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Musculo</label>
-                <select
-                  className="input"
-                  value={editingPoint.muscle}
-                  onChange={e => updatePoint(editingPoint.id, { muscle: e.target.value })}
-                >
-                  <option value="">Selecione</option>
-                  {ZONES.find(z => z.id === editingPoint.zone)?.muscles.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Lado</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'left', label: 'Esquerdo' },
-                    { value: 'center', label: 'Centro' },
-                    { value: 'right', label: 'Direito' },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => updatePoint(editingPoint.id, { side: opt.value })}
-                      className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                        editingPoint.side === opt.value
-                          ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
-                          : 'bg-slate-100 text-slate-600 border-2 border-transparent'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+            {/* Form */}
+            <div className="p-4 space-y-4">
+              {/* Zona e Músculo */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Zona</label>
+                  <select
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                    value={editingPoint.zone}
+                    onChange={e => updatePoint(editingPoint.id, { zone: e.target.value, muscle: '' })}
+                  >
+                    {ZONES.map(z => (
+                      <option key={z.id} value={z.id}>{z.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Músculo</label>
+                  <select
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                    value={editingPoint.muscle}
+                    onChange={e => updatePoint(editingPoint.id, { muscle: e.target.value })}
+                  >
+                    <option value="">Selecione</option>
+                    {ZONES.find(z => z.id === editingPoint.zone)?.muscles.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
+              {/* Unidades/Volume */}
               <div>
-                <label className="label">{type === 'toxin' ? 'Unidades' : 'Volume (ml)'}</label>
-                <div className="flex items-center gap-3">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">
+                  {isToxin ? 'Unidades' : 'Volume (ml)'}
+                </label>
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => updatePoint(editingPoint.id, { units: Math.max(0, editingPoint.units - (type === 'toxin' ? 1 : 0.1)) })}
-                    className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-lg font-bold text-slate-600 hover:bg-slate-200"
+                    onClick={() => updatePoint(editingPoint.id, { units: Math.max(0, editingPoint.units - (isToxin ? 1 : 0.1)) })}
+                    className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-lg font-bold text-slate-600 hover:bg-slate-200 active:scale-95 transition-all"
                   >
                     -
                   </button>
-                  <input
-                    type="number"
-                    className="input text-center text-lg font-bold w-24"
-                    value={editingPoint.units}
-                    onChange={e => updatePoint(editingPoint.id, { units: parseFloat(e.target.value) || 0 })}
-                    step={type === 'toxin' ? 1 : 0.1}
-                    min={0}
-                  />
+                  <div className="flex-1 flex gap-1">
+                    {(isToxin ? [2, 4, 6, 8, 10] : [0.1, 0.2, 0.3, 0.5, 1.0]).map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => updatePoint(editingPoint.id, { units: val })}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          editingPoint.units === val
+                            ? 'bg-violet-100 text-violet-700 ring-2 ring-violet-300'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {isToxin ? val : val.toFixed(1)}
+                      </button>
+                    ))}
+                  </div>
                   <button
                     type="button"
-                    onClick={() => updatePoint(editingPoint.id, { units: editingPoint.units + (type === 'toxin' ? 1 : 0.1) })}
-                    className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-lg font-bold text-slate-600 hover:bg-slate-200"
+                    onClick={() => updatePoint(editingPoint.id, { units: editingPoint.units + (isToxin ? 1 : 0.1) })}
+                    className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-lg font-bold text-slate-600 hover:bg-slate-200 active:scale-95 transition-all"
                   >
                     +
                   </button>
                 </div>
               </div>
 
+              {/* Profundidade */}
               <div>
-                <label className="label">Profundidade</label>
-                <select
-                  className="input"
-                  value={editingPoint.depth}
-                  onChange={e => updatePoint(editingPoint.id, { depth: e.target.value })}
-                >
-                  <option value="">Selecione</option>
-                  <option value="superficial">Superficial</option>
-                  <option value="medio">Medio</option>
-                  <option value="profundo">Profundo</option>
-                </select>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Profundidade</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {DEPTHS.map(d => (
+                    <button
+                      key={d.value}
+                      type="button"
+                      onClick={() => updatePoint(editingPoint.id, { depth: d.value })}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        editingPoint.depth === d.value
+                          ? 'ring-2 ring-offset-1'
+                          : 'bg-slate-50 hover:bg-slate-100'
+                      }`}
+                      style={editingPoint.depth === d.value ? { 
+                        backgroundColor: `${d.color}15`, 
+                        color: d.color,
+                        ringColor: d.color 
+                      } : {}}
+                    >
+                      <span 
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: d.color }}
+                      />
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
+              {/* Técnica */}
               <div>
-                <label className="label">Tecnica</label>
-                <select
-                  className="input"
-                  value={editingPoint.technique}
-                  onChange={e => updatePoint(editingPoint.id, { technique: e.target.value })}
-                >
-                  <option value="">Selecione</option>
-                  <option value="bolus">Bolus</option>
-                  <option value="retroinjecao">Retroinjecao</option>
-                  <option value="leque">Leque</option>
-                  <option value="canula">Canula</option>
-                </select>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Técnica</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {TECHNIQUES.map(t => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => updatePoint(editingPoint.id, { technique: t.value })}
+                      className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-[10px] font-medium transition-all ${
+                        editingPoint.technique === t.value
+                          ? 'bg-violet-100 text-violet-700 ring-2 ring-violet-300'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="text-base">{t.icon}</span>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={() => setEditingPoint(null)}
-                className="w-full btn-secondary"
+                className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors"
               >
-                Concluir edicao
+                Concluir edição
               </button>
             </div>
           </div>
         ) : (
-          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center">
-            <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">👆</span>
+          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center">
+            <div 
+              className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3"
+              style={{ background: `linear-gradient(135deg, ${gradientFrom}20, ${gradientTo}20)` }}
+            >
+              <Icon name="plus" className="w-6 h-6" style={{ color: baseColor }} />
             </div>
-            <p className="font-semibold text-slate-700 mb-2">Clique no mapa</p>
-            <p className="text-sm text-slate-500">
-              Clique na area do rosto onde deseja marcar um ponto de aplicacao
+            <p className="font-semibold text-slate-700 mb-1">Adicionar ponto</p>
+            <p className="text-xs text-slate-500">
+              Toque na área do rosto onde deseja marcar um ponto de aplicação
             </p>
           </div>
         )}
 
         {/* Lista de pontos */}
-        {points.length > 0 && !editingPoint && (
-          <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-4">
-            <h4 className="text-sm font-semibold text-slate-900 mb-3">Pontos adicionados</h4>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {points.map((point, i) => (
-                <div
-                  key={point.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100"
-                  onClick={() => setEditingPoint(point)}
-                >
-                  <div className="flex items-center gap-3">
-                    <span 
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                      style={{ backgroundColor: baseColor }}
+        {points.length > 0 && (
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+              <h4 className="text-sm font-semibold text-slate-900">Pontos ({points.length})</h4>
+            </div>
+            <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
+              {points.map((point) => {
+                const depthInfo = DEPTHS.find(d => d.value === point.depth)
+                const isEditing = editingPoint?.id === point.id
+                
+                return (
+                  <div
+                    key={point.id}
+                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                      isEditing ? 'bg-violet-50' : 'hover:bg-slate-50'
+                    }`}
+                    onClick={() => setEditingPoint(point)}
+                  >
+                    <div 
+                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm"
+                      style={{ backgroundColor: depthInfo?.color || baseColor }}
                     >
-                      {point.units}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">
+                      {isToxin ? point.units : point.units.toFixed(1)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">
                         {ZONES.find(z => z.id === point.zone)?.name || point.zone}
                       </p>
-                      <p className="text-xs text-slate-500">
-                        {point.muscle || 'Sem musculo'} • {point.side === 'left' ? 'Esq' : point.side === 'right' ? 'Dir' : 'Centro'}
+                      <p className="text-[10px] text-slate-500">
+                        {point.muscle || '—'} • {point.side === 'left' ? 'Esq' : point.side === 'right' ? 'Dir' : 'Centro'}
+                        {point.technique && ` • ${TECHNIQUES.find(t => t.value === point.technique)?.label}`}
                       </p>
                     </div>
+                    <Icon name="chevronRight" className="w-4 h-4 text-slate-300" />
                   </div>
-                  <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
+
+        {/* Legenda de profundidade */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Legenda</p>
+          <div className="flex flex-wrap gap-3">
+            {DEPTHS.map(d => (
+              <div key={d.value} className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+                <span className="text-[10px] text-slate-600">{d.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
