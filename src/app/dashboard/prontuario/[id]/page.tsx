@@ -75,7 +75,8 @@ export default async function ProntuarioPatientPage({ params }: { params: { id: 
             Ver ficha
           </Link>
           <NewEvolutionButton 
-            patientId={params.id} 
+            patientId={params.id}
+            patientName={patient.name}
             clinicId={userData?.clinic_id}
             professionalId={userData?.id}
             professionalName={userData?.name}
