@@ -2,24 +2,6 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { notifyAppointmentReminder, notifyBirthday } from '@/lib/n8n'
 
-type AppointmentWithRelations = {
-  id: string
-  start_time: string
-  status: string
-  patients: { name: string; phone: string | null } | null
-  users: { name: string } | null
-  procedures: { name: string } | null
-  clinics?: { name: string } | null
-}
-
-type PatientWithClinic = {
-  id: string
-  name: string
-  phone: string | null
-  birth_date: string | null
-  clinics: { name: string } | null
-}
-
 // Cron job para enviar lembretes (executar a cada hora)
 // Configure no Vercel: Settings > Cron Jobs
 // Ou use o n8n para chamar este endpoint periodicamente
@@ -68,14 +50,18 @@ export async function GET(request: Request) {
       .lte('start_time', tomorrowEnd.toISOString())
       .in('status', ['scheduled', 'confirmed'])
 
-    for (const apt of (appointments24h || []) as AppointmentWithRelations[]) {
-      if (apt.patients?.phone) {
+    for (const apt of appointments24h || []) {
+      const patient = Array.isArray(apt.patients) ? apt.patients[0] : apt.patients
+      const user = Array.isArray(apt.users) ? apt.users[0] : apt.users
+      const procedure = Array.isArray(apt.procedures) ? apt.procedures[0] : apt.procedures
+      
+      if (patient?.phone) {
         await notifyAppointmentReminder({
           id: apt.id,
-          patient_name: apt.patients.name,
-          patient_phone: apt.patients.phone,
-          professional_name: apt.users?.name || 'Profissional',
-          procedure_name: apt.procedures?.name || 'Consulta',
+          patient_name: patient.name,
+          patient_phone: patient.phone,
+          professional_name: user?.name || 'Profissional',
+          procedure_name: procedure?.name || 'Consulta',
           start_time: apt.start_time,
           hours_until: 24
         })
@@ -103,14 +89,18 @@ export async function GET(request: Request) {
       .lte('start_time', in2hoursEnd.toISOString())
       .in('status', ['scheduled', 'confirmed'])
 
-    for (const apt of (appointments2h || []) as AppointmentWithRelations[]) {
-      if (apt.patients?.phone) {
+    for (const apt of appointments2h || []) {
+      const patient = Array.isArray(apt.patients) ? apt.patients[0] : apt.patients
+      const user = Array.isArray(apt.users) ? apt.users[0] : apt.users
+      const procedure = Array.isArray(apt.procedures) ? apt.procedures[0] : apt.procedures
+      
+      if (patient?.phone) {
         await notifyAppointmentReminder({
           id: apt.id,
-          patient_name: apt.patients.name,
-          patient_phone: apt.patients.phone,
-          professional_name: apt.users?.name || 'Profissional',
-          procedure_name: apt.procedures?.name || 'Consulta',
+          patient_name: patient.name,
+          patient_phone: patient.phone,
+          professional_name: user?.name || 'Profissional',
+          procedure_name: procedure?.name || 'Consulta',
           start_time: apt.start_time,
           hours_until: 2
         })
@@ -128,7 +118,9 @@ export async function GET(request: Request) {
         .not('birth_date', 'is', null)
         .not('phone', 'is', null)
 
-      for (const patient of (birthdays || []) as PatientWithClinic[]) {
+      for (const patient of birthdays || []) {
+        const clinic = Array.isArray(patient.clinics) ? patient.clinics[0] : patient.clinics
+        
         if (patient.birth_date) {
           const patientBday = patient.birth_date.slice(5, 10)
           if (patientBday === today && patient.phone) {
@@ -140,7 +132,7 @@ export async function GET(request: Request) {
               name: patient.name,
               phone: patient.phone,
               age,
-              clinic_name: patient.clinics?.name || 'Clínica'
+              clinic_name: clinic?.name || 'Clínica'
             })
             results.birthdays++
           }
