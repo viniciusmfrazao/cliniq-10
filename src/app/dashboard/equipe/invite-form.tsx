@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 const ROLES = [
@@ -14,7 +13,6 @@ const ROLES = [
 
 export default function InviteForm({ clinicId }: { clinicId: string }) {
   const router = useRouter()
-  const supabase = createClient()
   const [form, setForm] = useState({ name: '', email: '', role: 'receptionist' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -28,49 +26,34 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
     setError('')
     setSuccess('')
 
-    // Gerar senha temporaria
-    const tempPassword = Math.random().toString(36).slice(-8) + 'A1!'
+    try {
+      const response = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          role: form.role,
+          clinicId,
+        }),
+      })
 
-    // Criar usuario no Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: form.email,
-      password: tempPassword,
-      options: {
-        data: { invited: true }
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Erro ao enviar convite')
+        setLoading(false)
+        return
       }
-    })
 
-    if (authError || !authData.user) {
-      setError(authError?.message || 'Erro ao criar usuario')
-      setLoading(false)
-      return
+      setSuccess(data.message || `Convite enviado para ${form.email}`)
+      setForm({ name: '', email: '', role: 'receptionist' })
+      router.refresh()
+    } catch (err: any) {
+      setError(err.message || 'Erro ao enviar convite')
     }
 
-    // Adicionar na tabela users
-    const { error: dbError } = await supabase.from('users').insert({
-      id: authData.user.id,
-      clinic_id: clinicId,
-      name: form.name,
-      email: form.email,
-      role: form.role,
-    })
-
-    if (dbError) {
-      console.error('Erro ao inserir usuário:', dbError)
-      setError(`Erro: ${dbError.message}`)
-      setLoading(false)
-      return
-    }
-
-    // Enviar email de recuperacao de senha para o usuario definir a senha
-    await supabase.auth.resetPasswordForEmail(form.email, {
-      redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
-    })
-
-    setSuccess(`Convite enviado para ${form.email}`)
-    setForm({ name: '', email: '', role: 'receptionist' })
     setLoading(false)
-    router.refresh()
   }
 
   return (
