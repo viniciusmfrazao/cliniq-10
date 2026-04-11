@@ -22,7 +22,7 @@ export default async function EquipePage() {
   // Buscar membros da equipe
   const { data: teamMembers } = await supabase
     .from('users')
-    .select('id, name, email, role, created_at')
+    .select('id, name, email, role, permissions, created_at')
     .eq('clinic_id', currentUser.clinic_id)
     .order('created_at', { ascending: true })
 
@@ -34,7 +34,7 @@ export default async function EquipePage() {
       </div>
 
       <div className="card p-6 mb-6">
-        <h2 className="text-sm font-semibold text-slate-900 mb-4">Convidar membro</h2>
+        <h2 className="text-sm font-semibold text-slate-900 mb-4">Cadastrar membro</h2>
         <InviteForm clinicId={currentUser.clinic_id} />
       </div>
 

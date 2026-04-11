@@ -4,11 +4,15 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
   try {
-    const { name, email, role, clinicId } = await request.json()
+    const { name, email, role, clinicId, password } = await request.json()
 
     // Validar dados
-    if (!name || !email || !role || !clinicId) {
+    if (!name || !email || !role || !clinicId || !password) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: 'Senha deve ter no mínimo 6 caracteres' }, { status: 400 })
     }
 
     // Cliente com service role para operações admin
@@ -55,15 +59,19 @@ export async function POST(request: Request) {
     let userId: string
 
     if (existingAuthUser) {
-      // Usuário já existe no Auth - usar o ID dele
+      // Usuário já existe no Auth - atualizar senha e usar o ID dele
       userId = existingAuthUser.id
-    } else {
-      // Criar novo usuário no Auth
-      const tempPassword = Math.random().toString(36).slice(-8) + 'A1!'
       
+      // Atualizar senha do usuário existente
+      await supabaseAdmin.auth.admin.updateUserById(userId, {
+        password,
+        email_confirm: true
+      })
+    } else {
+      // Criar novo usuário no Auth com a senha definida pelo admin
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
-        password: tempPassword,
+        password,
         email_confirm: true,
         user_metadata: { invited: true }
       })
@@ -88,17 +96,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    // Enviar email de reset de senha
-    const { error: resetError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'recovery',
-      email,
-    })
-
-    if (resetError) {
-      console.error('Erro ao gerar link de recuperação:', resetError)
-    }
-
-    return NextResponse.json({ success: true, message: `Convite enviado para ${email}` })
+    return NextResponse.json({ success: true, message: `Membro ${name} cadastrado com sucesso!` })
 
   } catch (error: any) {
     console.error('Erro no convite:', error)

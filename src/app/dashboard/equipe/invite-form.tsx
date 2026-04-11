@@ -13,10 +13,11 @@ const ROLES = [
 
 export default function InviteForm({ clinicId }: { clinicId: string }) {
   const router = useRouter()
-  const [form, setForm] = useState({ name: '', email: '', role: 'receptionist' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'receptionist' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   const update = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }))
 
@@ -33,6 +34,7 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
         body: JSON.stringify({
           name: form.name,
           email: form.email,
+          password: form.password,
           role: form.role,
           clinicId,
         }),
@@ -46,8 +48,8 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
         return
       }
 
-      setSuccess(data.message || `Convite enviado para ${form.email}`)
-      setForm({ name: '', email: '', role: 'receptionist' })
+      setSuccess(data.message || `Membro cadastrado com sucesso!`)
+      setForm({ name: '', email: '', password: '', role: 'receptionist' })
       router.refresh()
     } catch (err: any) {
       setError(err.message || 'Erro ao enviar convite')
@@ -82,24 +84,47 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
           />
         </div>
       </div>
-      <div>
-        <label className="label">Funcao</label>
-        <select
-          className="input"
-          value={form.role}
-          onChange={e => update('role', e.target.value)}
-        >
-          {ROLES.map(role => (
-            <option key={role.value} value={role.value}>{role.label}</option>
-          ))}
-        </select>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label className="label">Senha de acesso</label>
+          <div className="relative">
+            <input
+              className="input pr-10"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Mínimo 6 caracteres"
+              value={form.password}
+              onChange={e => update('password', e.target.value)}
+              minLength={6}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="label">Função</label>
+          <select
+            className="input"
+            value={form.role}
+            onChange={e => update('role', e.target.value)}
+          >
+            {ROLES.map(role => (
+              <option key={role.value} value={role.value}>{role.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
       
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
       {success && <p className="text-sm text-green-600 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{success}</p>}
       
       <button type="submit" disabled={loading} className="btn-primary">
-        {loading ? 'Enviando...' : 'Enviar convite'}
+        {loading ? 'Cadastrando...' : 'Cadastrar membro'}
       </button>
     </form>
   )
