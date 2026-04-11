@@ -1,45 +1,182 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
+import { createClient } from '@/lib/supabase/client'
 
-type Props = { clinicName: string; userName: string; trialDaysLeft: number; userId?: string }
+type Props = { 
+  clinicName: string
+  userName: string
+  userRole?: string
+  trialDaysLeft: number
+  userId?: string 
+}
 
-export default function TopBar({ clinicName, userName, trialDaysLeft, userId }: Props) {
+export default function TopBar({ clinicName, userName, userRole = 'viewer', trialDaysLeft, userId }: Props) {
   const pathname = usePathname()
+  const router = useRouter()
+  const [menuOpen, setMenuOpen] = useState(false)
   const current = NAV_ITEMS.find(i => i.href === '/dashboard' ? pathname === i.href : pathname.startsWith(i.href))
+  const supabase = createClient()
+  const nav = NAV_ITEMS.filter(i => i.roles.includes(userRole))
+
+  async function logout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
-    <header className="md:hidden flex items-center justify-between px-4 py-4 glass flex-shrink-0 sticky top-0 z-40">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 gradient-bg rounded-2xl flex items-center justify-center shadow-lg animate-pulse-glow">
-          <span className="text-white text-sm font-black">C</span>
+    <>
+      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex-shrink-0 sticky top-0 z-40">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <Icon name="menu" className="w-5 h-5 text-slate-600" />
+          </button>
+          <div>
+            <p className="text-base font-bold text-slate-900">{current?.label || 'Dashboard'}</p>
+            <p className="text-xs text-slate-500">{clinicName}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-bold text-slate-900">{current?.label || clinicName}</p>
-          {trialDaysLeft > 0 && trialDaysLeft <= 14 && (
-            <Link href="/planos" className="flex items-center gap-1">
-              <span className="text-xs gradient-text font-semibold flex items-center gap-1">
-                <Icon name="zap" className="w-3 h-3" />
-                {trialDaysLeft} dias
-              </span>
-            </Link>
-          )}
+        
+        <div className="flex items-center gap-2">
+          {userId && <NotificationBell userId={userId} />}
+          <Link 
+            href="/dashboard/config" 
+            className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20 active:scale-95 transition-transform"
+          >
+            <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
+          </Link>
         </div>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        {userId && <NotificationBell userId={userId} />}
-        <Link 
-          href="/dashboard/config" 
-          className="w-10 h-10 gradient-bg rounded-2xl flex items-center justify-center shadow-lg"
-        >
-          <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
-        </Link>
-      </div>
-    </header>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {menuOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setMenuOpen(false)}
+          />
+          
+          {/* Menu Panel */}
+          <div className="absolute left-0 top-0 bottom-0 w-[85%] max-w-xs bg-gradient-to-b from-violet-600 via-purple-600 to-fuchsia-700 animate-slide-in-left overflow-hidden">
+            {/* Decorative */}
+            <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-20 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-1/2" />
+            
+            {/* Header */}
+            <div className="relative px-5 py-6 flex items-center justify-between border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                  <span className="text-white text-xl font-black">C</span>
+                </div>
+                <div>
+                  <p className="text-white font-bold">{clinicName}</p>
+                  <p className="text-white/60 text-xs">Cliniq Pro</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setMenuOpen(false)}
+                className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center"
+              >
+                <Icon name="x" className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            {/* Trial Banner */}
+            {trialDaysLeft > 0 && trialDaysLeft <= 14 && (
+              <div className="mx-4 mt-4 px-4 py-3 bg-white/10 backdrop-blur rounded-xl">
+                <div className="flex items-center gap-2 text-white">
+                  <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center">
+                    <Icon name="zap" className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{trialDaysLeft} dias restantes</p>
+                    <Link href="/planos" onClick={() => setMenuOpen(false)} className="text-xs text-white/70">
+                      Fazer upgrade →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <nav className="relative px-4 py-4 space-y-1 overflow-y-auto max-h-[60vh]">
+              {nav.map((item) => {
+                const active = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href)
+                return (
+                  <Link 
+                    key={item.href} 
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${
+                      active 
+                        ? 'bg-white text-slate-900 shadow-lg' 
+                        : 'text-white/80 active:bg-white/10'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                      active 
+                        ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-md' 
+                        : 'bg-white/10'
+                    }`}>
+                      <Icon 
+                        name={item.icon} 
+                        className={`w-5 h-5 ${active ? 'text-white' : 'text-white/80'}`} 
+                      />
+                    </div>
+                    <span className="flex-1">{item.label}</span>
+                    {item.label === 'Eva IA' && (
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded ${
+                        active ? 'bg-purple-100 text-purple-700' : 'bg-white/20 text-white'
+                      }`}>
+                        IA
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+            </nav>
+
+            {/* User Section */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10 bg-black/10">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-gradient-to-br from-violet-400 to-purple-500 rounded-xl flex items-center justify-center">
+                  <span className="text-white font-bold">{userName.charAt(0).toUpperCase()}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{userName}</p>
+                  <p className="text-xs text-white/60 capitalize">{userRole}</p>
+                </div>
+                <button 
+                  onClick={logout}
+                  className="p-2.5 text-white/60 hover:text-white active:bg-white/10 rounded-xl transition-colors"
+                >
+                  <Icon name="logout" className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes slide-in-left {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
+        .animate-slide-in-left {
+          animation: slide-in-left 0.25s ease-out;
+        }
+      `}</style>
+    </>
   )
 }

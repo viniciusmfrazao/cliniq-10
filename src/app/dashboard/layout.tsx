@@ -34,6 +34,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <TopBar 
           clinicName={clinic?.name || 'Cliniq'} 
           userName={userData?.name || ''} 
+          userRole={userData?.role || 'viewer'}
           trialDaysLeft={trialDaysLeft}
           userId={user.id}
         />
