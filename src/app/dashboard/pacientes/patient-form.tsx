@@ -180,8 +180,8 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
             required
           >
             <option value="">Selecione o sexo</option>
-            <option value="female">Feminino</option>
-            <option value="male">Masculino</option>
+            <option value="F">Feminino</option>
+            <option value="M">Masculino</option>
           </select>
         </div>
 

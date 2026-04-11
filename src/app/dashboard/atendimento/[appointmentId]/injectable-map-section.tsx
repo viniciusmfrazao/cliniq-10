@@ -39,7 +39,7 @@ type Props = {
     total_units: number
     product_name?: string
     products: { name: string } | null
-    injectable_points: Array<{ x: number; y: number; region: string; units: number }>
+    injectable_points: Array<{ x_position: number; y_position: number; units: number }>
   }>
   clinicId: string
 }
@@ -284,11 +284,11 @@ export default function InjectableMapSection({ patient, appointmentId, products,
 
         console.log('=== APLICAÇÃO CRIADA ===', application?.id)
 
-        // Criar pontos (sem region - campo não existe na tabela)
+        // Criar pontos (usando x_position e y_position como na tabela)
         const pointsData = productPoints.map(p => ({
           application_id: application.id,
-          x: p.x,
-          y: p.y,
+          x_position: p.x,
+          y_position: p.y,
           units: p.units
         }))
 
@@ -570,7 +570,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
               {/* Pontos existentes (salvos) */}
               {currentInjections.flatMap(inj => 
                 inj.injectable_points?.map((p, i) => {
-                  const coords = toSvgCoords(p.x, p.y)
+                  const coords = toSvgCoords(p.x_position, p.y_position)
                   return (
                     <g key={`saved-${inj.id}-${i}`}>
                       <circle 

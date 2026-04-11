@@ -75,6 +75,88 @@
   --card-shadow: 0 4px 20px rgba(168, 85, 247, 0.1);
 }
 
+/* Dark Mode */
+.dark {
+  --bg-main: #0F172A;
+  --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.dark body {
+  background: var(--bg-main);
+}
+
+.dark .card {
+  @apply bg-slate-800 border-slate-700;
+}
+
+.dark .input {
+  @apply bg-slate-800 border-slate-600 text-white placeholder:text-slate-400;
+}
+
+.dark .input:focus {
+  border-color: var(--primary);
+}
+
+.dark .label {
+  @apply text-slate-400;
+}
+
+.dark .btn-secondary {
+  @apply bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:border-slate-500;
+}
+
+/* Dark mode text colors */
+.dark .text-slate-900 {
+  @apply text-white;
+}
+
+.dark .text-slate-800 {
+  @apply text-slate-100;
+}
+
+.dark .text-slate-700 {
+  @apply text-slate-200;
+}
+
+.dark .text-slate-600 {
+  @apply text-slate-300;
+}
+
+.dark .text-slate-500 {
+  @apply text-slate-400;
+}
+
+/* Dark mode backgrounds */
+.dark .bg-white {
+  @apply bg-slate-800;
+}
+
+.dark .bg-slate-50 {
+  @apply bg-slate-900;
+}
+
+.dark .bg-slate-100 {
+  @apply bg-slate-700;
+}
+
+/* Dark mode borders */
+.dark .border-slate-100 {
+  @apply border-slate-700;
+}
+
+.dark .border-slate-200 {
+  @apply border-slate-600;
+}
+
+/* Dark mode hover states */
+.dark .hover\:bg-slate-50:hover {
+  @apply bg-slate-700;
+}
+
+.dark .hover\:bg-slate-100:hover {
+  @apply bg-slate-600;
+}
+
 * { 
   -webkit-tap-highlight-color: transparent; 
 }

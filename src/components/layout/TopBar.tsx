@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import { createClient } from '@/lib/supabase/client'
 
 type Props = { 
@@ -32,21 +33,22 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
 
   return (
     <>
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex-shrink-0 sticky top-0 z-40">
+      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-700 flex-shrink-0 sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMenuOpen(true)}
-            className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+            className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
           >
-            <Icon name="menu" className="w-5 h-5 text-slate-600" />
+            <Icon name="menu" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
           </button>
           <div>
-            <p className="text-base font-bold text-slate-900">{current?.label || 'Dashboard'}</p>
-            <p className="text-xs text-slate-500">{clinicName}</p>
+            <p className="text-base font-bold text-slate-900 dark:text-white">{current?.label || 'Dashboard'}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{clinicName}</p>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           {userId && <NotificationBell userId={userId} />}
           <Link 
             href="/dashboard/config" 

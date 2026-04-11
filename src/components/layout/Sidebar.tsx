@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import { createClient } from '@/lib/supabase/client'
 
 type Props = { clinicName: string; userName: string; userRole: string; trialDaysLeft: number; userId?: string }
@@ -110,6 +111,7 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
             <p className="text-xs text-white/50 capitalize">{userRole}</p>
           </div>
           <div className="flex items-center gap-1">
+            <ThemeToggle variant="sidebar" />
             {userId && (
               <div className="[&_button]:text-white/50 [&_button:hover]:text-white [&_button:hover]:bg-white/10">
                 <NotificationBell userId={userId} />

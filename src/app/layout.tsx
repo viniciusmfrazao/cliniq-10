@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { ThemeProvider } from '@/contexts/ThemeContext'
 
 export const metadata: Metadata = {
   title: 'Cliniq',
@@ -9,9 +10,13 @@ export const metadata: Metadata = {
 const themeScript = `
   (function() {
     try {
-      var theme = localStorage.getItem('cliniq-theme');
-      if (theme && theme !== 'default') {
-        document.documentElement.setAttribute('data-theme', theme);
+      var mode = localStorage.getItem('theme-mode');
+      var color = localStorage.getItem('theme-color') || localStorage.getItem('cliniq-theme');
+      if (mode === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+      if (color && color !== 'default') {
+        document.documentElement.setAttribute('data-theme', color);
       }
     } catch (e) {}
   })();
@@ -30,7 +35,9 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   )
 }
