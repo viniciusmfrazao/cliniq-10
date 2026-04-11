@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Icon from '@/components/ui/Icon'
+import { useTheme } from '@/contexts/ThemeContext'
 
 const THEMES = [
   { 
@@ -51,6 +52,7 @@ const THEMES = [
 export default function ThemeSelector() {
   const [currentTheme, setCurrentTheme] = useState('default')
   const [hoveredTheme, setHoveredTheme] = useState<string | null>(null)
+  const { mode, setMode } = useTheme()
 
   useEffect(() => {
     const saved = localStorage.getItem('cliniq-theme') || 'default'
@@ -76,8 +78,60 @@ export default function ThemeSelector() {
 
   return (
     <div>
-      <p className="text-sm text-slate-600 mb-6">
-        Personalize a aparencia do sistema com sua cor favorita
+      {/* Modo Claro/Escuro */}
+      <div className="mb-8">
+        <p className="text-sm font-medium text-slate-700 mb-3">Modo de exibição</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setMode('light')}
+            className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+              mode === 'light' 
+                ? 'border-slate-900 bg-white shadow-md' 
+                : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              mode === 'light' ? 'bg-amber-100' : 'bg-slate-200'
+            }`}>
+              <Icon name="sun" className={`w-5 h-5 ${mode === 'light' ? 'text-amber-600' : 'text-slate-500'}`} />
+            </div>
+            <div className="text-left">
+              <p className="font-semibold text-slate-900 text-sm">Claro</p>
+              <p className="text-xs text-slate-500">Fundo branco</p>
+            </div>
+            {mode === 'light' && (
+              <Icon name="check" className="w-5 h-5 text-slate-900 ml-auto" />
+            )}
+          </button>
+          
+          <button
+            onClick={() => setMode('dark')}
+            className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+              mode === 'dark' 
+                ? 'border-slate-900 bg-slate-800 shadow-md' 
+                : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              mode === 'dark' ? 'bg-indigo-900' : 'bg-slate-200'
+            }`}>
+              <Icon name="moon" className={`w-5 h-5 ${mode === 'dark' ? 'text-indigo-300' : 'text-slate-500'}`} />
+            </div>
+            <div className="text-left">
+              <p className={`font-semibold text-sm ${mode === 'dark' ? 'text-white' : 'text-slate-900'}`}>Escuro</p>
+              <p className={`text-xs ${mode === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Fundo escuro</p>
+            </div>
+            {mode === 'dark' && (
+              <Icon name="check" className="w-5 h-5 text-white ml-auto" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Cores */}
+      <p className="text-sm font-medium text-slate-700 mb-3">Cor do tema</p>
+      <p className="text-sm text-slate-500 mb-4">
+        Personalize a aparência do sistema com sua cor favorita
       </p>
 
       {/* Preview */}

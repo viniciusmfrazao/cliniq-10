@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
-import ThemeToggle from '@/components/ui/ThemeToggle'
 import { createClient } from '@/lib/supabase/client'
 
 type Props = { 
@@ -48,7 +47,6 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
         </div>
         
         <div className="flex items-center gap-2">
-          <ThemeToggle />
           {userId && <NotificationBell userId={userId} />}
           <Link 
             href="/dashboard/config" 

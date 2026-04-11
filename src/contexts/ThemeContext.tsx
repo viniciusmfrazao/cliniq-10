@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
 type ThemeMode = 'light' | 'dark'
 type ThemeColor = 'default' | 'rose' | 'ocean' | 'emerald' | 'sunset' | 'lavender'
@@ -15,49 +15,84 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+function getInitialMode(): ThemeMode {
+  if (typeof window === 'undefined') return 'light'
+  try {
+    const saved = localStorage.getItem('theme-mode')
+    if (saved === 'dark' || saved === 'light') return saved
+  } catch {}
+  return 'light'
+}
+
+function getInitialColor(): ThemeColor {
+  if (typeof window === 'undefined') return 'default'
+  try {
+    const saved = localStorage.getItem('theme-color') || localStorage.getItem('cliniq-theme')
+    if (saved && saved !== 'default') return saved as ThemeColor
+  } catch {}
+  return 'default'
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>('light')
   const [color, setColorState] = useState<ThemeColor>('default')
   const [mounted, setMounted] = useState(false)
 
+  // Apply theme safely after mount
   useEffect(() => {
-    setMounted(true)
-    const savedMode = localStorage.getItem('theme-mode') as ThemeMode | null
-    const savedColor = localStorage.getItem('theme-color') as ThemeColor | null
+    const initialMode = getInitialMode()
+    const initialColor = getInitialColor()
     
-    if (savedMode) {
-      setModeState(savedMode)
-      document.documentElement.classList.toggle('dark', savedMode === 'dark')
+    setModeState(initialMode)
+    setColorState(initialColor)
+    
+    // Apply to DOM
+    if (initialMode === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
     }
     
-    if (savedColor && savedColor !== 'default') {
-      setColorState(savedColor)
-      document.documentElement.setAttribute('data-theme', savedColor)
+    if (initialColor !== 'default') {
+      document.documentElement.setAttribute('data-theme', initialColor)
+    }
+    
+    setMounted(true)
+  }, [])
+
+  const setMode = useCallback((newMode: ThemeMode) => {
+    setModeState(newMode)
+    try {
+      localStorage.setItem('theme-mode', newMode)
+    } catch {}
+    
+    if (newMode === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
     }
   }, [])
 
-  const setMode = (newMode: ThemeMode) => {
-    setModeState(newMode)
-    localStorage.setItem('theme-mode', newMode)
-    document.documentElement.classList.toggle('dark', newMode === 'dark')
-  }
-
-  const setColor = (newColor: ThemeColor) => {
+  const setColor = useCallback((newColor: ThemeColor) => {
     setColorState(newColor)
-    localStorage.setItem('theme-color', newColor)
+    try {
+      localStorage.setItem('theme-color', newColor)
+    } catch {}
+    
     if (newColor === 'default') {
       document.documentElement.removeAttribute('data-theme')
     } else {
       document.documentElement.setAttribute('data-theme', newColor)
     }
-  }
+  }, [])
 
-  const toggleMode = () => {
+  const toggleMode = useCallback(() => {
     setMode(mode === 'light' ? 'dark' : 'light')
-  }
+  }, [mode, setMode])
 
+  // Don't render children until mounted to avoid hydration mismatch
   if (!mounted) {
-    return <>{children}</>
+    return null
   }
 
   return (
@@ -70,7 +105,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme() {
   const context = useContext(ThemeContext)
   if (context === undefined) {
-    // Return safe defaults when used outside provider (SSR)
     return {
       mode: 'light' as ThemeMode,
       color: 'default' as ThemeColor,
