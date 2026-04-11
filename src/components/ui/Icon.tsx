@@ -80,9 +80,9 @@ const P: Record<string, string[]> = {
   layers: ['M12 2L2 7l10 5 10-5-10-5z', 'M2 17l10 5 10-5', 'M2 12l10 5 10-5'],
 }
 
-export default function Icon({ name, className = 'w-5 h-5' }: { name: string; className?: string }) {
+export default function Icon({ name, className = 'w-5 h-5', style }: { name: string; className?: string; style?: React.CSSProperties }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
       {(P[name] || []).map((d, i) => <path key={i} d={d} />)}
     </svg>
   )
