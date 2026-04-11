@@ -398,7 +398,8 @@ export default function FaceMapEditor({
                       style={editingPoint.depth === d.value ? { 
                         backgroundColor: `${d.color}15`, 
                         color: d.color,
-                        ringColor: d.color 
+                        // @ts-ignore - Tailwind CSS variable
+                        '--tw-ring-color': d.color
                       } : {}}
                     >
                       <span 

@@ -69,11 +69,18 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
     const { data: { user } } = await supabase.auth.getUser()
     const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
 
+    // Validar campo obrigatório
+    if (!form.gender) {
+      setError('O campo Sexo é obrigatório')
+      setLoading(false)
+      return
+    }
+
     const patientData = {
       ...form,
       clinic_id: userData?.clinic_id,
       birth_date: form.birth_date || null,
-      gender: form.gender || null,
+      gender: form.gender,
       email: form.email || null,
       phone: form.phone || null,
       cpf: form.cpf || null,
@@ -165,16 +172,16 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
         </div>
 
         <div>
-          <label className="label">Genero</label>
+          <label className="label">Sexo *</label>
           <select
             className="input"
             value={form.gender}
             onChange={e => update('gender', e.target.value)}
+            required
           >
-            <option value="">Selecione</option>
-            <option value="F">Feminino</option>
-            <option value="M">Masculino</option>
-            <option value="O">Outro</option>
+            <option value="">Selecione o sexo</option>
+            <option value="female">Feminino</option>
+            <option value="male">Masculino</option>
           </select>
         </div>
 
