@@ -2,6 +2,24 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { notifyAppointmentReminder, notifyBirthday } from '@/lib/n8n'
 
+type AppointmentWithRelations = {
+  id: string
+  start_time: string
+  status: string
+  patients: { name: string; phone: string | null } | null
+  users: { name: string } | null
+  procedures: { name: string } | null
+  clinics?: { name: string } | null
+}
+
+type PatientWithClinic = {
+  id: string
+  name: string
+  phone: string | null
+  birth_date: string | null
+  clinics: { name: string } | null
+}
+
 // Cron job para enviar lembretes (executar a cada hora)
 // Configure no Vercel: Settings > Cron Jobs
 // Ou use o n8n para chamar este endpoint periodicamente
@@ -50,7 +68,7 @@ export async function GET(request: Request) {
       .lte('start_time', tomorrowEnd.toISOString())
       .in('status', ['scheduled', 'confirmed'])
 
-    for (const apt of appointments24h || []) {
+    for (const apt of (appointments24h || []) as AppointmentWithRelations[]) {
       if (apt.patients?.phone) {
         await notifyAppointmentReminder({
           id: apt.id,
@@ -85,7 +103,7 @@ export async function GET(request: Request) {
       .lte('start_time', in2hoursEnd.toISOString())
       .in('status', ['scheduled', 'confirmed'])
 
-    for (const apt of appointments2h || []) {
+    for (const apt of (appointments2h || []) as AppointmentWithRelations[]) {
       if (apt.patients?.phone) {
         await notifyAppointmentReminder({
           id: apt.id,
@@ -110,7 +128,7 @@ export async function GET(request: Request) {
         .not('birth_date', 'is', null)
         .not('phone', 'is', null)
 
-      for (const patient of birthdays || []) {
+      for (const patient of (birthdays || []) as PatientWithClinic[]) {
         if (patient.birth_date) {
           const patientBday = patient.birth_date.slice(5, 10)
           if (patientBday === today && patient.phone) {
@@ -130,8 +148,9 @@ export async function GET(request: Request) {
       }
     }
 
-  } catch (error: any) {
-    results.errors.push(error.message)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    results.errors.push(errorMessage)
   }
 
   return NextResponse.json({

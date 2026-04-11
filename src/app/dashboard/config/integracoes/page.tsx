@@ -1,20 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState } from 'react'
 import Icon from '@/components/ui/Icon'
 
-type Integration = {
-  id: string
-  name: string
-  type: string
-  webhook_url: string
-  is_active: boolean
-  config: Record<string, any>
-}
-
 export default function IntegracoesPage() {
-  const supabase = createClient()
   const [n8nUrl, setN8nUrl] = useState('https://vfrazao.app.n8n.cloud')
   const [webhooks, setWebhooks] = useState({
     appointment_created: '',
@@ -110,8 +99,9 @@ export default function IntegracoesPage() {
       } else {
         setTestResult(`❌ Erro ${response.status}: ${response.statusText}`)
       }
-    } catch (error: any) {
-      setTestResult(`❌ Erro de conexão: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+      setTestResult(`❌ Erro de conexão: ${errorMessage}`)
     }
 
     setTimeout(() => setTestResult(null), 5000)

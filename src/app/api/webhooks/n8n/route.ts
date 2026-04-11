@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { event, data } = body
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     switch (event) {
       case 'whatsapp_message_received':
