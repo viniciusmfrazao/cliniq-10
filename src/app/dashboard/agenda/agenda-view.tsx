@@ -348,10 +348,10 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
   // Visão Dia - Colunas por profissional
   if (viewMode === 'day') {
     return (
-      <div className="card overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50">
+      <div className="card overflow-hidden dark:bg-slate-800 dark:border-slate-700">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm font-medium text-slate-600">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
               {appointments.length} agendamento{appointments.length !== 1 ? 's' : ''} • {displayProfessionals.length} profissional{displayProfessionals.length !== 1 ? 'is' : ''}
             </p>
             <div className="flex items-center gap-2">
@@ -376,9 +376,9 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
         <div className="overflow-x-auto">
           <div style={{ minWidth: displayProfessionals.length > 1 ? `${displayProfessionals.length * 200 + 80}px` : '100%' }}>
             {/* Header com profissionais */}
-            <div className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-10">
-              <div className="w-20 flex-shrink-0 p-3 text-center border-r border-slate-200">
-                <p className="text-xs font-semibold text-slate-500 uppercase">Hora</p>
+            <div className="flex border-b border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
+              <div className="w-20 flex-shrink-0 p-3 text-center border-r border-slate-200 dark:border-slate-600">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Hora</p>
               </div>
               {displayProfessionals.map((prof, idx) => (
                 <div 
@@ -399,9 +399,9 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
               const isLunchTime = hour === 12
               
               return (
-                <div key={hour} className={`flex border-b border-slate-100 ${isLunchTime ? 'bg-amber-50/30' : ''}`}>
-                  <div className="w-20 flex-shrink-0 p-2 text-center border-r border-slate-100 bg-slate-50">
-                    <p className={`text-sm font-semibold ${isLunchTime ? 'text-amber-600' : 'text-slate-600'}`}>
+                <div key={hour} className={`flex border-b border-slate-100 dark:border-slate-700 ${isLunchTime ? 'bg-amber-50/30 dark:bg-amber-900/20' : ''}`}>
+                  <div className="w-20 flex-shrink-0 p-2 text-center border-r border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                    <p className={`text-sm font-semibold ${isLunchTime ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}`}>
                       {timeStr}
                     </p>
                     {isLunchTime && <p className="text-xs text-amber-500">🍽️</p>}
@@ -416,8 +416,8 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
                     return (
                       <div 
                         key={prof.id}
-                        className={`flex-1 min-w-[180px] p-1.5 border-r border-slate-100 last:border-r-0 min-h-[70px] transition-colors ${
-                          draggedAppointment ? 'hover:bg-violet-100' : ''
+                        className={`flex-1 min-w-[180px] p-1.5 border-r border-slate-100 dark:border-slate-700 last:border-r-0 min-h-[70px] transition-colors ${
+                          draggedAppointment ? 'hover:bg-violet-100 dark:hover:bg-violet-900/30' : ''
                         }`}
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, selectedDate, hour, prof.id)}
@@ -437,9 +437,9 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
                         ) : (
                           <Link
                             href={`/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}`}
-                            className="h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 rounded-lg hover:border-violet-300 hover:bg-violet-50 transition-colors group"
+                            className="h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-lg hover:border-violet-300 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors group"
                           >
-                            <Icon name="plus" className="w-4 h-4 text-slate-300 group-hover:text-violet-500" />
+                            <Icon name="plus" className="w-4 h-4 text-slate-300 dark:text-slate-500 group-hover:text-violet-500" />
                           </Link>
                         )}
                       </div>

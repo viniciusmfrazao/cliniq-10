@@ -28,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     : 0
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
       <Sidebar clinicName={clinic?.name || 'Cliniq'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar 
