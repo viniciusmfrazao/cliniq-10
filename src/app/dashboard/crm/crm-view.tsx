@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import CRMSettingsModal from './crm-settings-modal'
 
 type Lead = {
   id: string
@@ -498,6 +499,17 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           onUpdate={() => { setSelectedLead(null); router.refresh() }}
         />
       )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <CRMSettingsModal
+          clinicId={clinicId}
+          currentStages={STAGES}
+          currentSources={SOURCES}
+          onClose={() => setShowSettings(false)}
+          onSave={() => { setShowSettings(false); router.refresh() }}
+        />
+      )}
     </div>
   )
 }
@@ -646,6 +658,8 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [newNote, setNewNote] = useState('')
+  const [interactionType, setInteractionType] = useState<'note' | 'call' | 'whatsapp' | 'email'>('note')
+  const [tab, setTab] = useState<'info' | 'history'>('info')
   const [form, setForm] = useState({
     status: lead.status,
     interest: lead.interest || '',
@@ -653,6 +667,14 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
     lost_reason: lead.lost_reason || ''
   })
 
+  // Calcular dias desde último contato
+  const daysSinceContact = lead.last_contact_at 
+    ? Math.floor((Date.now() - new Date(lead.last_contact_at).getTime()) / (1000 * 60 * 60 * 24))
+    : Math.floor((Date.now() - new Date(lead.created_at).getTime()) / (1000 * 60 * 60 * 24))
+
+  // Verificar se precisa follow-up
+  const needsFollowup = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
+  
   async function handleUpdate() {
     setLoading(true)
     const updateData: Record<string, string | null> = {
@@ -673,18 +695,63 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
     onUpdate()
   }
 
-  async function addNote() {
+  async function addInteraction() {
     if (!newNote.trim()) return
-    const notes = lead.notes ? `${lead.notes}\n\n[${new Date().toLocaleString('pt-BR')}]\n${newNote}` : `[${new Date().toLocaleString('pt-BR')}]\n${newNote}`
-    await supabase.from('leads').update({ notes }).eq('id', lead.id)
+    
+    const typeEmoji = {
+      note: '📝',
+      call: '📞',
+      whatsapp: '💬',
+      email: '📧'
+    }
+    
+    const typeLabel = {
+      note: 'Nota',
+      call: 'Ligação',
+      whatsapp: 'WhatsApp',
+      email: 'Email'
+    }
+    
+    const timestamp = new Date().toLocaleString('pt-BR')
+    const entry = `${typeEmoji[interactionType]} [${typeLabel[interactionType]} - ${timestamp}]\n${newNote}`
+    const notes = lead.notes ? `${entry}\n\n${lead.notes}` : entry
+    
+    await supabase.from('leads').update({ 
+      notes,
+      last_contact_at: new Date().toISOString()
+    }).eq('id', lead.id)
+    
+    // Se era uma interação de contato, atualizar status se for novo
+    if (interactionType !== 'note' && lead.status === 'new') {
+      await supabase.from('leads').update({ status: 'contacted' }).eq('id', lead.id)
+    }
+    
     setNewNote('')
     onUpdate()
   }
 
+  async function quickFollowup(days: number) {
+    const date = new Date()
+    date.setDate(date.getDate() + days)
+    setForm(prev => ({ ...prev, next_contact_at: date.toISOString().split('T')[0] }))
+  }
+
   async function convertToPatient() {
-    // Criar paciente a partir do lead
-    const { data: patient } = await supabase.from('patients').insert({
-      clinic_id: lead.id, // será substituído pelo clinic_id real
+    setLoading(true)
+    // Buscar clinic_id do lead
+    const { data: leadData } = await supabase
+      .from('leads')
+      .select('clinic_id')
+      .eq('id', lead.id)
+      .single()
+
+    if (!leadData) {
+      setLoading(false)
+      return
+    }
+
+    const { data: patient, error } = await supabase.from('patients').insert({
+      clinic_id: leadData.clinic_id,
       name: lead.name,
       phone: lead.phone,
       email: lead.email
@@ -697,6 +764,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
       }).eq('id', lead.id)
       onUpdate()
     }
+    setLoading(false)
   }
 
   const stage = stages.find(s => s.id === lead.status)
@@ -704,119 +772,225 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h2 className="font-bold text-slate-900">{lead.name}</h2>
-            <p className="text-sm text-slate-500">{source?.icon} {source?.label} • {new Date(lead.created_at).toLocaleDateString('pt-BR')}</p>
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-slate-100">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="font-bold text-slate-900 flex items-center gap-2">
+                {lead.name}
+                {lead.ai_priority && (
+                  <span className="text-sm">
+                    {lead.ai_priority === 'hot' ? '🔥' : lead.ai_priority === 'warm' ? '☀️' : '❄️'}
+                  </span>
+                )}
+              </h2>
+              <p className="text-sm text-slate-500">{source?.icon} {source?.label} • {new Date(lead.created_at).toLocaleDateString('pt-BR')}</p>
+            </div>
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600">
+              <Icon name="x" className="w-5 h-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600">
-            <Icon name="x" className="w-5 h-5" />
+          
+          {/* Alertas */}
+          {needsFollowup && (
+            <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+              <span className="text-amber-500">⚠️</span>
+              <p className="text-sm text-amber-700 font-medium">Follow-up pendente!</p>
+            </div>
+          )}
+          {daysSinceContact > 7 && lead.status !== 'converted' && lead.status !== 'lost' && (
+            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+              <span className="text-red-500">⏰</span>
+              <p className="text-sm text-red-700">{daysSinceContact} dias sem contato</p>
+            </div>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-100">
+          <button
+            onClick={() => setTab('info')}
+            className={`flex-1 py-2 text-sm font-medium ${tab === 'info' ? 'text-violet-600 border-b-2 border-violet-600' : 'text-slate-500'}`}
+          >
+            Informações
+          </button>
+          <button
+            onClick={() => setTab('history')}
+            className={`flex-1 py-2 text-sm font-medium ${tab === 'history' ? 'text-violet-600 border-b-2 border-violet-600' : 'text-slate-500'}`}
+          >
+            Histórico
           </button>
         </div>
         
-        <div className="p-4 space-y-4">
-          {/* Contato */}
-          <div className="flex gap-2">
-            {lead.phone && (
-              <a
-                href={`https://wa.me/55${lead.phone.replace(/\D/g, '')}`}
-                target="_blank"
-                className="flex-1 py-2 px-4 bg-emerald-500 text-white rounded-lg font-medium flex items-center justify-center gap-2 hover:bg-emerald-600"
-              >
-                <Icon name="message" className="w-4 h-4" />
-                WhatsApp
-              </a>
-            )}
-            {lead.phone && (
-              <a
-                href={`tel:${lead.phone}`}
-                className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg font-medium flex items-center justify-center gap-2 hover:bg-blue-600"
-              >
-                <Icon name="phone" className="w-4 h-4" />
-                Ligar
-              </a>
-            )}
-          </div>
-
-          {/* Status */}
-          <div>
-            <label className="label">Status</label>
-            <select
-              className="input"
-              value={form.status}
-              onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
-            >
-              {stages.map(s => (
-                <option key={s.id} value={s.id}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {form.status === 'lost' && (
-            <div>
-              <label className="label">Motivo da perda</label>
-              <input
-                type="text"
-                className="input"
-                value={form.lost_reason}
-                onChange={e => setForm(prev => ({ ...prev, lost_reason: e.target.value }))}
-                placeholder="Ex: Preço, concorrência, desistiu..."
-              />
-            </div>
-          )}
-
-          {/* Interesse */}
-          <div>
-            <label className="label">Interesse</label>
-            <input
-              type="text"
-              className="input"
-              value={form.interest}
-              onChange={e => setForm(prev => ({ ...prev, interest: e.target.value }))}
-              placeholder="Procedimento de interesse"
-            />
-          </div>
-
-          {/* Próximo contato */}
-          <div>
-            <label className="label">Próximo contato</label>
-            <input
-              type="date"
-              className="input"
-              value={form.next_contact_at}
-              onChange={e => setForm(prev => ({ ...prev, next_contact_at: e.target.value }))}
-            />
-          </div>
-
-          {/* Notas */}
-          <div>
-            <label className="label">Histórico / Notas</label>
-            {lead.notes && (
-              <div className="bg-slate-50 rounded-lg p-3 mb-2 text-sm text-slate-600 whitespace-pre-wrap max-h-40 overflow-y-auto">
-                {lead.notes}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {tab === 'info' ? (
+            <>
+              {/* Contato Rápido */}
+              <div className="flex gap-2">
+                {lead.phone && (
+                  <a
+                    href={`https://wa.me/55${lead.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    onClick={() => {
+                      // Registrar interação
+                      const entry = `💬 [WhatsApp - ${new Date().toLocaleString('pt-BR')}]\nContato iniciado via WhatsApp`
+                      const notes = lead.notes ? `${entry}\n\n${lead.notes}` : entry
+                      supabase.from('leads').update({ notes, last_contact_at: new Date().toISOString() }).eq('id', lead.id)
+                    }}
+                    className="flex-1 py-2.5 px-4 bg-emerald-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors"
+                  >
+                    <Icon name="message" className="w-4 h-4" />
+                    WhatsApp
+                  </a>
+                )}
+                {lead.phone && (
+                  <a
+                    href={`tel:${lead.phone}`}
+                    className="flex-1 py-2.5 px-4 bg-blue-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors"
+                  >
+                    <Icon name="phone" className="w-4 h-4" />
+                    Ligar
+                  </a>
+                )}
               </div>
-            )}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                className="input flex-1"
-                value={newNote}
-                onChange={e => setNewNote(e.target.value)}
-                placeholder="Adicionar nota..."
-                onKeyPress={e => e.key === 'Enter' && addNote()}
-              />
-              <button
-                onClick={addNote}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
-              >
-                <Icon name="plus" className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
 
-          {/* Ações */}
-          <div className="flex gap-3 pt-2">
+              {/* Status */}
+              <div>
+                <label className="label">Status</label>
+                <select
+                  className="input"
+                  value={form.status}
+                  onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
+                >
+                  {stages.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {form.status === 'lost' && (
+                <div>
+                  <label className="label">Motivo da perda</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={form.lost_reason}
+                    onChange={e => setForm(prev => ({ ...prev, lost_reason: e.target.value }))}
+                    placeholder="Ex: Preço, concorrência, desistiu..."
+                  />
+                </div>
+              )}
+
+              {/* Interesse */}
+              <div>
+                <label className="label">Interesse</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={form.interest}
+                  onChange={e => setForm(prev => ({ ...prev, interest: e.target.value }))}
+                  placeholder="Procedimento de interesse"
+                />
+              </div>
+
+              {/* Follow-up */}
+              <div>
+                <label className="label">Próximo contato (Follow-up)</label>
+                <input
+                  type="date"
+                  className="input mb-2"
+                  value={form.next_contact_at}
+                  onChange={e => setForm(prev => ({ ...prev, next_contact_at: e.target.value }))}
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => quickFollowup(1)} className="px-3 py-1 text-xs bg-slate-100 rounded-full hover:bg-slate-200">Amanhã</button>
+                  <button onClick={() => quickFollowup(3)} className="px-3 py-1 text-xs bg-slate-100 rounded-full hover:bg-slate-200">3 dias</button>
+                  <button onClick={() => quickFollowup(7)} className="px-3 py-1 text-xs bg-slate-100 rounded-full hover:bg-slate-200">1 semana</button>
+                  <button onClick={() => quickFollowup(14)} className="px-3 py-1 text-xs bg-slate-100 rounded-full hover:bg-slate-200">2 semanas</button>
+                </div>
+              </div>
+
+              {/* Eva IA Sugestão */}
+              {lead.ai_suggested_action && (
+                <div className="p-3 bg-violet-50 rounded-xl">
+                  <p className="text-xs font-medium text-violet-600 mb-1">💡 Sugestão Eva IA</p>
+                  <p className="text-sm text-violet-900">{lead.ai_suggested_action}</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Adicionar Interação */}
+              <div className="space-y-2">
+                <div className="flex gap-1">
+                  {(['note', 'call', 'whatsapp', 'email'] as const).map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setInteractionType(type)}
+                      className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                        interactionType === type
+                          ? 'bg-violet-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {type === 'note' && '📝 Nota'}
+                      {type === 'call' && '📞 Ligação'}
+                      {type === 'whatsapp' && '💬 WhatsApp'}
+                      {type === 'email' && '📧 Email'}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="input flex-1"
+                    value={newNote}
+                    onChange={e => setNewNote(e.target.value)}
+                    placeholder={interactionType === 'note' ? 'Adicionar nota...' : 'Descreva o contato...'}
+                    onKeyPress={e => e.key === 'Enter' && addInteraction()}
+                  />
+                  <button
+                    onClick={addInteraction}
+                    className="px-4 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-700"
+                  >
+                    <Icon name="plus" className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Histórico */}
+              <div>
+                <label className="label">Histórico de Interações</label>
+                {lead.notes ? (
+                  <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-600 whitespace-pre-wrap max-h-60 overflow-y-auto space-y-2">
+                    {lead.notes.split('\n\n').map((entry, i) => (
+                      <div key={i} className="pb-2 border-b border-slate-200 last:border-0">
+                        {entry}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400 italic">Nenhuma interação registrada</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-100 space-y-3">
+          {lead.status !== 'converted' && lead.status !== 'lost' && (
+            <button
+              onClick={convertToPatient}
+              disabled={loading}
+              className="w-full py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 flex items-center justify-center gap-2"
+            >
+              <Icon name="userPlus" className="w-4 h-4" />
+              Converter em Paciente
+            </button>
+          )}
+          <div className="flex gap-3">
             <button onClick={handleUpdate} disabled={loading} className="btn-primary flex-1">
               {loading ? 'Salvando...' : 'Salvar'}
             </button>
