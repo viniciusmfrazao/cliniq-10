@@ -15,6 +15,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'CRM',            href: '/dashboard/crm',          icon: 'target',    roles: ['admin','receptionist'] },
   { label: 'Documentos',     href: '/dashboard/documentos',   icon: 'file',      roles: ['admin','doctor','esthetician','receptionist'] },
   { label: 'Equipe',         href: '/dashboard/equipe',       icon: 'users',     roles: ['admin'] },
+  { label: 'Auditoria',      href: '/dashboard/auditoria',    icon: 'shield',    roles: ['admin'] },
   { label: 'Configuracoes',  href: '/dashboard/config',       icon: 'settings',  roles: ['admin','doctor','esthetician','receptionist','viewer'] },
 ]
 
