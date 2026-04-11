@@ -3,22 +3,18 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import FacialDiagnosis from './facial-diagnosis'
-import Icon from '@/components/ui/Icon'
 
 type Props = {
   patientId: string
-  patientName: string
   clinicId: string
   professionalId: string
   professionalName: string
 }
 
-export default function NewEvolutionButton({ patientId, patientName, clinicId, professionalId, professionalName }: Props) {
+export default function NewEvolutionButton({ patientId, clinicId, professionalId, professionalName }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [open, setOpen] = useState(false)
-  const [showFacialDiagnosis, setShowFacialDiagnosis] = useState(false)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     type: 'consultation',
@@ -60,34 +56,9 @@ export default function NewEvolutionButton({ patientId, patientName, clinicId, p
 
   if (!open) {
     return (
-      <>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => setShowFacialDiagnosis(true)} 
-            className="btn-secondary w-auto px-4 py-2 text-sm flex items-center gap-2"
-            title="Diagnóstico Facial"
-          >
-            <span>🎯</span>
-            Diagnóstico Facial
-          </button>
-          <button onClick={() => setOpen(true)} className="btn-primary w-auto px-4 py-2 text-sm">
-            + Nova evolução
-          </button>
-        </div>
-
-        {showFacialDiagnosis && (
-          <FacialDiagnosis
-            patientId={patientId}
-            patientName={patientName}
-            clinicId={clinicId}
-            onClose={() => setShowFacialDiagnosis(false)}
-            onSave={() => {
-              setShowFacialDiagnosis(false)
-              router.refresh()
-            }}
-          />
-        )}
-      </>
+      <button onClick={() => setOpen(true)} className="btn-primary w-auto px-4 py-2 text-sm">
+        + Nova evolucao
+      </button>
     )
   }
 
