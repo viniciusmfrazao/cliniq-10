@@ -1,0 +1,273 @@
+import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
+
+function fmt(v: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
+}
+
+export default async function FinanceiroPage() {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  const clinicId = userData?.clinic_id
+
+  const today = new Date()
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
+  const todayStr = today.toISOString().split('T')[0]
+
+  const { data: entradasHoje } = await supabase
+    .from('entradas')
+    .select('valor_bruto, valor_liquido')
+    .eq('clinic_id', clinicId)
+    .eq('data_venda', todayStr)
+
+  const { data: entradasMes } = await supabase
+    .from('entradas')
+    .select('valor_bruto, valor_liquido')
+    .eq('clinic_id', clinicId)
+    .gte('data_venda', startOfMonth)
+    .lte('data_venda', endOfMonth)
+
+  const { data: saidasMes } = await supabase
+    .from('saidas')
+    .select('valor')
+    .eq('clinic_id', clinicId)
+    .gte('data', startOfMonth)
+    .lte('data', endOfMonth)
+
+  const { data: ultimasEntradas } = await supabase
+    .from('entradas')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .order('data_venda', { ascending: false })
+    .limit(5)
+
+  const { data: ultimasSaidas } = await supabase
+    .from('saidas')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .order('data', { ascending: false })
+    .limit(5)
+
+  const receitaHoje = entradasHoje?.reduce((sum, e) => sum + Number(e.valor_bruto || 0), 0) || 0
+  const receitaMes = entradasMes?.reduce((sum, e) => sum + Number(e.valor_bruto || 0), 0) || 0
+  const liquidoMes = entradasMes?.reduce((sum, e) => sum + Number(e.valor_liquido || 0), 0) || 0
+  const despesasMes = saidasMes?.reduce((sum, s) => sum + Number(s.valor || 0), 0) || 0
+  const resultadoMes = liquidoMes - despesasMes
+  const ticketMedio = entradasMes?.length ? liquidoMes / entradasMes.length : 0
+
+  const mesLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900">Financeiro</h1>
+          <p className="text-slate-500 capitalize">{mesLabel}</p>
+        </div>
+        <div className="flex gap-2">
+          <Link
+            href="/dashboard/financeiro/entradas/nova"
+            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition"
+          >
+            <Icon name="plus" className="w-5 h-5" />
+            Nova Entrada
+          </Link>
+          <Link
+            href="/dashboard/financeiro/saidas/nova"
+            className="inline-flex items-center gap-2 bg-rose-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-rose-700 transition"
+          >
+            <Icon name="minus" className="w-5 h-5" />
+            Nova Saída
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+              <Icon name="trendingUp" className="w-5 h-5 text-emerald-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(receitaHoje)}</p>
+          <p className="text-sm text-slate-500">Receita hoje</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <Icon name="dollarSign" className="w-5 h-5 text-blue-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(receitaMes)}</p>
+          <p className="text-sm text-slate-500">Receita do mês</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
+              <Icon name="activity" className="w-5 h-5 text-violet-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(liquidoMes)}</p>
+          <p className="text-sm text-slate-500">Líquido do mês</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+              <Icon name="receipt" className="w-5 h-5 text-amber-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(ticketMedio)}</p>
+          <p className="text-sm text-slate-500">Ticket médio</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center">
+              <Icon name="trendingDown" className="w-5 h-5 text-rose-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(despesasMes)}</p>
+          <p className="text-sm text-slate-500">Saídas do mês</p>
+        </div>
+
+        <div className={`rounded-2xl p-5 border shadow-sm ${resultadoMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${resultadoMes >= 0 ? 'bg-emerald-200' : 'bg-rose-200'}`}>
+              <Icon name={resultadoMes >= 0 ? 'trendingUp' : 'trendingDown'} className={`w-5 h-5 ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} />
+            </div>
+          </div>
+          <p className={`text-2xl font-black ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{fmt(resultadoMes)}</p>
+          <p className={`text-sm ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Link href="/dashboard/financeiro/fluxo" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition group flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition">
+            <Icon name="activity" className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 text-sm">Fluxo de Caixa</p>
+            <p className="text-xs text-slate-500">Visão anual</p>
+          </div>
+        </Link>
+
+        <Link href="/dashboard/financeiro/historico-paciente" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-amber-200 hover:shadow-md transition group flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center group-hover:bg-amber-200 transition">
+            <Icon name="users" className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 text-sm">Histórico Paciente</p>
+            <p className="text-xs text-slate-500">Ranking</p>
+          </div>
+        </Link>
+
+        <Link href="/dashboard/financeiro/metas" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-pink-200 hover:shadow-md transition group flex items-center gap-3">
+          <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center group-hover:bg-pink-200 transition">
+            <Icon name="target" className="w-5 h-5 text-pink-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 text-sm">Metas</p>
+            <p className="text-xs text-slate-500">Mensal</p>
+          </div>
+        </Link>
+
+        <Link href="/dashboard/financeiro/dre" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-violet-200 hover:shadow-md transition group flex items-center gap-3">
+          <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center group-hover:bg-violet-200 transition">
+            <Icon name="pieChart" className="w-5 h-5 text-violet-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 text-sm">DRE</p>
+            <p className="text-xs text-slate-500">Resultado</p>
+          </div>
+        </Link>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                <Icon name="trendingUp" className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Últimas entradas</h3>
+                <p className="text-xs text-slate-500">Receitas recentes</p>
+              </div>
+            </div>
+            <Link href="/dashboard/financeiro/entradas" className="text-sm text-emerald-600 font-semibold">
+              Ver todas
+            </Link>
+          </div>
+          {!ultimasEntradas?.length ? (
+            <div className="p-8 text-center">
+              <p className="text-slate-500">Nenhuma entrada registrada</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {ultimasEntradas.map((e: any) => (
+                <div key={e.id} className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="font-medium text-slate-900">{e.paciente_nome || 'Paciente'}</p>
+                    <p className="text-sm text-slate-500">
+                      {e.procedimento_nome || 'Procedimento'} • {new Date(e.data_venda).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-emerald-600">{fmt(e.valor_bruto)}</p>
+                    <p className="text-xs text-slate-500">{e.forma_pagamento}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center">
+                <Icon name="trendingDown" className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Últimas saídas</h3>
+                <p className="text-xs text-slate-500">Despesas recentes</p>
+              </div>
+            </div>
+            <Link href="/dashboard/financeiro/saidas" className="text-sm text-rose-600 font-semibold">
+              Ver todas
+            </Link>
+          </div>
+          {!ultimasSaidas?.length ? (
+            <div className="p-8 text-center">
+              <p className="text-slate-500">Nenhuma saída registrada</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {ultimasSaidas.map((s: any) => (
+                <div key={s.id} className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="font-medium text-slate-900">{s.descricao}</p>
+                    <p className="text-sm text-slate-500">
+                      {s.categoria_dre || 'Sem categoria'} • {new Date(s.data).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-rose-600">-{fmt(s.valor)}</p>
+                    <p className="text-xs text-slate-500">{s.forma_pagamento || 'N/A'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

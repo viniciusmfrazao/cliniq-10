@@ -1,4 +1,11 @@
-export type NavItem = { label: string; href: string; icon: string; roles: string[] }
+export type NavSubItem = { label: string; href: string }
+export type NavItem = { 
+  label: string
+  href: string
+  icon: string
+  roles: string[]
+  children?: NavSubItem[]
+}
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Inicio',         href: '/dashboard',              icon: 'home',      roles: ['admin','doctor','esthetician','receptionist','viewer'] },
@@ -14,6 +21,18 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'WhatsApp',       href: '/dashboard/whatsapp',     icon: 'message',   roles: ['admin','receptionist'] },
   { label: 'CRM',            href: '/dashboard/crm',          icon: 'target',    roles: ['admin','receptionist'] },
   { label: 'Documentos',     href: '/dashboard/documentos',   icon: 'file',      roles: ['admin','doctor','esthetician','receptionist'] },
+  { 
+    label: 'Financeiro',    
+    href: '/dashboard/financeiro',   
+    icon: 'dollarSign',
+    roles: ['admin'],
+    children: [
+      { label: 'Dashboard', href: '/dashboard/financeiro' },
+      { label: 'Entradas', href: '/dashboard/financeiro/entradas' },
+      { label: 'Saídas', href: '/dashboard/financeiro/saidas' },
+      { label: 'Relatórios', href: '/dashboard/financeiro/dre' },
+    ]
+  },
   { label: 'Equipe',         href: '/dashboard/equipe',       icon: 'users',     roles: ['admin'] },
   { label: 'Auditoria',      href: '/dashboard/auditoria',    icon: 'shield',    roles: ['admin'] },
   { label: 'Configuracoes',  href: '/dashboard/config',       icon: 'settings',  roles: ['admin','doctor','esthetician','receptionist','viewer'] },
