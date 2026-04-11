@@ -41,7 +41,7 @@ const DEPTH_COLORS: Record<string, string> = {
   intramuscular: '#ef4444',
 }
 
-export default function FaceMapView({ points, type }: { points: Point[]; type: string }) {
+export default function FaceMapView({ points, type, gender = 'female' }: { points: Point[]; type: string; gender?: 'female' | 'male' }) {
   const isToxin = type === 'toxin'
   const baseColor = isToxin ? '#8B5CF6' : '#EC4899'
   const totalUnits = points.reduce((sum, p) => sum + (p.units || 0), 0)
@@ -50,7 +50,7 @@ export default function FaceMapView({ points, type }: { points: Point[]; type: s
     <div className="space-y-4">
       {/* Mapa */}
       <div className="bg-gradient-to-b from-slate-50 to-white rounded-2xl p-4 border border-slate-100">
-        <FaceMap showRegions={false}>
+        <FaceMap showRegions={false} gender={gender}>
           {points.map((point) => {
             const depthColor = point.depth ? DEPTH_COLORS[point.depth] || baseColor : baseColor
             

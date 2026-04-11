@@ -31,10 +31,12 @@ type Application = {
 
 export default function ApplicationHistory({ 
   applications, 
-  patientId 
+  patientId,
+  patientGender = 'female'
 }: { 
   applications: Application[]
-  patientId: string 
+  patientId: string
+  patientGender?: 'female' | 'male'
 }) {
   const [selectedApp, setSelectedApp] = useState<Application | null>(applications[0] || null)
   const [viewMode, setViewMode] = useState<'list' | 'compare'>('list')
@@ -124,7 +126,7 @@ export default function ApplicationHistory({
             </div>
 
             <div className="p-6">
-              <FaceMapView points={selectedApp.injectable_points} type={selectedApp.type} />
+              <FaceMapView points={selectedApp.injectable_points} type={selectedApp.type} gender={patientGender} />
             </div>
 
             {/* Detalhes */}

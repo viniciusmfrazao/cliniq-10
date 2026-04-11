@@ -20,9 +20,10 @@ type Props = {
   clinicId: string
   professionalId: string
   professionalName: string
+  patientGender?: 'female' | 'male'
 }
 
-export default function NewApplicationButton({ patientId, clinicId, professionalId, professionalName }: Props) {
+export default function NewApplicationButton({ patientId, clinicId, professionalId, professionalName, patientGender = 'female' }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const appointmentId = searchParams.get('appointment')
@@ -328,6 +329,7 @@ export default function NewApplicationButton({ patientId, clinicId, professional
                 points={points} 
                 setPoints={setPoints} 
                 type={form.type}
+                gender={patientGender}
               />
             </div>
           )}

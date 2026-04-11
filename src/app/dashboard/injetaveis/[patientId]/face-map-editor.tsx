@@ -55,11 +55,13 @@ const TECHNIQUES = [
 export default function FaceMapEditor({ 
   points, 
   setPoints, 
-  type 
+  type,
+  gender = 'female'
 }: { 
   points: Point[]
   setPoints: (points: Point[]) => void
   type: string
+  gender?: 'female' | 'male'
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [editingPoint, setEditingPoint] = useState<Point | null>(null)
@@ -182,6 +184,7 @@ export default function FaceMapEditor({
               view={view}
               showRegions={true}
               showMuscles={showMuscles}
+              gender={gender}
             >
               {/* Renderizar pontos */}
               {points.map((point) => {
