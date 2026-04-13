@@ -1,0 +1,192 @@
+{
+  "name": "Eva - Follow-up Automático",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Todo dia 10h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\n\n// Leads que não agendaram e último contato há mais de 1 dia\nconst umDiaAtras = new Date();\numDiaAtras.setDate(umDiaAtras.getDate() - 1);\n\nconst response = await this.helpers.httpRequest({\n  method: 'GET',\n  url: `${SUPABASE_URL}/rest/v1/leads?clinic_id=eq.${CLINIC_ID}&status=eq.contacted&last_contact_at=lt.${umDiaAtras.toISOString()}`,\n  headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }\n});\n\n// Filtrar: máximo 3 follow-ups\nconst leads = (response || []).filter(lead => {\n  const notas = lead.notes || '';\n  const followups = (notas.match(/FOLLOW-UP/g) || []).length;\n  return followups < 3;\n});\n\nif (leads.length === 0) {\n  return [{ json: { semLeads: true, mensagem: 'Nenhum lead para follow-up hoje' } }];\n}\n\nreturn leads.map(lead => ({ json: lead }));"
+      },
+      "id": "buscar-leads",
+      "name": "Buscar Leads para Follow-up",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.semLeads }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-tem-leads",
+      "name": "Tem leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\n\nconst lead = $input.item.json;\n\nconst historico = await this.helpers.httpRequest({\n  method: 'GET',\n  url: `${SUPABASE_URL}/rest/v1/eva_conversations?phone=eq.${lead.phone}&order=created_at.desc&limit=5`,\n  headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }\n});\n\nlet contexto = '';\nif (historico && historico.length > 0) {\n  for (const conv of historico.reverse()) {\n    if (conv.user_message) contexto += 'user: ' + conv.user_message + '\\n';\n    if (conv.assistant_message) contexto += 'assistant: ' + conv.assistant_message + '\\n';\n  }\n}\n\nreturn [{\n  json: {\n    ...lead,\n    historico: contexto\n  }\n}];"
+      },
+      "id": "buscar-historico",
+      "name": "Buscar Histórico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, -100]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Você é Eva, secretária da Clínica Sarah Pina. Gere UMA mensagem curta de follow-up.\n\nREGRAS OBRIGATÓRIAS:\n- Máximo 3 linhas\n- Tom acolhedor, NÃO insistente\n- Mencione o interesse se souber\n- Termine com pergunta suave\n- Use 🤍 no final\n- NÃO use frases como \"passando para saber\" ou \"gostaria de saber\"\n- Seja natural, como retomando uma conversa\n\nInteresse: {{ $json.interest }}\nNome: {{ $json.name }}\n\nÚltima conversa:\n{{ $json.historico }}"
+            },
+            {
+              "role": "user",
+              "content": "Gere apenas a mensagem de follow-up, sem explicações."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "openai-followup",
+      "name": "Gerar Follow-up",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [880, -100],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\n\nconst lead = $('Buscar Histórico').item.json;\nconst mensagem = $('Gerar Follow-up').item.json.message?.content || $('Gerar Follow-up').item.json.text || '';\nconst dataAtual = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\n// Atualizar notas do lead com registro do follow-up\nconst notasAtuais = lead.notes || '';\nconst novasNotas = `📤 FOLLOW-UP ${dataAtual}:\\n${mensagem}\\n\\n${notasAtuais}`;\n\nawait this.helpers.httpRequest({\n  method: 'PATCH',\n  url: `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead.id}`,\n  headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n  body: { notes: novasNotas, last_contact_at: new Date().toISOString() }\n});\n\n// Salvar na conversa\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: `${SUPABASE_URL}/rest/v1/eva_conversations`,\n  headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n  body: { phone: lead.phone, assistant_message: `[FOLLOW-UP] ${mensagem}` }\n});\n\n// TODO: Adicionar envio WhatsApp aqui quando integrar\n\nreturn [{ json: { \n  sucesso: true, \n  telefone: lead.phone, \n  nome: lead.name,\n  interesse: lead.interest,\n  mensagemGerada: mensagem,\n  status: 'PENDENTE ENVIO - Integração WhatsApp não configurada'\n} }];"
+      },
+      "id": "salvar-followup",
+      "name": "Salvar e Registrar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -100]
+    },
+    {
+      "parameters": {},
+      "id": "noop-sem-leads",
+      "name": "Sem leads hoje",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 100]
+    }
+  ],
+  "connections": {
+    "Todo dia 10h": {
+      "main": [
+        [
+          {
+            "node": "Buscar Leads para Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Leads para Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Tem leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem leads?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Histórico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sem leads hoje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Histórico": {
+      "main": [
+        [
+          {
+            "node": "Gerar Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Salvar e Registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

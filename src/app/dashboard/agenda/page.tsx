@@ -5,25 +5,24 @@ import Icon from '@/components/ui/Icon'
 import AgendaView from './agenda-view'
 import AgendaFilters from './agenda-filters'
 
+export const revalidate = 30
+
 export default async function AgendaPage({ 
   searchParams 
 }: { 
   searchParams: { date?: string; view?: string; professional?: string } 
 }) {
   const supabase = createClient()
+  
+  // Auth check
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
-  const { data: userData } = await supabase
-    .from('users')
-    .select('clinic_id')
-    .eq('id', user.id)
-    .single()
 
   // Data selecionada ou hoje
   const selectedDate = searchParams.date || new Date().toISOString().split('T')[0]
   const viewMode = searchParams.view || 'day'
   const selectedProfessional = searchParams.professional || 'all'
+  const today = new Date().toISOString().split('T')[0]
 
   // Calcular range de datas baseado na view
   let startDate: string
@@ -49,56 +48,57 @@ export default async function AgendaPage({
     endDate = `${end.toISOString().split('T')[0]}T23:59:59`
   }
 
-  // Buscar profissionais da clinica
-  const { data: professionals } = await supabase
+  // Buscar clinic_id do usuário
+  const { data: userData } = await supabase
     .from('users')
-    .select('id, name, role')
-    .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician'])
-    .order('name')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
 
-  // Buscar agendamentos
-  const { data: appointments } = await supabase
-    .from('appointments')
-    .select(`
-      *,
-      patients(id, name, phone, photo_url, cpf, birth_date),
-      procedures(name, duration_minutes, price),
-      professional:users!appointments_professional_id_fkey(id, name)
-    `)
-    .eq('clinic_id', userData?.clinic_id)
-    .gte('start_time', startDate)
-    .lte('start_time', endDate)
-    .order('start_time')
+  const clinicId = userData?.clinic_id
 
-  // Estatisticas do dia
-  const today = new Date().toISOString().split('T')[0]
-  const todayStart = `${today}T00:00:00`
-  const todayEnd = `${today}T23:59:59`
+  // EXECUTAR QUERIES EM PARALELO (muito mais rápido!)
+  const [professionalsResult, appointmentsResult, todayAppointmentsResult] = await Promise.all([
+    // Query 1: Profissionais
+    supabase
+      .from('users')
+      .select('id, name, role')
+      .eq('clinic_id', clinicId)
+      .in('role', ['admin', 'doctor', 'esthetician'])
+      .order('name'),
+    
+    // Query 2: Agendamentos do período selecionado
+    supabase
+      .from('appointments')
+      .select(`
+        *,
+        patients(id, name, phone, photo_url, cpf, birth_date),
+        procedures(name, duration_minutes, price),
+        professional:users!appointments_professional_id_fkey(id, name)
+      `)
+      .eq('clinic_id', clinicId)
+      .gte('start_time', startDate)
+      .lte('start_time', endDate)
+      .order('start_time'),
+    
+    // Query 3: Agendamentos de hoje (para estatísticas)
+    supabase
+      .from('appointments')
+      .select('status')
+      .eq('clinic_id', clinicId)
+      .gte('start_time', `${today}T00:00:00`)
+      .lte('start_time', `${today}T23:59:59`)
+      .neq('status', 'cancelled')
+  ])
 
-  const { count: todayTotal } = await supabase
-    .from('appointments')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData?.clinic_id)
-    .gte('start_time', todayStart)
-    .lte('start_time', todayEnd)
-    .neq('status', 'cancelled')
+  const professionals = professionalsResult.data || []
+  const appointments = appointmentsResult.data || []
+  const todayAppointments = todayAppointmentsResult.data || []
 
-  const { count: todayConfirmed } = await supabase
-    .from('appointments')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData?.clinic_id)
-    .gte('start_time', todayStart)
-    .lte('start_time', todayEnd)
-    .eq('status', 'confirmed')
-
-  const { count: todayCompleted } = await supabase
-    .from('appointments')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData?.clinic_id)
-    .gte('start_time', todayStart)
-    .lte('start_time', todayEnd)
-    .eq('status', 'completed')
+  // Calcular estatísticas do array (sem queries extras!)
+  const todayTotal = todayAppointments.length
+  const todayConfirmed = todayAppointments.filter(a => a.status === 'confirmed').length
+  const todayCompleted = todayAppointments.filter(a => a.status === 'completed').length
 
   return (
     <div className="max-w-7xl mx-auto">
