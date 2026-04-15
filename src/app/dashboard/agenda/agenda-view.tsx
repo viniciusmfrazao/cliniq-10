@@ -189,13 +189,22 @@ function AppointmentCard({
                 </button>
               )}
               {canCancel && (
-                <button
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'cancelled') }}
-                  className="flex-1 py-1.5 px-2 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-1"
-                >
-                  <Icon name="x" className="w-3 h-3" />
-                  Cancelar
-                </button>
+                <>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'no_show') }}
+                    className="flex-1 py-1.5 px-2 bg-amber-500 text-white text-xs font-medium rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Icon name="clock" className="w-3 h-3" />
+                    Faltou
+                  </button>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'cancelled') }}
+                    className="flex-1 py-1.5 px-2 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Icon name="x" className="w-3 h-3" />
+                    Cancelar
+                  </button>
+                </>
               )}
               <Link
                 href={`/dashboard/atendimento/${apt.id}`}

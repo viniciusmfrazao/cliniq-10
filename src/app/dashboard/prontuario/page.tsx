@@ -23,13 +23,23 @@ export default async function ProntuarioPage({
 
   const { data: patients } = await query.limit(30)
 
-  // Buscar ultimas evolucoes (usando join com patients para filtrar pela clinic_id)
-  const { data: recentEvolutions } = await supabase
-    .from('evolutions')
-    .select('*, patients!inner(name, clinic_id)')
-    .eq('patients.clinic_id', userData?.clinic_id)
-    .order('created_at', { ascending: false })
-    .limit(5)
+  // Buscar IDs dos pacientes da clínica
+  const { data: clinicPatients } = await supabase
+    .from('patients')
+    .select('id')
+    .eq('clinic_id', userData?.clinic_id)
+
+  const patientIds = clinicPatients?.map(p => p.id) || []
+
+  // Buscar últimas evoluções apenas dos pacientes da clínica
+  const { data: recentEvolutions } = patientIds.length > 0 
+    ? await supabase
+        .from('evolutions')
+        .select('*, patients(name)')
+        .in('patient_id', patientIds)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    : { data: [] }
 
   return (
     <div className="max-w-4xl mx-auto">
