@@ -5,7 +5,7 @@ import Icon from '@/components/ui/Icon'
 import WaitingListTable from './waiting-list-table'
 
 export default async function WaitingListPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

@@ -4,7 +4,7 @@ import Icon from '@/components/ui/Icon'
 import HistoricoPacienteView from './historico-view'
 
 export default async function HistoricoPacientePage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import ReceptionView from './reception-view'
 
 export default async function RecepcaoPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

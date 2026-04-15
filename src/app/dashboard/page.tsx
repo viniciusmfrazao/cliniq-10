@@ -3,7 +3,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
 export default async function DashboardPage({ searchParams }: { searchParams: { welcome?: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('name, clinic_id, role').eq('id', user!.id).single()
   const { data: clinic } = await supabase.from('clinics').select('name, trial_ends_at').eq('id', userData?.clinic_id).single()

@@ -6,7 +6,7 @@ import ProductList from './product-list'
 import StockAlerts from './stock-alerts'
 
 export default async function EstoquePage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

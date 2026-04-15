@@ -4,7 +4,7 @@ import InviteForm from './invite-form'
 import TeamList from './team-list'
 
 export default async function EquipePage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

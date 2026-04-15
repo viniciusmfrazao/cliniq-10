@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import ProductForm from '../product-form'
 
 export default async function NovoProductPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

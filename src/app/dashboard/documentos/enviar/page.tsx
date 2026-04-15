@@ -5,7 +5,7 @@ import Icon from '@/components/ui/Icon'
 import SendDocumentForm from './send-form'
 
 export default async function EnviarDocumentoPage({ searchParams }: { searchParams: { patient?: string; appointment?: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

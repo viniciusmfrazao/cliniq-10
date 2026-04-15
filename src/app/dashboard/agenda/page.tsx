@@ -12,7 +12,7 @@ export default async function AgendaPage({
 }: { 
   searchParams: { date?: string; view?: string; professional?: string } 
 }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   // Auth check
   const { data: { user } } = await supabase.auth.getUser()

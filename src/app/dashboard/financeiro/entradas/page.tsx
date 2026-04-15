@@ -4,7 +4,7 @@ import Icon from '@/components/ui/Icon'
 import EntradasList from './entradas-list'
 
 export default async function EntradasPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import CRMView from './crm-view'
 
 export default async function CRMPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

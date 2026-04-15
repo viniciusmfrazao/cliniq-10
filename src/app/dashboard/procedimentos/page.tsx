@@ -4,7 +4,7 @@ import ProcedureForm from './procedure-form'
 import ProcedureList from './procedure-list'
 
 export default async function ProcedimentosPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
 

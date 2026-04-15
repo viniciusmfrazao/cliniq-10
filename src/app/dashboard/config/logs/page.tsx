@@ -5,7 +5,7 @@ import Icon from '@/components/ui/Icon'
 import LogsViewer from './logs-viewer'
 
 export default async function LogsPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

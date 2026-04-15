@@ -7,7 +7,7 @@ import PermissionsSettings from './permissions-settings'
 import ThemeSelector from './theme-selector'
 
 export default async function ConfigPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

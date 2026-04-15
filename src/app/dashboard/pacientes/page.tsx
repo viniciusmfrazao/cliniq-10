@@ -8,7 +8,7 @@ export default async function PacientesPage({
 }: { 
   searchParams: { q?: string; filter?: string } 
 }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
 

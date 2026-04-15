@@ -5,7 +5,7 @@ import Icon from '@/components/ui/Icon'
 import TemplatesList from './templates-list'
 
 export default async function TemplatesPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

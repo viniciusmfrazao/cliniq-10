@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import WaitingListForm from './waiting-list-form'
 
 export default async function NovaListaEsperaPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
