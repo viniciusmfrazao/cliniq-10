@@ -5,7 +5,7 @@ import ApplicationHistory from './application-history'
 import NewApplicationButton from './new-application-button'
 
 export default async function PatientInjetaveisPage({ params }: { params: { patientId: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id, id, name').eq('id', user!.id).single()
 

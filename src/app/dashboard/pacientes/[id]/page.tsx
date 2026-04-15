@@ -4,7 +4,7 @@ import Link from 'next/link'
 import DeletePatientButton from './delete-button'
 
 export default async function PatientDetailPage({ params }: { params: { id: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: patient } = await supabase
     .from('patients')

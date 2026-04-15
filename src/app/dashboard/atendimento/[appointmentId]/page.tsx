@@ -7,7 +7,7 @@ import ProductsUsedSection from './products-used-section'
 import ReturnScheduler from './return-scheduler'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

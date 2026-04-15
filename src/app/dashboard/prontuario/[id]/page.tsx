@@ -6,7 +6,7 @@ import EvolutionTimeline from './evolution-timeline'
 import NewEvolutionButton from './new-evolution-button'
 
 export default async function ProntuarioPatientPage({ params }: { params: { id: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id, id, name').eq('id', user!.id).single()
 

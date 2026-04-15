@@ -5,7 +5,7 @@ import Icon from '@/components/ui/Icon'
 import TemplateForm from '../template-form'
 
 export default async function EditTemplatePage({ params }: { params: { id: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

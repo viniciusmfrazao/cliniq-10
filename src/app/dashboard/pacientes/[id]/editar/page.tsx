@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import PatientForm from '../../patient-form'
 
 export default async function EditarPacientePage({ params }: { params: { id: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: patient } = await supabase
     .from('patients')

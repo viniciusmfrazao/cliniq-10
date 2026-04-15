@@ -10,18 +10,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Run user query first (needed for clinic_id)
   const { data: userData } = await supabase
     .from('users').select('name, role, clinic_id').eq('id', user.id).single()
 
-  const { data: clinic } = await supabase
-    .from('clinics').select('name, trial_ends_at').eq('id', userData?.clinic_id).single()
+  if (!userData?.clinic_id) redirect('/login')
 
-  // Buscar usuários da clínica para o chat
-  const { data: clinicUsers } = await supabase
-    .from('users')
-    .select('id, name, role')
-    .eq('clinic_id', userData?.clinic_id)
-    .order('name')
+  // Run clinic and users queries in PARALLEL (much faster!)
+  const [clinicResult, usersResult] = await Promise.all([
+    supabase.from('clinics').select('name, trial_ends_at').eq('id', userData.clinic_id).single(),
+    supabase.from('users').select('id, name, role').eq('clinic_id', userData.clinic_id).order('name')
+  ])
+
+  const clinic = clinicResult.data
+  const clinicUsers = usersResult.data
 
   const trialDaysLeft = clinic?.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at).getTime() - Date.now()) / 86400000))
@@ -47,7 +49,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {/* Chat Widget */}
       <ChatWidget 
         currentUserId={user.id}
-        clinicId={userData?.clinic_id || ''}
+        clinicId={userData.clinic_id}
         users={clinicUsers || []}
       />
     </div>

@@ -6,7 +6,7 @@ import StockMovementForm from './stock-movement-form'
 import MovementHistory from './movement-history'
 
 export default async function ProductDetailPage({ params }: { params: { id: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
