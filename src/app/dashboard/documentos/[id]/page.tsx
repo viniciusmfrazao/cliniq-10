@@ -3,9 +3,10 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import DocumentActions from './document-actions'
+import DocumentLinkCard from './document-link-card'
 
 export default async function DocumentoDetalhePage({ params }: { params: { id: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
@@ -121,26 +122,13 @@ export default async function DocumentoDetalhePage({ params }: { params: { id: s
         </div>
 
         {/* Link */}
-        {doc.status === 'pending' && (
-          <div className="card p-6">
-            <h2 className="font-semibold text-slate-900 mb-2">Link para assinatura</h2>
-            <p className="text-sm text-slate-500 mb-4">Envie este link para o paciente via WhatsApp ou email</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                readOnly
-                value={signUrl}
-                className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono"
-              />
-              <button
-                onClick={() => navigator.clipboard.writeText(signUrl)}
-                className="btn-primary w-auto px-4 flex items-center gap-2"
-              >
-                <Icon name="link" className="w-4 h-4" />
-                Copiar
-              </button>
-            </div>
-          </div>
+        {(doc.status === 'pending' || doc.status === 'viewed') && (
+          <DocumentLinkCard 
+            signUrl={signUrl} 
+            patientName={(doc.patients as { name: string })?.name}
+            patientPhone={(doc.patients as { phone?: string })?.phone}
+            docName={doc.name}
+          />
         )}
 
         {/* Content */}
@@ -166,7 +154,13 @@ export default async function DocumentoDetalhePage({ params }: { params: { id: s
         )}
 
         {/* Actions */}
-        <DocumentActions docId={doc.id} status={doc.status} />
+        <DocumentActions 
+          docId={doc.id} 
+          status={doc.status}
+          patientName={(doc.patients as { name: string })?.name}
+          patientPhone={(doc.patients as { phone?: string })?.phone}
+          docName={doc.name}
+        />
       </div>
     </div>
   )
