@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from './Icon'
+import { maskPhone, unmask } from '@/lib/masks'
 
 type Props = {
   clinicId: string
@@ -144,8 +145,9 @@ export default function QuickPatientModal({ clinicId, onPatientCreated, onClose 
               type="tel"
               className="input"
               placeholder="(00) 00000-0000"
-              value={form.phone}
-              onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))}
+              value={maskPhone(form.phone)}
+              onChange={e => setForm(prev => ({ ...prev, phone: unmask(e.target.value).slice(0, 11) }))}
+              maxLength={16}
             />
           </div>
 

@@ -7,10 +7,11 @@ type Props = {
   currentDate: string
   currentView: string
   currentProfessional: string
+  currentStatus: string
   professionals: { id: string; name: string }[]
 }
 
-export default function AgendaFilters({ currentDate, currentView, currentProfessional, professionals }: Props) {
+export default function AgendaFilters({ currentDate, currentView, currentProfessional, currentStatus, professionals }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -117,6 +118,20 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
           {professionals.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
+        </select>
+
+        {/* Filtro de status */}
+        <select
+          value={currentStatus}
+          onChange={e => updateParams('status', e.target.value)}
+          className="input w-auto min-w-[150px]"
+        >
+          <option value="all">Todos status</option>
+          <option value="scheduled">Agendados</option>
+          <option value="confirmed">Confirmados</option>
+          <option value="completed">Realizados</option>
+          <option value="cancelled">Cancelados</option>
+          <option value="no_show">Faltantes</option>
         </select>
       </div>
     </div>

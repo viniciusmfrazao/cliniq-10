@@ -10,7 +10,7 @@ export const revalidate = 30
 export default async function AgendaPage({ 
   searchParams 
 }: { 
-  searchParams: { date?: string; view?: string; professional?: string } 
+  searchParams: { date?: string; view?: string; professional?: string; status?: string } 
 }) {
   const supabase = await createClient()
   
@@ -22,6 +22,7 @@ export default async function AgendaPage({
   const selectedDate = searchParams.date || new Date().toISOString().split('T')[0]
   const viewMode = searchParams.view || 'day'
   const selectedProfessional = searchParams.professional || 'all'
+  const selectedStatus = searchParams.status || 'all'
   const today = new Date().toISOString().split('T')[0]
 
   // Calcular range de datas baseado na view
@@ -149,12 +150,16 @@ export default async function AgendaPage({
         currentDate={selectedDate}
         currentView={viewMode}
         currentProfessional={selectedProfessional}
+        currentStatus={selectedStatus}
         professionals={professionals || []}
       />
 
       {/* Agenda */}
       <AgendaView 
-        appointments={appointments || []}
+        appointments={selectedStatus === 'all' 
+          ? (appointments || [])
+          : (appointments || []).filter(a => a.status === selectedStatus)
+        }
         viewMode={viewMode}
         selectedDate={selectedDate}
         professionals={professionals || []}

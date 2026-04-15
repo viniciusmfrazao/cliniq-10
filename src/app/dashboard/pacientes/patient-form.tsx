@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { maskPhone, maskCPF, unmask, validateCPF } from '@/lib/masks'
 
 type Patient = {
   id?: string
@@ -134,8 +135,9 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
             className="input"
             type="tel"
             placeholder="(11) 99999-9999"
-            value={form.phone}
-            onChange={e => update('phone', e.target.value)}
+            value={maskPhone(form.phone)}
+            onChange={e => update('phone', unmask(e.target.value).slice(0, 11))}
+            maxLength={16}
           />
         </div>
 
@@ -156,8 +158,9 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
             className="input"
             type="text"
             placeholder="000.000.000-00"
-            value={form.cpf}
-            onChange={e => update('cpf', e.target.value)}
+            value={maskCPF(form.cpf)}
+            onChange={e => update('cpf', unmask(e.target.value).slice(0, 11))}
+            maxLength={14}
           />
         </div>
 

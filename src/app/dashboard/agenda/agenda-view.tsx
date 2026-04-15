@@ -70,6 +70,7 @@ function AppointmentCard({
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.birth_date)
+  const isConfirmed = apt.status === 'confirmed'
   const canConfirm = apt.status === 'scheduled'
   const canCancel = ['scheduled', 'confirmed'].includes(apt.status)
   const canCheckIn = ['scheduled', 'confirmed'].includes(apt.status) && !apt.checked_in_at
@@ -93,6 +94,11 @@ function AppointmentCard({
         <div className="flex items-center justify-between gap-1">
           <span className="text-xs font-bold text-slate-700">{aptTime}</span>
           <div className="flex items-center gap-1">
+            {isConfirmed && !isCheckedIn && (
+              <span className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center" title="Confirmado">
+                <Icon name="check" className="w-2 h-2 text-white" />
+              </span>
+            )}
             {isCheckedIn && (
               <span className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center" title={`Chegou às ${checkedInTime}`}>
                 <Icon name="check" className="w-2 h-2 text-white" />

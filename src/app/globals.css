@@ -98,11 +98,47 @@
 }
 
 .dark .label {
-  @apply text-slate-400;
+  @apply text-slate-300;
 }
 
 .dark .btn-secondary {
   @apply bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:border-slate-500;
+}
+
+/* Dark mode text colors */
+.dark .text-slate-900 { @apply text-slate-100; }
+.dark .text-slate-800 { @apply text-slate-200; }
+.dark .text-slate-700 { @apply text-slate-300; }
+.dark .text-slate-600 { @apply text-slate-400; }
+.dark .text-slate-500 { @apply text-slate-400; }
+
+/* Dark mode backgrounds */
+.dark .bg-white { @apply bg-slate-800; }
+.dark .bg-slate-50 { @apply bg-slate-900; }
+.dark .bg-slate-100 { @apply bg-slate-800; }
+
+/* Dark mode borders */
+.dark .border-slate-100 { @apply border-slate-700; }
+.dark .border-slate-200 { @apply border-slate-600; }
+.dark .border-slate-300 { @apply border-slate-500; }
+
+/* Dark mode hover states */
+.dark .hover\:bg-slate-50:hover { @apply bg-slate-700; }
+.dark .hover\:bg-slate-100:hover { @apply bg-slate-700; }
+
+/* Dark mode specific for tables and lists */
+.dark table thead { @apply bg-slate-900; }
+.dark table tbody tr { @apply border-slate-700; }
+.dark table tbody tr:hover { @apply bg-slate-700; }
+
+/* Dark mode for select elements */
+.dark select { @apply bg-slate-800 border-slate-600 text-white; }
+.dark select option { @apply bg-slate-800 text-white; }
+
+/* Dark mode for modals */
+.dark .modal-content,
+.dark [class*="modal"] > div:not([class*="bg-black"]) {
+  @apply bg-slate-800;
 }
 
 /* Dark mode utility class to preserve original colors (for colored cards) */
@@ -113,6 +149,28 @@
 .preserve-colors .text-slate-500 {
   color: inherit;
 }
+
+/* Preserve colored backgrounds in dark mode */
+.dark .bg-emerald-100 { @apply bg-emerald-900/30; }
+.dark .bg-blue-100 { @apply bg-blue-900/30; }
+.dark .bg-amber-100 { @apply bg-amber-900/30; }
+.dark .bg-red-100 { @apply bg-red-900/30; }
+.dark .bg-violet-100 { @apply bg-violet-900/30; }
+.dark .bg-purple-100 { @apply bg-purple-900/30; }
+.dark .bg-pink-100 { @apply bg-pink-900/30; }
+.dark .bg-cyan-100 { @apply bg-cyan-900/30; }
+.dark .bg-teal-100 { @apply bg-teal-900/30; }
+
+/* Fix text on colored backgrounds in dark mode */
+.dark .text-emerald-700 { @apply text-emerald-400; }
+.dark .text-blue-700 { @apply text-blue-400; }
+.dark .text-amber-700 { @apply text-amber-400; }
+.dark .text-red-700 { @apply text-red-400; }
+.dark .text-violet-700 { @apply text-violet-400; }
+.dark .text-purple-700 { @apply text-purple-400; }
+.dark .text-pink-700 { @apply text-pink-400; }
+.dark .text-cyan-700 { @apply text-cyan-400; }
+.dark .text-teal-700 { @apply text-teal-400; }
 
 * { 
   -webkit-tap-highlight-color: transparent; 
