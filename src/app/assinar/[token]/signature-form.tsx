@@ -1,27 +1,21 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 
 type Doc = {
   id: string
   content: string
-  sign_token: string
 }
 
-export default function SignatureForm({ doc }: { doc: Doc }) {
+export default function SignatureForm({ doc, token }: { doc: Doc; token: string }) {
   const router = useRouter()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [loading, setLoading] = useState(false)
   const [agreed, setAgreed] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
   const [isDrawing, setIsDrawing] = useState(false)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const [success, setSuccess] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -110,23 +104,41 @@ export default function SignatureForm({ doc }: { doc: Doc }) {
     try {
       const signatureData = canvas.toDataURL('image/png')
 
-      await supabase
-        .from('documents_sent')
-        .update({
-          status: 'signed',
-          signed_at: new Date().toISOString(),
-          signature_data: signatureData,
-          signature_ip: 'captured',
-        })
-        .eq('id', doc.id)
+      const response = await fetch(`/api/documents/sign/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signature: signatureData,
+          ip: 'captured',
+        }),
+      })
 
-      router.refresh()
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Erro ao assinar')
+      }
+
+      setSuccess(true)
     } catch (error) {
       console.error(error)
       alert('Erro ao assinar documento. Tente novamente.')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (success) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-100 flex items-center justify-center">
+          <svg className="w-10 h-10 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Documento assinado!</h2>
+        <p className="text-slate-600">Sua assinatura foi registrada com sucesso. Você pode fechar esta página.</p>
+      </div>
+    )
   }
 
   return (
