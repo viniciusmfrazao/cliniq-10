@@ -69,7 +69,7 @@ function AppointmentCard({
   const [showPreview, setShowPreview] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.birth_date)
+  const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.phone)
   const isConfirmed = apt.status === 'confirmed'
   const canConfirm = apt.status === 'scheduled'
   const canCancel = ['scheduled', 'confirmed'].includes(apt.status)

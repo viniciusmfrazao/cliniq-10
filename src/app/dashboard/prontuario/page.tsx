@@ -23,11 +23,11 @@ export default async function ProntuarioPage({
 
   const { data: patients } = await query.limit(30)
 
-  // Buscar ultimas evolucoes
+  // Buscar ultimas evolucoes (usando join com patients para filtrar pela clinic_id)
   const { data: recentEvolutions } = await supabase
     .from('evolutions')
-    .select('*, patients(name)')
-    .eq('clinic_id', userData?.clinic_id)
+    .select('*, patients!inner(name, clinic_id)')
+    .eq('patients.clinic_id', userData?.clinic_id)
     .order('created_at', { ascending: false })
     .limit(5)
 

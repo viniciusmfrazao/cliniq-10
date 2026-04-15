@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { maskPhone, maskCPF, unmask, validateCPF } from '@/lib/masks'
+import { maskPhone, maskCPF, maskCEP, unmask, validateCPF } from '@/lib/masks'
 
 type Patient = {
   id?: string
@@ -42,9 +42,34 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
   const [form, setForm] = useState<Patient>(patient || EMPTY_PATIENT)
   const [tagInput, setTagInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingCep, setLoadingCep] = useState(false)
   const [error, setError] = useState('')
 
   const isEditing = !!patient?.id
+
+  async function buscarCep(cep: string) {
+    const numbers = cep.replace(/\D/g, '')
+    if (numbers.length !== 8) return
+    
+    setLoadingCep(true)
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${numbers}/json/`)
+      const data = await response.json()
+      
+      if (!data.erro) {
+        setForm(prev => ({
+          ...prev,
+          address: data.logradouro || prev.address,
+          city: data.localidade || prev.city,
+          state: data.uf || prev.state,
+        }))
+      }
+    } catch {
+      console.error('Erro ao buscar CEP')
+    } finally {
+      setLoadingCep(false)
+    }
+  }
 
   const update = (field: keyof Patient, value: string | string[]) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -190,13 +215,25 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
 
         <div>
           <label className="label">CEP</label>
-          <input
-            className="input"
-            type="text"
-            placeholder="00000-000"
-            value={form.zip_code}
-            onChange={e => update('zip_code', e.target.value)}
-          />
+          <div className="relative">
+            <input
+              className="input"
+              type="text"
+              placeholder="00000-000"
+              value={maskCEP(form.zip_code)}
+              onChange={e => {
+                const value = unmask(e.target.value).slice(0, 8)
+                update('zip_code', value)
+                if (value.length === 8) buscarCep(value)
+              }}
+              maxLength={9}
+            />
+            {loadingCep && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                Buscando...
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="md:col-span-2">

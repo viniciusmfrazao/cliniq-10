@@ -21,8 +21,18 @@ export default async function EditarPacientePage({ params }: { params: { id: str
       </div>
       <div className="card p-6">
         <PatientForm patient={{
-          ...patient,
+          id: patient.id,
+          name: patient.name || '',
+          email: patient.email || '',
+          phone: patient.phone || '',
+          cpf: patient.cpf || '',
           birth_date: patient.birth_date || '',
+          gender: patient.gender || '',
+          address: patient.address || '',
+          city: patient.city || '',
+          state: patient.state || '',
+          zip_code: patient.zip_code || '',
+          notes: patient.notes || '',
           tags: patient.tags || [],
         }} />
       </div>

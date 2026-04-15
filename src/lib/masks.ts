@@ -1,4 +1,5 @@
-export function maskPhone(value: string): string {
+export function maskPhone(value: string | null | undefined): string {
+  if (!value) return ''
   const numbers = value.replace(/\D/g, '')
   
   if (numbers.length <= 2) {
@@ -13,7 +14,8 @@ export function maskPhone(value: string): string {
   return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`
 }
 
-export function maskCPF(value: string): string {
+export function maskCPF(value: string | null | undefined): string {
+  if (!value) return ''
   const numbers = value.replace(/\D/g, '')
   
   if (numbers.length <= 3) {
@@ -28,8 +30,18 @@ export function maskCPF(value: string): string {
   return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9, 11)}`
 }
 
-export function unmask(value: string): string {
+export function unmask(value: string | null | undefined): string {
+  if (!value) return ''
   return value.replace(/\D/g, '')
+}
+
+export function maskCEP(value: string | null | undefined): string {
+  if (!value) return ''
+  const numbers = value.replace(/\D/g, '')
+  if (numbers.length <= 5) {
+    return numbers
+  }
+  return `${numbers.slice(0, 5)}-${numbers.slice(5, 8)}`
 }
 
 export function validateCPF(cpf: string): boolean {
