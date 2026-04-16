@@ -21,6 +21,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'WhatsApp',       href: '/dashboard/whatsapp',     icon: 'message',   roles: ['admin','receptionist'] },
   { label: 'CRM',            href: '/dashboard/crm',          icon: 'target',    roles: ['admin','receptionist'] },
   { label: 'Documentos',     href: '/dashboard/documentos',   icon: 'file',      roles: ['admin','doctor','esthetician','receptionist'] },
+  { label: 'Anamnese',       href: '/dashboard/anamnese',     icon: 'clipboard', roles: ['admin','doctor','esthetician','receptionist'] },
   { 
     label: 'Financeiro',    
     href: '/dashboard/financeiro',   
