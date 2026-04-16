@@ -12,6 +12,7 @@ type Template = {
   category: string
   is_active: boolean
   created_at: string
+  theme_color?: string
 }
 
 export default function TemplatesList({ templates: initial, clinicId }: { templates: Template[]; clinicId: string }) {
@@ -60,8 +61,11 @@ export default function TemplatesList({ templates: initial, clinicId }: { templa
       {templates.map(template => (
         <div key={template.id} className={`card p-4 ${!template.is_active ? 'opacity-50' : ''}`}>
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl gradient-bg flex items-center justify-center flex-shrink-0">
-              <Icon name="file" className="w-6 h-6 text-white" />
+            <div 
+              className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: template.theme_color || 'var(--color-primary)' }}
+            >
+              <Icon name={template.category === 'anamnese' ? 'clipboard' : 'file'} className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">

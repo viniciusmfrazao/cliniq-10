@@ -10,6 +10,7 @@ type Template = {
   name: string
   content: string
   category: string
+  theme_color?: string
 }
 
 type Patient = {
@@ -59,6 +60,14 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
 
   const selectTemplate = (template: Template) => {
     setSelectedTemplate(template)
+    
+    // Se for anamnese, não precisa editar conteúdo - vai direto para confirmação
+    if (template.category === 'anamnese') {
+      setContent('ANAMNESE_FORM')
+      setStep(3)
+      return
+    }
+    
     const now = new Date()
     let processedContent = template.content
       .replace(/\{\{PACIENTE_NOME\}\}/g, selectedPatient?.name || '')
@@ -85,26 +94,44 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
       const expiresAt = new Date()
       expiresAt.setDate(expiresAt.getDate() + 7)
 
-      const { data, error } = await supabase
-        .from('documents_sent')
-        .insert({
-          clinic_id: clinicId,
-          template_id: selectedTemplate.id,
-          patient_id: selectedPatient.id,
-          appointment_id: appointmentId || null,
-          name: selectedTemplate.name,
-          content,
-          status: 'pending',
-          sent_by: userId,
-          sign_token: token,
-          expires_at: expiresAt.toISOString(),
-        })
-        .select()
-        .single()
+      let signUrl: string
 
-      if (error) throw error
+      // Se for anamnese, usa tabela anamneses
+      if (selectedTemplate.category === 'anamnese') {
+        const { error } = await supabase
+          .from('anamneses')
+          .insert({
+            clinic_id: clinicId,
+            patient_id: selectedPatient.id,
+            status: 'pending',
+            sent_by: userId,
+            token,
+            expires_at: expiresAt.toISOString(),
+          })
 
-      const signUrl = `${window.location.origin}/assinar/${token}`
+        if (error) throw error
+        signUrl = `${window.location.origin}/anamnese/${token}`
+      } else {
+        // Documento normal
+        const { error } = await supabase
+          .from('documents_sent')
+          .insert({
+            clinic_id: clinicId,
+            template_id: selectedTemplate.id,
+            patient_id: selectedPatient.id,
+            appointment_id: appointmentId || null,
+            name: selectedTemplate.name,
+            content,
+            status: 'pending',
+            sent_by: userId,
+            sign_token: token,
+            expires_at: expiresAt.toISOString(),
+          })
+
+        if (error) throw error
+        signUrl = `${window.location.origin}/assinar/${token}`
+      }
+
       setGeneratedLink(signUrl)
       setShowSuccessModal(true)
     } catch (error) {
@@ -303,14 +330,19 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
                   <button
                     key={template.id}
                     onClick={() => selectTemplate(template)}
-                    className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors text-left"
+                    className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl border border-slate-100 dark:border-slate-700 transition-colors text-left"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-                      <Icon name="file" className="w-5 h-5 text-slate-600" />
+                    <div 
+                      className="w-10 h-10 rounded-xl flex items-center justify-center"
+                      style={{ background: template.theme_color || 'var(--color-primary)' }}
+                    >
+                      <Icon name={template.category === 'anamnese' ? 'clipboard' : 'file'} className="w-5 h-5 text-white" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-slate-900">{template.name}</p>
-                      <p className="text-xs text-slate-500 capitalize">{template.category}</p>
+                      <p className="font-semibold text-slate-900 dark:text-white">{template.name}</p>
+                      <p className="text-xs text-slate-500 capitalize">
+                        {template.category === 'anamnese' ? 'Ficha de Anamnese' : template.category}
+                      </p>
                     </div>
                     <Icon name="chevronRight" className="w-5 h-5 text-slate-300" />
                   </button>
@@ -325,11 +357,14 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
       {step === 3 && (
         <div className="space-y-4">
           <div className="card p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-semibold">
+            <div 
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
+              style={{ background: selectedTemplate?.theme_color || 'var(--color-primary)' }}
+            >
               {selectedPatient?.name.charAt(0)}
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-slate-900">{selectedPatient?.name}</p>
+              <p className="font-semibold text-slate-900 dark:text-white">{selectedPatient?.name}</p>
               <p className="text-sm text-slate-500">{selectedTemplate?.name}</p>
             </div>
             <button
@@ -340,18 +375,49 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
             </button>
           </div>
 
-          <div className="card p-6">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Conteudo do documento</label>
-            <textarea
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all font-mono text-sm resize-none"
-              rows={15}
-            />
-            <p className="text-xs text-slate-500 mt-2">
-              Voce pode editar o conteudo antes de enviar
-            </p>
-          </div>
+          {selectedTemplate?.category === 'anamnese' ? (
+            <div 
+              className="rounded-xl p-8 border-2"
+              style={{ 
+                borderColor: selectedTemplate?.theme_color || '#b89a6a',
+                background: `${selectedTemplate?.theme_color || '#b89a6a'}10`
+              }}
+            >
+              <div className="text-center">
+                <div 
+                  className="w-20 h-20 mx-auto mb-4 rounded-2xl flex items-center justify-center"
+                  style={{ background: selectedTemplate?.theme_color || '#b89a6a' }}
+                >
+                  <Icon name="clipboard" className="w-10 h-10 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Ficha de Anamnese</h3>
+                <p className="text-slate-500 mb-4">
+                  Um link será gerado com um formulário elegante para <strong>{selectedPatient?.name}</strong> preencher.
+                </p>
+                <div className="text-sm text-slate-400 space-y-1">
+                  <p>O formulário inclui:</p>
+                  <p>• Procedimentos anteriores</p>
+                  <p>• Hábitos de vida e alergias</p>
+                  <p>• Medicamentos em uso</p>
+                  <p>• Saúde geral e queixas</p>
+                  <p>• Assinatura digital</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="card p-6">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Conteudo do documento</label>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-700 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all font-mono text-sm resize-none"
+                rows={15}
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Voce pode editar o conteudo antes de enviar
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3">
             <button
