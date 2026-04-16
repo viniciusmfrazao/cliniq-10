@@ -347,9 +347,18 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               <div className="w-16 h-px" style={{ background: 'var(--gold)', opacity: 0.5 }} />
             </div>
             {anamnese?.patients && (
-              <p className="mt-4 text-sm" style={{ color: 'var(--light-text)' }}>
-                Paciente: <strong style={{ color: 'var(--mid)' }}>{anamnese.patients.name}</strong>
-              </p>
+              <div className="mt-6 p-4 rounded" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+                <p className="text-sm mb-2" style={{ color: 'var(--light-text)' }}>
+                  Paciente: <strong style={{ color: 'var(--dark)' }}>{anamnese.patients.name}</strong>
+                </p>
+                {anamnese.patients.birth_date && (
+                  <p className="text-sm" style={{ color: 'var(--light-text)' }}>
+                    Data de nascimento: <strong style={{ color: 'var(--dark)' }}>
+                      {new Date(anamnese.patients.birth_date).toLocaleDateString('pt-BR')}
+                    </strong>
+                  </p>
+                )}
+              </div>
             )}
           </header>
 
