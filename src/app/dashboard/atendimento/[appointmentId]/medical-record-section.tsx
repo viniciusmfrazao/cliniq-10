@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
 type Props = {
@@ -219,19 +220,19 @@ export default function MedicalRecordSection({
             {/* Botão Salvar */}
             <button
               onClick={saveMedicalRecord}
-              disabled={saving}
+              disabled={saving || saved}
               className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${
                 saved 
-                  ? 'bg-emerald-500 text-white' 
+                  ? 'bg-emerald-500 text-white cursor-not-allowed' 
                   : 'btn-primary'
-              }`}
+              } disabled:opacity-70`}
             >
               {saving ? (
                 <span className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
               ) : saved ? (
                 <>
                   <Icon name="check" className="w-5 h-5" />
-                  Salvo!
+                  Salvo com sucesso!
                 </>
               ) : (
                 <>
@@ -240,10 +241,25 @@ export default function MedicalRecordSection({
                 </>
               )}
             </button>
+            
+            {saved && (
+              <p className="text-center text-sm text-emerald-600 mt-2">
+                Registro salvo. Para adicionar outro, recarregue a página.
+              </p>
+            )}
           </div>
         ) : (
           /* Histórico */
           <div className="space-y-4 max-h-[500px] overflow-y-auto">
+            {/* Link para prontuário completo */}
+            <Link
+              href={`/dashboard/prontuario/${patient.id}`}
+              className="flex items-center justify-center gap-2 w-full py-3 bg-violet-50 text-violet-700 rounded-xl font-semibold hover:bg-violet-100 transition-colors"
+            >
+              <Icon name="file" className="w-5 h-5" />
+              Ver prontuário completo
+            </Link>
+
             {medicalRecords.length === 0 ? (
               <div className="text-center py-8">
                 <Icon name="file" className="w-12 h-12 text-slate-300 mx-auto mb-3" />
