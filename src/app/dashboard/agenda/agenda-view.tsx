@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -67,8 +67,16 @@ function AppointmentCard({
   compact?: boolean
 }) {
   const [showPreview, setShowPreview] = useState(false)
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+  
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current)
+      }
+    }
+  }, [])
   
   const handleMouseEnter = () => {
     if (hideTimeoutRef.current) {
