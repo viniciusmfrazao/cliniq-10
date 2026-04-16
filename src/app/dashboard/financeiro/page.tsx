@@ -147,7 +147,17 @@ export default async function FinanceiroPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Link href="/dashboard/financeiro/devedores" className="bg-white rounded-xl p-4 border border-rose-200 shadow-sm hover:border-rose-300 hover:shadow-md transition group flex items-center gap-3">
+          <div className="w-10 h-10 bg-rose-100 rounded-lg flex items-center justify-center group-hover:bg-rose-200 transition">
+            <Icon name="dollarSign" className="w-5 h-5 text-rose-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 text-sm">Devedores</p>
+            <p className="text-xs text-slate-500">Em aberto</p>
+          </div>
+        </Link>
+
         <Link href="/dashboard/financeiro/fluxo" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition">
             <Icon name="activity" className="w-5 h-5 text-blue-600" />
