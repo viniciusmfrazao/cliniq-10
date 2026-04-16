@@ -23,11 +23,14 @@ export default function NewEvolutionButton({ patientId, clinicId, professionalId
     procedure_name: '',
   })
 
+  const [error, setError] = useState('')
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    setError('')
 
-    await supabase.from('evolutions').insert({
+    const { error: insertError } = await supabase.from('evolutions').insert({
       clinic_id: clinicId,
       patient_id: patientId,
       professional_id: professionalId,
@@ -36,6 +39,12 @@ export default function NewEvolutionButton({ patientId, clinicId, professionalId
       content: form.content || null,
       procedure_name: form.type === 'procedure' ? form.procedure_name : null,
     })
+
+    if (insertError) {
+      setError(`Erro ao salvar: ${insertError.message}`)
+      setLoading(false)
+      return
+    }
 
     setForm({ type: 'consultation', title: '', content: '', procedure_name: '' })
     setOpen(false)
@@ -119,6 +128,12 @@ export default function NewEvolutionButton({ patientId, clinicId, professionalId
             <p className="text-xs text-slate-400">
               Registrando como: {professionalName}
             </p>
+
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
 
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={loading} className="btn-primary">

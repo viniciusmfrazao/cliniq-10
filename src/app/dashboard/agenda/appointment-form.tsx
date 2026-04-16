@@ -143,6 +143,9 @@ export default function AppointmentForm({
       ? `Procedimentos: ${procedureNames}${form.notes ? '\n' + form.notes : ''}`
       : form.notes
 
+    // Buscar usuário atual para registrar quem criou
+    const { data: { user } } = await supabase.auth.getUser()
+
     const appointmentData = {
       clinic_id: clinicId,
       patient_id: form.patient_id,
@@ -163,7 +166,10 @@ export default function AppointmentForm({
     } else {
       result = await supabase
         .from('appointments')
-        .insert(appointmentData)
+        .insert({
+          ...appointmentData,
+          created_by: user?.id || null,
+        })
     }
 
     if (result.error) {

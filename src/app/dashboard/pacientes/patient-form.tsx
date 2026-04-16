@@ -95,7 +95,17 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
     const { data: { user } } = await supabase.auth.getUser()
     const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
 
-    // Validar campo obrigatório
+    // Validar campos obrigatórios
+    if (!form.cpf || form.cpf.length < 11) {
+      setError('CPF é obrigatório')
+      setLoading(false)
+      return
+    }
+    if (!form.birth_date) {
+      setError('Data de nascimento é obrigatória')
+      setLoading(false)
+      return
+    }
     if (!form.gender) {
       setError('O campo Sexo é obrigatório')
       setLoading(false)
@@ -178,7 +188,7 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
         </div>
 
         <div>
-          <label className="label">CPF</label>
+          <label className="label">CPF *</label>
           <input
             className="input"
             type="text"
@@ -186,16 +196,18 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
             value={maskCPF(form.cpf)}
             onChange={e => update('cpf', unmask(e.target.value).slice(0, 11))}
             maxLength={14}
+            required
           />
         </div>
 
         <div>
-          <label className="label">Data de nascimento</label>
+          <label className="label">Data de nascimento *</label>
           <input
             className="input"
             type="date"
             value={form.birth_date}
             onChange={e => update('birth_date', e.target.value)}
+            required
           />
         </div>
 

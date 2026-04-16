@@ -42,6 +42,8 @@ export default function ReceptionView({ appointments, professionals }: Props) {
   const supabase = createClient()
   const [filter, setFilter] = useState<'all' | 'waiting' | 'checked_in'>('all')
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [incompleteModal, setIncompleteModal] = useState<{ show: boolean; apt: Appointment | null }>({ show: false, apt: null })
+  const [notesModal, setNotesModal] = useState<{ show: boolean; apt: Appointment | null; notes: string }>({ show: false, apt: null, notes: '' })
 
   // Estatísticas
   const stats = {
@@ -59,8 +61,24 @@ export default function ReceptionView({ appointments, professionals }: Props) {
     return apt.status !== 'completed'
   })
 
+  // Verificar se cadastro está incompleto
+  function isPatientIncomplete(apt: Appointment): boolean {
+    return !apt.patients?.cpf || !apt.patients?.birth_date
+  }
+
+  // Tentar fazer check-in (verifica cadastro primeiro)
+  function tryCheckIn(appointmentId: string) {
+    const apt = appointments.find(a => a.id === appointmentId)
+    if (apt && isPatientIncomplete(apt)) {
+      setIncompleteModal({ show: true, apt })
+    } else {
+      doCheckIn(appointmentId)
+    }
+  }
+
   // Registrar check-in
-  async function handleCheckIn(appointmentId: string) {
+  async function doCheckIn(appointmentId: string) {
+    setIncompleteModal({ show: false, apt: null })
     setLoadingId(appointmentId)
     
     // Buscar dados do agendamento para a notificação
@@ -88,6 +106,28 @@ export default function ReceptionView({ appointments, professionals }: Props) {
       router.refresh()
     }
     setLoadingId(null)
+  }
+
+  // Salvar observação da recepção
+  async function handleSaveNotes() {
+    if (!notesModal.apt) return
+    setLoadingId(notesModal.apt.id)
+    
+    // Combina observação da recepção com notas existentes
+    const receptionNote = `[Recepção]: ${notesModal.notes}`
+    const existingNotes = notesModal.apt.notes || ''
+    const newNotes = existingNotes.includes('[Recepção]:') 
+      ? existingNotes.replace(/\[Recepção\]:.*?(?=\n|$)/g, receptionNote)
+      : existingNotes ? `${existingNotes}\n${receptionNote}` : receptionNote
+    
+    await supabase
+      .from('appointments')
+      .update({ notes: newNotes })
+      .eq('id', notesModal.apt.id)
+    
+    setNotesModal({ show: false, apt: null, notes: '' })
+    setLoadingId(null)
+    router.refresh()
   }
 
   // Iniciar atendimento
@@ -316,7 +356,7 @@ export default function ReceptionView({ appointments, professionals }: Props) {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {!apt.checked_in_at && ['scheduled', 'confirmed'].includes(apt.status) && (
                       <button
-                        onClick={() => handleCheckIn(apt.id)}
+                        onClick={() => tryCheckIn(apt.id)}
                         disabled={isLoading}
                         className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold rounded-lg hover:from-emerald-600 hover:to-teal-600 transition-all flex items-center gap-2 shadow-md disabled:opacity-50"
                       >
@@ -353,6 +393,21 @@ export default function ReceptionView({ appointments, professionals }: Props) {
                         Ver atendimento
                       </Link>
                     )}
+
+                    <button
+                      onClick={() => {
+                        const existingNote = apt.notes?.match(/\[Recepção\]:\s*(.*)(?:\n|$)/)?.[1] || ''
+                        setNotesModal({ show: true, apt, notes: existingNote })
+                      }}
+                      className={`p-2 rounded-lg transition-colors ${
+                        apt.notes?.includes('[Recepção]:') 
+                          ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' 
+                          : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                      }`}
+                      title="Observação da recepção"
+                    >
+                      <Icon name="message" className="w-5 h-5" />
+                    </button>
 
                     <Link
                       href={`/dashboard/atendimento/${apt.id}`}
@@ -391,6 +446,112 @@ export default function ReceptionView({ appointments, professionals }: Props) {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de observação da recepção */}
+      {notesModal.show && notesModal.apt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                <Icon name="message" className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Observação da Recepção</h3>
+                <p className="text-sm text-slate-500">{notesModal.apt.patients?.name}</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-slate-600 mb-3">
+              Esta observação será visível para o profissional no atendimento.
+            </p>
+
+            <textarea
+              className="input min-h-[120px] mb-4"
+              placeholder="Ex: Paciente chegou acompanhado, solicitou água, pagamento pendente..."
+              value={notesModal.notes}
+              onChange={e => setNotesModal(prev => ({ ...prev, notes: e.target.value }))}
+              autoFocus
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveNotes}
+                disabled={loadingId === notesModal.apt.id}
+                className="btn-primary flex-1"
+              >
+                {loadingId === notesModal.apt.id ? 'Salvando...' : 'Salvar observação'}
+              </button>
+              <button
+                onClick={() => setNotesModal({ show: false, apt: null, notes: '' })}
+                className="btn-secondary"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cadastro incompleto */}
+      {incompleteModal.show && incompleteModal.apt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                <Icon name="bell" className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Cadastro incompleto</h3>
+                <p className="text-sm text-slate-500">{incompleteModal.apt.patients?.name}</p>
+              </div>
+            </div>
+            
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <p className="text-sm text-amber-800 font-medium mb-2">Dados faltando:</p>
+              <ul className="text-sm text-amber-700 space-y-1">
+                {!incompleteModal.apt.patients?.cpf && (
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                    CPF não preenchido
+                  </li>
+                )}
+                {!incompleteModal.apt.patients?.birth_date && (
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                    Data de nascimento não preenchida
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-4">
+              Deseja completar o cadastro agora ou fazer o check-in mesmo assim?
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <Link
+                href={`/dashboard/pacientes/${incompleteModal.apt.patients?.id}/editar`}
+                className="btn-primary text-center"
+                onClick={() => setIncompleteModal({ show: false, apt: null })}
+              >
+                Completar cadastro
+              </Link>
+              <button
+                onClick={() => doCheckIn(incompleteModal.apt!.id)}
+                className="btn-secondary"
+              >
+                Fazer check-in mesmo assim
+              </button>
+              <button
+                onClick={() => setIncompleteModal({ show: false, apt: null })}
+                className="text-sm text-slate-500 hover:text-slate-700"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>

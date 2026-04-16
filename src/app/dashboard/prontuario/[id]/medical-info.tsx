@@ -26,6 +26,7 @@ export default function MedicalInfo({
   const supabase = createClient()
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [form, setForm] = useState({
     blood_type: medicalRecord?.blood_type || '',
     allergies: medicalRecord?.allergies?.join(', ') || '',
@@ -38,6 +39,7 @@ export default function MedicalInfo({
 
   async function handleSave() {
     setLoading(true)
+    setError('')
     
     const data = {
       blood_type: form.blood_type || null,
@@ -49,10 +51,16 @@ export default function MedicalInfo({
       notes: form.notes || null,
     }
 
-    await supabase
+    const { error: updateError } = await supabase
       .from('medical_records')
       .update(data)
       .eq('patient_id', patientId)
+
+    if (updateError) {
+      setError(`Erro ao salvar: ${updateError.message}`)
+      setLoading(false)
+      return
+    }
 
     setLoading(false)
     setEditing(false)
@@ -135,6 +143,11 @@ export default function MedicalInfo({
               onChange={e => setForm({ ...form, notes: e.target.value })}
             />
           </div>
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
           <div className="flex gap-2 pt-2">
             <button onClick={handleSave} disabled={loading} className="btn-primary">
               {loading ? 'Salvando...' : 'Salvar'}
