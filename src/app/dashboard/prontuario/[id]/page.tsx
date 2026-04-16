@@ -45,6 +45,13 @@ export default async function ProntuarioPatientPage({ params }: { params: { id: 
     .eq('patient_id', params.id)
     .order('created_at', { ascending: false })
 
+  // Buscar anamneses
+  const { data: anamneses } = await supabase
+    .from('anamneses')
+    .select('*')
+    .eq('patient_id', params.id)
+    .order('created_at', { ascending: false })
+
   // Calcular idade
   const age = patient.birth_date 
     ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31557600000)
@@ -105,6 +112,47 @@ export default async function ProntuarioPatientPage({ params }: { params: { id: 
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Fichas de Anamnese */}
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-900">Anamneses</h2>
+              <Link 
+                href={`/dashboard/anamnese/enviar?patient=${params.id}`}
+                className="text-xs text-[var(--color-primary)] hover:underline"
+              >
+                + Enviar
+              </Link>
+            </div>
+            {(!anamneses || anamneses.length === 0) ? (
+              <p className="text-sm text-slate-400 text-center py-4">Nenhuma ficha enviada</p>
+            ) : (
+              <div className="space-y-2">
+                {anamneses.map((a: any) => (
+                  <Link 
+                    key={a.id} 
+                    href={`/dashboard/anamnese/${a.id}`}
+                    className="block p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">
+                        {new Date(a.created_at).toLocaleDateString('pt-BR')}
+                      </span>
+                      <span className={`px-2 py-0.5 text-xs rounded-full ${
+                        a.status === 'completed' 
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : a.status === 'viewed'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {a.status === 'completed' ? 'Preenchido' : a.status === 'viewed' ? 'Visto' : 'Pendente'}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
