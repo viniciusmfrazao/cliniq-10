@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -67,7 +67,22 @@ function AppointmentCard({
   compact?: boolean
 }) {
   const [showPreview, setShowPreview] = useState(false)
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+  
+  const handleMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current)
+      hideTimeoutRef.current = null
+    }
+    setShowPreview(true)
+  }
+  
+  const handleMouseLeave = () => {
+    hideTimeoutRef.current = setTimeout(() => {
+      setShowPreview(false)
+    }, 150)
+  }
   const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.phone)
   const isConfirmed = apt.status === 'confirmed'
@@ -82,8 +97,8 @@ function AppointmentCard({
   return (
     <div 
       className="relative group"
-      onMouseEnter={() => setShowPreview(true)}
-      onMouseLeave={() => setShowPreview(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <Link
         href={`/dashboard/atendimento/${apt.id}`}
@@ -124,7 +139,12 @@ function AppointmentCard({
 
       {/* Preview ao passar o mouse */}
       {showPreview && (
-        <div className="absolute z-50 left-full ml-2 top-0 w-72 bg-white rounded-xl shadow-xl border border-slate-200 p-4 animate-in fade-in slide-in-from-left-2 duration-200">
+        <div 
+          className="absolute z-50 left-full top-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 animate-in fade-in slide-in-from-left-2 duration-200"
+          style={{ marginLeft: '-4px', paddingLeft: '12px' }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
           <div className="flex items-start gap-3 mb-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${isCheckedIn ? 'bg-gradient-to-br from-emerald-500 to-teal-500' : 'bg-gradient-to-br from-violet-500 to-purple-500'}`}>
               {apt.patients?.name?.charAt(0) || '?'}
