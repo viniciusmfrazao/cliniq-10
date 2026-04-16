@@ -83,14 +83,20 @@ export default function MedicalRecordSection({
         photos.length > 0 && `**Fotos:** ${photos.length} anexada(s)`
       ].filter(Boolean).join('\n\n')
 
-      await supabase.from('evolutions').insert({
+      const { error } = await supabase.from('evolutions').insert({
         clinic_id: clinicId,
         patient_id: patient.id,
-        type: 'consulta',
+        professional_id: professionalId,
+        type: 'consultation',
         title: `Atendimento ${new Date().toLocaleDateString('pt-BR')}`,
         content,
-        created_by: professionalId
       })
+
+      if (error) {
+        console.error('Erro ao salvar:', error)
+        alert(`Erro ao salvar prontuário: ${error.message}`)
+        return
+      }
 
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)

@@ -17,7 +17,6 @@ type Appointment = {
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
   professional: { id: string; name: string } | null
-  created_by_user: { id: string; name: string } | null
 }
 
 type Professional = {
@@ -186,12 +185,6 @@ function AppointmentCard({
               <span className="text-slate-500">Status:</span>
               <span className={`font-medium ${status.text}`}>{status.label}</span>
             </div>
-            {apt.created_by_user && (
-              <div className="flex justify-between">
-                <span className="text-slate-500">Agendado por:</span>
-                <span className="font-medium text-slate-700">{apt.created_by_user.name}</span>
-              </div>
-            )}
             {apt.notes && (
               <div className="pt-2 border-t border-slate-100">
                 <p className="text-slate-500 mb-1">Observações:</p>
