@@ -1,39 +1,58 @@
 import { createClient } from '@/lib/supabase/server'
-import Link from 'next/link'
-import ProcedureForm from './procedure-form'
+import { redirect } from 'next/navigation'
 import ProcedureList from './procedure-list'
+import ProcedureForm from './procedure-form'
+
+export const metadata = {
+  title: 'Procedimentos | Cliniq',
+}
 
 export default async function ProcedimentosPage() {
   const supabase = await createClient()
+  
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
+  if (!user) redirect('/login')
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+
+  if (!userData?.clinic_id) redirect('/login')
 
   const { data: procedures } = await supabase
     .from('procedures')
     .select('*')
-    .eq('clinic_id', userData?.clinic_id)
+    .eq('clinic_id', userData.clinic_id)
     .order('category', { ascending: true })
     .order('name', { ascending: true })
 
-  const isAdmin = userData?.role === 'admin'
+  const isAdmin = userData.role === 'admin'
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">Procedimentos</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Catalogo de servicos da clinica</p>
+        <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">
+          Procedimentos
+        </h1>
+        <p className="text-sm text-slate-500">
+          Gerencie os procedimentos da clínica
+        </p>
       </div>
 
       {isAdmin && (
-        <div className="card p-6 mb-6">
-          <h2 className="text-sm font-semibold text-slate-900 mb-4">Adicionar procedimento</h2>
-          <ProcedureForm clinicId={userData?.clinic_id} />
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 mb-6">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
+            Adicionar procedimento
+          </h2>
+          <ProcedureForm clinicId={userData.clinic_id} />
         </div>
       )}
 
-      <div className="card p-6">
-        <h2 className="text-sm font-semibold text-slate-900 mb-4">
-          Procedimentos cadastrados ({procedures?.length || 0})
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
+          Procedimentos cadastrados
         </h2>
         <ProcedureList procedures={procedures || []} isAdmin={isAdmin} />
       </div>
