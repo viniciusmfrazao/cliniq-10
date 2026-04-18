@@ -33,13 +33,15 @@ export default async function RecepcaoPage() {
     .order('start_time')
 
   // Buscar profissionais (todos os roles que atendem)
-  const { data: professionals } = await supabase
+  const { data: allProfessionals } = await supabase
     .from('users')
-    .select('id, name, role')
+    .select('id, name, role, active')
     .eq('clinic_id', userData?.clinic_id)
-    .eq('active', true)
     .in('role', ['admin', 'doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist'])
     .order('name')
+  
+  // Filtrar: active !== false (permite true e null)
+  const professionals = (allProfessionals || []).filter(p => p.active !== false)
 
   return (
     <div className="max-w-6xl mx-auto">

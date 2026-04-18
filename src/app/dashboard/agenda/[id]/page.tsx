@@ -36,12 +36,14 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
     .eq('clinic_id', userData?.clinic_id)
     .eq('active', true)
 
-  const { data: professionals } = await supabase
+  const { data: allProfessionals } = await supabase
     .from('users')
-    .select('id, name')
+    .select('id, name, active')
     .eq('clinic_id', userData?.clinic_id)
-    .eq('active', true)
-    .in('role', ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist'])
+    .in('role', ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'admin'])
+  
+  // Filtrar: active !== false (permite true e null)
+  const professionals = (allProfessionals || []).filter(p => p.active !== false)
 
   const { data: rooms } = await supabase
     .from('rooms')

@@ -61,12 +61,12 @@ export default async function AgendaPage({
   // EXECUTAR QUERIES EM PARALELO (muito mais rápido!)
   const [professionalsResult, appointmentsResult, todayAppointmentsResult] = await Promise.all([
     // Query 1: Profissionais (todos os roles que atendem pacientes)
+    // Busca todos e filtra no código para lidar com active NULL
     supabase
       .from('users')
-      .select('id, name, role')
+      .select('id, name, role, active')
       .eq('clinic_id', clinicId)
-      .eq('active', true)
-      .in('role', ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist'])
+      .in('role', ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'admin'])
       .order('name'),
     
     // Query 2: Agendamentos do período selecionado
@@ -93,7 +93,8 @@ export default async function AgendaPage({
       .neq('status', 'cancelled')
   ])
 
-  const professionals = professionalsResult.data || []
+  // Filtrar profissionais: active === true OU active === null (usuarios antigos)
+  const professionals = (professionalsResult.data || []).filter(p => p.active !== false)
   const appointments = appointmentsResult.data || []
   const todayAppointments = todayAppointmentsResult.data || []
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+import PatientSearch from '@/components/ui/PatientSearch'
 import QuickPatientModal from '@/components/ui/QuickPatientModal'
 
 type Patient = { id: string; name: string }
@@ -198,17 +199,13 @@ export default function AppointmentForm({
             Novo paciente
           </button>
         </div>
-        <select
-          className="input"
+        <PatientSearch
+          patients={patients}
           value={form.patient_id}
-          onChange={e => update('patient_id', e.target.value)}
+          onChange={(id) => update('patient_id', id)}
+          placeholder="Digite o nome do paciente..."
           required
-        >
-          <option value="">Selecione o paciente</option>
-          {patients.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+        />
       </div>
 
       <div>

@@ -89,12 +89,19 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
 
 export default function PermissionsModal({ member, onClose, onSave }: Props) {
   const supabase = createClient()
-  const [permissions, setPermissions] = useState<string[]>(
-    member.permissions || DEFAULT_PERMISSIONS[member.role] || []
-  )
+  
+  // Garantir que permissions seja sempre um array
+  const getInitialPermissions = (): string[] => {
+    if (Array.isArray(member.permissions)) {
+      return member.permissions
+    }
+    return DEFAULT_PERMISSIONS[member.role] || []
+  }
+  
+  const [permissions, setPermissions] = useState<string[]>(getInitialPermissions())
   const [saving, setSaving] = useState(false)
 
-  const hasAll = permissions.includes('all')
+  const hasAll = Array.isArray(permissions) && permissions.includes('all')
   
   function togglePermission(permId: string) {
     if (hasAll) return
