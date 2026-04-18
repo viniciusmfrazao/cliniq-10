@@ -182,7 +182,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         </div>
       </div>
 
-      {/* Trial Warning */}
+      {/* Trial Warning - DESATIVADO POR ENQUANTO
       {trialDaysLeft <= 7 && trialDaysLeft > 0 && !searchParams.welcome && (
         <div className="p-4 md:p-5 rounded-xl md:rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -199,6 +199,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           </Link>
         </div>
       )}
+      */}
 
       {/* Stats Overview - Horizontal scroll on mobile */}
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-4 scrollbar-hide">

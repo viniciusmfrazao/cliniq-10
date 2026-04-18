@@ -79,7 +79,7 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
         </div>
       </div>
 
-      {/* Trial Banner */}
+      {/* Trial Banner - DESATIVADO POR ENQUANTO
       {trialDaysLeft > 0 && trialDaysLeft <= 14 && (
         <div className="mx-4 mb-4 px-4 py-3 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20">
           <div className="flex items-center gap-2 text-white">
@@ -95,6 +95,7 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
           </div>
         </div>
       )}
+      */}
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-2 overflow-y-auto space-y-1">
