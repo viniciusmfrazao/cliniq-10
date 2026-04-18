@@ -1,6 +1,7 @@
 import { getClinicDetails } from '@/lib/super-admin'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import ClinicModulesEditor from './modules-editor'
 
 export default async function ClinicDetailsPage({ params }: { params: { id: string } }) {
   const data = await getClinicDetails(params.id)
@@ -10,6 +11,7 @@ export default async function ClinicDetailsPage({ params }: { params: { id: stri
   }
 
   const { clinic, users, stats } = data
+  const activeModules = clinic.settings?.active_modules || [] = data
 
   return (
     <div className="space-y-6">
@@ -86,6 +88,9 @@ export default async function ClinicDetailsPage({ params }: { params: { id: stri
           <p className="text-3xl font-bold text-purple-700 dark:text-purple-300">{stats.appointments}</p>
         </div>
       </div>
+
+      {/* Modules */}
+      <ClinicModulesEditor clinicId={clinic.id} activeModules={activeModules} />
 
       {/* Users List */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">

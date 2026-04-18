@@ -3,11 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import ModuleSelector from '@/components/admin/ModuleSelector'
+import { getDefaultModules, type ModuleId } from '@/lib/modules'
 
 export default function NewClinicPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [activeModules, setActiveModules] = useState<ModuleId[]>(getDefaultModules())
   
   const [form, setForm] = useState({
     name: '',
@@ -45,7 +48,7 @@ export default function NewClinicPage() {
       const res = await fetch('/api/admin/clinics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, activeModules })
       })
 
       const data = await res.json()
@@ -149,6 +152,20 @@ export default function NewClinicPage() {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Módulos */}
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+            Módulos Disponíveis
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            Selecione quais módulos essa clínica terá acesso
+          </p>
+          <ModuleSelector
+            selectedModules={activeModules}
+            onChange={setActiveModules}
+          />
         </div>
 
         {/* Dados do Admin */}

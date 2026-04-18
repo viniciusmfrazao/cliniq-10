@@ -4,10 +4,20 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { BOTTOM_NAV } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
+import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 
-export default function BottomNav({ userRole }: { userRole: string }) {
+type Props = {
+  userRole: string
+  activeModules?: ModuleId[]
+}
+
+export default function BottomNav({ userRole, activeModules = [] }: Props) {
   const pathname = usePathname()
-  const items = BOTTOM_NAV.filter(i => i.roles.includes(userRole))
+  const items = BOTTOM_NAV.filter(i => {
+    if (!i.roles.includes(userRole)) return false
+    if (activeModules.length === 0) return true
+    return isRouteEnabled(i.href, activeModules)
+  })
   const isActive = (href: string) => href === '/dashboard' ? pathname === href : pathname.startsWith(href)
 
   return (

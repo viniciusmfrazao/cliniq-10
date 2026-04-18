@@ -7,14 +7,33 @@ import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
+import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 
-type Props = { clinicName: string; userName: string; userRole: string; trialDaysLeft: number; userId?: string }
+type Props = { 
+  clinicName: string
+  userName: string
+  userRole: string
+  trialDaysLeft: number
+  userId?: string
+  activeModules?: ModuleId[]
+}
 
-export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId }: Props) {
+export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId, activeModules = [] }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  const nav = NAV_ITEMS.filter(i => i.roles.includes(userRole))
+  
+  // Filtra por role E por módulos ativos (se houver módulos configurados)
+  const nav = NAV_ITEMS.filter(i => {
+    // Primeiro verifica se o usuário tem a role necessária
+    if (!i.roles.includes(userRole)) return false
+    
+    // Se não há módulos configurados, libera tudo (compatibilidade)
+    if (activeModules.length === 0) return true
+    
+    // Verifica se a rota está habilitada pelos módulos
+    return isRouteEnabled(i.href, activeModules)
+  })
   const isActive = (href: string) => href === '/dashboard' ? pathname === href : pathname.startsWith(href)
   
   const [expandedMenus, setExpandedMenus] = useState<string[]>(() => {

@@ -18,12 +18,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // Run clinic and users queries in PARALLEL (much faster!)
   const [clinicResult, usersResult] = await Promise.all([
-    supabase.from('clinics').select('name, trial_ends_at').eq('id', userData.clinic_id).single(),
+    supabase.from('clinics').select('name, trial_ends_at, settings').eq('id', userData.clinic_id).single(),
     supabase.from('users').select('id, name, role').eq('clinic_id', userData.clinic_id).order('name')
   ])
 
   const clinic = clinicResult.data
   const clinicUsers = usersResult.data
+  const activeModules = clinic?.settings?.active_modules || []
 
   const trialDaysLeft = clinic?.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at).getTime() - Date.now()) / 86400000))
@@ -31,7 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
-      <Sidebar clinicName={clinic?.name || 'Cliniq'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} />
+      <Sidebar clinicName={clinic?.name || 'Cliniq'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar 
           clinicName={clinic?.name || 'Cliniq'} 
@@ -44,7 +45,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <div className="px-4 py-4 md:px-8 md:py-6 pb-24 md:pb-6">{children}</div>
         </main>
       </div>
-      <BottomNav userRole={userData?.role || 'viewer'} />
+      <BottomNav userRole={userData?.role || 'viewer'} activeModules={activeModules} />
       
       {/* Chat Widget */}
       <ChatWidget 
