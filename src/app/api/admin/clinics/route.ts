@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email já cadastrado' }, { status: 400 })
     }
 
+    // Convert plan name to enum value (lowercase)
+    const planValue = (planName || 'starter').toLowerCase().replace(/\s+/g, '_')
+    
     // 1. Create the clinic
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest) {
         name,
         cnpj: cnpj || null,
         slug,
-        plan: planName || 'starter',
+        plan: planValue,
         trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
         settings: { active_modules: activeModules || [] }
       })
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     if (clinicError) {
       console.error('Clinic error:', clinicError)
-      return NextResponse.json({ error: 'Erro ao criar clínica' }, { status: 500 })
+      return NextResponse.json({ error: `Erro ao criar clínica: ${clinicError.message}` }, { status: 500 })
     }
 
     // 2. Create auth user using service role
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
       // Rollback clinic
       await supabase.from('clinics').delete().eq('id', clinic.id)
       console.error('Auth error:', authError)
-      return NextResponse.json({ error: 'Erro ao criar usuário' }, { status: 500 })
+      return NextResponse.json({ error: `Erro ao criar usuário: ${authError.message}` }, { status: 500 })
     }
 
     // 3. Create user record
