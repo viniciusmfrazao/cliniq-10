@@ -41,7 +41,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Convert plan name to enum value (lowercase)
-    const planValue = (planName || 'starter').toLowerCase().replace(/\s+/g, '_')
+    // Valid values: 'starter', 'professional', 'enterprise'
+    let planValue = (planName || 'starter').toLowerCase().replace(/\s+/g, '_')
+    
+    // If custom or invalid, default to starter
+    const validPlans = ['starter', 'professional', 'enterprise']
+    if (!validPlans.includes(planValue)) {
+      planValue = 'starter'
+    }
     
     // 1. Create the clinic
     const { data: clinic, error: clinicError } = await supabase
