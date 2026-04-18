@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { isSuperAdmin } from '@/lib/super-admin'
 
 export async function POST(request: NextRequest) {
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, cnpj, slug, plan, adminName, adminEmail, adminPassword, activeModules } = body
+    const { name, cnpj, slug, planName, adminName, adminEmail, adminPassword, activeModules } = body
 
     if (!name || !slug || !adminName || !adminEmail || !adminPassword) {
       return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 })
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         name,
         cnpj: cnpj || null,
         slug,
-        plan: plan || 'starter',
+        plan: planName || 'starter',
         trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
         settings: { active_modules: activeModules || [] }
       })
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Create auth user using service role
-    const serviceSupabase = await createClient()
+    const serviceSupabase = createServiceClient()
     
     const { data: authData, error: authError } = await serviceSupabase.auth.admin.createUser({
       email: adminEmail,
