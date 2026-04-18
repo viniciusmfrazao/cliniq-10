@@ -32,12 +32,13 @@ export default async function RecepcaoPage() {
     .neq('status', 'cancelled')
     .order('start_time')
 
-  // Buscar profissionais
+  // Buscar profissionais (todos os roles que atendem)
   const { data: professionals } = await supabase
     .from('users')
     .select('id, name, role')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician'])
+    .eq('active', true)
+    .in('role', ['admin', 'doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist'])
     .order('name')
 
   return (
@@ -45,6 +46,7 @@ export default async function RecepcaoPage() {
       <ReceptionView 
         appointments={appointments || []}
         professionals={professionals || []}
+        clinicId={userData?.clinic_id}
       />
     </div>
   )

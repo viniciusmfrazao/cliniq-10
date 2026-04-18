@@ -1,99 +1,193 @@
-# Testes Automatizados - Cliniq
+# Testes Automatizados E2E - CliniQ
 
-Este projeto usa **Playwright** para testes end-to-end (E2E).
+Testes end-to-end usando **Playwright** que simulam usuários reais navegando pelo sistema.
 
-## Instalação
+## 📦 Instalação
 
 ```bash
-# Instalar Playwright
+# Instalar dependências do Playwright
 npm install -D @playwright/test
 
-# Instalar navegadores
+# Instalar navegadores (Chromium, Firefox, WebKit)
 npx playwright install
 ```
 
-## Configuração
+## 🚀 Como Executar
 
-Crie um arquivo `.env.test` na raiz com suas credenciais de teste:
+### Rodar Todos os Testes
+```bash
+npm run test:e2e
+```
+
+### Rodar com Interface Visual (UI Mode)
+```bash
+npm run test:e2e:ui
+```
+
+### Ver Relatório após os Testes
+```bash
+npm run test:e2e:report
+```
+
+### Rodar Testes Específicos
+```bash
+# Apenas testes de autenticação
+npx playwright test auth.spec.ts
+
+# Apenas testes de agenda
+npx playwright test agenda.spec.ts
+
+# Apenas testes do admin
+npx playwright test admin.spec.ts
+```
+
+### Rodar em Modo Debug
+```bash
+npx playwright test --debug
+```
+
+## ⚙️ Configuração
+
+### Variáveis de Ambiente
+
+Crie um arquivo `.env.test` ou defina as variáveis:
 
 ```env
-TEST_EMAIL=seu-email@teste.com
-TEST_PASSWORD=sua-senha
-TEST_URL=http://localhost:3000
+# Credenciais de usuário comum para testes
+TEST_EMAIL=teste@cliniq.com
+TEST_PASSWORD=senha123
+
+# Credenciais de super admin
+SUPER_ADMIN_EMAIL=admin@cliniq.com
+SUPER_ADMIN_PASSWORD=senha123
+
+# URL base (opcional, padrão: http://localhost:3000)
+BASE_URL=http://localhost:3000
 ```
 
-## Executar Testes
+### Testar em Produção/Staging
+```bash
+# Testar no staging
+BASE_URL=https://cliniq-staging.vercel.app npx playwright test
+
+# Testar em produção (cuidado!)
+BASE_URL=https://cliniq.com.br npx playwright test
+```
+
+## 📁 Estrutura dos Testes
+
+```
+tests/e2e/
+├── auth.spec.ts           # Login, logout, permissões
+├── agenda.spec.ts         # Agendamentos
+├── pacientes.spec.ts      # CRUD de pacientes
+├── financeiro.spec.ts     # Entradas, saídas, DRE
+├── crm.spec.ts            # Leads e funil
+├── admin.spec.ts          # Super Admin
+└── fluxos-completos.spec.ts  # Jornadas completas
+```
+
+## 📊 Módulos Testados
+
+| Módulo | Arquivo | Status |
+|--------|---------|--------|
+| Autenticação | auth.spec.ts | ✅ |
+| Agenda | agenda.spec.ts | ✅ |
+| Pacientes | pacientes.spec.ts | ✅ |
+| Financeiro | financeiro.spec.ts | ✅ |
+| CRM | crm.spec.ts | ✅ |
+| Super Admin | admin.spec.ts | ✅ |
+| Fluxos E2E | fluxos-completos.spec.ts | ✅ |
+
+## 🔧 Comandos Úteis
 
 ```bash
-# Rodar todos os testes
-npx playwright test
+# Gerar código de teste automaticamente (gravador)
+npx playwright codegen http://localhost:3000
 
-# Rodar com interface visual
-npx playwright test --ui
+# Rodar em modo headless (sem interface)
+npx playwright test --headed=false
 
-# Rodar um teste específico
-npx playwright test full-system.spec.ts
+# Rodar só em Chrome
+npx playwright test --project=chromium
 
-# Ver relatório após os testes
-npx playwright show-report
+# Rodar com paralelismo desabilitado
+npx playwright test --workers=1
+
+# Atualizar snapshots
+npx playwright test --update-snapshots
 ```
 
-## O que os testes cobrem
+## 🎬 Gravador de Testes
 
-### Dashboard
-- ✅ Carregamento da página inicial
-- ✅ Cards de estatísticas
-- ✅ Ações rápidas
+O Playwright tem um gravador que gera código automaticamente:
 
-### Agenda
-- ✅ Visualização dia/semana/mês
-- ✅ Criar agendamento
-- ✅ Navegação entre datas
-
-### Pacientes
-- ✅ Lista de pacientes
-- ✅ Criar novo paciente
-- ✅ Busca de pacientes
-
-### Prontuário
-- ✅ Carregamento da página
-
-### Estoque
-- ✅ Lista de produtos
-- ✅ Formulário de novo produto
-
-### CRM
-- ✅ Visualização Kanban
-- ✅ Criar novo lead
-- ✅ Configurações do CRM
-
-### Equipe
-- ✅ Lista de membros
-- ✅ Gestão de permissões
-
-### Recepção
-- ✅ Check-in de pacientes
-
-### Documentos
-- ✅ Lista de documentos
-- ✅ Templates
-
-### Responsividade
-- ✅ Tela mobile (375px)
-- ✅ Tela tablet (768px)
-
-## Estrutura
-
-```
-tests/
-├── .auth/           # Estado de autenticação salvo
-├── auth.setup.ts    # Login automático
-├── full-system.spec.ts  # Testes principais
-└── README.md
+```bash
+npx playwright codegen http://localhost:3000
 ```
 
-## Dicas
+1. Uma janela do navegador abre
+2. Você navega e clica normalmente
+3. O código do teste é gerado automaticamente
 
-- Os testes salvam screenshots quando falham
-- Use `--ui` para depurar visualmente
-- Configure `TEST_URL` para testar em produção
+## 📸 Screenshots e Vídeos
+
+Em caso de falha, os testes geram automaticamente:
+- Screenshots: `test-results/*/test-failed-1.png`
+- Vídeos: `test-results/*/video.webm`
+- Traces: `test-results/*/trace.zip`
+
+Para ver o trace:
+```bash
+npx playwright show-trace test-results/auth-login/trace.zip
+```
+
+## 🔄 CI/CD
+
+Para rodar no CI (GitHub Actions), adicione:
+
+```yaml
+# .github/workflows/tests.yml
+name: E2E Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx playwright install --with-deps
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+```
+
+## ❓ Troubleshooting
+
+### Erro: "Cannot find module '@playwright/test'"
+```bash
+npm install -D @playwright/test
+```
+
+### Erro: "Executable doesn't exist"
+```bash
+npx playwright install
+```
+
+### Testes muito lentos
+- Verifique se `npm run dev` está rodando
+- Use `--workers=4` para paralelismo
+- Verifique conexão com o banco
+
+### Testes falhando por timeout
+- Aumente o timeout em `playwright.config.ts`
+- Verifique se os seletores estão corretos
+- Use o modo debug: `npx playwright test --debug`

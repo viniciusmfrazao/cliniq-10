@@ -40,7 +40,7 @@ export default async function EquipePage() {
 
       <div className="card p-6">
         <h2 className="text-sm font-semibold text-slate-900 mb-4">Membros ({teamMembers?.length || 0})</h2>
-        <TeamList members={teamMembers || []} currentUserId={user.id} />
+        <TeamList members={teamMembers || []} currentUserId={user.id} clinicId={currentUser.clinic_id} />
       </div>
     </div>
   )

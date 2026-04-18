@@ -92,7 +92,8 @@ export async function POST(request: NextRequest) {
         clinic_id: clinic.id,
         name: adminName,
         email: adminEmail,
-        role: 'admin'
+        role: 'admin',
+        active: true
       })
 
     if (userError) {

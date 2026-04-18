@@ -60,12 +60,13 @@ export default async function AgendaPage({
 
   // EXECUTAR QUERIES EM PARALELO (muito mais rápido!)
   const [professionalsResult, appointmentsResult, todayAppointmentsResult] = await Promise.all([
-    // Query 1: Profissionais
+    // Query 1: Profissionais (todos os roles que atendem pacientes)
     supabase
       .from('users')
       .select('id, name, role')
       .eq('clinic_id', clinicId)
-      .in('role', ['doctor', 'esthetician'])
+      .eq('active', true)
+      .in('role', ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist'])
       .order('name'),
     
     // Query 2: Agendamentos do período selecionado

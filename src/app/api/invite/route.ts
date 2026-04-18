@@ -90,6 +90,7 @@ export async function POST(request: Request) {
       name,
       email,
       role,
+      active: true,
     })
 
     if (dbError) {

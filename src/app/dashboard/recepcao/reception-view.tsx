@@ -28,6 +28,7 @@ type Professional = {
 type Props = {
   appointments: Appointment[]
   professionals: Professional[]
+  clinicId?: string
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -37,7 +38,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   completed: { label: 'Finalizado', color: 'text-emerald-600 bg-emerald-100' },
 }
 
-export default function ReceptionView({ appointments, professionals }: Props) {
+export default function ReceptionView({ appointments, professionals, clinicId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [filter, setFilter] = useState<'all' | 'waiting' | 'checked_in'>('all')
@@ -95,7 +96,7 @@ export default function ReceptionView({ appointments, professionals }: Props) {
     if (!error && apt?.professional_id) {
       // Enviar notificação para o profissional
       await supabase.from('notifications').insert({
-        clinic_id: apt.patients?.id ? undefined : undefined, // será pego pela RLS
+        clinic_id: clinicId,
         user_id: apt.professional_id,
         type: 'check_in',
         title: `${apt.patients?.name || 'Paciente'} chegou!`,

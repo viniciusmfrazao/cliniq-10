@@ -1,5 +1,12 @@
 node_modules
 .next
 .env.local
+.env.test
 .DS_Store
 *.log
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

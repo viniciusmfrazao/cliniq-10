@@ -47,7 +47,7 @@ const ROLE_COLORS: Record<string, string> = {
   viewer: 'bg-slate-100 text-slate-700',
 }
 
-export default function TeamList({ members, currentUserId }: { members: Member[]; currentUserId: string }) {
+export default function TeamList({ members, currentUserId, clinicId }: { members: Member[]; currentUserId: string; clinicId: string }) {
   const router = useRouter()
   const supabase = createClient()
   const [removing, setRemoving] = useState<string | null>(null)
@@ -58,7 +58,21 @@ export default function TeamList({ members, currentUserId }: { members: Member[]
     
     setRemoving(memberId)
     
-    await supabase.from('users').delete().eq('id', memberId)
+    try {
+      const response = await fetch(`/api/team/${memberId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicId })
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        alert(data.error || 'Erro ao remover membro')
+      }
+    } catch (error) {
+      console.error('Erro:', error)
+      alert('Erro ao remover membro')
+    }
     
     setRemoving(null)
     router.refresh()
