@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function isSuperAdmin(): Promise<boolean> {
   const supabase = await createClient()
@@ -6,7 +6,9 @@ export async function isSuperAdmin(): Promise<boolean> {
   
   if (!user) return false
   
-  const { data } = await supabase
+  // Use service role to check super_admins table (bypasses RLS)
+  const serviceSupabase = createServiceClient()
+  const { data } = await serviceSupabase
     .from('super_admins')
     .select('id')
     .eq('id', user.id)
@@ -21,7 +23,8 @@ export async function getSuperAdminData() {
   
   if (!user) return null
   
-  const { data } = await supabase
+  const serviceSupabase = createServiceClient()
+  const { data } = await serviceSupabase
     .from('super_admins')
     .select('*')
     .eq('id', user.id)
@@ -31,20 +34,38 @@ export async function getSuperAdminData() {
 }
 
 export async function getAdminMetrics() {
-  const supabase = await createClient()
+  const serviceSupabase = createServiceClient()
   
-  const { data } = await supabase
-    .from('admin_metrics')
-    .select('*')
-    .single()
-  
-  return data
+  // Get metrics directly since admin_metrics view might not exist
+  const [clinicsResult, usersResult, patientsResult, appointmentsResult, leadsResult] = await Promise.all([
+    serviceSupabase.from('clinics').select('id, trial_ends_at', { count: 'exact', head: true }).is('deleted_at', null),
+    serviceSupabase.from('users').select('id', { count: 'exact', head: true }).eq('active', true),
+    serviceSupabase.from('patients').select('id', { count: 'exact', head: true }),
+    serviceSupabase.from('appointments').select('id', { count: 'exact', head: true }).gte('start_time', new Date().toISOString().split('T')[0]),
+    serviceSupabase.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+  ])
+
+  // Count clinics on trial
+  const { data: trialClinics } = await serviceSupabase
+    .from('clinics')
+    .select('id')
+    .is('deleted_at', null)
+    .gt('trial_ends_at', new Date().toISOString())
+
+  return {
+    total_clinics: clinicsResult.count || 0,
+    clinics_on_trial: trialClinics?.length || 0,
+    total_users: usersResult.count || 0,
+    total_patients: patientsResult.count || 0,
+    appointments_today: appointmentsResult.count || 0,
+    leads_this_month: leadsResult.count || 0
+  }
 }
 
 export async function getAllClinics() {
-  const supabase = await createClient()
+  const serviceSupabase = createServiceClient()
   
-  const { data } = await supabase
+  const { data } = await serviceSupabase
     .from('clinics')
     .select(`
       *,
@@ -59,26 +80,26 @@ export async function getAllClinics() {
 }
 
 export async function getClinicDetails(clinicId: string) {
-  const supabase = await createClient()
+  const serviceSupabase = createServiceClient()
   
-  const { data: clinic } = await supabase
+  const { data: clinic } = await serviceSupabase
     .from('clinics')
     .select('*')
     .eq('id', clinicId)
     .single()
   
-  const { data: users } = await supabase
+  const { data: users } = await serviceSupabase
     .from('users')
     .select('*')
     .eq('clinic_id', clinicId)
     .eq('active', true)
   
-  const { count: patientsCount } = await supabase
+  const { count: patientsCount } = await serviceSupabase
     .from('patients')
     .select('*', { count: 'exact', head: true })
     .eq('clinic_id', clinicId)
   
-  const { count: appointmentsCount } = await supabase
+  const { count: appointmentsCount } = await serviceSupabase
     .from('appointments')
     .select('*', { count: 'exact', head: true })
     .eq('clinic_id', clinicId)
