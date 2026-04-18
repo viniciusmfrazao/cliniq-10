@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const PUBLIC_ROUTES = ['/', '/login', '/cadastro', '/auth/callback', '/planos', '/esqueci-senha', '/redefinir-senha']
 const PUBLIC_PREFIXES = ['/api/documents/sign', '/assinar/', '/anamnese/']
+const ADMIN_ROUTES = ['/admin']
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
