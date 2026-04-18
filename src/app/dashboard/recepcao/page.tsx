@@ -32,16 +32,17 @@ export default async function RecepcaoPage() {
     .neq('status', 'cancelled')
     .order('start_time')
 
-  // Buscar profissionais (todos os roles que atendem)
-  const { data: allProfessionals } = await supabase
+  // Buscar TODOS os usuários e filtrar no código (evita problemas com enum)
+  const PROFESSIONAL_ROLES = ['admin', 'doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist']
+  const { data: allUsers } = await supabase
     .from('users')
     .select('id, name, role, active')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist'])
     .order('name')
   
-  // Filtrar: active !== false (permite true e null)
-  const professionals = (allProfessionals || []).filter(p => p.active !== false)
+  const professionals = (allUsers || []).filter(u => 
+    PROFESSIONAL_ROLES.includes(u.role) && u.active !== false
+  )
 
   return (
     <div className="max-w-6xl mx-auto">

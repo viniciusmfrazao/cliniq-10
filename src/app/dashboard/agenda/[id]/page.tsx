@@ -36,14 +36,16 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
     .eq('clinic_id', userData?.clinic_id)
     .eq('active', true)
 
-  const { data: allProfessionals } = await supabase
+  // Buscar TODOS os usuários e filtrar no código (evita problemas com enum)
+  const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'admin']
+  const { data: allUsers } = await supabase
     .from('users')
-    .select('id, name, active')
+    .select('id, name, role, active')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'admin'])
   
-  // Filtrar: active !== false (permite true e null)
-  const professionals = (allProfessionals || []).filter(p => p.active !== false)
+  const professionals = (allUsers || []).filter(u => 
+    PROFESSIONAL_ROLES.includes(u.role) && u.active !== false
+  )
 
   const { data: rooms } = await supabase
     .from('rooms')

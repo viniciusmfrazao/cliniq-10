@@ -58,15 +58,16 @@ export default async function AgendaPage({
 
   const clinicId = userData?.clinic_id
 
+  // Roles que podem atender pacientes
+  const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'admin']
+
   // EXECUTAR QUERIES EM PARALELO (muito mais rápido!)
-  const [professionalsResult, appointmentsResult, todayAppointmentsResult] = await Promise.all([
-    // Query 1: Profissionais (todos os roles que atendem pacientes)
-    // Busca todos e filtra no código para lidar com active NULL
+  const [allUsersResult, appointmentsResult, todayAppointmentsResult] = await Promise.all([
+    // Query 1: TODOS os usuários da clínica (filtraremos no código)
     supabase
       .from('users')
       .select('id, name, role, active')
       .eq('clinic_id', clinicId)
-      .in('role', ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'admin'])
       .order('name'),
     
     // Query 2: Agendamentos do período selecionado
@@ -93,8 +94,11 @@ export default async function AgendaPage({
       .neq('status', 'cancelled')
   ])
 
-  // Filtrar profissionais: active === true OU active === null (usuarios antigos)
-  const professionals = (professionalsResult.data || []).filter(p => p.active !== false)
+  // Filtrar profissionais no código (evita problemas com enum)
+  const allUsers = allUsersResult.data || []
+  const professionals = allUsers.filter(u => 
+    PROFESSIONAL_ROLES.includes(u.role) && u.active !== false
+  )
   const appointments = appointmentsResult.data || []
   const todayAppointments = todayAppointmentsResult.data || []
 
