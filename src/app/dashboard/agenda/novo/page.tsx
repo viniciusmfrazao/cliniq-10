@@ -27,7 +27,7 @@ export default async function NovoAgendamentoPage({
     .from('users')
     .select('id, name')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician'])
+    .in('role', ['doctor', 'esthetician'])
 
   const { data: rooms } = await supabase
     .from('rooms')

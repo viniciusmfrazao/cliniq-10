@@ -40,7 +40,7 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
     .from('users')
     .select('id, name')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician'])
+    .in('role', ['doctor', 'esthetician'])
 
   const { data: rooms } = await supabase
     .from('rooms')

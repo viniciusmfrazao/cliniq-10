@@ -430,7 +430,9 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
                 >
                   <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r ${PROFESSIONAL_COLORS[idx % PROFESSIONAL_COLORS.length]} text-white text-sm font-medium`}>
                     <Icon name="user" className="w-3 h-3" />
-                    {prof.name.split(' ')[0]}
+                    {prof.name.startsWith('Dra.') || prof.name.startsWith('Dr.') 
+                      ? prof.name.split(' ').slice(0, 2).join(' ')
+                      : prof.name.split(' ')[0]}
                   </div>
                 </div>
               ))}

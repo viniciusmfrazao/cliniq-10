@@ -65,7 +65,7 @@ export default async function AgendaPage({
       .from('users')
       .select('id, name, role')
       .eq('clinic_id', clinicId)
-      .in('role', ['admin', 'doctor', 'esthetician'])
+      .in('role', ['doctor', 'esthetician'])
       .order('name'),
     
     // Query 2: Agendamentos do período selecionado
