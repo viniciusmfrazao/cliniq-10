@@ -250,7 +250,7 @@ export default function AppointmentForm({
                   className="w-4 h-4 text-violet-600 rounded border-slate-300 focus:ring-violet-500"
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-slate-900 truncate">{proc.name}</p>
+                  <p className="font-medium text-slate-900" title={proc.name}>{proc.name}</p>
                   <p className="text-xs text-slate-500">{proc.duration_minutes} min</p>
                 </div>
                 <span className="text-sm font-medium text-slate-600">

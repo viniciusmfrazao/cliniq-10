@@ -58,16 +58,19 @@ function AppointmentCard({
   onStatusChange,
   onCheckIn,
   onDragStart,
-  compact = false
+  compact = false,
+  isRightColumn = false
 }: { 
   apt: Appointment
   onStatusChange: (id: string, status: string) => void
   onCheckIn: (id: string) => void
   onDragStart?: (e: React.DragEvent, apt: Appointment) => void
   compact?: boolean
+  isRightColumn?: boolean
 }) {
   const [showPreview, setShowPreview] = useState(false)
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   
   useEffect(() => {
@@ -148,8 +151,10 @@ function AppointmentCard({
       {/* Preview ao passar o mouse */}
       {showPreview && (
         <div 
-          className="absolute z-50 left-full top-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 animate-in fade-in slide-in-from-left-2 duration-200"
-          style={{ marginLeft: '-4px', paddingLeft: '12px' }}
+          className={`absolute z-50 top-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 animate-in fade-in duration-200 ${
+            isRightColumn ? 'right-full slide-in-from-right-2' : 'left-full slide-in-from-left-2'
+          }`}
+          style={isRightColumn ? { marginRight: '-4px', paddingRight: '12px' } : { marginLeft: '-4px', paddingLeft: '12px' }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -452,11 +457,12 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
                     {isLunchTime && <p className="text-xs text-amber-500">🍽️</p>}
                   </div>
                   
-                  {displayProfessionals.map((prof) => {
+                  {displayProfessionals.map((prof, profIdx) => {
                     const hourAppointments = appointments.filter(apt => {
                       const aptHour = new Date(apt.start_time).getHours()
                       return apt.professional_id === prof.id && aptHour === hour
                     })
+                    const isLastColumn = profIdx === displayProfessionals.length - 1
                     
                     return (
                       <div 
@@ -476,6 +482,7 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
                                 onStatusChange={handleStatusChange}
                                 onCheckIn={handleCheckIn}
                                 onDragStart={handleDragStart}
+                                isRightColumn={isLastColumn}
                               />
                             ))}
                           </div>
@@ -594,6 +601,7 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
                             onCheckIn={handleCheckIn}
                             onDragStart={handleDragStart}
                             compact
+                            isRightColumn={idx >= 5}
                           />
                         ))}
                         {dayAppointments.length > 6 && (

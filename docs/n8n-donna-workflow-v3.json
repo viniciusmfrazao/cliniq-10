@@ -1,0 +1,185 @@
+{
+  "name": "Donna Atendimento WhatsApp v3",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "donna-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "donna-webhook-id"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\nlet phone = '';\nlet message = '';\nlet pushName = '';\n\nif (body.data) {\n  phone = body.data.key?.remoteJid?.replace('@s.whatsapp.net', '') || '';\n  message = body.data.message?.conversation || body.data.message?.extendedTextMessage?.text || '';\n  pushName = body.data.pushName || '';\n} else {\n  phone = body.phone || body.from || '';\n  message = body.message || body.text || '';\n  pushName = body.pushName || body.name || '';\n}\n\nphone = phone.replace(/\\D/g, '');\nif (!phone.startsWith('55') && (phone.length === 11 || phone.length === 10)) {\n  phone = '55' + phone;\n}\n\nif (!message || message.trim() === '') {\n  return [];\n}\n\n// Data em horário de Brasília (UTC-3)\nconst hoje = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));\nconst diasSemana = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];\nconst meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];\nconst dataAtual = `${diasSemana[hoje.getDay()]}, ${hoje.getDate()} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;\nconst dataISO = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;\n\nreturn [{ phone, message, pushName, dataAtual, dataISO, timestamp: new Date().toISOString() }];"
+      },
+      "id": "extract_message",
+      "name": "Extrair Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\n\nconst phone = $input.first().json.phone;\nconst pushName = $input.first().json.pushName;\nconst message = $input.first().json.message;\nconst dataAtual = $input.first().json.dataAtual;\n\nlet historyText = '';\nlet customerName = pushName || '';\nlet isNewConversation = true;\n\ntry {\n  // Buscar histórico - estrutura: user_message, assistant_message por linha\n  const convResponse = await fetch(\n    `${SUPABASE_URL}/rest/v1/eva_conversations?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=user_message,assistant_message,created_at&order=created_at.desc&limit=10`,\n    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }\n  );\n  const conversations = await convResponse.json();\n  \n  if (conversations && conversations.length > 0) {\n    isNewConversation = false;\n    // Inverter para ordem cronológica e montar histórico\n    const sorted = conversations.reverse();\n    historyText = '\\n\\nHISTÓRICO DA CONVERSA (últimas mensagens):\\n';\n    for (const conv of sorted) {\n      if (conv.user_message) historyText += `Paciente: ${conv.user_message}\\n`;\n      if (conv.assistant_message) historyText += `Donna: ${conv.assistant_message}\\n`;\n    }\n  }\n  \n  // Buscar nome do lead se não tiver\n  if (!customerName || customerName === '') {\n    const leadResponse = await fetch(\n      `${SUPABASE_URL}/rest/v1/leads?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=name`,\n      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }\n    );\n    const leads = await leadResponse.json();\n    if (leads && leads.length > 0 && leads[0].name && leads[0].name !== 'Lead WhatsApp') {\n      customerName = leads[0].name;\n    }\n  }\n} catch (e) { console.error('Erro ao carregar histórico:', e); }\n\nconst systemPrompt = `DATA DE HOJE: ${dataAtual}\n\n# DONNA — Atendente Clínica Sarah Pina\n\n## IDENTIDADE\nVocê é Donna, da Clínica Sarah Pina. Comercial — atendimento, relacionamento e agendamentos via WhatsApp.\nNunca diga que é IA, robô ou assistente virtual. Você é a Donna.\nPersonalidade: acolhedora, elegante e sutil. Conduz sem pressionar.\nTom: refinado mas humano. Nunca seja fria ou robótica.\n\n## REGRAS ABSOLUTAS\n1. Leia o histórico antes de responder\n2. Mensagens curtas: máximo 3-4 linhas\n3. Uma informação por vez\n4. Emojis: apenas 🤍 ✨ 🌟 — máximo 1 por mensagem\n5. Preço: só quando perguntar, USE consultar_precos\n6. NUNCA invente horários ou procedimentos\n${customerName ? `\\nNome do paciente: ${customerName}` : ''}\n\n## PRIMEIRO CONTATO\n${isNewConversation ? 'NOVA conversa - APRESENTE-SE: \"Olá! Eu sou a Donna, seja muito bem-vindo(a) à Clínica Sarah Pina 🤍 Tudo bem? Como posso te chamar?\"' : 'CONVERSA EM ANDAMENTO - NÃO se apresente novamente. Continue naturalmente.'}\n\n## FERRAMENTAS — USE IMEDIATAMENTE\n| Situação | Ação |\n|----------|------|\n| Pergunta PREÇO | USE consultar_precos |\n| Quer HORÁRIO | USE consultar_agenda |\n| AGENDAR | USE criar_agendamento |\n| Saber NOME | USE criar_lead |\n\n**PROIBIDO**: Dizer \"vou verificar\" sem usar ferramenta\n\n## CLÍNICA\n- Endereço: Roosevelt de Oliveira, 305 – Centro, Uberlândia\n- Horário: 8h às 20h, só com hora marcada\n- Pagamento: 12x sem juros | PIX/dinheiro 5% desc\n\n## PROFISSIONAIS\n**Dra. Amanda ⭐** (PREFERÊNCIA): Seg-Sex 09h-12h e 13h30-19h\n**Dra. Sarah**: Seg 13h30-19h | Ter 09h-12h | Qua 13h30-19h | Qui NÃO ATENDE | Sex 13h30-19h\n\n## PREÇOS - Informe APENAS parcelado (ex: \"12x de R$90\")\n${historyText}`;\n\nreturn [{\n  phone, message, pushName, dataAtual,\n  dataISO: $input.first().json.dataISO,\n  customerName, systemPrompt,\n  clinicId: CLINIC_ID, isNewConversation\n}];"
+      },
+      "id": "load_history",
+      "name": "Carregar Histórico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "={{ $json.systemPrompt }}"
+        }
+      },
+      "id": "ai_agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 800
+        }
+      },
+      "id": "openai_model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [660, 520],
+      "credentials": {
+        "openAiApi": {
+          "id": "CONFIGURE_OPENAI",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "consultar_precos",
+        "description": "Consulta preços de procedimentos. Parâmetro: procedimento (ex: botox, preenchimento)",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\n\nconst input = $input.item.json.query || $input.item.json.procedimento || $input.item.json;\nlet proc = typeof input === 'string' ? input.toLowerCase().trim() : (input.procedimento || input.nome || '').toLowerCase().trim();\n\nif (!proc) return { response: 'Informe o procedimento: botox, preenchimento, microvasos, etc' };\n\ntry {\n  let url = `${SUPABASE_URL}/rest/v1/procedures?clinic_id=eq.${CLINIC_ID}&active=eq.true&select=name,price,installments,installment_price,professional,notes`;\n  if (proc !== 'todos') url += `&name=ilike.*${encodeURIComponent(proc)}*`;\n  \n  const response = await this.helpers.httpRequest({ method: 'GET', url, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } });\n  \n  if (!response || response.length === 0) return { response: `\"${proc}\" não encontrado. Temos: Botox, Preenchimento, Bioestimulador, Microvasos, Limpeza, Microagulhamento, Enzimas, Fios PDO, Lavieen` };\n  \n  let r = 'PROCEDIMENTOS:\\n';\n  for (const p of response.slice(0, 5)) {\n    r += `\\n${p.name}: ${p.installments}x R$${p.installment_price?.toFixed(2) || (p.price/12).toFixed(2)}`;\n    if (p.professional) r += ` (${p.professional})`;\n    if (p.notes) r += ` - ${p.notes}`;\n  }\n  r += '\\n\\nINFORME APENAS VALOR PARCELADO!';\n  return { response: r };\n} catch (e) { return { response: `Erro: ${e.message}` }; }"
+      },
+      "id": "tool_precos",
+      "name": "consultar_precos",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [780, 520]
+    },
+    {
+      "parameters": {
+        "name": "consultar_agenda",
+        "description": "Consulta horários disponíveis. Parâmetro: data (hoje, amanhã, segunda, 15/04)",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\nconst DRA_SARAH_ID = 'beefd6c9-fd93-44cf-9efc-4d08076bfb93';\nconst DRA_AMANDA_ID = 'cb8ac5ba-eca3-4c5a-ab62-6b420c7c5313';\n\nfunction parseData(input) {\n  const hoje = new Date();\n  const texto = String(input).toLowerCase().trim();\n  if (texto === 'hoje') return hoje;\n  if (texto === 'amanhã' || texto === 'amanha') return new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);\n  const dias = { 'domingo': 0, 'segunda': 1, 'terca': 2, 'terça': 2, 'quarta': 3, 'quinta': 4, 'sexta': 5 };\n  for (const [nome, num] of Object.entries(dias)) {\n    if (texto.includes(nome)) {\n      const d = new Date(); const diff = (num - d.getDay() + 7) % 7 || 7; d.setDate(d.getDate() + diff); return d;\n    }\n  }\n  const m = texto.match(/(\\d{1,2})\\/(\\d{1,2})/);\n  if (m) return new Date(hoje.getFullYear(), parseInt(m[2]) - 1, parseInt(m[1]));\n  const m2 = texto.match(/(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m2) return new Date(parseInt(m2[1]), parseInt(m2[2]) - 1, parseInt(m2[3]));\n  return null;\n}\n\nconst input = $input.item.json.query || $input.item.json.data || $input.item.json;\nlet dataParam = typeof input === 'string' ? input : (input.data || input.date || 'hoje');\nconst dataObj = parseData(dataParam);\nif (!dataObj) return { response: `Não entendi \"${dataParam}\". Use: hoje, amanhã, segunda, 15/04` };\n\nconst diaSem = dataObj.getDay();\nif (diaSem === 0 || diaSem === 6) return { response: 'Fim de semana. A clínica funciona segunda a sexta.' };\n\nconst dateStr = `${dataObj.getFullYear()}-${String(dataObj.getMonth()+1).padStart(2,'0')}-${String(dataObj.getDate()).padStart(2,'0')}`;\nconst diasPt = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];\n\nconst SARAH = { 1: ['13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'], 2: ['09:00','09:30','10:00','10:30','11:00','11:30'], 3: ['13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'], 4: [], 5: ['13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'] };\nconst AMANDA = { 1: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'], 2: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'], 3: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'], 4: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'], 5: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'] };\n\nlet ocupados = [];\ntry {\n  ocupados = await this.helpers.httpRequest({ method: 'GET', url: `${SUPABASE_URL}/rest/v1/appointments?clinic_id=eq.${CLINIC_ID}&start_time=gte.${dateStr}T00:00:00&start_time=lte.${dateStr}T23:59:59&status=neq.cancelled`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }) || [];\n} catch (e) {}\n\nconst getHora = s => s.match(/T(\\d{2}:\\d{2})/)?.[1];\nconst ocupS = ocupados.filter(a => a.professional_id === DRA_SARAH_ID).map(a => getHora(a.start_time)).filter(h => h);\nconst ocupA = ocupados.filter(a => a.professional_id === DRA_AMANDA_ID).map(a => getHora(a.start_time)).filter(h => h);\n\nconst dispS = (SARAH[diaSem] || []).filter(h => !ocupS.includes(h));\nconst dispA = (AMANDA[diaSem] || []).filter(h => !ocupA.includes(h));\n\nlet r = `HORÁRIOS ${diasPt[diaSem].toUpperCase()} ${dataObj.getDate()}/${dataObj.getMonth()+1}:\\n`;\nr += diaSem === 4 ? 'Dra. Sarah: não atende quinta\\n' : (dispS.length ? `Dra. Sarah: ${dispS.slice(0,4).join(', ')}\\n` : 'Dra. Sarah: sem horário\\n');\nr += dispA.length ? `Dra. Amanda: ${dispA.slice(0,4).join(', ')}` : 'Dra. Amanda: sem horário';\nr += '\\n\\nOFEREÇA MAX 2 HORÁRIOS. Priorize Dra. Amanda.';\nreturn { response: r };"
+      },
+      "id": "tool_agenda",
+      "name": "consultar_agenda",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [900, 520]
+    },
+    {
+      "parameters": {
+        "name": "criar_agendamento",
+        "description": "Cria agendamento. Parâmetros: data (YYYY-MM-DD), horario (HH:MM), profissional (amanda/sarah), nome_completo",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\nconst DRA_SARAH_ID = 'beefd6c9-fd93-44cf-9efc-4d08076bfb93';\nconst DRA_AMANDA_ID = 'cb8ac5ba-eca3-4c5a-ab62-6b420c7c5313';\n\nconst input = $input.item.json.query || $input.item.json;\nlet p; try { p = typeof input === 'string' ? JSON.parse(input) : input; } catch { p = input; }\n\nconst data = p.data || p.date;\nconst horario = p.horario || p.time || p.hora;\nconst prof = p.profissional || p.professional || 'amanda';\nconst nome = p.nome_completo || p.nome || p.name;\n\nif (!data || !horario) return { response: 'ERRO: Preciso data (YYYY-MM-DD) e horário (HH:MM)' };\nif (!nome || nome.length < 5) return { response: 'ERRO: Preciso NOME COMPLETO. Pergunte ao paciente.' };\n\nconst profId = prof.toLowerCase().includes('sarah') ? DRA_SARAH_ID : DRA_AMANDA_ID;\nconst profName = prof.toLowerCase().includes('sarah') ? 'Dra. Sarah' : 'Dra. Amanda';\nconst phone = $('Carregar Histórico').first().json.phone;\n\ntry {\n  let patientId;\n  const existing = await this.helpers.httpRequest({ method: 'GET', url: `${SUPABASE_URL}/rest/v1/patients?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=id`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } });\n  \n  if (existing?.length > 0) {\n    patientId = existing[0].id;\n    await this.helpers.httpRequest({ method: 'PATCH', url: `${SUPABASE_URL}/rest/v1/patients?id=eq.${patientId}`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nome }) });\n  } else {\n    const np = await this.helpers.httpRequest({ method: 'POST', url: `${SUPABASE_URL}/rest/v1/patients`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }, body: JSON.stringify({ clinic_id: CLINIC_ID, name: nome, phone }) });\n    patientId = np[0]?.id;\n  }\n  \n  await this.helpers.httpRequest({ method: 'POST', url: `${SUPABASE_URL}/rest/v1/appointments`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic_id: CLINIC_ID, patient_id: patientId, professional_id: profId, start_time: `${data}T${horario}:00`, end_time: `${data}T${(parseInt(horario.split(':')[0])+1).toString().padStart(2,'0')}:${horario.split(':')[1]}:00`, status: 'scheduled', notes: 'Agendado via WhatsApp - Donna' }) });\n  \n  await this.helpers.httpRequest({ method: 'PATCH', url: `${SUPABASE_URL}/rest/v1/leads?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ stage: 'scheduled', name: nome }) });\n  \n  const d = new Date(data + 'T12:00:00');\n  const dias = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];\n  return { response: `CONFIRMADO!\\n${nome}\\n${dias[d.getDay()]}, ${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} às ${horario}\\n${profName}\\n\\nEnvie mensagem de confirmação padronizada.` };\n} catch (e) { return { response: `ERRO: ${e.message}` }; }"
+      },
+      "id": "tool_agendamento",
+      "name": "criar_agendamento",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [1020, 520]
+    },
+    {
+      "parameters": {
+        "name": "criar_lead",
+        "description": "Cria/atualiza lead. Parâmetros: nome, interesse",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\n\nconst input = $input.item.json.query || $input.item.json;\nlet p; try { p = typeof input === 'string' ? JSON.parse(input) : input; } catch { p = input; }\n\nconst nome = p.nome || p.name || '';\nconst interesse = p.interesse || p.interest || '';\nconst phone = $('Carregar Histórico').first().json.phone;\n\ntry {\n  const existing = await this.helpers.httpRequest({ method: 'GET', url: `${SUPABASE_URL}/rest/v1/leads?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=id`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } });\n  \n  const data = { clinic_id: CLINIC_ID, phone, source: 'whatsapp', stage: 'contacted' };\n  if (nome) data.name = nome;\n  if (interesse) data.interest = interesse;\n  \n  if (existing?.length > 0) {\n    await this.helpers.httpRequest({ method: 'PATCH', url: `${SUPABASE_URL}/rest/v1/leads?id=eq.${existing[0].id}`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(data) });\n    return { response: `Lead atualizado: ${nome || 'sem nome'}` };\n  } else {\n    if (!data.name) data.name = 'Lead WhatsApp';\n    await this.helpers.httpRequest({ method: 'POST', url: `${SUPABASE_URL}/rest/v1/leads`, headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(data) });\n    return { response: `Lead criado: ${data.name}` };\n  }\n} catch (e) { return { response: `Erro: ${e.message}` }; }"
+      },
+      "id": "tool_lead",
+      "name": "criar_lead",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [1140, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "let answer = $input.first().json.output || $input.first().json.text || '';\nanswer = answer.replace(/^(Donna:|Assistant:)/gi, '').trim();\nanswer = answer.replace(/```[\\s\\S]*?```/g, '').trim();\nif (answer.length > 1500) answer = answer.substring(0, 1500) + '...';\n\nreturn [{\n  answer,\n  userMessage: $('Carregar Histórico').first().json.message,\n  phone: $('Carregar Histórico').first().json.phone,\n  clinicId: $('Carregar Histórico').first().json.clinicId\n}];"
+      },
+      "id": "clean_answer",
+      "name": "Limpar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\n\nconst { phone, clinicId, answer, userMessage } = $input.first().json;\n\ntry {\n  // Inserir nova linha com user_message e assistant_message\n  await fetch(`${SUPABASE_URL}/rest/v1/eva_conversations`, {\n    method: 'POST',\n    headers: {\n      'apikey': SUPABASE_KEY,\n      'Authorization': `Bearer ${SUPABASE_KEY}`,\n      'Content-Type': 'application/json'\n    },\n    body: JSON.stringify({\n      clinic_id: clinicId,\n      phone: phone,\n      user_message: userMessage,\n      assistant_message: answer\n    })\n  });\n} catch (e) { console.error('Erro ao salvar conversa:', e); }\n\nreturn [{ answer, phone }];"
+      },
+      "id": "save_conversation",
+      "name": "Salvar Conversa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://evolution-api-production-7853.up.railway.app/message/sendText/clinica-sarah-pina",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.phone }}\",\n  \"text\": {{ JSON.stringify($json.answer) }}\n}",
+        "options": {}
+      },
+      "id": "send_whatsapp",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true }) }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, 300]
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": { "main": [[{ "node": "Extrair Mensagem", "type": "main", "index": 0 }]] },
+    "Extrair Mensagem": { "main": [[{ "node": "Carregar Histórico", "type": "main", "index": 0 }]] },
+    "Carregar Histórico": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
+    "AI Agent": { "main": [[{ "node": "Limpar Resposta", "type": "main", "index": 0 }]] },
+    "OpenAI Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },
+    "consultar_precos": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "consultar_agenda": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "criar_agendamento": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "criar_lead": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "Limpar Resposta": { "main": [[{ "node": "Salvar Conversa", "type": "main", "index": 0 }]] },
+    "Salvar Conversa": { "main": [[{ "node": "Enviar WhatsApp", "type": "main", "index": 0 }]] },
+    "Enviar WhatsApp": { "main": [[{ "node": "Responder Webhook", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

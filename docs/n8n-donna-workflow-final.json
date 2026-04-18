@@ -1,0 +1,191 @@
+{
+  "name": "Donna Atendimento WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "donna-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "donna-webhook-id"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair dados da mensagem do WhatsApp (Evolution API)\nconst body = $input.first().json.body || $input.first().json;\n\nlet phone = '';\nlet message = '';\nlet pushName = '';\n\nif (body.data) {\n  phone = body.data.key?.remoteJid?.replace('@s.whatsapp.net', '') || '';\n  message = body.data.message?.conversation || body.data.message?.extendedTextMessage?.text || '';\n  pushName = body.data.pushName || '';\n} else {\n  phone = body.phone || body.from || '';\n  message = body.message || body.text || '';\n  pushName = body.pushName || body.name || '';\n}\n\nphone = phone.replace(/\\D/g, '');\nif (!phone.startsWith('55') && (phone.length === 11 || phone.length === 10)) {\n  phone = '55' + phone;\n}\n\nconst hoje = new Date();\nconst diasSemana = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];\nconst meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];\n\nconst dataAtual = `${diasSemana[hoje.getDay()]}, ${hoje.getDate()} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;\nconst dataISO = hoje.toISOString().split('T')[0];\n\nreturn { phone, message, pushName, dataAtual, dataISO, timestamp: new Date().toISOString() };"
+      },
+      "id": "extract_message",
+      "name": "Extrair Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\n\nconst phone = $input.first().json.phone;\nconst pushName = $input.first().json.pushName;\nconst message = $input.first().json.message;\nconst dataAtual = $input.first().json.dataAtual;\n\nlet conversationHistory = [];\nlet leadId = null;\nlet patientId = null;\nlet customerName = pushName || '';\n\ntry {\n  const convResponse = await fetch(\n    `${SUPABASE_URL}/rest/v1/eva_conversations?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=*`,\n    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }\n  );\n  const conversations = await convResponse.json();\n  \n  if (conversations && conversations.length > 0) {\n    const conv = conversations[0];\n    conversationHistory = conv.messages || [];\n    leadId = conv.lead_id;\n    patientId = conv.patient_id;\n    customerName = conv.customer_name || pushName || '';\n  }\n  \n  if (!leadId) {\n    const leadResponse = await fetch(\n      `${SUPABASE_URL}/rest/v1/leads?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=id,name,stage`,\n      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }\n    );\n    const leads = await leadResponse.json();\n    if (leads && leads.length > 0) {\n      leadId = leads[0].id;\n      if (leads[0].name && leads[0].name !== 'Lead WhatsApp') customerName = leads[0].name;\n    }\n  }\n  \n  if (!patientId) {\n    const patientResponse = await fetch(\n      `${SUPABASE_URL}/rest/v1/patients?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=id,name`,\n      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }\n    );\n    const patients = await patientResponse.json();\n    if (patients && patients.length > 0) {\n      patientId = patients[0].id;\n      customerName = patients[0].name || customerName;\n    }\n  }\n} catch (e) { console.error('Erro ao buscar histórico:', e); }\n\nconst recentHistory = conversationHistory.slice(-20);\nlet historyText = '';\nif (recentHistory.length > 0) {\n  historyText = '\\n\\nHISTÓRICO DA CONVERSA:\\n';\n  for (const msg of recentHistory) {\n    const role = msg.role === 'user' ? 'Paciente' : 'Donna';\n    historyText += `${role}: ${msg.content}\\n`;\n  }\n}\n\nconversationHistory.push({ role: 'user', content: message, timestamp: new Date().toISOString() });\n\nreturn {\n  phone, message, pushName, dataAtual,\n  dataISO: $input.first().json.dataISO,\n  customerName, conversationHistory, historyText,\n  leadId, patientId, clinicId: CLINIC_ID,\n  isNewConversation: recentHistory.length === 0\n};"
+      },
+      "id": "load_history",
+      "name": "Carregar Histórico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const dataAtual = $('Carregar Histórico').first().json.dataAtual;\nconst historyText = $('Carregar Histórico').first().json.historyText;\nconst customerName = $('Carregar Histórico').first().json.customerName;\nconst message = $('Carregar Histórico').first().json.message;\nconst isNew = $('Carregar Histórico').first().json.isNewConversation;\n\nconst systemPrompt = `DATA DE HOJE: ${dataAtual}\n\n# DONNA — Atendente Clínica Sarah Pina\n\n## IDENTIDADE\nVocê é Donna, da Clínica Sarah Pina. Você é comercial — responsável por atendimento, relacionamento e agendamentos via WhatsApp.\n\nNunca diga que é IA, robô, assistente virtual. Você é a Donna.\n\nPersonalidade: acolhedora, elegante e sutil. Conduz sem pressionar. Faz o paciente se sentir especial e naturalmente querer agendar. Não vende procedimento — vende autoestima, confiança e transformação.\n\nTom: refinado mas humano. Nunca seja fria, nunca seja robótica, nunca repita a mesma estrutura de frase.\n\n## REGRAS ABSOLUTAS\n1. Leia o histórico completo antes de responder\n2. Nunca ignore o que o paciente já disse\n3. Mensagens curtas: máximo 3-4 linhas por bloco\n4. Uma informação por vez, pergunte, espere, avance\n5. Emojis: apenas 🤍 ✨ 🌟 — máximo 1 por mensagem (exceto confirmação)\n6. Preço: só fale quando perguntar. SEMPRE use a ferramenta consultar_precos antes de informar valor\n7. Gênero: adapte feminino/masculino após saber o nome\n8. Nunca invente procedimentos, horários ou políticas\n${customerName ? `\\nNome do paciente: ${customerName}` : ''}\n\n## PRIMEIRO CONTATO\n${isNew ? 'Esta é uma NOVA conversa. APRESENTE-SE!' : 'Conversa em andamento. NÃO se apresente novamente.'}\n\nMensagem de abertura (só para conversa nova):\n\"Olá! Eu sou a Donna, seja muito bem-vindo(a) à Clínica Sarah Pina 🤍\\nTudo bem com você? Como posso te chamar?\"\n\n## FERRAMENTAS — USE IMEDIATAMENTE\n\n| Situação | Ferramenta |\n|----------|------------|\n| Paciente pergunta PREÇO | USE consultar_precos AGORA |\n| Paciente quer horário | USE consultar_agenda AGORA |\n| Confirmar agendamento | USE criar_agendamento AGORA |\n| Saber nome/interesse | USE criar_lead |\n| Cadastrar paciente | USE cadastrar_paciente |\n\n**PROIBIDO**: \"Vou verificar\", \"só um instante\", \"deixa eu consultar\" SEM usar a ferramenta\n**OBRIGATÓRIO**: Usar ferramenta E responder com resultado NA MESMA mensagem\n\n## INFORMAÇÕES DA CLÍNICA\n- Endereço: Roosevelt de Oliveira, 305 – Centro, Uberlândia\n- Funcionamento: 8h às 20h — somente com hora marcada\n- Pagamento: cartão até 12x sem juros | PIX/dinheiro 5% desconto\n\n## PROFISSIONAIS\n\n### Dra. Amanda ⭐ (PREFERÊNCIA)\nSegunda a sexta: 09h às 12h e 13h30 às 19h\nFaz: Microvasos, Enzimas, Microagulhamento, Limpeza, Carboxiterapia, Botox, Preenchimento, Bioestimulador\nNÃO faz: Fios de PDO\n\n### Dra. Sarah\nSegunda: 13h30-19h | Terça: 09h-12h | Quarta: 13h30-19h | Quinta: NÃO ATENDE | Sexta: 13h30-19h\nFaz: Botox, Preenchimento, Bioestimulador, Fios de PDO, Protocolo Glúteo\nNÃO faz: Microvasos, Limpeza, Enzimas, Microagulhamento, Carboxiterapia\n\n## COMO INFORMAR PREÇOS\n1. USE consultar_precos para obter o valor atualizado\n2. Valorize o procedimento ANTES de falar o preço\n3. Informe SEMPRE em parcelas (ex: \"fica em 12x de R$90\")\n4. NUNCA diga o valor total à vista (exceto se perguntarem)\n5. Mini fechamento: \"Posso ver um horário pra você?\"\n\n## DURAÇÃO DOS PROCEDIMENTOS\n- 30min: Botox, Preenchimento, Remoção, Fios, Enzimas, Carboxi\n- 1h: Microvasos, Microagulhamento, Bioestimulador, Protocolo Glúteo\n- 2h: Limpeza de pele\n- 15min: Lavieen\n\n## CONFIRMAÇÃO DE AGENDAMENTO\nApós criar_agendamento com sucesso, envie:\n\n✨ Seu atendimento está confirmado aqui na Clínica Sarah Pina! ✨\n\n📅 Data: [dia], [data]\n⏰ Horário: [horário]\n📍 Endereço: Roosevelt de Oliveira, 305 – Centro, Uberlândia\n\nA Dra. [nome] reservou esse horário com todo carinho para te receber 💆‍♀️🌷\n\nSe surgir imprevisto, me avise com antecedência, combinado? 💬\n\nSerá um prazer te receber!\n\n## ESCALAÇÃO\nEncaminhe ao setor quando: reclamações, dúvidas médicas, desconto especial, procedimento não listado.\nNunca diga \"equipe humana\". Diga: \"setor\", \"Dra. Sarah\", \"Dra. Amanda\".\n${historyText}`;\n\nreturn { systemPrompt, userMessage: message, ...($('Carregar Histórico').first().json) };"
+      },
+      "id": "prepare_prompt",
+      "name": "Preparar Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": { "temperature": 0.7, "maxTokens": 800 }
+      },
+      "id": "openai_model",
+      "name": "Message a model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [880, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "CONFIGURE_OPENAI_CREDENTIAL",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "consultar_precos",
+        "description": "Consulta preços e detalhes de procedimentos. Parâmetro: procedimento (ex: 'botox', 'preenchimento', 'microvasos', 'todos')",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\n\nconst input = $input.item.json.query || $input.item.json.procedimento || $input.item.json;\nlet procedimento = '';\n\nif (typeof input === 'string') {\n  procedimento = input.trim().toLowerCase();\n} else if (typeof input === 'object') {\n  procedimento = (input.procedimento || input.procedure || input.nome || '').toString().toLowerCase().trim();\n}\n\nif (!procedimento) {\n  return { response: 'ERRO: Informe o procedimento. Ex: \"botox\", \"preenchimento\", \"microvasos\"' };\n}\n\ntry {\n  let url = `${SUPABASE_URL}/rest/v1/procedures?clinic_id=eq.${CLINIC_ID}&active=eq.true&select=name,description,price,installments,installment_price,duration_minutes,professional,notes`;\n  \n  if (procedimento !== 'todos' && procedimento !== 'all') {\n    url += `&name=ilike.*${encodeURIComponent(procedimento)}*`;\n  }\n  \n  const response = await this.helpers.httpRequest({\n    method: 'GET',\n    url: url,\n    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }\n  });\n  \n  if (!response || response.length === 0) {\n    return { response: `Procedimento \"${procedimento}\" não encontrado. Procedimentos disponíveis: Botox, Preenchimento, Bioestimulador, Microvasos, Limpeza de pele, Microagulhamento, Enzimas, Carboxiterapia, Fios PDO, Lavieen.` };\n  }\n  \n  let resultado = `PROCEDIMENTOS ENCONTRADOS:\\n\\n`;\n  \n  for (const proc of response.slice(0, 5)) {\n    resultado += `📌 ${proc.name}\\n`;\n    if (proc.description) resultado += `   ${proc.description}\\n`;\n    if (proc.installments && proc.installment_price) {\n      resultado += `   💰 ${proc.installments}x R$${proc.installment_price.toFixed(2)}\\n`;\n    } else if (proc.price) {\n      resultado += `   💰 R$${proc.price.toFixed(2)}\\n`;\n    }\n    if (proc.professional) resultado += `   👩‍⚕️ ${proc.professional}\\n`;\n    if (proc.duration_minutes) resultado += `   ⏱️ ${proc.duration_minutes} min\\n`;\n    if (proc.notes) resultado += `   ℹ️ ${proc.notes}\\n`;\n    resultado += `\\n`;\n  }\n  \n  resultado += `LEMBRE-SE: Informe APENAS o valor parcelado (ex: \"12x de R$90\"). Nunca diga o valor total primeiro.`;\n  \n  return { response: resultado };\n} catch (e) {\n  return { response: `Erro ao buscar procedimento: ${e.message}` };\n}"
+      },
+      "id": "tool_consultar_precos",
+      "name": "consultar_precos",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [760, 520]
+    },
+    {
+      "parameters": {
+        "name": "consultar_agenda",
+        "description": "Consulta horários disponíveis. Parâmetro: data (ex: 'hoje', 'amanhã', 'segunda', '15/04', '2026-04-15')",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\nconst DRA_SARAH_ID = 'beefd6c9-fd93-44cf-9efc-4d08076bfb93';\nconst DRA_AMANDA_ID = 'cb8ac5ba-eca3-4c5a-ab62-6b420c7c5313';\n\nfunction parseData(input) {\n  const hoje = new Date();\n  const ano = hoje.getFullYear();\n  const mes = hoje.getMonth();\n  const dia = hoje.getDate();\n  const texto = String(input).toLowerCase().trim();\n  \n  if (texto === 'hoje') return hoje;\n  if (texto === 'amanhã' || texto === 'amanha') return new Date(ano, mes, dia + 1);\n  \n  const diasSemana = { 'domingo': 0, 'segunda': 1, 'terca': 2, 'terça': 2, 'quarta': 3, 'quinta': 4, 'sexta': 5, 'sabado': 6, 'sábado': 6 };\n  for (const [nome, diaSem] of Object.entries(diasSemana)) {\n    if (texto.includes(nome)) {\n      const d = new Date(ano, mes, dia);\n      const diff = (diaSem - d.getDay() + 7) % 7 || 7;\n      d.setDate(d.getDate() + diff);\n      return d;\n    }\n  }\n  \n  const matchBarra = texto.match(/(\\d{1,2})\\/(\\d{1,2})(?:\\/(\\d{2,4}))?/);\n  if (matchBarra) {\n    let [_, d, m, a] = matchBarra;\n    a = a ? (a.length === 2 ? '20' + a : a) : ano;\n    return new Date(parseInt(a), parseInt(m) - 1, parseInt(d));\n  }\n  \n  const matchISO = texto.match(/(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (matchISO) {\n    const [_, a, m, d] = matchISO;\n    return new Date(parseInt(a), parseInt(m) - 1, parseInt(d));\n  }\n  \n  const matchDia = texto.match(/(?:dia\\s+)?(\\d{1,2})/);\n  if (matchDia) return new Date(ano, mes, parseInt(matchDia[1]));\n  \n  return null;\n}\n\nconst input = $input.item.json.query || $input.item.json.data || $input.item.json;\nlet dataParam = typeof input === 'string' ? input : (input.data || input.date || 'hoje');\n\nconst dataObj = parseData(dataParam);\nif (!dataObj || isNaN(dataObj.getTime())) {\n  return { response: `Não entendi a data \"${dataParam}\". Pode ser: \"hoje\", \"amanhã\", \"segunda\", \"15/04\"` };\n}\n\nconst diaSemana = dataObj.getDay();\nconst diaNum = dataObj.getDate();\nconst mesNum = dataObj.getMonth();\nconst anoNum = dataObj.getFullYear();\nconst dateStr = `${anoNum}-${String(mesNum+1).padStart(2,'0')}-${String(diaNum).padStart(2,'0')}`;\nconst diasPtBr = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];\n\nif (diaSemana === 0 || diaSemana === 6) {\n  return { response: `${diasPtBr[diaSemana]}, ${diaNum}/${mesNum+1} é fim de semana. A clínica funciona segunda a sexta.` };\n}\n\nconst HORARIOS_SARAH = {\n  1: ['13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30'],\n  2: ['09:00','09:30','10:00','10:30','11:00','11:30'],\n  3: ['13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30'],\n  4: [],\n  5: ['13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30']\n};\n\nconst HORARIOS_AMANDA = {\n  1: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30'],\n  2: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30'],\n  3: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30'],\n  4: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30'],\n  5: ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30']\n};\n\nlet ocupados = [];\ntry {\n  const response = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${SUPABASE_URL}/rest/v1/appointments?clinic_id=eq.${CLINIC_ID}&start_time=gte.${dateStr}T00:00:00&start_time=lte.${dateStr}T23:59:59&status=neq.cancelled`,\n    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }\n  });\n  ocupados = response || [];\n} catch (e) {}\n\nconst extrairHora = (s) => { const m = s.match(/T(\\d{2}:\\d{2})/); return m ? m[1] : null; };\nconst ocupSarah = ocupados.filter(a => a.professional_id === DRA_SARAH_ID).map(a => extrairHora(a.start_time)).filter(h => h);\nconst ocupAmanda = ocupados.filter(a => a.professional_id === DRA_AMANDA_ID).map(a => extrairHora(a.start_time)).filter(h => h);\n\nconst dispSarah = (HORARIOS_SARAH[diaSemana] || []).filter(h => !ocupSarah.includes(h));\nconst dispAmanda = (HORARIOS_AMANDA[diaSemana] || []).filter(h => !ocupAmanda.includes(h));\n\nlet resp = `HORÁRIOS ${diasPtBr[diaSemana].toUpperCase()} ${diaNum}/${mesNum+1}:\\n\\n`;\n\nif (diaSemana === 4) resp += `Dra. Sarah: não atende quinta\\n`;\nelse if (dispSarah.length === 0) resp += `Dra. Sarah: sem horário\\n`;\nelse resp += `Dra. Sarah: ${dispSarah.slice(0,4).join(', ')}\\n`;\n\nif (dispAmanda.length === 0) resp += `Dra. Amanda: sem horário`;\nelse resp += `Dra. Amanda: ${dispAmanda.slice(0,4).join(', ')}`;\n\nresp += `\\n\\nOFEREÇA MÁXIMO 2 HORÁRIOS. Priorize Dra. Amanda.`;\n\nreturn { response: resp };"
+      },
+      "id": "tool_consultar_agenda",
+      "name": "consultar_agenda",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [880, 520]
+    },
+    {
+      "parameters": {
+        "name": "criar_agendamento",
+        "description": "Cria agendamento. Parâmetros: data (YYYY-MM-DD), horario (HH:MM), profissional ('amanda' ou 'sarah'), nome_completo",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\nconst DRA_SARAH_ID = 'beefd6c9-fd93-44cf-9efc-4d08076bfb93';\nconst DRA_AMANDA_ID = 'cb8ac5ba-eca3-4c5a-ab62-6b420c7c5313';\n\nconst input = $input.item.json.query || $input.item.json;\nlet params;\ntry { params = typeof input === 'string' ? JSON.parse(input) : input; } catch (e) { params = input; }\n\nconst data = params.data || params.date;\nconst horario = params.horario || params.time || params.hora;\nconst profissional = params.profissional || params.professional || 'amanda';\nconst nomeCompleto = params.nome_completo || params.nome || params.name;\n\nif (!data || !horario) return { response: 'ERRO: Preciso da data (YYYY-MM-DD) e horário (HH:MM).' };\nif (!nomeCompleto || nomeCompleto.length < 5 || nomeCompleto.toLowerCase().includes('lead')) {\n  return { response: 'ERRO: Preciso do NOME COMPLETO. Pergunte: \"Me passa seu nome completo para confirmar?\"' };\n}\n\nconst professionalId = profissional.toLowerCase().includes('sarah') ? DRA_SARAH_ID : DRA_AMANDA_ID;\nconst professionalName = profissional.toLowerCase().includes('sarah') ? 'Dra. Sarah' : 'Dra. Amanda';\nconst startTime = `${data}T${horario}:00`;\nconst endTime = `${data}T${(parseInt(horario.split(':')[0]) + 1).toString().padStart(2, '0')}:${horario.split(':')[1]}:00`;\n\nlet patientId = null;\nconst phone = $('Carregar Histórico').first().json.phone;\n\ntry {\n  const patientResponse = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${SUPABASE_URL}/rest/v1/patients?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=id`,\n    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }\n  });\n  \n  if (patientResponse && patientResponse.length > 0) {\n    patientId = patientResponse[0].id;\n    await this.helpers.httpRequest({\n      method: 'PATCH',\n      url: `${SUPABASE_URL}/rest/v1/patients?id=eq.${patientId}`,\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify({ name: nomeCompleto })\n    });\n  } else {\n    const newPatient = await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${SUPABASE_URL}/rest/v1/patients`,\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },\n      body: JSON.stringify({ clinic_id: CLINIC_ID, name: nomeCompleto, phone: phone })\n    });\n    patientId = newPatient[0]?.id;\n  }\n  \n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: `${SUPABASE_URL}/rest/v1/appointments`,\n    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({ clinic_id: CLINIC_ID, patient_id: patientId, professional_id: professionalId, start_time: startTime, end_time: endTime, status: 'scheduled', notes: 'Agendado via WhatsApp - Donna' })\n  });\n  \n  await this.helpers.httpRequest({\n    method: 'PATCH',\n    url: `${SUPABASE_URL}/rest/v1/leads?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}`,\n    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({ stage: 'scheduled', name: nomeCompleto })\n  });\n  \n  const diasPtBr = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];\n  const dataObj = new Date(data + 'T12:00:00');\n  const diaSemana = diasPtBr[dataObj.getDay()];\n  const dataFormatada = `${dataObj.getDate().toString().padStart(2,'0')}/${(dataObj.getMonth()+1).toString().padStart(2,'0')}/${dataObj.getFullYear()}`;\n  \n  return { response: `AGENDAMENTO CONFIRMADO!\\nPaciente: ${nomeCompleto}\\nData: ${diaSemana}, ${dataFormatada}\\nHorário: ${horario}\\nProfissional: ${professionalName}\\n\\nAgora envie a mensagem de confirmação padronizada.` };\n} catch (e) {\n  return { response: `ERRO ao agendar: ${e.message}` };\n}"
+      },
+      "id": "tool_criar_agendamento",
+      "name": "criar_agendamento",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [1000, 520]
+    },
+    {
+      "parameters": {
+        "name": "criar_lead",
+        "description": "Cria/atualiza lead no CRM. Parâmetros: nome, interesse, status ('new','contacted','qualified','scheduled')",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\n\nconst input = $input.item.json.query || $input.item.json;\nlet params;\ntry { params = typeof input === 'string' ? JSON.parse(input) : input; } catch (e) { params = input; }\n\nconst nome = params.nome || params.name || '';\nconst interesse = params.interesse || params.interest || '';\nconst status = params.status || params.stage || 'contacted';\nconst phone = $('Carregar Histórico').first().json.phone;\n\ntry {\n  const existingLead = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${SUPABASE_URL}/rest/v1/leads?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=id`,\n    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }\n  });\n  \n  const leadData = { clinic_id: CLINIC_ID, phone: phone, source: 'whatsapp', stage: status };\n  if (nome && nome.length > 1) leadData.name = nome;\n  if (interesse) leadData.interest = interesse;\n  \n  if (existingLead && existingLead.length > 0) {\n    await this.helpers.httpRequest({\n      method: 'PATCH',\n      url: `${SUPABASE_URL}/rest/v1/leads?id=eq.${existingLead[0].id}`,\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(leadData)\n    });\n    return { response: `Lead atualizado: ${nome || 'sem nome'} - ${interesse || 'sem interesse'}` };\n  } else {\n    if (!leadData.name) leadData.name = 'Lead WhatsApp';\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${SUPABASE_URL}/rest/v1/leads`,\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(leadData)\n    });\n    return { response: `Lead criado: ${leadData.name}` };\n  }\n} catch (e) {\n  return { response: `Erro ao salvar lead: ${e.message}` };\n}"
+      },
+      "id": "tool_criar_lead",
+      "name": "criar_lead",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [1120, 520]
+    },
+    {
+      "parameters": {
+        "name": "cadastrar_paciente",
+        "description": "Cadastra paciente. Parâmetro: nome (nome completo)",
+        "code": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\nconst CLINIC_ID = '6a718c1d-9a79-4e80-ad71-1c5c8a2ea190';\n\nconst input = $input.item.json.query || $input.item.json;\nlet params;\ntry { params = typeof input === 'string' ? JSON.parse(input) : input; } catch (e) { params = input; }\n\nconst nome = params.nome || params.name || '';\nconst phone = $('Carregar Histórico').first().json.phone;\n\nif (!nome || nome.length < 3) return { response: 'ERRO: Nome é obrigatório.' };\n\ntry {\n  const existing = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${SUPABASE_URL}/rest/v1/patients?phone=eq.${phone}&clinic_id=eq.${CLINIC_ID}&select=id`,\n    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }\n  });\n  \n  if (existing && existing.length > 0) {\n    await this.helpers.httpRequest({\n      method: 'PATCH',\n      url: `${SUPABASE_URL}/rest/v1/patients?id=eq.${existing[0].id}`,\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify({ name: nome })\n    });\n    return { response: `Paciente atualizado: ${nome}` };\n  } else {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${SUPABASE_URL}/rest/v1/patients`,\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify({ clinic_id: CLINIC_ID, name: nome, phone: phone })\n    });\n    return { response: `Paciente cadastrado: ${nome}` };\n  }\n} catch (e) {\n  return { response: `Erro: ${e.message}` };\n}"
+      },
+      "id": "tool_cadastrar_paciente",
+      "name": "cadastrar_paciente",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [1240, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "let answer = $input.first().json.text || $input.first().json.content || $input.first().json.output || '';\nanswer = answer.replace(/^(Donna:|Eva:|Assistente:|Assistant:)/gi, '').trim();\nanswer = answer.replace(/```[\\s\\S]*?```/g, '').trim();\nanswer = answer.replace(/\\\\n/g, '\\n');\nif (answer.length > 1500) answer = answer.substring(0, 1500) + '...';\n\nreturn {\n  answer,\n  phone: $('Carregar Histórico').first().json.phone,\n  conversationHistory: $('Carregar Histórico').first().json.conversationHistory,\n  customerName: $('Carregar Histórico').first().json.customerName,\n  clinicId: $('Carregar Histórico').first().json.clinicId\n};"
+      },
+      "id": "clean_answer",
+      "name": "Limpar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTc3MTQ4NywiZXhwIjoyMDkxMzQ3NDg3fQ.q4VwAwLbPQTXGCdW1ZfLvmyW8TAQuJ67LgI3gCO6mzg';\n\nconst phone = $input.first().json.phone;\nconst clinicId = $input.first().json.clinicId;\nconst customerName = $input.first().json.customerName;\nconst answer = $input.first().json.answer;\nlet conversationHistory = $input.first().json.conversationHistory || [];\n\nconversationHistory.push({ role: 'assistant', content: answer, timestamp: new Date().toISOString() });\nif (conversationHistory.length > 50) conversationHistory = conversationHistory.slice(-50);\n\ntry {\n  const existing = await fetch(\n    `${SUPABASE_URL}/rest/v1/eva_conversations?phone=eq.${phone}&clinic_id=eq.${clinicId}&select=id`,\n    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }\n  );\n  const convs = await existing.json();\n  \n  const convData = { clinic_id: clinicId, phone: phone, customer_name: customerName, messages: conversationHistory, updated_at: new Date().toISOString() };\n  \n  if (convs && convs.length > 0) {\n    await fetch(`${SUPABASE_URL}/rest/v1/eva_conversations?id=eq.${convs[0].id}`, {\n      method: 'PATCH',\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(convData)\n    });\n  } else {\n    await fetch(`${SUPABASE_URL}/rest/v1/eva_conversations`, {\n      method: 'POST',\n      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify(convData)\n    });\n  }\n} catch (e) { console.error('Erro ao salvar conversa:', e); }\n\nreturn { answer, phone };"
+      },
+      "id": "save_conversation",
+      "name": "Salvar Conversa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://evolution-api-production-7853.up.railway.app/message/sendText/clinica-sarah-pina",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.phone }}\",\n  \"text\": {{ JSON.stringify($json.answer) }}\n}",
+        "options": {}
+      },
+      "id": "send_whatsapp",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true }) }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1760, 300]
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": { "main": [[{ "node": "Extrair Mensagem", "type": "main", "index": 0 }]] },
+    "Extrair Mensagem": { "main": [[{ "node": "Carregar Histórico", "type": "main", "index": 0 }]] },
+    "Carregar Histórico": { "main": [[{ "node": "Preparar Prompt", "type": "main", "index": 0 }]] },
+    "Preparar Prompt": { "main": [[{ "node": "Message a model", "type": "main", "index": 0 }]] },
+    "Message a model": { "main": [[{ "node": "Limpar Resposta", "type": "main", "index": 0 }]] },
+    "consultar_precos": { "ai_tool": [[{ "node": "Message a model", "type": "ai_tool", "index": 0 }]] },
+    "consultar_agenda": { "ai_tool": [[{ "node": "Message a model", "type": "ai_tool", "index": 0 }]] },
+    "criar_agendamento": { "ai_tool": [[{ "node": "Message a model", "type": "ai_tool", "index": 0 }]] },
+    "criar_lead": { "ai_tool": [[{ "node": "Message a model", "type": "ai_tool", "index": 0 }]] },
+    "cadastrar_paciente": { "ai_tool": [[{ "node": "Message a model", "type": "ai_tool", "index": 0 }]] },
+    "Limpar Resposta": { "main": [[{ "node": "Salvar Conversa", "type": "main", "index": 0 }]] },
+    "Salvar Conversa": { "main": [[{ "node": "Enviar WhatsApp", "type": "main", "index": 0 }]] },
+    "Enviar WhatsApp": { "main": [[{ "node": "Responder Webhook", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
