@@ -1,12 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 
 export default async function DashboardPage({ searchParams }: { searchParams: { welcome?: string } }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('name, clinic_id, role').eq('id', user!.id).single()
-  const { data: clinic } = await supabase.from('clinics').select('name, trial_ends_at').eq('id', userData?.clinic_id).single()
+  const { data: clinic } = await supabase.from('clinics').select('name, trial_ends_at, settings').eq('id', userData?.clinic_id).single()
+  
+  // Get active modules from clinic settings
+  const activeModules: ModuleId[] = clinic?.settings?.active_modules || []
+  const hasModule = (route: string) => activeModules.length === 0 || isRouteEnabled(route, activeModules)
 
   const firstName = userData?.name?.split(' ')[0] || ''
   const trialDaysLeft = clinic?.trial_ends_at
@@ -240,33 +245,37 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           </Link>
         </div>
 
-        {/* Leads CRM */}
-        <div className="flex-shrink-0 w-[160px] md:w-auto bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Icon name="target" className="w-5 h-5 md:w-6 md:h-6 text-white" />
+        {/* Leads CRM - Only show if module is enabled */}
+        {hasModule('/dashboard/crm') && (
+          <div className="flex-shrink-0 w-[160px] md:w-auto bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <Icon name="target" className="w-5 h-5 md:w-6 md:h-6 text-white" />
+              </div>
             </div>
+            <p className="text-2xl md:text-3xl font-black text-slate-900">{leadsCount || 0}</p>
+            <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">Novos leads</p>
+            <Link href="/dashboard/crm" className="mt-2 md:mt-3 text-[10px] md:text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
+              Ver CRM <Icon name="arrowRight" className="w-3 h-3" />
+            </Link>
           </div>
-          <p className="text-2xl md:text-3xl font-black text-slate-900">{leadsCount || 0}</p>
-          <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">Novos leads</p>
-          <Link href="/dashboard/crm" className="mt-2 md:mt-3 text-[10px] md:text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
-            Ver CRM <Icon name="arrowRight" className="w-3 h-3" />
-          </Link>
-        </div>
+        )}
 
-        {/* Waiting List */}
-        <div className="flex-shrink-0 w-[160px] md:w-auto bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <Icon name="clock" className="w-5 h-5 md:w-6 md:h-6 text-white" />
+        {/* Waiting List - Only show if module is enabled */}
+        {hasModule('/dashboard/lista-espera') && (
+          <div className="flex-shrink-0 w-[160px] md:w-auto bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Icon name="clock" className="w-5 h-5 md:w-6 md:h-6 text-white" />
+              </div>
             </div>
+            <p className="text-2xl md:text-3xl font-black text-slate-900">{waitingList || 0}</p>
+            <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">Lista de espera</p>
+            <Link href="/dashboard/lista-espera" className="mt-2 md:mt-3 text-[10px] md:text-xs text-amber-600 font-semibold inline-flex items-center gap-1">
+              Gerenciar <Icon name="arrowRight" className="w-3 h-3" />
+            </Link>
           </div>
-          <p className="text-2xl md:text-3xl font-black text-slate-900">{waitingList || 0}</p>
-          <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">Lista de espera</p>
-          <Link href="/dashboard/lista-espera" className="mt-2 md:mt-3 text-[10px] md:text-xs text-amber-600 font-semibold inline-flex items-center gap-1">
-            Gerenciar <Icon name="arrowRight" className="w-3 h-3" />
-          </Link>
-        </div>
+        )}
       </div>
 
       {/* Main Content Grid */}
@@ -334,29 +343,38 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
         {/* Right Column */}
         <div className="space-y-4 md:space-y-6">
-          {/* Quick Actions - Grid on mobile */}
-          <div className="bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm p-4 md:p-5">
-            <h3 className="font-bold text-slate-900 mb-3 md:mb-4 text-sm md:text-base">Ações rápidas</h3>
-            <div className="grid grid-cols-4 md:grid-cols-2 gap-2 md:gap-3">
-              {[
-                { label: 'Recepção', href: '/dashboard/recepcao', icon: 'userCheck', color: 'from-emerald-500 to-teal-500' },
-                { label: 'Estoque', href: '/dashboard/estoque', icon: 'box', color: 'from-amber-500 to-orange-500' },
-                { label: 'CRM', href: '/dashboard/crm', icon: 'target', color: 'from-blue-500 to-cyan-500' },
-                { label: 'Eva IA', href: '/dashboard/eva', icon: 'sparkles', color: 'from-violet-500 to-purple-500' },
-              ].map(action => (
-                <Link 
-                  key={action.label}
-                  href={action.href}
-                  className="flex flex-col items-center gap-1.5 md:gap-2 p-2.5 md:p-4 rounded-lg md:rounded-xl bg-slate-50 active:bg-slate-100 transition-colors"
-                >
-                  <div className={`w-9 h-9 md:w-10 md:h-10 bg-gradient-to-br ${action.color} rounded-lg md:rounded-xl flex items-center justify-center shadow-md`}>
-                    <Icon name={action.icon} className="w-4 h-4 md:w-5 md:h-5 text-white" />
-                  </div>
-                  <span className="text-[10px] md:text-sm font-medium text-slate-700 text-center">{action.label}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
+          {/* Quick Actions - Grid on mobile - Filtered by modules */}
+          {(() => {
+            const allActions = [
+              { label: 'Recepção', href: '/dashboard/recepcao', icon: 'userCheck', color: 'from-emerald-500 to-teal-500' },
+              { label: 'Estoque', href: '/dashboard/estoque', icon: 'box', color: 'from-amber-500 to-orange-500' },
+              { label: 'CRM', href: '/dashboard/crm', icon: 'target', color: 'from-blue-500 to-cyan-500' },
+              { label: 'Eva IA', href: '/dashboard/eva', icon: 'sparkles', color: 'from-violet-500 to-purple-500' },
+            ]
+            const filteredActions = allActions.filter(action => hasModule(action.href))
+            
+            if (filteredActions.length === 0) return null
+            
+            return (
+              <div className="bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm p-4 md:p-5">
+                <h3 className="font-bold text-slate-900 mb-3 md:mb-4 text-sm md:text-base">Ações rápidas</h3>
+                <div className={`grid gap-2 md:gap-3 ${filteredActions.length <= 2 ? 'grid-cols-2' : 'grid-cols-4 md:grid-cols-2'}`}>
+                  {filteredActions.map(action => (
+                    <Link 
+                      key={action.label}
+                      href={action.href}
+                      className="flex flex-col items-center gap-1.5 md:gap-2 p-2.5 md:p-4 rounded-lg md:rounded-xl bg-slate-50 active:bg-slate-100 transition-colors"
+                    >
+                      <div className={`w-9 h-9 md:w-10 md:h-10 bg-gradient-to-br ${action.color} rounded-lg md:rounded-xl flex items-center justify-center shadow-md`}>
+                        <Icon name={action.icon} className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                      </div>
+                      <span className="text-[10px] md:text-sm font-medium text-slate-700 text-center">{action.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Birthdays */}
           {birthdaysThisWeek.length > 0 && (
