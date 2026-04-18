@@ -2,6 +2,32 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
+import WeeklyChart from '@/components/dashboard/WeeklyChart'
+
+// Tradução de entity_type para português
+const ENTITY_LABELS: Record<string, string> = {
+  appointments: 'agendamento',
+  patients: 'paciente',
+  evolutions: 'evolução',
+  leads: 'lead',
+  procedures: 'procedimento',
+  users: 'usuário',
+  products: 'produto',
+  entradas: 'entrada financeira',
+  saidas: 'saída financeira',
+  documents_sent: 'documento',
+  anamneses: 'anamnese',
+  waiting_list: 'lista de espera',
+  rooms: 'sala',
+  notifications: 'notificação',
+}
+
+// Tradução de ações
+const ACTION_LABELS: Record<string, string> = {
+  INSERT: 'Criado',
+  UPDATE: 'Atualizado',
+  DELETE: 'Removido',
+}
 
 export default async function DashboardPage({ searchParams }: { searchParams: { welcome?: string } }) {
   const supabase = await createClient()
@@ -27,6 +53,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
   const startOfYesterday = `${yesterday}T00:00:00`
   const endOfYesterday = `${yesterday}T23:59:59`
+
+  // Buscar dados da semana para gráfico
+  const weekData: { day: string; count: number }[] = []
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+  
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date()
+    date.setDate(date.getDate() - i)
+    const dateStr = date.toISOString().split('T')[0]
+    
+    const { count } = await supabase
+      .from('appointments')
+      .select('*', { count: 'exact', head: true })
+      .eq('clinic_id', userData?.clinic_id)
+      .gte('start_time', `${dateStr}T00:00:00`)
+      .lte('start_time', `${dateStr}T23:59:59`)
+      .neq('status', 'cancelled')
+    
+    weekData.push({
+      day: dayNames[date.getDay()],
+      count: count || 0
+    })
+  }
 
   const { count: appointmentsToday } = await supabase
     .from('appointments')
@@ -66,7 +115,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .from('leads')
     .select('*', { count: 'exact', head: true })
     .eq('clinic_id', userData?.clinic_id)
-    .eq('stage', 'new')
+    .in('status', ['new', 'contacted'])
 
   const { count: checkedIn } = await supabase
     .from('appointments')
@@ -83,6 +132,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .gte('start_time', startOfDay)
     .lte('start_time', endOfDay)
     .eq('status', 'completed')
+
+  // Receita do mês (se módulo financeiro ativo)
+  let monthlyRevenue = 0
+  if (hasModule('/dashboard/financeiro')) {
+    const { data: entradas } = await supabase
+      .from('entradas')
+      .select('valor_liquido')
+      .eq('clinic_id', userData?.clinic_id)
+      .gte('data_venda', startOfMonth.split('T')[0])
+    
+    monthlyRevenue = entradas?.reduce((sum, e) => sum + (e.valor_liquido || 0), 0) || 0
+  }
 
   const { data: nextAppointments } = await supabase
     .from('appointments')
@@ -119,6 +180,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   }) || []
 
   const appointmentsDiff = (appointmentsToday || 0) - (appointmentsYesterday || 0)
+  const weekTotal = weekData.reduce((sum, d) => sum + d.count, 0)
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -138,10 +200,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         </div>
       )}
 
-      {/* Header Section - Mobile Optimized */}
+      {/* Header Section */}
       <div className="space-y-3 md:space-y-0 md:flex md:items-end md:justify-between md:gap-4">
         <div>
-          {/* Clinic badge - hidden on mobile since TopBar shows it */}
           <div className="hidden md:flex items-center gap-2 mb-2">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
             <span className="text-sm font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
@@ -156,7 +217,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           </p>
         </div>
         
-        {/* Quick action buttons - Horizontal scroll on mobile */}
         <div className="flex gap-2 md:gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
           <Link 
             href="/dashboard/agenda/novo" 
@@ -172,107 +232,97 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             <Icon name="userPlus" className="w-4 h-4 md:w-5 md:h-5" />
             <span className="whitespace-nowrap">Paciente</span>
           </Link>
-          <Link 
-            href="/dashboard/recepcao" 
-            className="flex-shrink-0 inline-flex items-center gap-2 bg-white text-slate-700 px-4 md:px-5 py-2.5 md:py-3 rounded-xl font-semibold border border-slate-200 active:scale-95 transition-transform text-sm md:text-base md:hidden"
-          >
-            <Icon name="userCheck" className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="whitespace-nowrap">Check-in</span>
-          </Link>
         </div>
       </div>
 
-      {/* Trial Warning - DESATIVADO POR ENQUANTO
-      {trialDaysLeft <= 7 && trialDaysLeft > 0 && !searchParams.welcome && (
-        <div className="p-4 md:p-5 rounded-xl md:rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-              <Icon name="zap" className="w-5 h-5 md:w-6 md:h-6 text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="font-bold text-amber-900 text-sm md:text-base">Trial expira em {trialDaysLeft} {trialDaysLeft === 1 ? 'dia' : 'dias'}</p>
-              <p className="text-xs md:text-sm text-amber-700 hidden sm:block">Assine agora e não perca seus dados</p>
-            </div>
-          </div>
-          <Link href="/planos" className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs md:text-sm px-4 md:px-6 py-2 md:py-3 rounded-lg md:rounded-xl font-bold shadow-lg flex-shrink-0">
-            Assinar
-          </Link>
-        </div>
-      )}
-      */}
-
-      {/* Stats Overview - Horizontal scroll on mobile */}
-      <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-4 scrollbar-hide">
-        {/* Appointments Today */}
-        <div className="flex-shrink-0 w-[160px] md:w-auto bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Icon name="calendar" className="w-5 h-5 md:w-6 md:h-6 text-white" />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        {/* Consultas Hoje */}
+        <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Icon name="calendar" className="w-5 h-5 text-white" />
             </div>
             {appointmentsDiff !== 0 && (
-              <span className={`text-[10px] md:text-xs font-bold px-1.5 md:px-2 py-0.5 md:py-1 rounded-md md:rounded-lg ${
-                appointmentsDiff > 0 
-                  ? 'bg-emerald-100 text-emerald-700' 
-                  : 'bg-rose-100 text-rose-700'
+              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                appointmentsDiff > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
               }`}>
                 {appointmentsDiff > 0 ? '+' : ''}{appointmentsDiff}
               </span>
             )}
           </div>
           <p className="text-2xl md:text-3xl font-black text-slate-900">{appointmentsToday || 0}</p>
-          <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">Consultas hoje</p>
-          <div className="mt-2 md:mt-3 flex flex-wrap gap-1 md:gap-2">
-            <span className="text-[10px] md:text-xs bg-emerald-100 text-emerald-700 px-1.5 md:px-2 py-0.5 rounded-full">{completedToday || 0} ok</span>
-            <span className="text-[10px] md:text-xs bg-blue-100 text-blue-700 px-1.5 md:px-2 py-0.5 rounded-full">{checkedIn || 0} espera</span>
+          <p className="text-xs md:text-sm text-slate-500 mt-1">Consultas hoje</p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{completedToday || 0} finalizados</span>
+            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{checkedIn || 0} aguardando</span>
           </div>
         </div>
 
-        {/* Patients */}
-        <div className="flex-shrink-0 w-[160px] md:w-auto bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-violet-500 to-purple-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20">
-              <Icon name="users" className="w-5 h-5 md:w-6 md:h-6 text-white" />
+        {/* Pacientes */}
+        <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-500 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/20">
+              <Icon name="users" className="w-5 h-5 text-white" />
             </div>
             {(newPatientsMonth || 0) > 0 && (
-              <span className="text-[10px] md:text-xs font-bold px-1.5 md:px-2 py-0.5 md:py-1 rounded-md md:rounded-lg bg-violet-100 text-violet-700">
-                +{newPatientsMonth}
+              <span className="text-xs font-bold px-2 py-1 rounded-lg bg-violet-100 text-violet-700">
+                +{newPatientsMonth} mês
               </span>
             )}
           </div>
           <p className="text-2xl md:text-3xl font-black text-slate-900">{totalPatients || 0}</p>
-          <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">Pacientes</p>
-          <Link href="/dashboard/pacientes" className="mt-2 md:mt-3 text-[10px] md:text-xs text-violet-600 font-semibold inline-flex items-center gap-1">
+          <p className="text-xs md:text-sm text-slate-500 mt-1">Pacientes cadastrados</p>
+          <Link href="/dashboard/pacientes" className="mt-2 text-xs text-violet-600 font-semibold inline-flex items-center gap-1">
             Ver todos <Icon name="arrowRight" className="w-3 h-3" />
           </Link>
         </div>
 
-        {/* Leads CRM - Only show if module is enabled */}
+        {/* Receita do Mês - só se módulo financeiro ativo */}
+        {hasModule('/dashboard/financeiro') && (
+          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <Icon name="dollarSign" className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <p className="text-2xl md:text-3xl font-black text-slate-900">
+              {monthlyRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+            </p>
+            <p className="text-xs md:text-sm text-slate-500 mt-1">Receita do mês</p>
+            <Link href="/dashboard/financeiro" className="mt-2 text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
+              Ver financeiro <Icon name="arrowRight" className="w-3 h-3" />
+            </Link>
+          </div>
+        )}
+
+        {/* Leads CRM - só se módulo ativo */}
         {hasModule('/dashboard/crm') && (
-          <div className="flex-shrink-0 w-[160px] md:w-auto bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
-            <div className="flex items-center justify-between mb-3 md:mb-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <Icon name="target" className="w-5 h-5 md:w-6 md:h-6 text-white" />
+          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Icon name="target" className="w-5 h-5 text-white" />
               </div>
             </div>
             <p className="text-2xl md:text-3xl font-black text-slate-900">{leadsCount || 0}</p>
-            <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">Novos leads</p>
-            <Link href="/dashboard/crm" className="mt-2 md:mt-3 text-[10px] md:text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
+            <p className="text-xs md:text-sm text-slate-500 mt-1">Leads ativos</p>
+            <Link href="/dashboard/crm" className="mt-2 text-xs text-amber-600 font-semibold inline-flex items-center gap-1">
               Ver CRM <Icon name="arrowRight" className="w-3 h-3" />
             </Link>
           </div>
         )}
 
-        {/* Waiting List - Only show if module is enabled */}
-        {hasModule('/dashboard/lista-espera') && (
-          <div className="flex-shrink-0 w-[160px] md:w-auto bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
-            <div className="flex items-center justify-between mb-3 md:mb-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
-                <Icon name="clock" className="w-5 h-5 md:w-6 md:h-6 text-white" />
+        {/* Lista de Espera - só se CRM não ativo (para preencher) */}
+        {!hasModule('/dashboard/crm') && hasModule('/dashboard/lista-espera') && (
+          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Icon name="clock" className="w-5 h-5 text-white" />
               </div>
             </div>
             <p className="text-2xl md:text-3xl font-black text-slate-900">{waitingList || 0}</p>
-            <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">Lista de espera</p>
-            <Link href="/dashboard/lista-espera" className="mt-2 md:mt-3 text-[10px] md:text-xs text-amber-600 font-semibold inline-flex items-center gap-1">
+            <p className="text-xs md:text-sm text-slate-500 mt-1">Lista de espera</p>
+            <Link href="/dashboard/lista-espera" className="mt-2 text-xs text-amber-600 font-semibold inline-flex items-center gap-1">
               Gerenciar <Icon name="arrowRight" className="w-3 h-3" />
             </Link>
           </div>
@@ -281,76 +331,94 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
       {/* Main Content Grid */}
       <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Next Appointments */}
-        <div className="lg:col-span-2 bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 md:p-5 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 md:w-10 md:h-10 bg-gradient-to-br from-violet-500 to-purple-500 rounded-lg md:rounded-xl flex items-center justify-center">
-                <Icon name="calendar" className="w-4 h-4 md:w-5 md:h-5 text-white" />
-              </div>
+        {/* Left Column - 2/3 */}
+        <div className="lg:col-span-2 space-y-4 md:space-y-6">
+          {/* Gráfico de Atendimentos */}
+          <div className="bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm p-4 md:p-6">
+            <div className="flex items-center justify-between mb-4 md:mb-6">
               <div>
-                <h3 className="font-bold text-slate-900 text-sm md:text-base">Próximas consultas</h3>
-                <p className="text-[10px] md:text-xs text-slate-500">Agenda de hoje</p>
+                <h3 className="font-bold text-slate-900 text-base md:text-lg">Atendimentos da Semana</h3>
+                <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+                  Total: <span className="font-semibold text-violet-600">{weekTotal} consultas</span>
+                </p>
               </div>
+              <Link href="/dashboard/agenda" className="text-xs md:text-sm text-violet-600 font-semibold flex items-center gap-1">
+                Ver agenda <Icon name="arrowRight" className="w-4 h-4" />
+              </Link>
             </div>
-            <Link href="/dashboard/agenda" className="text-xs md:text-sm text-violet-600 font-semibold flex items-center gap-1">
-              Ver <span className="hidden sm:inline">agenda</span> <Icon name="arrowRight" className="w-4 h-4" />
-            </Link>
+            <WeeklyChart data={weekData} color="#8B5CF6" />
           </div>
-          
-          {!nextAppointments || nextAppointments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 md:py-12 text-center px-4">
-              <div className="w-14 h-14 md:w-16 md:h-16 bg-slate-100 rounded-xl md:rounded-2xl flex items-center justify-center mb-3 md:mb-4">
-                <Icon name="calendar" className="w-7 h-7 md:w-8 md:h-8 text-slate-400" />
+
+          {/* Próximas Consultas */}
+          <div className="bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between p-4 md:p-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 md:w-10 md:h-10 bg-gradient-to-br from-violet-500 to-purple-500 rounded-lg md:rounded-xl flex items-center justify-center">
+                  <Icon name="calendar" className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm md:text-base">Próximas Consultas</h3>
+                  <p className="text-[10px] md:text-xs text-slate-500">Agenda de hoje</p>
+                </div>
               </div>
-              <p className="font-semibold text-slate-600 text-sm md:text-base">Nenhuma consulta restante</p>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">Aproveite para organizar amanhã</p>
+              <Link href="/dashboard/agenda" className="text-xs md:text-sm text-violet-600 font-semibold flex items-center gap-1">
+                Ver agenda <Icon name="arrowRight" className="w-4 h-4" />
+              </Link>
             </div>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {nextAppointments.map((apt, idx) => (
-                <Link 
-                  key={apt.id} 
-                  href={`/dashboard/atendimento/${apt.id}`}
-                  className="flex items-center gap-3 md:gap-4 p-3 md:p-4 active:bg-slate-50 transition-colors"
-                >
-                  <div className="w-12 md:w-16 text-center flex-shrink-0">
-                    <p className="text-base md:text-lg font-black text-slate-900">
-                      {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  <div className={`w-1 h-10 md:h-12 rounded-full flex-shrink-0 ${
-                    idx === 0 ? 'bg-gradient-to-b from-violet-500 to-purple-500' : 'bg-slate-200'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 truncate text-sm md:text-base">{apt.patients?.name}</p>
-                    <p className="text-xs md:text-sm text-slate-500 truncate">{apt.procedures?.name || 'Consulta'}</p>
-                  </div>
-                  <span className={`text-[10px] md:text-xs px-2 md:px-3 py-1 md:py-1.5 rounded-lg font-semibold flex-shrink-0 ${
-                    apt.status === 'confirmed' 
-                      ? 'bg-emerald-100 text-emerald-700' 
-                      : apt.status === 'checked_in'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {apt.status === 'confirmed' ? 'Confirmado' : apt.status === 'checked_in' ? 'Aguardando' : apt.status === 'scheduled' ? 'Agendado' : apt.status}
-                  </span>
-                  <Icon name="chevronRight" className="w-4 h-4 md:w-5 md:h-5 text-slate-300 flex-shrink-0 hidden sm:block" />
-                </Link>
-              ))}
-            </div>
-          )}
+            
+            {!nextAppointments || nextAppointments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 md:py-12 text-center px-4">
+                <div className="w-14 h-14 md:w-16 md:h-16 bg-slate-100 rounded-xl md:rounded-2xl flex items-center justify-center mb-3 md:mb-4">
+                  <Icon name="calendar" className="w-7 h-7 md:w-8 md:h-8 text-slate-400" />
+                </div>
+                <p className="font-semibold text-slate-600 text-sm md:text-base">Nenhuma consulta restante</p>
+                <p className="text-xs md:text-sm text-slate-400 mt-1">Aproveite para organizar amanhã</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-50">
+                {nextAppointments.map((apt, idx) => (
+                  <Link 
+                    key={apt.id} 
+                    href={`/dashboard/atendimento/${apt.id}`}
+                    className="flex items-center gap-3 md:gap-4 p-3 md:p-4 active:bg-slate-50 transition-colors"
+                  >
+                    <div className="w-12 md:w-16 text-center flex-shrink-0">
+                      <p className="text-base md:text-lg font-black text-slate-900">
+                        {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div className={`w-1 h-10 md:h-12 rounded-full flex-shrink-0 ${
+                      idx === 0 ? 'bg-gradient-to-b from-violet-500 to-purple-500' : 'bg-slate-200'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-900 truncate text-sm md:text-base">{apt.patients?.name}</p>
+                      <p className="text-xs md:text-sm text-slate-500 truncate">{apt.procedures?.name || 'Consulta'}</p>
+                    </div>
+                    <span className={`text-[10px] md:text-xs px-2 md:px-3 py-1 md:py-1.5 rounded-lg font-semibold flex-shrink-0 ${
+                      apt.status === 'confirmed' 
+                        ? 'bg-emerald-100 text-emerald-700' 
+                        : apt.status === 'checked_in'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {apt.status === 'confirmed' ? 'Confirmado' : apt.status === 'checked_in' ? 'Aguardando' : apt.status === 'scheduled' ? 'Agendado' : apt.status}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right Column */}
         <div className="space-y-4 md:space-y-6">
-          {/* Quick Actions - Grid on mobile - Filtered by modules */}
+          {/* Quick Actions */}
           {(() => {
             const allActions = [
               { label: 'Recepção', href: '/dashboard/recepcao', icon: 'userCheck', color: 'from-emerald-500 to-teal-500' },
               { label: 'Estoque', href: '/dashboard/estoque', icon: 'box', color: 'from-amber-500 to-orange-500' },
               { label: 'CRM', href: '/dashboard/crm', icon: 'target', color: 'from-blue-500 to-cyan-500' },
-              { label: 'Eva IA', href: '/dashboard/eva', icon: 'sparkles', color: 'from-violet-500 to-purple-500' },
+              { label: 'Financeiro', href: '/dashboard/financeiro', icon: 'dollarSign', color: 'from-emerald-500 to-green-500' },
             ]
             const filteredActions = allActions.filter(action => hasModule(action.href))
             
@@ -358,7 +426,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             
             return (
               <div className="bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm p-4 md:p-5">
-                <h3 className="font-bold text-slate-900 mb-3 md:mb-4 text-sm md:text-base">Ações rápidas</h3>
+                <h3 className="font-bold text-slate-900 mb-3 md:mb-4 text-sm md:text-base">Ações Rápidas</h3>
                 <div className={`grid gap-2 md:gap-3 ${filteredActions.length <= 2 ? 'grid-cols-2' : 'grid-cols-4 md:grid-cols-2'}`}>
                   {filteredActions.map(action => (
                     <Link 
@@ -406,32 +474,60 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             </div>
           )}
 
-          {/* Recent Activity */}
+          {/* Recent Activity - TRADUZIDA */}
           {recentActivity && recentActivity.length > 0 && (
             <div className="bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm p-4 md:p-5">
               <div className="flex items-center justify-between mb-3 md:mb-4">
-                <h3 className="font-bold text-slate-900 text-sm md:text-base">Atividade recente</h3>
+                <h3 className="font-bold text-slate-900 text-sm md:text-base">Atividade Recente</h3>
                 <Link href="/dashboard/auditoria" className="text-[10px] md:text-xs text-violet-600 font-semibold">
                   Ver tudo
                 </Link>
               </div>
               <div className="space-y-2.5 md:space-y-3">
-                {recentActivity.slice(0, 4).map((log: any) => (
-                  <div key={log.id} className="flex items-start gap-2.5 md:gap-3">
-                    <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full mt-1.5 md:mt-2 flex-shrink-0 ${
-                      log.action === 'INSERT' ? 'bg-emerald-500' :
-                      log.action === 'UPDATE' ? 'bg-blue-500' : 'bg-rose-500'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs md:text-sm text-slate-700 truncate">
-                        {log.action === 'INSERT' ? 'Novo' : log.action === 'UPDATE' ? 'Atualizado' : 'Removido'} {log.entity_type}
-                      </p>
-                      <p className="text-[10px] md:text-xs text-slate-400">
-                        {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                {recentActivity.slice(0, 4).map((log: any) => {
+                  const actionLabel = ACTION_LABELS[log.action] || log.action
+                  const entityLabel = ENTITY_LABELS[log.entity_type] || log.entity_type
+                  
+                  return (
+                    <div key={log.id} className="flex items-start gap-2.5 md:gap-3">
+                      <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full mt-1.5 md:mt-2 flex-shrink-0 ${
+                        log.action === 'INSERT' ? 'bg-emerald-500' :
+                        log.action === 'UPDATE' ? 'bg-blue-500' : 'bg-rose-500'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs md:text-sm text-slate-700">
+                          <span className="font-medium">{actionLabel}</span> {entityLabel}
+                          {log.entity_name && (
+                            <span className="text-slate-500"> • {log.entity_name}</span>
+                          )}
+                        </p>
+                        <p className="text-[10px] md:text-xs text-slate-400">
+                          {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
                     </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Lista de Espera - se não estiver nos cards */}
+          {hasModule('/dashboard/crm') && hasModule('/dashboard/lista-espera') && (waitingList || 0) > 0 && (
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl md:rounded-2xl border border-amber-100 p-4 md:p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center">
+                    <Icon name="clock" className="w-5 h-5 text-white" />
                   </div>
-                ))}
+                  <div>
+                    <p className="font-bold text-amber-900 text-sm">{waitingList} na espera</p>
+                    <p className="text-xs text-amber-700">Lista de espera</p>
+                  </div>
+                </div>
+                <Link href="/dashboard/lista-espera" className="text-xs text-amber-700 font-semibold flex items-center gap-1">
+                  Ver <Icon name="arrowRight" className="w-3 h-3" />
+                </Link>
               </div>
             </div>
           )}
