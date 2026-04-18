@@ -1,26 +1,63 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ModuleSelector from '@/components/admin/ModuleSelector'
 import { getDefaultModules, type ModuleId } from '@/lib/modules'
 
+type Plan = {
+  id: string
+  name: string
+  description: string | null
+  price_monthly: number
+  modules: ModuleId[]
+  max_professionals: number | null
+}
+
 export default function NewClinicPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [activeModules, setActiveModules] = useState<ModuleId[]>(getDefaultModules())
   
   const [form, setForm] = useState({
     name: '',
     cnpj: '',
     slug: '',
-    plan: 'starter',
     adminName: '',
     adminEmail: '',
     adminPassword: '',
   })
+
+  // Carregar planos disponíveis
+  useEffect(() => {
+    async function loadPlans() {
+      try {
+        const res = await fetch('/api/admin/plans')
+        if (res.ok) {
+          const data = await res.json()
+          setPlans(data.filter((p: Plan) => p))
+        }
+      } catch (e) {
+        console.error('Erro ao carregar planos:', e)
+      }
+    }
+    loadPlans()
+  }, [])
+
+  // Auto-preencher módulos ao selecionar plano
+  const handlePlanChange = (planId: string) => {
+    setSelectedPlanId(planId)
+    if (planId) {
+      const plan = plans.find(p => p.id === planId)
+      if (plan?.modules) {
+        setActiveModules(plan.modules as ModuleId[])
+      }
+    }
+  }
 
   const generateSlug = (name: string) => {
     return name
@@ -45,10 +82,16 @@ export default function NewClinicPage() {
     setError('')
 
     try {
+      const selectedPlan = plans.find(p => p.id === selectedPlanId)
       const res = await fetch('/api/admin/clinics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, activeModules })
+        body: JSON.stringify({ 
+          ...form, 
+          activeModules,
+          planId: selectedPlanId || null,
+          planName: selectedPlan?.name || 'custom'
+        })
       })
 
       const data = await res.json()
@@ -142,14 +185,25 @@ export default function NewClinicPage() {
                 Plano
               </label>
               <select
-                value={form.plan}
-                onChange={e => setForm(prev => ({ ...prev, plan: e.target.value }))}
+                value={selectedPlanId}
+                onChange={e => handlePlanChange(e.target.value)}
                 className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="starter">Starter (Trial 14 dias)</option>
-                <option value="professional">Professional</option>
-                <option value="enterprise">Enterprise</option>
+                <option value="">Selecione um plano (ou configure manualmente)</option>
+                {plans.map(plan => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name} - R$ {plan.price_monthly}/mês
+                    {plan.max_professionals && ` (até ${plan.max_professionals} profissionais)`}
+                  </option>
+                ))}
               </select>
+              {plans.length === 0 && (
+                <p className="text-xs text-slate-500 mt-1">
+                  <Link href="/admin/plans/new" className="text-blue-600 hover:underline">
+                    Crie planos primeiro
+                  </Link> ou configure os módulos manualmente abaixo.
+                </p>
+              )}
             </div>
           </div>
         </div>

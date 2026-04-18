@@ -61,6 +61,38 @@ CREATE POLICY "Super admins can view all users"
     SELECT clinic_id FROM users WHERE id = auth.uid()
   ));
 
+-- 8. Criar tabela de planos do admin
+CREATE TABLE IF NOT EXISTS admin_plans (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  description text,
+  price_monthly numeric NOT NULL DEFAULT 0,
+  price_yearly numeric,
+  modules text[] NOT NULL DEFAULT '{}',
+  max_professionals integer,
+  active boolean DEFAULT true,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- RLS para admin_plans
+ALTER TABLE admin_plans ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Super admins can manage plans"
+  ON admin_plans FOR ALL
+  TO authenticated
+  USING (is_super_admin(auth.uid()));
+
+-- Inserir planos padrão
+INSERT INTO admin_plans (name, description, price_monthly, price_yearly, modules, max_professionals) VALUES
+  ('Starter', 'Ideal para clínicas iniciantes', 199, 1990, 
+   ARRAY['agenda', 'pacientes', 'recepcao', 'procedimentos', 'financeiro', 'equipe'], 2),
+  ('Professional', 'Para clínicas em crescimento', 399, 3990, 
+   ARRAY['agenda', 'pacientes', 'recepcao', 'procedimentos', 'prontuario', 'injetaveis', 'documentos', 'estoque', 'crm', 'financeiro', 'equipe'], 5),
+  ('Enterprise', 'Recursos completos para grandes clínicas', 699, 6990, 
+   ARRAY['agenda', 'pacientes', 'recepcao', 'procedimentos', 'prontuario', 'injetaveis', 'documentos', 'lista_espera', 'estoque', 'crm', 'whatsapp', 'eva_ia', 'financeiro', 'equipe', 'auditoria'], NULL)
+ON CONFLICT (name) DO NOTHING;
+
 -- ============================================
 -- CRIAR PRIMEIRO SUPER ADMIN
 -- Substitua pelo seu email e ID do Supabase Auth
