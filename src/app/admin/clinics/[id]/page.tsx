@@ -11,7 +11,7 @@ export default async function ClinicDetailsPage({ params }: { params: { id: stri
   }
 
   const { clinic, users, stats } = data
-  const activeModules = clinic.settings?.active_modules || [] = data
+  const activeModules = clinic.settings?.active_modules || []
 
   return (
     <div className="space-y-6">
