@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
+    const serviceSupabase = createServiceClient() // Use service role to bypass RLS
 
     // Check if slug already exists
     const { data: existingClinic } = await supabase
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest) {
       planValue = 'starter'
     }
     
-    // 1. Create the clinic
-    const { data: clinic, error: clinicError } = await supabase
+    // 1. Create the clinic (using service role to bypass RLS)
+    const { data: clinic, error: clinicError } = await serviceSupabase
       .from('clinics')
       .insert({
         name,
@@ -70,8 +71,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Create auth user using service role
-    const serviceSupabase = createServiceClient()
-    
     const { data: authData, error: authError } = await serviceSupabase.auth.admin.createUser({
       email: adminEmail,
       password: adminPassword,
@@ -80,13 +79,13 @@ export async function POST(request: NextRequest) {
 
     if (authError) {
       // Rollback clinic
-      await supabase.from('clinics').delete().eq('id', clinic.id)
+      await serviceSupabase.from('clinics').delete().eq('id', clinic.id)
       console.error('Auth error:', authError)
       return NextResponse.json({ error: `Erro ao criar usuário: ${authError.message}` }, { status: 500 })
     }
 
-    // 3. Create user record
-    const { error: userError } = await supabase
+    // 3. Create user record (using service role to bypass RLS)
+    const { error: userError } = await serviceSupabase
       .from('users')
       .insert({
         id: authData.user.id,
@@ -98,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     if (userError) {
       // Rollback
-      await supabase.from('clinics').delete().eq('id', clinic.id)
+      await serviceSupabase.from('clinics').delete().eq('id', clinic.id)
       console.error('User error:', userError)
       return NextResponse.json({ error: 'Erro ao criar usuário' }, { status: 500 })
     }
