@@ -19,18 +19,23 @@ export default async function EquipePage() {
     redirect('/dashboard')
   }
 
-  // Buscar membros da equipe
-  const { data: teamMembers } = await supabase
+  // Buscar membros da equipe (ativos e inativos)
+  const { data: allMembers } = await supabase
     .from('users')
-    .select('id, name, email, role, permissions, created_at')
+    .select('id, name, email, role, permissions, active, created_at')
     .eq('clinic_id', currentUser.clinic_id)
-    .order('created_at', { ascending: true })
+    .order('active', { ascending: false }) // Ativos primeiro
+    .order('name')
+
+  // Separar ativos e inativos
+  const activeMembers = (allMembers || []).filter(m => m.active !== false)
+  const inactiveMembers = (allMembers || []).filter(m => m.active === false)
 
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Equipe</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Gerencie os membros da sua clinica</p>
+        <p className="text-sm text-slate-500 mt-0.5">Gerencie os membros da sua clínica</p>
       </div>
 
       <div className="card p-6 mb-6">
@@ -39,9 +44,16 @@ export default async function EquipePage() {
       </div>
 
       <div className="card p-6">
-        <h2 className="text-sm font-semibold text-slate-900 mb-4">Membros ({teamMembers?.length || 0})</h2>
-        <TeamList members={teamMembers || []} currentUserId={user.id} clinicId={currentUser.clinic_id} />
+        <h2 className="text-sm font-semibold text-slate-900 mb-4">Membros ativos ({activeMembers.length})</h2>
+        <TeamList members={activeMembers} currentUserId={user.id} clinicId={currentUser.clinic_id} />
       </div>
+
+      {inactiveMembers.length > 0 && (
+        <div className="card p-6 mt-6 bg-slate-50">
+          <h2 className="text-sm font-semibold text-slate-500 mb-4">Membros desativados ({inactiveMembers.length})</h2>
+          <TeamList members={inactiveMembers} currentUserId={user.id} clinicId={currentUser.clinic_id} showReactivate />
+        </div>
+      )}
     </div>
   )
 }

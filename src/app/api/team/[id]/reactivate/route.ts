@@ -2,8 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
-// DELETE - Desativar membro da equipe (soft delete para manter histórico)
-export async function DELETE(
+// POST - Reativar membro da equipe
+export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -40,28 +40,28 @@ export async function DELETE(
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
     }
 
-    // Verificar se o membro pertence à clínica e não é admin
-    const { data: memberToDeactivate } = await supabaseAdmin
+    // Verificar se o membro pertence à clínica
+    const { data: memberToReactivate } = await supabaseAdmin
       .from('users')
-      .select('id, name, role, clinic_id')
+      .select('id, name, clinic_id, active')
       .eq('id', memberId)
       .eq('clinic_id', clinicId)
       .single()
 
-    if (!memberToDeactivate) {
+    if (!memberToReactivate) {
       return NextResponse.json({ error: 'Membro não encontrado' }, { status: 404 })
     }
 
-    if (memberToDeactivate.role === 'admin') {
-      return NextResponse.json({ error: 'Não é possível desativar administradores' }, { status: 400 })
+    if (memberToReactivate.active !== false) {
+      return NextResponse.json({ error: 'Membro já está ativo' }, { status: 400 })
     }
 
-    // 1. SOFT DELETE: Apenas desativar o usuário (mantém histórico)
+    // 1. Reativar o usuário na tabela users
     const { error: dbError } = await supabaseAdmin
       .from('users')
       .update({ 
-        active: false,
-        deleted_at: new Date().toISOString()
+        active: true,
+        deleted_at: null
       })
       .eq('id', memberId)
       .eq('clinic_id', clinicId)
@@ -70,18 +70,18 @@ export async function DELETE(
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    // 2. Desabilitar login no auth (não deleta, apenas bloqueia)
+    // 2. Desbanir no auth
     await supabaseAdmin.auth.admin.updateUserById(memberId, {
-      ban_duration: '876000h' // ~100 anos = permanente
+      ban_duration: 'none'
     })
 
     return NextResponse.json({ 
       success: true, 
-      message: `${memberToDeactivate.name} foi desativado. O histórico foi mantido.` 
+      message: `${memberToReactivate.name} foi reativado com sucesso!` 
     })
 
   } catch (error: any) {
-    console.error('Erro ao desativar membro:', error)
+    console.error('Erro ao reativar membro:', error)
     return NextResponse.json({ error: error.message || 'Erro interno' }, { status: 500 })
   }
 }

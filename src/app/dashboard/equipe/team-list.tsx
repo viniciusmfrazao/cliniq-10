@@ -11,8 +11,16 @@ type Member = {
   name: string
   email: string
   role: string
+  active?: boolean
   permissions?: string[]
   created_at: string
+}
+
+type Props = {
+  members: Member[]
+  currentUserId: string
+  clinicId: string
+  showReactivate?: boolean
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -47,16 +55,16 @@ const ROLE_COLORS: Record<string, string> = {
   viewer: 'bg-slate-100 text-slate-700',
 }
 
-export default function TeamList({ members, currentUserId, clinicId }: { members: Member[]; currentUserId: string; clinicId: string }) {
+export default function TeamList({ members, currentUserId, clinicId, showReactivate = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
-  const [removing, setRemoving] = useState<string | null>(null)
+  const [loading, setLoading] = useState<string | null>(null)
   const [editingPermissions, setEditingPermissions] = useState<Member | null>(null)
 
-  async function handleRemove(memberId: string) {
-    if (!confirm('Tem certeza que deseja remover este membro?')) return
+  async function handleDeactivate(memberId: string, memberName: string) {
+    if (!confirm(`Desativar ${memberName}?\n\nO membro não poderá mais acessar o sistema, mas o histórico será mantido.`)) return
     
-    setRemoving(memberId)
+    setLoading(memberId)
     
     try {
       const response = await fetch(`/api/team/${memberId}`, {
@@ -65,23 +73,56 @@ export default function TeamList({ members, currentUserId, clinicId }: { members
         body: JSON.stringify({ clinicId })
       })
 
+      const data = await response.json()
+      
       if (!response.ok) {
-        const data = await response.json()
-        alert(data.error || 'Erro ao remover membro')
+        alert(data.error || 'Erro ao desativar membro')
+      } else {
+        alert(data.message || 'Membro desativado com sucesso')
       }
     } catch (error) {
       console.error('Erro:', error)
-      alert('Erro ao remover membro')
+      alert('Erro ao desativar membro')
     }
     
-    setRemoving(null)
+    setLoading(null)
+    router.refresh()
+  }
+
+  async function handleReactivate(memberId: string, memberName: string) {
+    if (!confirm(`Reativar ${memberName}?\n\nO membro poderá acessar o sistema novamente.`)) return
+    
+    setLoading(memberId)
+    
+    try {
+      const response = await fetch(`/api/team/${memberId}/reactivate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicId })
+      })
+
+      const data = await response.json()
+      
+      if (!response.ok) {
+        alert(data.error || 'Erro ao reativar membro')
+      } else {
+        alert(data.message || 'Membro reativado com sucesso')
+      }
+    } catch (error) {
+      console.error('Erro:', error)
+      alert('Erro ao reativar membro')
+    }
+    
+    setLoading(null)
     router.refresh()
   }
 
   if (members.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-sm text-slate-500">Nenhum membro na equipe ainda.</p>
+        <p className="text-sm text-slate-500">
+          {showReactivate ? 'Nenhum membro desativado.' : 'Nenhum membro na equipe ainda.'}
+        </p>
       </div>
     )
   }
@@ -90,15 +131,22 @@ export default function TeamList({ members, currentUserId, clinicId }: { members
     <>
       <div className="space-y-3">
         {members.map(member => (
-          <div key={member.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+          <div 
+            key={member.id} 
+            className={`flex items-center justify-between p-3 rounded-xl ${
+              showReactivate ? 'bg-white border border-slate-200' : 'bg-slate-50'
+            }`}
+          >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-brand-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-brand-700 text-sm font-semibold">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                showReactivate ? 'bg-slate-200' : 'bg-brand-100'
+              }`}>
+                <span className={`text-sm font-semibold ${showReactivate ? 'text-slate-500' : 'text-brand-700'}`}>
                   {member.name.charAt(0).toUpperCase()}
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-900">
+                <p className={`text-sm font-medium ${showReactivate ? 'text-slate-500' : 'text-slate-900'}`}>
                   {member.name}
                   {member.id === currentUserId && <span className="text-slate-400 ml-1">(você)</span>}
                 </p>
@@ -106,26 +154,45 @@ export default function TeamList({ members, currentUserId, clinicId }: { members
               </div>
             </div>
             <div className="flex items-center gap-2">
-            <span className={`text-xs px-2 py-1 rounded-full font-medium ${ROLE_COLORS[member.role] || 'bg-violet-100 text-violet-700'}`}>
-              {ROLE_LABELS[member.role] || member.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-            </span>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                showReactivate 
+                  ? 'bg-slate-100 text-slate-500' 
+                  : (ROLE_COLORS[member.role] || 'bg-violet-100 text-violet-700')
+              }`}>
+                {ROLE_LABELS[member.role] || member.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </span>
+              
               {member.id !== currentUserId && (
                 <>
-                  <button
-                    onClick={() => setEditingPermissions(member)}
-                    className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
-                    title="Permissões"
-                  >
-                    <Icon name="settings" className="w-4 h-4" />
-                  </button>
-                  {member.role !== 'admin' && (
+                  {showReactivate ? (
+                    // Botão de reativar
                     <button
-                      onClick={() => handleRemove(member.id)}
-                      disabled={removing === member.id}
-                      className="text-xs text-red-500 hover:text-red-700 px-2 py-1"
+                      onClick={() => handleReactivate(member.id, member.name)}
+                      disabled={loading === member.id}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg font-medium transition-colors"
                     >
-                      {removing === member.id ? '...' : 'Remover'}
+                      {loading === member.id ? '...' : 'Reativar'}
                     </button>
+                  ) : (
+                    // Botões de editar e desativar
+                    <>
+                      <button
+                        onClick={() => setEditingPermissions(member)}
+                        className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                        title="Permissões"
+                      >
+                        <Icon name="settings" className="w-4 h-4" />
+                      </button>
+                      {member.role !== 'admin' && (
+                        <button
+                          onClick={() => handleDeactivate(member.id, member.name)}
+                          disabled={loading === member.id}
+                          className="text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 px-2 py-1 rounded-lg transition-colors"
+                        >
+                          {loading === member.id ? '...' : 'Desativar'}
+                        </button>
+                      )}
+                    </>
                   )}
                 </>
               )}
