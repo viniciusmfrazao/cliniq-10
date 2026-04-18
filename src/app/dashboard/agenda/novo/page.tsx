@@ -24,7 +24,8 @@ export default async function NovoAgendamentoPage({
     .order('name')
 
   // Buscar TODOS os usuários e filtrar no código (evita problemas com enum)
-  const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'admin']
+  // admin NÃO é profissional
+  const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist']
   const { data: allUsers } = await supabase
     .from('users')
     .select('id, name, role, active')

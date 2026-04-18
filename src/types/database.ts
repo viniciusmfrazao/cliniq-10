@@ -26,8 +26,8 @@ export const USER_ROLES = [
 export type UserRole = typeof USER_ROLES[number]
 
 // Roles que podem atender pacientes (aparecem na agenda)
+// NOTA: 'admin' NÃO é profissional - apenas administrador do sistema
 export const PROFESSIONAL_ROLES: UserRole[] = [
-  'admin',
   'doctor',
   'biomedic',
   'nurse',

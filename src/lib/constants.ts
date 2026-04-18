@@ -40,8 +40,8 @@ export const ROLE_COLORS: Record<string, string> = {
 }
 
 // Roles que podem atender pacientes (aparecem na agenda)
+// NOTA: 'admin' NÃO é profissional - é apenas administrador
 export const PROFESSIONAL_ROLES = [
-  'admin',
   'doctor',
   'biomedic',
   'nurse',

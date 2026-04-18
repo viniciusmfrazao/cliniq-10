@@ -58,8 +58,8 @@ export default async function AgendaPage({
 
   const clinicId = userData?.clinic_id
 
-  // Roles que podem atender pacientes
-  const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'admin']
+  // Roles que podem atender pacientes (admin NÃO é profissional)
+  const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist']
 
   // EXECUTAR QUERIES EM PARALELO (muito mais rápido!)
   const [allUsersResult, appointmentsResult, todayAppointmentsResult] = await Promise.all([

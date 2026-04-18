@@ -33,7 +33,8 @@ export default async function RecepcaoPage() {
     .order('start_time')
 
   // Buscar TODOS os usuários e filtrar no código (evita problemas com enum)
-  const PROFESSIONAL_ROLES = ['admin', 'doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist']
+  // admin NÃO é profissional
+  const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist']
   const { data: allUsers } = await supabase
     .from('users')
     .select('id, name, role, active')
