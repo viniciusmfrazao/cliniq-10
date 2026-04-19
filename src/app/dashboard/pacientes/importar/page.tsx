@@ -128,7 +128,7 @@ export default function ImportarPacientesPage() {
     const colIndexes: Record<string, number> = {}
     columns.forEach((col, idx) => { colIndexes[col] = idx })
 
-    const processed: PatientRow[] = fileData
+    const processed = fileData
       .filter(row => row && row.length > 0)
       .map(row => {
         const getValue = (field: keyof ColumnMapping) => {
@@ -210,7 +210,7 @@ export default function ImportarPacientesPage() {
           notes: getValue('notes'),
         }
       })
-      .filter((p): p is PatientRow => p !== null)
+      .filter((p): p is PatientRow => p !== null) as PatientRow[]
 
     setPreviewData(processed)
     setStep('preview')
