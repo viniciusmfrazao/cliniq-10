@@ -75,8 +75,10 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
             {/* Header */}
             <div className="relative px-5 py-6 flex items-center justify-between border-b border-white/10">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-white/30 to-white/10 backdrop-blur rounded-2xl flex items-center justify-center border border-white/20">
-                  <span className="text-white text-xl font-black">K</span>
+                <div className="w-12 h-12 bg-gradient-to-br from-violet-400 to-purple-500 rounded-2xl flex items-center justify-center">
+                  <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                    <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
+                  </svg>
                 </div>
                 <div>
                   <p className="text-white font-bold">{clinicName}</p>

@@ -28,7 +28,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex relative overflow-hidden">
       {/* Left Panel - Decorative */}
-      <div className="hidden lg:flex flex-1 gradient-bg relative items-center justify-center p-12">
+      <div className="hidden lg:flex flex-1 relative items-center justify-center p-12" style={{ background: 'linear-gradient(135deg, #1E1041 0%, #3730A3 50%, #6366F1 100%)' }}>
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-glow" />
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse-glow" style={{ animationDelay: '1s' }} />
@@ -36,18 +36,23 @@ export default function LoginPage() {
         </div>
         
         <div className="relative text-white max-w-md">
-          <div className="w-20 h-20 bg-gradient-to-br from-white/30 to-white/10 backdrop-blur-xl rounded-3xl flex items-center justify-center mb-8 animate-float border border-white/20">
-            <span className="text-4xl font-black">K</span>
+          {/* Logo com + */}
+          <div className="w-20 h-20 bg-gradient-to-br from-violet-500 to-purple-600 rounded-3xl flex items-center justify-center mb-8 animate-float shadow-2xl">
+            <svg width="40" height="40" viewBox="0 0 32 32" fill="none">
+              <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
+            </svg>
           </div>
           <h1 className="text-5xl font-black mb-4 leading-tight">
-            Gestao inteligente para sua clinica
+            Gerencie sua clínica com{' '}
+            <span className="animate-gradient-text">inteligência</span>
+            {' '}real
           </h1>
           <p className="text-white/70 text-lg">
-            Simplifique sua rotina com a plataforma mais completa para clinicas de estetica.
+            Agenda, pacientes, financeiro, estoque, prontuário e muito mais — tudo em um sistema moderno, 100% na nuvem.
           </p>
           
-          <div className="mt-12 flex gap-4">
-            {['Agenda', 'Pacientes', 'Injetaveis', 'Estoque'].map((item, i) => (
+          <div className="mt-12 flex gap-3 flex-wrap">
+            {['Agenda', 'Pacientes', 'Injetáveis', 'Estoque', 'Financeiro'].map((item, i) => (
               <div 
                 key={item}
                 className="px-4 py-2 bg-white/10 backdrop-blur rounded-xl text-sm font-medium animate-slide-up"
@@ -65,8 +70,10 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
-            <div className="inline-flex items-center justify-center w-16 h-16 gradient-bg rounded-3xl mb-4 shadow-xl border border-white/20">
-              <span className="text-white text-2xl font-black">K</span>
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 rounded-3xl mb-4 shadow-xl">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
+              </svg>
             </div>
             <h1 className="text-3xl font-black text-slate-900">Clinike</h1>
           </div>
@@ -74,7 +81,7 @@ export default function LoginPage() {
           <div className="card p-8">
             <div className="mb-8">
               <h2 className="text-2xl font-black text-slate-900">Bem-vindo de volta!</h2>
-              <p className="text-slate-500 mt-2">Entre para acessar sua clinica</p>
+              <p className="text-slate-500 mt-2">Entre para acessar sua clínica</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-5">
@@ -153,17 +160,6 @@ export default function LoginPage() {
                 Esqueci minha senha
               </Link>
             </div>
-          </div>
-
-          <div className="mt-8 text-center">
-            <p className="text-slate-500 mb-2">Ainda nao tem conta?</p>
-            <Link 
-              href="/cadastro" 
-              className="inline-flex items-center gap-2 gradient-text font-bold hover:opacity-80 transition-opacity"
-            >
-              <Icon name="sparkles" className="w-5 h-5" />
-              Criar conta gratis - 14 dias de trial
-            </Link>
           </div>
         </div>
       </div>

@@ -326,6 +326,22 @@ body {
   animation: slide-up 0.5s ease-out forwards;
 }
 
+/* Animated gradient text like landing page */
+@keyframes gradient-text-animation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-text {
+  background: linear-gradient(90deg, #38BDF8, #A78BFA, #F472B6, #38BDF8);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-text-animation 4s ease infinite;
+}
+
 /* Efeito de brilho nos cards */
 .card-shine {
   position: relative;

@@ -4,7 +4,12 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 
 export const metadata: Metadata = {
   title: 'Clinike',
-  description: 'Gestão para clínicas de estética',
+  description: 'Gestão inteligente para clínicas de estética',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 }
 
 const themeScript = `
