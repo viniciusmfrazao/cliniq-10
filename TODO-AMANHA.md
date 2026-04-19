@@ -1,6 +1,17 @@
 # TODO - Tarefas Organizadas
 
-## 🔵 HOJE - Site Institucional
+## 🟢 PRÓXIMA: Integração Google Calendar
+- [ ] Criar projeto no Google Cloud Console
+- [ ] Habilitar Calendar API
+- [ ] Configurar OAuth2 credentials
+- [ ] Implementar flow de conexão nas configurações da clínica
+- [ ] Ao agendar com paciente que tem email → criar evento no Google Calendar
+- [ ] Paciente recebe convite automático por email
+- **Tempo estimado:** ~2 horas
+
+---
+
+## 🔵 CONCLUÍDO - Site Institucional
 
 ### 1. Criar Site de Vendas do Clinike
 - [ ] Usar o prompt em `docs/PROMPT-SITE-INSTITUCIONAL.md`

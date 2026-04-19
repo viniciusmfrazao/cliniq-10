@@ -67,7 +67,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
           />
           
           {/* Menu Panel */}
-          <div className="absolute left-0 top-0 bottom-0 w-[85%] max-w-xs bg-gradient-to-b from-violet-600 via-purple-600 to-fuchsia-700 animate-slide-in-left overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-[85%] max-w-xs sidebar-gradient animate-slide-in-left overflow-hidden">
             {/* Decorative */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-20 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-1/2" />
@@ -75,8 +75,8 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
             {/* Header */}
             <div className="relative px-5 py-6 flex items-center justify-between border-b border-white/10">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-                  <span className="text-white text-xl font-black">C</span>
+                <div className="w-12 h-12 bg-gradient-to-br from-white/30 to-white/10 backdrop-blur rounded-2xl flex items-center justify-center border border-white/20">
+                  <span className="text-white text-xl font-black">K</span>
                 </div>
                 <div>
                   <p className="text-white font-bold">{clinicName}</p>

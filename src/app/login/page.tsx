@@ -36,8 +36,8 @@ export default function LoginPage() {
         </div>
         
         <div className="relative text-white max-w-md">
-          <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-3xl flex items-center justify-center mb-8 animate-float">
-            <span className="text-4xl font-black">C</span>
+          <div className="w-20 h-20 bg-gradient-to-br from-white/30 to-white/10 backdrop-blur-xl rounded-3xl flex items-center justify-center mb-8 animate-float border border-white/20">
+            <span className="text-4xl font-black">K</span>
           </div>
           <h1 className="text-5xl font-black mb-4 leading-tight">
             Gestao inteligente para sua clinica
@@ -65,8 +65,8 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
-            <div className="inline-flex items-center justify-center w-16 h-16 gradient-bg rounded-3xl mb-4 shadow-xl animate-pulse-glow">
-              <span className="text-white text-2xl font-black">C</span>
+            <div className="inline-flex items-center justify-center w-16 h-16 gradient-bg rounded-3xl mb-4 shadow-xl border border-white/20">
+              <span className="text-white text-2xl font-black">K</span>
             </div>
             <h1 className="text-3xl font-black text-slate-900">Clinike</h1>
           </div>
