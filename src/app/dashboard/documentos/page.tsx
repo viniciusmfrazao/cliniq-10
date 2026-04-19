@@ -52,6 +52,10 @@ export default async function DocumentosPage() {
           <p className="text-sm text-slate-500 mt-0.5">Termos e contratos para assinatura</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/dashboard/documentos/recibo" className="btn-secondary w-auto px-4 flex items-center gap-2">
+            <Icon name="file" className="w-4 h-4" />
+            Recibo
+          </Link>
           <Link href="/dashboard/documentos/templates" className="btn-secondary w-auto px-4 flex items-center gap-2">
             <Icon name="file" className="w-4 h-4" />
             Templates
