@@ -40,10 +40,16 @@ export default async function PacientesPage({
           <h1 className="text-xl font-bold text-slate-900">Pacientes</h1>
           <p className="text-sm text-slate-500 mt-0.5">{patients?.length || 0} cadastrados</p>
         </div>
-        <Link href="/dashboard/pacientes/novo" className="btn-primary w-auto px-4 flex items-center gap-2">
-          <Icon name="plus" className="w-4 h-4" />
-          Novo paciente
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/pacientes/importar" className="btn-secondary w-auto px-4 flex items-center gap-2">
+            <Icon name="upload" className="w-4 h-4" />
+            Importar
+          </Link>
+          <Link href="/dashboard/pacientes/novo" className="btn-primary w-auto px-4 flex items-center gap-2">
+            <Icon name="plus" className="w-4 h-4" />
+            Novo paciente
+          </Link>
+        </div>
       </div>
 
       {/* Alerta de cadastros pendentes */}
