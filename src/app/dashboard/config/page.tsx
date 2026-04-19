@@ -90,11 +90,43 @@ export default async function ConfigPage() {
           </div>
         )}
 
+        {/* Central de Ajuda - disponível para todos */}
+        <div className="card p-6">
+          <h2 className="text-sm font-semibold text-slate-900 mb-4">❓ Ajuda</h2>
+          <Link 
+            href="/dashboard/config/tutorial"
+            className="flex items-center gap-4 p-4 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors border border-violet-200"
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+              <Icon name="info" className="w-5 h-5 text-violet-600" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-violet-900">Central de Ajuda</p>
+              <p className="text-xs text-violet-600">Tutorial passo a passo de como usar o sistema</p>
+            </div>
+            <Icon name="chevronRight" className="w-5 h-5 text-violet-400" />
+          </Link>
+        </div>
+
         {/* Links de ferramentas - apenas admin */}
         {isAdmin && (
           <div className="card p-6">
             <h2 className="text-sm font-semibold text-slate-900 mb-4">🛠️ Ferramentas</h2>
             <div className="grid gap-3">
+              <Link 
+                href="/dashboard/config/tutorial"
+                className="flex items-center gap-4 p-4 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors border border-violet-200"
+              >
+                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+                  <Icon name="info" className="w-5 h-5 text-violet-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-violet-900">Central de Ajuda</p>
+                  <p className="text-xs text-violet-600">Tutorial passo a passo de como usar o sistema</p>
+                </div>
+                <Icon name="chevronRight" className="w-5 h-5 text-violet-400" />
+              </Link>
+
               <Link 
                 href="/dashboard/config/logs"
                 className="flex items-center gap-4 p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
