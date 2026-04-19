@@ -3,32 +3,45 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PatientSearch from './patient-search'
 
+const PER_PAGE = 50
+
 export default async function PacientesPage({ 
   searchParams 
 }: { 
-  searchParams: { q?: string; filter?: string } 
+  searchParams: { q?: string; filter?: string; page?: string } 
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
 
+  const currentPage = Math.max(1, parseInt(searchParams.page || '1'))
+  const offset = (currentPage - 1) * PER_PAGE
+
+  // Pegar total de pacientes (com filtro de busca se houver)
+  let countQuery = supabase
+    .from('patients')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+
+  if (searchParams.q) {
+    countQuery = countQuery.or(`name.ilike.%${searchParams.q}%,phone.ilike.%${searchParams.q}%,email.ilike.%${searchParams.q}%,cpf.ilike.%${searchParams.q}%`)
+  }
+
+  const { count: totalPatients } = await countQuery
+
   let query = supabase
     .from('patients')
     .select('*')
     .eq('clinic_id', userData?.clinic_id)
-    .order('created_at', { ascending: false })
+    .order('name', { ascending: true })
+    .range(offset, offset + PER_PAGE - 1)
 
   if (searchParams.q) {
     query = query.or(`name.ilike.%${searchParams.q}%,phone.ilike.%${searchParams.q}%,email.ilike.%${searchParams.q}%,cpf.ilike.%${searchParams.q}%`)
   }
 
-  // Pegar total de pacientes
-  const { count: totalPatients } = await supabase
-    .from('patients')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData?.clinic_id)
-
-  const { data: patients } = await query.limit(500)
+  const { data: patients } = await query
+  const totalPages = Math.ceil((totalPatients || 0) / PER_PAGE)
 
   // Separar pacientes completos e incompletos
   const incompletePatients = patients?.filter(p => !p.cpf || !p.birth_date) || []
@@ -91,7 +104,7 @@ export default async function PacientesPage({
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Todos ({patients?.length || 0})
+          Todos ({totalPatients || 0})
         </Link>
         <Link
           href="/dashboard/pacientes?filter=pendentes"
@@ -181,6 +194,38 @@ export default async function PacientesPage({
           })
         )}
       </div>
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 px-2">
+          <p className="text-sm text-slate-500">
+            Mostrando {offset + 1}-{Math.min(offset + PER_PAGE, totalPatients || 0)} de {totalPatients}
+          </p>
+          <div className="flex gap-2">
+            {currentPage > 1 && (
+              <Link
+                href={`/dashboard/pacientes?page=${currentPage - 1}${searchParams.q ? `&q=${searchParams.q}` : ''}${searchParams.filter ? `&filter=${searchParams.filter}` : ''}`}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center gap-1"
+              >
+                <Icon name="chevronLeft" className="w-4 h-4" />
+                Anterior
+              </Link>
+            )}
+            <span className="px-4 py-2 text-sm text-slate-600">
+              Página {currentPage} de {totalPages}
+            </span>
+            {currentPage < totalPages && (
+              <Link
+                href={`/dashboard/pacientes?page=${currentPage + 1}${searchParams.q ? `&q=${searchParams.q}` : ''}${searchParams.filter ? `&filter=${searchParams.filter}` : ''}`}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center gap-1"
+              >
+                Próxima
+                <Icon name="chevronRight" className="w-4 h-4" />
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
