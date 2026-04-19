@@ -22,7 +22,13 @@ export default async function PacientesPage({
     query = query.or(`name.ilike.%${searchParams.q}%,phone.ilike.%${searchParams.q}%,email.ilike.%${searchParams.q}%,cpf.ilike.%${searchParams.q}%`)
   }
 
-  const { data: patients } = await query.limit(100)
+  // Pegar total de pacientes
+  const { count: totalPatients } = await supabase
+    .from('patients')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+
+  const { data: patients } = await query.limit(500)
 
   // Separar pacientes completos e incompletos
   const incompletePatients = patients?.filter(p => !p.cpf || !p.birth_date) || []
@@ -38,7 +44,7 @@ export default async function PacientesPage({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Pacientes</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{patients?.length || 0} cadastrados</p>
+          <p className="text-sm text-slate-500 mt-0.5">{totalPatients || 0} cadastrados</p>
         </div>
         <div className="flex gap-2">
           <Link href="/dashboard/pacientes/importar" className="btn-secondary w-auto px-4 flex items-center gap-2">
