@@ -12,7 +12,7 @@
 2. Clique em "New Project"
 3. Preencha:
    - **Organization:** Sua organização
-   - **Name:** cliniq-staging
+   - **Name:** clinike-staging
    - **Database Password:** (gere uma senha forte)
    - **Region:** South America (São Paulo) - mesma da produção
 4. Aguarde a criação (~2 minutos)
@@ -62,7 +62,7 @@ supabase db push
 ## Passo 3: Criar Deploy de Staging no Vercel
 
 1. Acesse https://vercel.com/dashboard
-2. Selecione o projeto cliniq-10
+2. Selecione o projeto clinike-10
 3. Vá em **Settings → Git**
 4. Em "Production Branch", mantenha `main`
 
@@ -116,7 +116,7 @@ git push origin staging
 ```
 
 A Vercel criará automaticamente um deploy preview em:
-`https://cliniq-10-git-staging-SEU-USUARIO.vercel.app`
+`https://clinike-10-git-staging-SEU-USUARIO.vercel.app`
 
 ### Promover para Produção
 Após testar e aprovar:
@@ -149,8 +149,8 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 | Ambiente | Branch | URL | Banco |
 |----------|--------|-----|-------|
 | **Local** | qualquer | localhost:3000 | Staging |
-| **Staging** | staging | cliniq-staging.vercel.app | Staging |
-| **Produção** | main | cliniq-10.vercel.app | Produção |
+| **Staging** | staging | clinike-staging.vercel.app | Staging |
+| **Produção** | main | clinike-10.vercel.app | Produção |
 
 ---
 

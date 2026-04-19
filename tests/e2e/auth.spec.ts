@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 // Dados de teste - ALTERE PARA SUAS CREDENCIAIS DE TESTE
 const TEST_USER = {
-  email: 'teste@cliniq.com',
+  email: 'teste@clinike.com.br',
   password: 'senha123'
 }
 

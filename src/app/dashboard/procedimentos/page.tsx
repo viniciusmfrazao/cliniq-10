@@ -4,7 +4,7 @@ import ProcedureList from './procedure-list'
 import ProcedureForm from './procedure-form'
 
 export const metadata = {
-  title: 'Procedimentos | Cliniq',
+  title: 'Procedimentos | Clinike',
 }
 
 export default async function ProcedimentosPage() {

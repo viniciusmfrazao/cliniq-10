@@ -424,7 +424,7 @@ Em **Messages**, clique em **Add Message** novamente:
 Depois que o básico funcionar:
 
 1. **Adicionar detecção de intenção** — Identificar se quer agendar, preço, etc
-2. **Buscar dados do Cliniq** — Pacientes, procedimentos, agenda
+2. **Buscar dados do Clinike** — Pacientes, procedimentos, agenda
 3. **Criar agendamentos** — Integrar com a agenda do sistema
 4. **Automações** — Confirmação 24h, pós-procedimento, aniversários
 

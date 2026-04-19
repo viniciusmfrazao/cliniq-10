@@ -11,7 +11,7 @@ export default function PlanosPage({ searchParams }: { searchParams: { trial_exp
         {searchParams.trial_expirado === '1' && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
             <p className="text-sm font-medium text-amber-800">Seu periodo de trial encerrou.</p>
-            <p className="text-xs text-amber-600 mt-1">Escolha um plano para continuar usando o Cliniq.</p>
+            <p className="text-xs text-amber-600 mt-1">Escolha um plano para continuar usando o Clinike.</p>
           </div>
         )}
 

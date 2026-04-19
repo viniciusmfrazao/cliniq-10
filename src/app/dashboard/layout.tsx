@@ -32,10 +32,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
-      <Sidebar clinicName={clinic?.name || 'Cliniq'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} />
+      <Sidebar clinicName={clinic?.name || 'Clinike'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar 
-          clinicName={clinic?.name || 'Cliniq'} 
+          clinicName={clinic?.name || 'Clinike'} 
           userName={userData?.name || ''} 
           userRole={userData?.role || 'viewer'}
           trialDaysLeft={trialDaysLeft}

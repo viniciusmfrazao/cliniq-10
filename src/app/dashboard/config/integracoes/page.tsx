@@ -209,7 +209,7 @@ export default function IntegracoesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event,
-          data: { test: true, message: 'Teste de conexão do Cliniq' },
+          data: { test: true, message: 'Teste de conexão do Clinike' },
           timestamp: new Date().toISOString()
         })
       })
@@ -387,13 +387,13 @@ export default function IntegracoesPage() {
 
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-600 mb-2">
-              <strong>Webhook de retorno do Cliniq:</strong>
+              <strong>Webhook de retorno do Clinike:</strong>
             </p>
             <code className="text-xs bg-slate-200 px-2 py-1 rounded">
               {typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/n8n
             </code>
             <p className="text-xs text-slate-500 mt-2">
-              Use esta URL no n8n para enviar respostas de volta ao Cliniq
+              Use esta URL no n8n para enviar respostas de volta ao Clinike
             </p>
           </div>
         </div>
@@ -427,12 +427,12 @@ export default function IntegracoesPage() {
                     <input
                       type="url"
                       className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-                      placeholder={`${n8nUrl}/webhook/cliniq-${event.key.replace('_', '-')}`}
+                      placeholder={`${n8nUrl}/webhook/clinike-${event.key.replace('_', '-')}`}
                       value={webhooks[event.key as keyof typeof webhooks]}
                       onChange={e => setWebhooks(prev => ({ ...prev, [event.key]: e.target.value }))}
                     />
                     <button
-                      onClick={() => testWebhook(event.key, webhooks[event.key as keyof typeof webhooks] || `${n8nUrl}/webhook/cliniq-${event.key.replace('_', '-')}`)}
+                      onClick={() => testWebhook(event.key, webhooks[event.key as keyof typeof webhooks] || `${n8nUrl}/webhook/clinike-${event.key.replace('_', '-')}`)}
                       className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
                     >
                       Testar
@@ -488,7 +488,7 @@ export default function IntegracoesPage() {
 
         <div className="mt-4 p-3 bg-white/50 rounded-xl">
           <p className="text-xs text-slate-600">
-            <strong>Dados enviados pelo Cliniq:</strong> Cada webhook envia um JSON com <code>event</code>, <code>data</code> (informações do paciente, agendamento, etc) e <code>timestamp</code>.
+            <strong>Dados enviados pelo Clinike:</strong> Cada webhook envia um JSON com <code>event</code>, <code>data</code> (informações do paciente, agendamento, etc) e <code>timestamp</code>.
           </p>
         </div>
       </div>

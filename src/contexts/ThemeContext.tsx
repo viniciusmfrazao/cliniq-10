@@ -27,7 +27,7 @@ function getInitialMode(): ThemeMode {
 function getInitialColor(): ThemeColor {
   if (typeof window === 'undefined') return 'default'
   try {
-    const saved = localStorage.getItem('theme-color') || localStorage.getItem('cliniq-theme')
+    const saved = localStorage.getItem('theme-color') || localStorage.getItem('clinike-theme')
     if (saved && saved !== 'default') return saved as ThemeColor
   } catch {}
   return 'default'

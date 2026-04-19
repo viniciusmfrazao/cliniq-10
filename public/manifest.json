@@ -1,6 +1,6 @@
 {
-  "name": "Cliniq",
-  "short_name": "Cliniq",
+  "name": "Clinike",
+  "short_name": "Clinike",
   "description": "Gestão para clínicas de estética",
   "start_url": "/dashboard",
   "display": "standalone",

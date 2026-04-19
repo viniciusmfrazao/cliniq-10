@@ -80,7 +80,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                 </div>
                 <div>
                   <p className="text-white font-bold">{clinicName}</p>
-                  <p className="text-white/60 text-xs">Cliniq Pro</p>
+                  <p className="text-white/60 text-xs">Clinike</p>
                 </div>
               </div>
               <button 

@@ -1,6 +1,6 @@
 # EVA — DOCUMENTAÇÃO TÉCNICA
 
-Lógica de integração da Eva com o sistema Cliniq (Supabase) e automações N8N.
+Lógica de integração da Eva com o sistema Clinike (Supabase) e automações N8N.
 
 ---
 

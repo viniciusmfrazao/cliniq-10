@@ -193,7 +193,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
               <Icon name="sparkles" className="w-6 h-6 md:w-8 md:h-8" />
             </div>
             <div>
-              <h2 className="text-lg md:text-2xl font-black">Bem-vinda ao Cliniq Pro!</h2>
+              <h2 className="text-lg md:text-2xl font-black">Bem-vinda ao Clinike!</h2>
               <p className="text-white/80 text-sm md:text-base mt-0.5">{trialDaysLeft} dias de trial gratuito</p>
             </div>
           </div>

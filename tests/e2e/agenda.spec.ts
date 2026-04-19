@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 // Helper para fazer login antes dos testes
 async function login(page: any) {
   await page.goto('/login')
-  await page.fill('input[type="email"]', process.env.TEST_EMAIL || 'teste@cliniq.com')
+  await page.fill('input[type="email"]', process.env.TEST_EMAIL || 'teste@clinike.com.br')
   await page.fill('input[type="password"]', process.env.TEST_PASSWORD || 'senha123')
   await page.click('button[type="submit"]')
   await expect(page).toHaveURL(/dashboard/, { timeout: 10000 })

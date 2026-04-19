@@ -1,4 +1,4 @@
-# Testes Automatizados E2E - CliniQ
+# Testes Automatizados E2E - Clinike
 
 Testes end-to-end usando **Playwright** que simulam usuários reais navegando pelo sistema.
 
@@ -54,11 +54,11 @@ Crie um arquivo `.env.test` ou defina as variáveis:
 
 ```env
 # Credenciais de usuário comum para testes
-TEST_EMAIL=teste@cliniq.com
+TEST_EMAIL=teste@clinike.com
 TEST_PASSWORD=senha123
 
 # Credenciais de super admin
-SUPER_ADMIN_EMAIL=admin@cliniq.com
+SUPER_ADMIN_EMAIL=admin@clinike.com
 SUPER_ADMIN_PASSWORD=senha123
 
 # URL base (opcional, padrão: http://localhost:3000)
@@ -68,10 +68,10 @@ BASE_URL=http://localhost:3000
 ### Testar em Produção/Staging
 ```bash
 # Testar no staging
-BASE_URL=https://cliniq-staging.vercel.app npx playwright test
+BASE_URL=https://clinike-staging.vercel.app npx playwright test
 
 # Testar em produção (cuidado!)
-BASE_URL=https://cliniq.com.br npx playwright test
+BASE_URL=https://clinike.com.br npx playwright test
 ```
 
 ## 📁 Estrutura dos Testes

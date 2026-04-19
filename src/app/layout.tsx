@@ -3,7 +3,7 @@ import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 
 export const metadata: Metadata = {
-  title: 'Cliniq',
+  title: 'Clinike',
   description: 'Gestão para clínicas de estética',
 }
 
@@ -11,7 +11,7 @@ const themeScript = `
   (function() {
     try {
       var mode = localStorage.getItem('theme-mode');
-      var color = localStorage.getItem('theme-color') || localStorage.getItem('cliniq-theme');
+      var color = localStorage.getItem('theme-color') || localStorage.getItem('clinike-theme');
       if (mode === 'dark') {
         document.documentElement.classList.add('dark');
       }

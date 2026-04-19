@@ -1,7 +1,7 @@
 # Análise do Banco de Dados
 
 **Data:** Abril 2026  
-**Projeto:** CliniQ
+**Projeto:** Clinike
 
 ## Resumo
 

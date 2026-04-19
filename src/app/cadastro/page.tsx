@@ -120,7 +120,7 @@ export default function CadastroPage() {
             <div className="inline-flex items-center justify-center w-14 h-14 gradient-bg rounded-2xl mb-3 shadow-xl shadow-purple-200">
               <span className="text-white text-xl font-bold">C</span>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">Cliniq</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Clinike</h1>
           </div>
 
           <div className="card p-6 shadow-xl">

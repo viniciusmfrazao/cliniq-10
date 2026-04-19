@@ -74,7 +74,7 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
           </div>
           <div className="min-w-0">
             <p className="text-white font-bold text-lg truncate">{clinicName}</p>
-            <p className="text-white/50 text-xs font-medium">Cliniq Pro</p>
+            <p className="text-white/50 text-xs font-medium">Clinike</p>
           </div>
         </div>
       </div>

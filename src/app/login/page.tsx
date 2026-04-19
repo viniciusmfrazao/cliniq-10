@@ -68,7 +68,7 @@ export default function LoginPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 gradient-bg rounded-3xl mb-4 shadow-xl animate-pulse-glow">
               <span className="text-white text-2xl font-black">C</span>
             </div>
-            <h1 className="text-3xl font-black text-slate-900">Cliniq</h1>
+            <h1 className="text-3xl font-black text-slate-900">Clinike</h1>
           </div>
 
           <div className="card p-8">

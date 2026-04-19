@@ -26,7 +26,7 @@ export async function triggerN8nWebhook(
 ): Promise<boolean> {
   const webhookUrl = webhookPath 
     ? `${N8N_WEBHOOK_BASE}/${webhookPath}`
-    : `${N8N_WEBHOOK_BASE}/cliniq-${event.replace('_', '-')}`
+    : `${N8N_WEBHOOK_BASE}/clinike-${event.replace('_', '-')}`
 
   if (!N8N_WEBHOOK_BASE) {
     console.log(`[n8n] Webhook não configurado. Evento: ${event}`)

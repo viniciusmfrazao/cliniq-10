@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
 export const metadata = {
-  title: 'Eva IA | Cliniq',
+  title: 'Eva IA | Clinike',
 }
 
 export default async function EvaPage() {

@@ -9,8 +9,8 @@ Este documento explica como configurar e usar o ambiente de staging para testar 
 │   PRODUÇÃO      │     │    STAGING      │
 ├─────────────────┤     ├─────────────────┤
 │ Branch: main    │     │ Branch: staging │
-│ URL: cliniq.app │     │ URL: staging-   │
-│                 │     │   cliniq.app    │
+│ URL: clinike.app │     │ URL: staging-   │
+│                 │     │   clinike.app    │
 │ Supabase: PROD  │     │ Supabase: STG   │
 └─────────────────┘     └─────────────────┘
 ```
@@ -18,7 +18,7 @@ Este documento explica como configurar e usar o ambiente de staging para testar 
 ## Passo 1: Criar Projeto Staging no Supabase
 
 1. Acesse [Supabase](https://supabase.com)
-2. Crie um novo projeto: `cliniq-staging`
+2. Crie um novo projeto: `clinike-staging`
 3. Copie as credenciais (URL, anon key, service key)
 
 ## Passo 2: Configurar Vercel
@@ -37,7 +37,7 @@ SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key_staging
 ```
 
 4. Opcional: Configure um domínio custom para staging:
-   - `staging.cliniq.app` → branch staging
+   - `staging.clinike.app` → branch staging
 
 ## Passo 3: Migrar Schema para Staging
 
@@ -81,7 +81,7 @@ git merge feature/minha-feature
 git push origin staging
 ```
 
-Vercel fará deploy automático para staging. Teste em `staging-cliniq.vercel.app`
+Vercel fará deploy automático para staging. Teste em `staging-clinike.vercel.app`
 
 ### 3. Promover para Produção
 

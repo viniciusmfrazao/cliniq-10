@@ -1,4 +1,15 @@
-# TODO - Próximas Tarefas
+# TODO - Tarefas Organizadas
+
+## 🔵 HOJE - Site Institucional
+
+### 1. Criar Site de Vendas do Clinike
+- [ ] Usar o prompt em `docs/PROMPT-SITE-INSTITUCIONAL.md`
+- [ ] Gerar código com Claude
+- [ ] Tirar screenshots do sistema para usar no site
+- [ ] Configurar WhatsApp: **34991805722**
+- [ ] Deploy do site (Vercel)
+
+---
 
 ## 🔴 PRIORIDADE ALTA: Ambiente de Staging
 
@@ -8,7 +19,7 @@ Antes de vender, precisa configurar ambiente separado para desenvolvimento/teste
 
 1. **Criar banco Supabase de staging**
    - Acesse: https://supabase.com/dashboard
-   - Clique "New Project" → Nome: `cliniq-staging`
+   - Clique "New Project" → Nome: `clinike-staging`
    - Anote as chaves (URL, anon key, service role key)
 
 2. **Copiar schema para staging**
@@ -29,25 +40,40 @@ Antes de vender, precisa configurar ambiente separado para desenvolvimento/teste
 - [ ] Afinar Donna (IA WhatsApp) - consultar ferramentas corretamente
 - [ ] Configurar monitoramento de erros (Sentry)
 - [ ] Backup automático do banco
+- [ ] PWA para acesso mobile como app
 
 ---
 
-## ✅ CONCLUÍDO HOJE
+## ✅ CONCLUÍDO ONTEM
 
 - [x] Remover admin da lista de profissionais na agenda
 - [x] Melhorar dashboard com gráfico semanal
 - [x] Traduzir atividades para português
+- [x] Soft delete para equipe (preserva histórico)
+- [x] Indexes de performance no banco
+- [x] Documentar convenções de nomenclatura
+- [x] Centralizar tipos TypeScript
 - [x] Documentar setup de staging
 
 ---
 
-## 📝 NOTAS
+## 📝 ARQUIVOS IMPORTANTES
 
-- Guia completo de staging: `scripts/setup-staging.md`
-- Convenções de código: `docs/NAMING-CONVENTIONS.md`
-- Análise do banco: `docs/DATABASE-ANALYSIS.md`
-- Indexes de performance: `docs/indexes-performance.sql`
+| Arquivo | Descrição |
+|---------|-----------|
+| `docs/PROMPT-SITE-INSTITUCIONAL.md` | Prompt para gerar site de vendas |
+| `scripts/setup-staging.md` | Guia de setup do ambiente staging |
+| `docs/NAMING-CONVENTIONS.md` | Convenções de código |
+| `docs/DATABASE-ANALYSIS.md` | Análise do banco de dados |
+| `docs/indexes-performance.sql` | Indexes para performance |
 
 ---
 
-Boa noite! 🌙
+## 📞 CONTATO COMERCIAL
+
+WhatsApp: **34 99180-5722**
+Link: https://wa.me/5534991805722
+
+---
+
+Atualizado em: 19/04/2026

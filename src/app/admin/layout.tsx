@@ -24,7 +24,7 @@ export default async function AdminLayout({
             🛡️ Super Admin
           </Link>
           <span className="text-slate-400">|</span>
-          <span className="text-slate-300">ClinIQ Management</span>
+          <span className="text-slate-300">Clinike Admin</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-slate-300">{adminData?.name}</span>

@@ -55,7 +55,7 @@ export default function ThemeSelector() {
   const { mode, setMode } = useTheme()
 
   useEffect(() => {
-    const saved = localStorage.getItem('cliniq-theme') || 'default'
+    const saved = localStorage.getItem('clinike-theme') || 'default'
     setCurrentTheme(saved)
     applyTheme(saved)
   }, [])
@@ -70,7 +70,7 @@ export default function ThemeSelector() {
 
   function selectTheme(themeId: string) {
     setCurrentTheme(themeId)
-    localStorage.setItem('cliniq-theme', themeId)
+    localStorage.setItem('clinike-theme', themeId)
     applyTheme(themeId)
   }
 

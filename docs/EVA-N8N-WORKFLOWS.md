@@ -25,7 +25,7 @@ Documentação técnica dos fluxos de automação da Eva.
 ┌─────────────────────────────────────────────────────────────────┐
 │                         ENTRADA                                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  WhatsApp (Z-API)  │  Cron (horário)  │  Webhook (Cliniq)       │
+│  WhatsApp (Z-API)  │  Cron (horário)  │  Webhook (Clinike)       │
 └─────────┬──────────┴────────┬─────────┴───────────┬─────────────┘
           │                   │                     │
           ▼                   ▼                     ▼
@@ -55,7 +55,7 @@ Documentação técnica dos fluxos de automação da Eva.
 
 #### 1. Supabase (HTTP Header Auth)
 ```
-Nome: Supabase Cliniq
+Nome: Supabase Clinike
 Tipo: Header Auth
 Header Name: apikey
 Header Value: [SUA_SUPABASE_SERVICE_KEY]

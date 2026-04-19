@@ -1,4 +1,4 @@
-# Cliniq Pro - Roadmap de Funcionalidades
+# Clinike - Roadmap de Funcionalidades
 
 ## 📊 Módulos que Geram Receita Direta
 
@@ -78,12 +78,12 @@
 
 ## 💰 Modelo de Negócio - Novas Receitas
 
-### Cliniq Marketplace
+### Clinike Marketplace
 - [ ] **Fornecedores de insumos** - Anúncios dentro do sistema
 - [ ] **Compra integrada ao estoque** - Pedido direto pelo sistema
 - [ ] **Comissão por venda**
 
-### Cliniq Academy
+### Clinike Academy
 - [ ] **Cursos para profissionais** - Técnicas, gestão, marketing
 - [ ] **Certificações**
 - [ ] **Monetização da base de usuários**
@@ -109,8 +109,8 @@
 
 ### Fase 4 - Escala
 10. NFS-e integrada
-11. Cliniq Marketplace
-12. Cliniq Academy
+11. Clinike Marketplace
+12. Clinike Academy
 
 ---
 
