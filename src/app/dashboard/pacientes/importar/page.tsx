@@ -173,6 +173,9 @@ export default function ImportarPacientesPage() {
             if (date) {
               birth_date = `${date.y}-${String(date.m).padStart(2,'0')}-${String(date.d).padStart(2,'0')}`
             }
+          } else if (birth_date.includes('T')) {
+            // ISO format (2024-01-15T03:00:00.000Z) - extract just the date
+            birth_date = birth_date.split('T')[0]
           } else if (birth_date.includes('/')) {
             const parts = birth_date.split('/')
             if (parts.length === 3) {
