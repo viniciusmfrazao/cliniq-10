@@ -72,7 +72,7 @@ export default async function PacientesPage({
       )}
 
       <div className="card p-4 mb-4">
-        <PatientSearch initialQuery={searchParams.q || ''} />
+        <PatientSearch initialQuery={searchParams.q || ''} clinicId={userData?.clinic_id || ''} />
       </div>
 
       {/* Filtros rápidos */}
