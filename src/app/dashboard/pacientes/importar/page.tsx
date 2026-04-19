@@ -210,7 +210,7 @@ export default function ImportarPacientesPage() {
           notes: getValue('notes'),
         }
       })
-      .filter((p): p is PatientRow => p !== null) as PatientRow[]
+      .filter(p => p !== null) as PatientRow[]
 
     setPreviewData(processed)
     setStep('preview')
