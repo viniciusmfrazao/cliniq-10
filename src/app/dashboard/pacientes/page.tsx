@@ -17,40 +17,50 @@ export default async function PacientesPage({
   const currentPage = Math.max(1, parseInt(searchParams.page || '1'))
   const offset = (currentPage - 1) * PER_PAGE
 
-  // Pegar total de pacientes (com filtro de busca se houver)
-  let countQuery = supabase
-    .from('patients')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData?.clinic_id)
+  // Contar totais em paralelo
+  const [totalResult, pendingResult] = await Promise.all([
+    supabase
+      .from('patients')
+      .select('*', { count: 'exact', head: true })
+      .eq('clinic_id', userData?.clinic_id),
+    supabase
+      .from('patients')
+      .select('*', { count: 'exact', head: true })
+      .eq('clinic_id', userData?.clinic_id)
+      .or('cpf.is.null,birth_date.is.null')
+  ])
 
-  if (searchParams.q) {
-    countQuery = countQuery.or(`name.ilike.%${searchParams.q}%,phone.ilike.%${searchParams.q}%,email.ilike.%${searchParams.q}%,cpf.ilike.%${searchParams.q}%`)
-  }
+  const totalPatients = totalResult.count || 0
+  const totalPending = pendingResult.count || 0
 
-  const { count: totalPatients } = await countQuery
-
+  // Query para listar pacientes
   let query = supabase
     .from('patients')
     .select('*')
     .eq('clinic_id', userData?.clinic_id)
     .order('name', { ascending: true })
-    .range(offset, offset + PER_PAGE - 1)
 
+  // Aplicar filtro de busca
   if (searchParams.q) {
     query = query.or(`name.ilike.%${searchParams.q}%,phone.ilike.%${searchParams.q}%,email.ilike.%${searchParams.q}%,cpf.ilike.%${searchParams.q}%`)
   }
 
+  // Aplicar filtro de pendentes
+  if (searchParams.filter === 'pendentes') {
+    query = query.or('cpf.is.null,birth_date.is.null')
+  }
+
+  // Contar para paginação (com filtros aplicados)
+  const activeTotal = searchParams.filter === 'pendentes' ? totalPending : totalPatients
+  const totalPages = Math.ceil(activeTotal / PER_PAGE)
+
+  // Aplicar paginação
+  query = query.range(offset, offset + PER_PAGE - 1)
+
   const { data: patients } = await query
-  const totalPages = Math.ceil((totalPatients || 0) / PER_PAGE)
 
-  // Separar pacientes completos e incompletos
-  const incompletePatients = patients?.filter(p => !p.cpf || !p.birth_date) || []
-  const completePatients = patients?.filter(p => p.cpf && p.birth_date) || []
-
-  // Filtrar baseado no parâmetro
-  const filteredPatients = searchParams.filter === 'pendentes' 
-    ? incompletePatients 
-    : patients
+  // Para o alerta, verificar se há pendentes na página atual
+  const incompleteInPage = patients?.filter(p => !p.cpf || !p.birth_date) || []
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -72,7 +82,7 @@ export default async function PacientesPage({
       </div>
 
       {/* Alerta de cadastros pendentes */}
-      {incompletePatients.length > 0 && !searchParams.filter && (
+      {totalPending > 0 && !searchParams.filter && (
         <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center">
@@ -80,7 +90,7 @@ export default async function PacientesPage({
             </div>
             <div>
               <p className="font-semibold text-amber-900">
-                {incompletePatients.length} cadastro{incompletePatients.length > 1 ? 's' : ''} pendente{incompletePatients.length > 1 ? 's' : ''}
+                {totalPending} cadastro{totalPending > 1 ? 's' : ''} pendente{totalPending > 1 ? 's' : ''}
               </p>
               <p className="text-sm text-amber-700">
                 Pacientes sem CPF ou data de nascimento - use o filtro "Pendentes" para ver
@@ -115,12 +125,12 @@ export default async function PacientesPage({
           }`}
         >
           <span className="w-2 h-2 rounded-full bg-amber-500" />
-          Pendentes ({incompletePatients.length})
+          Pendentes ({totalPending})
         </Link>
       </div>
 
       <div className="card divide-y divide-slate-100">
-        {filteredPatients?.length === 0 ? (
+        {patients?.length === 0 ? (
           <div className="p-8 text-center">
             <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <Icon name="users" className="w-6 h-6 text-slate-400" />
@@ -137,7 +147,7 @@ export default async function PacientesPage({
             )}
           </div>
         ) : (
-          filteredPatients?.map(patient => {
+          patients?.map(patient => {
             const isIncomplete = !patient.cpf || !patient.birth_date
             return (
               <Link 
@@ -199,7 +209,7 @@ export default async function PacientesPage({
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 px-2">
           <p className="text-sm text-slate-500">
-            Mostrando {offset + 1}-{Math.min(offset + PER_PAGE, totalPatients || 0)} de {totalPatients}
+            Mostrando {offset + 1}-{Math.min(offset + PER_PAGE, activeTotal)} de {activeTotal}
           </p>
           <div className="flex gap-2">
             {currentPage > 1 && (
