@@ -38,11 +38,11 @@ export default function LoginPage() {
         <div className="relative text-white max-w-md">
           {/* Logo com + e nome */}
           <div className="flex items-center gap-4 mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center animate-float shadow-2xl">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-              </svg>
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="Clinike" 
+              className="w-20 h-20 rounded-2xl animate-float shadow-2xl"
+            />
             <div>
               <h2 className="text-3xl font-black">Clinike</h2>
               <p className="text-white/60 text-sm">Simples como deve ser</p>
@@ -76,11 +76,11 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 rounded-3xl mb-4 shadow-xl">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-              </svg>
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="Clinike" 
+              className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-xl"
+            />
             <h1 className="text-3xl font-black text-slate-900">Clinike</h1>
             <p className="text-slate-500 text-sm mt-1">Simples como deve ser</p>
           </div>

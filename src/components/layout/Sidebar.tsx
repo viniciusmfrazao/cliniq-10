@@ -69,11 +69,11 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
       {/* Logo */}
       <div className="px-6 py-6 relative">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-violet-400 to-purple-500 rounded-2xl flex items-center justify-center shadow-lg">
-            <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-              <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-            </svg>
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="Clinike" 
+            className="w-12 h-12 rounded-xl shadow-lg"
+          />
           <div className="min-w-0">
             <p className="text-white font-bold text-lg truncate">{clinicName}</p>
             <p className="text-white/50 text-xs font-medium">Clinike</p>

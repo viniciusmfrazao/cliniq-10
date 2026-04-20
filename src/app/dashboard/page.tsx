@@ -189,11 +189,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-5 md:p-8 text-white">
           <div className="absolute top-0 right-0 w-48 md:w-64 h-48 md:h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
           <div className="relative flex items-center gap-4">
-            <div className="w-12 h-12 md:w-16 md:h-16 bg-gradient-to-br from-white/30 to-white/10 backdrop-blur rounded-xl md:rounded-2xl flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-              </svg>
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="Clinike" 
+              className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl"
+            />
             <div>
               <h2 className="text-lg md:text-2xl font-black">Bem-vindo ao Clinike!</h2>
               <p className="text-white/80 text-sm md:text-base mt-0.5">Simples como deve ser</p>
@@ -207,11 +207,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         <div>
           <div className="hidden md:flex items-center gap-3 mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/25">
-                <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
-                  <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-                </svg>
-              </div>
+              <img 
+                src="/logo.png" 
+                alt="Clinike" 
+                className="w-8 h-8 rounded-lg shadow-lg shadow-violet-500/25"
+              />
               <span className="text-sm font-bold text-slate-700">Clinike</span>
               <span className="text-xs text-slate-400">• Simples como deve ser</span>
             </div>
