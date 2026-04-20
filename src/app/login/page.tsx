@@ -36,11 +36,17 @@ export default function LoginPage() {
         </div>
         
         <div className="relative text-white max-w-md">
-          {/* Logo com + */}
-          <div className="w-20 h-20 bg-gradient-to-br from-violet-500 to-purple-600 rounded-3xl flex items-center justify-center mb-8 animate-float shadow-2xl">
-            <svg width="40" height="40" viewBox="0 0 32 32" fill="none">
-              <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-            </svg>
+          {/* Logo com + e nome */}
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center animate-float shadow-2xl">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <path d="M16 6V26M6 16H26" stroke="white" strokeWidth="4" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-3xl font-black">Clinike</h2>
+              <p className="text-white/60 text-sm">Simples como deve ser</p>
+            </div>
           </div>
           <h1 className="text-5xl font-black mb-4 leading-tight">
             Gerencie sua clínica com{' '}
@@ -76,6 +82,7 @@ export default function LoginPage() {
               </svg>
             </div>
             <h1 className="text-3xl font-black text-slate-900">Clinike</h1>
+            <p className="text-slate-500 text-sm mt-1">Simples como deve ser</p>
           </div>
 
           <div className="card p-8">
