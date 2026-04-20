@@ -70,7 +70,7 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
       <div className="px-6 py-6 relative">
         <div className="flex items-center gap-4">
           <img 
-            src="/logo.png" 
+            src="/logo.svg" 
             alt="Clinike" 
             className="w-12 h-12 rounded-xl shadow-lg"
           />

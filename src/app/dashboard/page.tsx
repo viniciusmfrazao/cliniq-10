@@ -190,7 +190,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           <div className="absolute top-0 right-0 w-48 md:w-64 h-48 md:h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
           <div className="relative flex items-center gap-4">
             <img 
-              src="/logo.png" 
+              src="/logo.svg" 
               alt="Clinike" 
               className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl"
             />
@@ -208,7 +208,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           <div className="hidden md:flex items-center gap-3 mb-3">
             <div className="flex items-center gap-2">
               <img 
-                src="/logo.png" 
+                src="/logo.svg" 
                 alt="Clinike" 
                 className="w-8 h-8 rounded-lg shadow-lg shadow-violet-500/25"
               />

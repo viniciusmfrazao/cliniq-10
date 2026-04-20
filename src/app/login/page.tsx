@@ -39,7 +39,7 @@ export default function LoginPage() {
           {/* Logo com + e nome */}
           <div className="flex items-center gap-4 mb-8">
             <img 
-              src="/logo.png" 
+              src="/logo.svg" 
               alt="Clinike" 
               className="w-20 h-20 rounded-2xl animate-float shadow-2xl"
             />
@@ -77,7 +77,7 @@ export default function LoginPage() {
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
             <img 
-              src="/logo.png" 
+              src="/logo.svg" 
               alt="Clinike" 
               className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-xl"
             />

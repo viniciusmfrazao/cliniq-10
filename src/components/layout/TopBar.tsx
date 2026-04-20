@@ -76,7 +76,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
             <div className="relative px-5 py-6 flex items-center justify-between border-b border-white/10">
               <div className="flex items-center gap-3">
                 <img 
-                  src="/logo.png" 
+                  src="/logo.svg" 
                   alt="Clinike" 
                   className="w-12 h-12 rounded-xl"
                 />
