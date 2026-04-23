@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAllPatients } from '@/lib/queries'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -28,11 +29,11 @@ export default async function EnviarDocumentoPage({ searchParams }: { searchPara
     .eq('is_active', true)
     .order('name')
 
-  const { data: patients } = await supabase
-    .from('patients')
-    .select('id, name, email, phone, cpf')
-    .eq('clinic_id', userData?.clinic_id)
-    .order('name')
+  const patients = await getAllPatients<{ id: string; name: string; email: string | null; phone: string | null; cpf: string | null }>(
+    supabase,
+    userData?.clinic_id,
+    'id, name, email, phone, cpf'
+  )
 
   return (
     <div className="max-w-3xl mx-auto">

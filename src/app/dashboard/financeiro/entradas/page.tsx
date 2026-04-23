@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import EntradasList from './entradas-list'
@@ -16,11 +17,11 @@ export default async function EntradasPage() {
     .order('data_venda', { ascending: false })
     .limit(100)
 
-  const { data: pacientes } = await supabase
-    .from('patients')
-    .select('id, name')
-    .eq('clinic_id', clinicId)
-    .order('name')
+  const pacientes = await getAllPatients<{ id: string; name: string }>(
+    supabase,
+    clinicId,
+    'id, name'
+  )
 
   const { data: procedimentos } = await supabase
     .from('procedures')

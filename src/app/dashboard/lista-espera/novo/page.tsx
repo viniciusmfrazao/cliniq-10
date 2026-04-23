@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAllPatients } from '@/lib/queries'
 import { redirect } from 'next/navigation'
 import WaitingListForm from './waiting-list-form'
 
@@ -13,11 +14,11 @@ export default async function NovaListaEsperaPage() {
     .eq('id', user.id)
     .single()
 
-  const { data: patients } = await supabase
-    .from('patients')
-    .select('id, name')
-    .eq('clinic_id', userData?.clinic_id)
-    .order('name')
+  const patients = await getAllPatients<{ id: string; name: string }>(
+    supabase,
+    userData?.clinic_id,
+    'id, name'
+  )
 
   const { data: procedures } = await supabase
     .from('procedures')

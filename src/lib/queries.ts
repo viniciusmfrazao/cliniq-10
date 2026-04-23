@@ -109,6 +109,58 @@ export async function getPatients(
 }
 
 /**
+ * Busca TODOS os pacientes de uma clínica, contornando o maxRows=1000 do PostgREST
+ * via paginação paralela em chunks de 1000.
+ *
+ * Use quando precisar carregar todos os pacientes (ex: selects/autocompletes).
+ * Para listagens paginadas, prefira getPatients com offset/limit.
+ */
+export async function getAllPatients<T = any>(
+  supabase: SupabaseClientType,
+  clinicId: string,
+  columns: string = 'id, name',
+  orderBy: string = 'name'
+): Promise<T[]> {
+  const CHUNK_SIZE = 1000
+
+  const { count } = await supabase
+    .from('patients')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+
+  const total = count || 0
+  if (total === 0) return []
+
+  const chunks = Math.ceil(total / CHUNK_SIZE)
+
+  const requests = Array.from({ length: chunks }, (_, i) => {
+    const from = i * CHUNK_SIZE
+    const to = from + CHUNK_SIZE - 1
+    return supabase
+      .from('patients')
+      .select(columns)
+      .eq('clinic_id', clinicId)
+      .order(orderBy)
+      .range(from, to)
+  })
+
+  const results = await Promise.all(requests)
+
+  const allPatients: T[] = []
+  for (const result of results) {
+    if (result.error) {
+      console.error('Erro ao buscar pacientes (chunk):', result.error)
+      continue
+    }
+    if (result.data) {
+      allPatients.push(...(result.data as T[]))
+    }
+  }
+
+  return allPatients
+}
+
+/**
  * Busca um paciente específico com todas as informações
  */
 export async function getPatientById(

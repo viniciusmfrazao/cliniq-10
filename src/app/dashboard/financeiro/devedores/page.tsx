@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import DevedoresList from './devedores-list'
@@ -17,12 +18,11 @@ export default async function DevedoresPage() {
     .eq('status', 'pendente')
     .order('data_vencimento', { ascending: true })
 
-  // Buscar pacientes para o formulário
-  const { data: pacientes } = await supabase
-    .from('patients')
-    .select('id, name, phone')
-    .eq('clinic_id', clinicId)
-    .order('name')
+  const pacientes = await getAllPatients<{ id: string; name: string; phone: string | null }>(
+    supabase,
+    clinicId,
+    'id, name, phone'
+  )
 
   // Calcular totais
   const totalPendente = debitos?.reduce((sum, d) => sum + Number(d.valor || 0), 0) || 0

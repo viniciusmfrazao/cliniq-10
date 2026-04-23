@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAllPatients } from '@/lib/queries'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -23,12 +24,11 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
 
   if (!appointment) notFound()
 
-  // Dados para editar
-  const { data: patients } = await supabase
-    .from('patients')
-    .select('id, name')
-    .eq('clinic_id', userData?.clinic_id)
-    .order('name')
+  const patients = await getAllPatients<{ id: string; name: string }>(
+    supabase,
+    userData?.clinic_id,
+    'id, name'
+  )
 
   const { data: procedures } = await supabase
     .from('procedures')

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import EntradaForm from './entrada-form'
@@ -9,11 +10,11 @@ export default async function NovaEntradaPage() {
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id
 
-  const { data: pacientes } = await supabase
-    .from('patients')
-    .select('id, name')
-    .eq('clinic_id', clinicId)
-    .order('name')
+  const pacientes = await getAllPatients<{ id: string; name: string }>(
+    supabase,
+    clinicId,
+    'id, name'
+  )
 
   const { data: procedimentos } = await supabase
     .from('procedures')

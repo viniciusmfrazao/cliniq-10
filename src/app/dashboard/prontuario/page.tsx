@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import PatientSearchProntuario from './patient-search'
 
@@ -23,13 +24,13 @@ export default async function ProntuarioPage({
 
   const { data: patients } = await query.limit(30)
 
-  // Buscar IDs dos pacientes da clínica
-  const { data: clinicPatients } = await supabase
-    .from('patients')
-    .select('id')
-    .eq('clinic_id', userData?.clinic_id)
+  const clinicPatients = await getAllPatients<{ id: string }>(
+    supabase,
+    userData?.clinic_id,
+    'id'
+  )
 
-  const patientIds = clinicPatients?.map(p => p.id) || []
+  const patientIds = clinicPatients.map(p => p.id)
 
   // Buscar últimas evoluções apenas dos pacientes da clínica
   const { data: recentEvolutions } = patientIds.length > 0 

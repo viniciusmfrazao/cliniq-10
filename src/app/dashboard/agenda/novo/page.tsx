@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAllPatients } from '@/lib/queries'
 import AppointmentForm from '../appointment-form'
 
 export default async function NovoAgendamentoPage({ 
@@ -10,12 +11,11 @@ export default async function NovoAgendamentoPage({
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
 
-  // Buscar dados para os selects
-  const { data: patients } = await supabase
-    .from('patients')
-    .select('id, name')
-    .eq('clinic_id', userData?.clinic_id)
-    .order('name')
+  const patients = await getAllPatients<{ id: string; name: string }>(
+    supabase,
+    userData?.clinic_id,
+    'id, name'
+  )
 
   const { data: procedures } = await supabase
     .from('procedures')
