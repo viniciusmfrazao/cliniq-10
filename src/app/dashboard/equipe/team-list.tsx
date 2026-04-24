@@ -4,7 +4,14 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import PermissionsModal from './permissions-modal'
+import SchedulesModal from './schedules-modal'
+import UnavailabilityModal from './unavailability-modal'
 import Icon from '@/components/ui/Icon'
+
+const PROFESSIONAL_ROLES = new Set([
+  'doctor', 'biomedic', 'nurse', 'esthetician',
+  'physiotherapist', 'nutritionist', 'psychologist',
+])
 
 type Member = {
   id: string
@@ -60,6 +67,8 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
   const supabase = createClient()
   const [loading, setLoading] = useState<string | null>(null)
   const [editingPermissions, setEditingPermissions] = useState<Member | null>(null)
+  const [editingSchedules, setEditingSchedules] = useState<Member | null>(null)
+  const [editingUnavail, setEditingUnavail] = useState<Member | null>(null)
 
   async function handleDeactivate(memberId: string, memberName: string) {
     if (!confirm(`Desativar ${memberName}?\n\nO membro não poderá mais acessar o sistema, mas o histórico será mantido.`)) return
@@ -176,6 +185,24 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                   ) : (
                     // Botões de editar e desativar
                     <>
+                      {PROFESSIONAL_ROLES.has(member.role) && (
+                        <>
+                          <button
+                            onClick={() => setEditingSchedules(member)}
+                            className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                            title="Horários de atendimento"
+                          >
+                            <Icon name="clock" className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setEditingUnavail(member)}
+                            className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                            title="Férias e folgas"
+                          >
+                            <Icon name="calendar" className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={() => setEditingPermissions(member)}
                         className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
@@ -209,6 +236,24 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
             setEditingPermissions(null)
             router.refresh()
           }}
+        />
+      )}
+
+      {editingSchedules && (
+        <SchedulesModal
+          member={{ id: editingSchedules.id, name: editingSchedules.name }}
+          clinicId={clinicId}
+          onClose={() => setEditingSchedules(null)}
+          onSave={() => router.refresh()}
+        />
+      )}
+
+      {editingUnavail && (
+        <UnavailabilityModal
+          member={{ id: editingUnavail.id, name: editingUnavail.name }}
+          clinicId={clinicId}
+          onClose={() => setEditingUnavail(null)}
+          onSave={() => router.refresh()}
         />
       )}
     </>

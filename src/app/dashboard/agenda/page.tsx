@@ -170,6 +170,7 @@ export default async function AgendaPage({
         selectedDate={selectedDate}
         professionals={professionals || []}
         selectedProfessional={selectedProfessional}
+        clinicId={clinicId}
       />
     </div>
   )

@@ -80,6 +80,10 @@ export default function AppointmentForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const [availableSlots, setAvailableSlots] = useState<string[]>([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [hasScheduleConfigured, setHasScheduleConfigured] = useState<boolean | null>(null)
+
   // Calcula duração total baseado nos procedimentos selecionados
   useEffect(() => {
     if (selectedProcedures.length > 0) {
@@ -90,6 +94,45 @@ export default function AppointmentForm({
       setForm(prev => ({ ...prev, duration: totalDuration.toString() }))
     }
   }, [selectedProcedures, procedures])
+
+  // Busca slots disponíveis quando profissional + data + duração mudarem
+  useEffect(() => {
+    async function loadSlots() {
+      if (!form.professional_id || !form.date) {
+        setAvailableSlots([])
+        setHasScheduleConfigured(null)
+        return
+      }
+      setLoadingSlots(true)
+
+      const { data, error: rpcErr } = await supabase.rpc('get_available_slots', {
+        p_clinic_id: clinicId,
+        p_date: form.date,
+        p_professional_id: form.professional_id,
+        p_duration_min: parseInt(form.duration) || 30,
+      })
+
+      if (rpcErr) {
+        console.error('Erro ao buscar slots:', rpcErr)
+        setAvailableSlots([])
+        setLoadingSlots(false)
+        return
+      }
+
+      const { count } = await supabase
+        .from('professional_schedules')
+        .select('*', { count: 'exact', head: true })
+        .eq('professional_id', form.professional_id)
+        .eq('is_active', true)
+
+      setHasScheduleConfigured((count ?? 0) > 0)
+
+      const slots: string[] = (data || []).map((s: any) => String(s.slot_time).slice(0, 5))
+      setAvailableSlots(slots)
+      setLoadingSlots(false)
+    }
+    loadSlots()
+  }, [form.professional_id, form.date, form.duration, clinicId, supabase])
 
   const handleNewPatient = (patient: { id: string; name: string }) => {
     setPatients(prev => [...prev, patient].sort((a, b) => a.name.localeCompare(b.name)))
@@ -292,6 +335,45 @@ export default function AppointmentForm({
           />
         </div>
       </div>
+
+      {form.professional_id && form.date && (
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="label mb-0">Horários disponíveis</label>
+            {loadingSlots && <span className="text-xs text-slate-400">carregando...</span>}
+          </div>
+          {hasScheduleConfigured === false ? (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              Este profissional ainda não tem horários cadastrados.
+              {' '}
+              <a href="/dashboard/equipe" className="underline font-medium">
+                Configurar em Equipe
+              </a>
+            </div>
+          ) : availableSlots.length === 0 && !loadingSlots ? (
+            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+              Sem horários livres nesta data. Tente outro dia ou ajuste a duração.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {availableSlots.map(slot => (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => update('start_time', slot)}
+                  className={`px-2.5 py-1 rounded-lg text-sm border transition-colors ${
+                    form.start_time === slot
+                      ? 'bg-violet-600 text-white border-violet-600'
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-violet-400 hover:bg-violet-50'
+                  }`}
+                >
+                  {slot}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div>
         <label className="label">Duração (minutos)</label>

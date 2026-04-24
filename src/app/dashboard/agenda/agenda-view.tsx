@@ -31,6 +31,7 @@ type Props = {
   selectedDate: string
   professionals: Professional[]
   selectedProfessional: string
+  clinicId: string
 }
 
 const HOUR_SLOTS = Array.from({ length: 14 }, (_, i) => i + 7)
@@ -255,7 +256,7 @@ function AppointmentCard({
   )
 }
 
-export default function AgendaView({ appointments, viewMode, selectedDate, professionals, selectedProfessional }: Props) {
+export default function AgendaView({ appointments, viewMode, selectedDate, professionals, selectedProfessional, clinicId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null)
@@ -346,50 +347,46 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
     setDraggedAppointment(null)
   }
 
-  // Encontrar próximo horário livre
-  function findNextAvailableSlot(): { date: string; time: string; professionalId: string } | null {
-    const now = new Date()
+  // Encontrar próximo horário livre (usa RPC get_available_slots)
+  async function findNextAvailableSlot(): Promise<{ date: string; time: string; professionalId: string } | null> {
     const checkDate = new Date(selectedDate + 'T00:00:00')
-    
+
     for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
       const currentDate = new Date(checkDate)
       currentDate.setDate(checkDate.getDate() + dayOffset)
       const dateStr = currentDate.toISOString().split('T')[0]
-      
-      for (const prof of displayProfessionals) {
-        for (let hour = 7; hour <= 19; hour++) {
-          for (const minute of [0, 30]) {
-            const slotTime = new Date(`${dateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`)
-            
-            if (slotTime <= now) continue
-            
-            const hasAppointment = appointments.some(apt => {
-              const aptStart = new Date(apt.start_time)
-              const aptEnd = apt.end_time ? new Date(apt.end_time) : new Date(aptStart.getTime() + 30 * 60 * 1000)
-              return apt.professional_id === prof.id && 
-                     slotTime >= aptStart && slotTime < aptEnd
-            })
-            
-            if (!hasAppointment) {
-              return {
-                date: dateStr,
-                time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-                professionalId: prof.id
-              }
-            }
-          }
+
+      const profId = selectedProfessional === 'all' ? null : selectedProfessional
+
+      const { data, error } = await supabase.rpc('get_available_slots', {
+        p_clinic_id: clinicId,
+        p_date: dateStr,
+        p_professional_id: profId,
+        p_duration_min: 30,
+      })
+
+      if (error) {
+        console.error('Erro ao buscar slots:', error)
+        continue
+      }
+      if (data && data.length > 0) {
+        const first: any = data[0]
+        return {
+          date: dateStr,
+          time: String(first.slot_time).slice(0, 5),
+          professionalId: first.professional_id,
         }
       }
     }
     return null
   }
 
-  function handleFindNextSlot() {
-    const slot = findNextAvailableSlot()
+  async function handleFindNextSlot() {
+    const slot = await findNextAvailableSlot()
     if (slot) {
       router.push(`/dashboard/agenda/novo?date=${slot.date}&time=${slot.time}&professional=${slot.professionalId}`)
     } else {
-      alert('Não encontramos horários disponíveis nos próximos 30 dias')
+      alert('Não encontramos horários disponíveis nos próximos 30 dias.\n\nVerifique se os profissionais têm horários cadastrados em Equipe.')
     }
   }
 
