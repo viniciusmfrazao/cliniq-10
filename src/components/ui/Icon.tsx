@@ -82,6 +82,8 @@ const P: Record<string, string[]> = {
   shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
   trending: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'],
   layers: ['M12 2L2 7l10 5 10-5-10-5z', 'M2 17l10 5 10-5', 'M2 12l10 5 10-5'],
+  alertCircle: ['M12 22a10 10 0 100-20 10 10 0 000 20z', 'M12 8v4', 'M12 16h.01'],
+  command: ['M18 3a3 3 0 00-3 3v12a3 3 0 003 3 3 3 0 003-3 3 3 0 00-3-3H6a3 3 0 00-3 3 3 3 0 003 3 3 3 0 003-3V6a3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3h12a3 3 0 003-3 3 3 0 00-3-3z'],
 }
 
 export default function Icon({ name, className = 'w-5 h-5', style }: { name: string; className?: string; style?: React.CSSProperties }) {

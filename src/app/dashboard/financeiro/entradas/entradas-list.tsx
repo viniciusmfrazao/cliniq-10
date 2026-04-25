@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
+import { useToast } from '@/components/ui/Toast'
 
 type Entrada = {
   id: string
@@ -38,6 +39,7 @@ export default function EntradasList({ entradas, clinicId }: Props) {
   const [deleting, setDeleting] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
 
   const filteredList = list.filter(e => {
     const matchSearch = !search || 
@@ -59,17 +61,41 @@ export default function EntradasList({ entradas, clinicId }: Props) {
   }, {} as Record<string, { valor: number; qtd: number }>)
 
   async function handleDelete(id: string) {
-    if (!confirm('Tem certeza que deseja excluir esta entrada?')) return
-    setDeleting(id)
-    
-    const { error } = await supabase.from('entradas').delete().eq('id', id)
-    
-    if (error) {
-      alert('Erro ao excluir: ' + error.message)
-    } else {
-      setList(list.filter(e => e.id !== id))
-    }
-    setDeleting(null)
+    // Padrao optimistic-undo:
+    // 1) Remove visualmente AGORA (UX rapida)
+    // 2) Mostra toast com botao "Desfazer" por 5s
+    // 3) Se nao desfizer no prazo, manda o DELETE pro banco
+    const removed = list.find(e => e.id === id)
+    if (!removed) return
+
+    setList(prev => prev.filter(e => e.id !== id))
+
+    let undone = false
+    toast.undo({
+      title: 'Entrada removida',
+      description: 'Voce tem 5s pra desfazer',
+      duration: 5000,
+      onUndo: () => {
+        undone = true
+        setList(prev => [...prev, removed].sort(
+          (a, b) => (b.data_venda || '').localeCompare(a.data_venda || '')
+        ))
+      },
+    })
+
+    setTimeout(async () => {
+      if (undone) return
+      setDeleting(id)
+      const { error } = await supabase.from('entradas').delete().eq('id', id)
+      setDeleting(null)
+      if (error) {
+        // restaura e avisa
+        setList(prev => [...prev, removed].sort(
+          (a, b) => (b.data_venda || '').localeCompare(a.data_venda || '')
+        ))
+        toast.error('Erro ao excluir', { description: error.message })
+      }
+    }, 5200)
   }
 
   return (

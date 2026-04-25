@@ -7,6 +7,7 @@ import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
+import { useCommandPalette } from '@/components/ui/CommandPalette'
 
 type Props = { 
   clinicName: string
@@ -23,6 +24,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
   const current = NAV_ITEMS.find(i => i.href === '/dashboard' ? pathname === i.href : pathname.startsWith(i.href))
   const supabase = createClient()
   const nav = NAV_ITEMS.filter(i => i.roles.includes(userRole))
+  const cmd = useCommandPalette()
 
   async function logout() {
     await supabase.auth.signOut()
@@ -50,6 +52,15 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
         </div>
         
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={cmd.open}
+            className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+            title="Busca rapida"
+            aria-label="Busca rapida"
+          >
+            <Icon name="search" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+          </button>
           <Link
             href="/dashboard/como-funciona"
             className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
@@ -158,30 +169,6 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                 )
               })}
 
-              {/* Atalho "Como funciona" — disponivel pra todos */}
-              <Link
-                href="/dashboard/como-funciona"
-                onClick={() => setMenuOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all mt-2 ${
-                  pathname.startsWith('/dashboard/como-funciona')
-                    ? 'bg-white text-slate-900 shadow-lg'
-                    : 'text-white/80 active:bg-white/10'
-                }`}
-              >
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                  pathname.startsWith('/dashboard/como-funciona')
-                    ? 'bg-gradient-to-br from-emerald-500 to-teal-500 shadow-md'
-                    : 'bg-white/10'
-                }`}>
-                  <Icon name="info" className={`w-5 h-5 ${pathname.startsWith('/dashboard/como-funciona') ? 'text-white' : 'text-white/80'}`} />
-                </div>
-                <span className="flex-1">Como funciona</span>
-                <span className={`text-[10px] font-bold px-2 py-1 rounded ${
-                  pathname.startsWith('/dashboard/como-funciona') ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/30 text-white'
-                }`}>
-                  GUIA
-                </span>
-              </Link>
             </nav>
 
             {/* User Section */}

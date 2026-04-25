@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
+import { useToast } from '@/components/ui/Toast'
 
 type Saida = {
   id: string
@@ -41,6 +42,7 @@ export default function SaidasList({ saidas, clinicId }: Props) {
   const [categoria, setCategoria] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
   const supabase = createClient()
+  const toast = useToast()
 
   const filteredList = list.filter(s => {
     const matchSearch = !search || 
@@ -60,17 +62,38 @@ export default function SaidasList({ saidas, clinicId }: Props) {
   }, {} as Record<string, number>)
 
   async function handleDelete(id: string) {
-    if (!confirm('Tem certeza que deseja excluir esta saída?')) return
-    setDeleting(id)
-    
-    const { error } = await supabase.from('saidas').delete().eq('id', id)
-    
-    if (error) {
-      alert('Erro ao excluir: ' + error.message)
-    } else {
-      setList(list.filter(e => e.id !== id))
-    }
-    setDeleting(null)
+    // Optimistic-undo: remove visualmente, mostra "Desfazer" por 5s,
+    // so manda DELETE no banco depois do prazo.
+    const removed = list.find(s => s.id === id)
+    if (!removed) return
+
+    setList(prev => prev.filter(s => s.id !== id))
+
+    let undone = false
+    toast.undo({
+      title: 'Saida removida',
+      description: 'Voce tem 5s pra desfazer',
+      duration: 5000,
+      onUndo: () => {
+        undone = true
+        setList(prev => [...prev, removed].sort(
+          (a, b) => (b.data || '').localeCompare(a.data || '')
+        ))
+      },
+    })
+
+    setTimeout(async () => {
+      if (undone) return
+      setDeleting(id)
+      const { error } = await supabase.from('saidas').delete().eq('id', id)
+      setDeleting(null)
+      if (error) {
+        setList(prev => [...prev, removed].sort(
+          (a, b) => (b.data || '').localeCompare(a.data || '')
+        ))
+        toast.error('Erro ao excluir', { description: error.message })
+      }
+    }, 5200)
   }
 
   return (

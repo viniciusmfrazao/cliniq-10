@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+import { useToast } from '@/components/ui/Toast'
 
 type Appointment = {
   id: string
@@ -260,6 +261,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
 export default function AgendaView({ appointments: allAppointments, viewMode, selectedDate, professionals, selectedProfessional, clinicId }: Props) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
   const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null)
 
   const displayProfessionals = selectedProfessional === 'all' 
@@ -279,15 +281,48 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
 
   // Atualizar status do agendamento
   const handleStatusChange = useCallback(async (appointmentId: string, newStatus: string) => {
+    // Guarda status anterior pra permitir Desfazer
+    const apt = allAppointments.find(a => a.id === appointmentId)
+    const previousStatus = apt?.status
+
     const { error } = await supabase
       .from('appointments')
       .update({ status: newStatus })
       .eq('id', appointmentId)
 
-    if (!error) {
-      router.refresh()
+    if (error) {
+      toast.error('Nao foi possivel atualizar', { description: error.message })
+      return
     }
-  }, [supabase, router])
+
+    router.refresh()
+
+    // Mostra feedback adequado por tipo de mudanca
+    const labels: Record<string, string> = {
+      confirmed: 'Confirmado',
+      cancelled: 'Cancelado',
+      completed: 'Concluido',
+      no_show: 'Marcado como nao compareceu',
+    }
+    const label = labels[newStatus] || 'Status atualizado'
+
+    if (previousStatus && previousStatus !== newStatus) {
+      toast.undo({
+        title: label,
+        description: apt?.patients?.name || undefined,
+        duration: 5000,
+        onUndo: async () => {
+          await supabase
+            .from('appointments')
+            .update({ status: previousStatus })
+            .eq('id', appointmentId)
+          router.refresh()
+        },
+      })
+    } else {
+      toast.success(label)
+    }
+  }, [supabase, router, toast, allAppointments])
 
   // Registrar check-in do paciente
   const handleCheckIn = useCallback(async (appointmentId: string) => {
@@ -396,7 +431,10 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
     if (slot) {
       router.push(`/dashboard/agenda/novo?date=${slot.date}&time=${slot.time}&professional=${slot.professionalId}`)
     } else {
-      alert('Não encontramos horários disponíveis nos próximos 30 dias.\n\nVerifique se os profissionais têm horários cadastrados em Equipe.')
+      toast.error('Sem horarios livres', {
+        description: 'Nao encontramos horarios nos proximos 30 dias. Confira em Equipe se os profissionais tem horario cadastrado.',
+        duration: 7000,
+      })
     }
   }
 

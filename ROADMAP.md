@@ -1,141 +1,70 @@
-# Clinike - Roadmap de Funcionalidades
+# Clinike — Roadmap de Usabilidade
 
-## 📊 Módulos que Geram Receita Direta
+Lista de melhorias priorizadas, atualizada continuamente conforme cada item é entregue.
 
-### Financeiro Completo
-- [ ] **Emissão de NFS-e integrada** - Geração automática de nota fiscal de serviço
-- [ ] **Link de pagamento** - Pix e cartão gerado no check-out
-- [ ] **Controle de pacotes** - Paciente compra 10 sessões, sistema debita automaticamente a cada atendimento
-- [ ] **Alerta de pacote acabando** - Notificação quando restam poucas sessões
-
----
-
-## 📈 Relatórios e Inteligência
-
-### Painel da Dra. (Resumo Diário)
-- [ ] **Envio automático por WhatsApp às 8h**:
-  - Quantas consultas hoje
-  - Faturamento previsto
-  - Quem não confirmou
-  
-### Análise de Churn
-- [ ] **Identificar pacientes inativos** - Quem não volta há X dias
-- [ ] **Reativação automática via Eva** - Disparo de mensagem personalizada
+> **Status**
+> - [x] Concluído
+> - [ ] Pendente
+> - [~] Em andamento
 
 ---
 
-## 🤖 Eva IA - Evolução
+## ✅ Concluído
 
-### Pré-Anamnese via WhatsApp
-- [ ] Perguntas automáticas antes da consulta:
-  - "Tem alguma alergia?"
-  - "Usou anticoagulante nos últimos dias?"
-  - "Está grávida ou amamentando?"
-
-### Pós-Procedimento
-- [ ] **Cuidados automáticos** - Envio de orientações após cada tipo de procedimento
-- [ ] **Follow-up programado** - "Como está a região aplicada?"
-
-### Sugestões de Upgrade
-- [ ] **Durante o atendimento** - "Dra., a Ana faz botox há 3 sessões — ela pode se interessar por bioestimulador"
-- [ ] **Análise de histórico** - Identificar oportunidades de cross-sell
+- [x] **Fuso horário (Timezone BR)** — `now()` e queries do dashboard sempre em America/Sao_Paulo, fim do bug "vira o dia às 21h". (`src/lib/datetime.ts` + `supabase-timezone.sql`)
+- [x] **Busca global ⌘K / Ctrl+K** — paleta de comandos com pacientes, páginas e ações rápidas (`src/components/ui/CommandPalette.tsx`).
+- [x] **Toasts + Undo** — sistema de notificações com botão "Desfazer" 5s. Aplicado em deletar entrada/saída e mudar status de agendamento (`src/components/ui/Toast.tsx`).
 
 ---
 
-## 👩‍💼 Experiência da Paciente
+## 🔥 Próximos (alta prioridade)
 
-### Portal da Paciente (App/Web)
-- [ ] **Histórico de procedimentos**
-- [ ] **Fotos antes/depois**
-- [ ] **Próximas consultas**
-- [ ] **Documentos assinados**
-- [ ] **Agendamento online**
+### Inteligência / Automação
+- [ ] **Confirmação ativa via Eva (24h antes)** — cron + N8N + WhatsApp ativo: "Confirma sua consulta amanhã 14h?". Reduz no-show drasticamente.
+- [ ] **Recall automático** — paciente que fez procedimento e não volta há X meses → Eva manda mensagem de retorno.
+- [ ] **Aniversariantes do dia** — card no dashboard com botão "Mandar parabéns via WhatsApp" em 1 clique.
 
-### Avaliação Pós-Atendimento
-- [ ] **NPS via WhatsApp** - Pesquisa simples após cada atendimento
-- [ ] **Painel de satisfação** - Dashboard com métricas de NPS da clínica
-
----
-
-## 🏥 Operacional
-
-### Controle de Sala e Equipamento
-- [ ] **Agenda por sala** - Evitar conflito de espaço
-- [ ] **Agenda por aparelho** - Laser, ultrassom, etc.
-- [ ] **Visualização de disponibilidade**
-
-### Protocolo de Procedimento
-- [ ] **Checklist durante atendimento** - Garantir padronização
-- [ ] **Templates por tipo de procedimento**
-- [ ] **Assinatura do profissional**
-
-### Foto com IA
-- [ ] **Alinhamento automático** - Câmera posiciona igual à foto anterior
-- [ ] **Comparação antes/depois** - Overlay das imagens
-- [ ] **Detecção de pontos faciais**
+### Mobile / Atendimento
+- [ ] **Ditado por voz na evolução** — Web Speech API. Profissional fala, vira texto na evolução (mãos ocupadas com paciente).
+- [ ] **Fotos antes/depois** — upload na evolução + comparador slider lado-a-lado. Crítico pra estética.
+- [ ] **Modo "TV" recepção** — tela pra TV/tablet na sala de espera mostrando fila em tempo real (Realtime já está ligado).
 
 ---
 
-## 💰 Modelo de Negócio - Novas Receitas
+## 📈 Médio prazo (impacto MÉDIO–ALTO)
 
-### Clinike Marketplace
-- [ ] **Fornecedores de insumos** - Anúncios dentro do sistema
-- [ ] **Compra integrada ao estoque** - Pedido direto pelo sistema
-- [ ] **Comissão por venda**
+### Operação
+- [ ] **Comissão automática por profissional** — fechamento mensal: "Dra. Ana fez R$ X em abril → comissão Y%".
+- [ ] **Relatório semanal no WhatsApp da dona** — sexta 18h: resumo automático (atendimentos, receita, no-shows, leads).
+- [ ] **Permissões finas** — auditoria das roles: recepção sem DRE, profissional só vê seus pacientes, etc.
 
-### Clinike Academy
-- [ ] **Cursos para profissionais** - Técnicas, gestão, marketing
-- [ ] **Certificações**
-- [ ] **Monetização da base de usuários**
+### UX que parece detalhe mas conta
+- [ ] **Skeleton loaders** — agenda, financeiro e listas pesadas com shimmer em vez de tela em branco.
+- [ ] **Empty states com CTA** — listas vazias com ilustração + "Criar primeiro X" em vez de tela em branco.
+- [ ] **Atalhos de teclado** — `N` novo agendamento, `G+A` ir pra agenda, `Esc` fechar modal.
+- [ ] **Modo escuro** — confortável em sala com luz baixa (já tem variáveis CSS prontas).
 
----
-
-## 🎯 Priorização Sugerida
-
-### Fase 1 - Gerar Receita Imediata
-1. Link de pagamento (Pix/Cartão)
-2. Controle de pacotes
-3. Portal da paciente básico
-
-### Fase 2 - Retenção e Fidelização  
-4. NPS pós-atendimento
-5. Análise de churn + reativação Eva
-6. Painel da Dra. (resumo diário)
-
-### Fase 3 - Diferenciação
-7. Pré-anamnese via WhatsApp
-8. Foto com IA
-9. Controle de sala/equipamento
-
-### Fase 4 - Escala
-10. NFS-e integrada
-11. Clinike Marketplace
-12. Clinike Academy
+### Compliance / Diferencial
+- [ ] **LGPD — exportação de dados do paciente** — botão "Exportar (PDF + JSON)" na ficha. Lei obriga e quase ninguém faz.
+- [ ] **Backup completo da clínica** — botão de exportar Excel/CSV de pacientes, financeiro, agenda.
 
 ---
 
-## 🎓 Tutorial e Onboarding
+## 🧪 Backlog (ideias pra avaliar)
 
-### Tutorial Interativo
-- [ ] **Primeiro acesso guiado** - Passo a passo para configurar a clínica
-- [ ] **Tour pelo sistema** - Tooltips explicando cada funcionalidade
-- [ ] **Vídeos curtos** - Tutoriais de 1-2 min por módulo
-- [ ] **Checklist de configuração** - Progresso visual do setup inicial
-
-### Central de Ajuda
-- [ ] **Base de conhecimento** - Artigos e FAQs
-- [ ] **Chat de suporte** - Integrado no sistema
-- [ ] **Vídeos tutoriais** - Biblioteca organizada por tema
-
-### Onboarding da Equipe
-- [ ] **Convite com tutorial** - Novo membro recebe guia específico do seu papel
-- [ ] **Permissões explicadas** - O que cada função pode fazer
-- [ ] **Simulador de treino** - Ambiente sandbox para praticar
+- [ ] **Pesquisa NPS pós-atendimento** — Eva manda 24h depois "Como foi sua experiência? 1-10".
+- [ ] **Compartilhar agendamento via WhatsApp** — botão "enviar para o paciente" na agenda em 1 clique.
+- [ ] **Indicador de carga horária por profissional** — heatmap semanal de ocupação.
+- [ ] **Reagendamento sugerido** — quando cliente cancela, Eva sugere os próximos 3 horários disponíveis automaticamente.
+- [ ] **Multi-clínica** — uma conta única com várias unidades (já tem `clinic_id` em tudo).
+- [ ] **PWA push notifications** — aproveitar que já é PWA pra receber alertas mesmo com app fechado.
+- [ ] **Histórico timeline do paciente** — uma tela só com agendamentos + evoluções + financeiro + fotos em ordem cronológica.
 
 ---
 
-## 📝 Notas
+## Convenções
 
-- Cada funcionalidade deve ser validada com clínicas piloto antes de lançar
-- Priorizar features que reduzem tempo da equipe (ROI claro)
-- Eva IA é o diferencial - investir em personalização
+- **Mobile-first**: toda nova feature deve funcionar bem no celular antes do desktop.
+- **Sem libs novas sem motivo**: se der pra fazer com o que já tem (Tailwind + Supabase + componentes internos), preferir.
+- **Realtime quando faz sentido**: agenda, recepção, fila de pacientes, notificações. Não em listas de relatório.
+- **LGPD por padrão**: nenhuma melhoria pode quebrar logs de auditoria nem expor dados de outra clínica.

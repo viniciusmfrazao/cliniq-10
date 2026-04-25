@@ -4,6 +4,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import BottomNav from '@/components/layout/BottomNav'
 import TopBar from '@/components/layout/TopBar'
 import ChatWidget from '@/components/ui/ChatWidget'
+import AppProviders from '@/components/layout/AppProviders'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -31,27 +32,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
     : 0
 
   return (
-    <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden">
-      <Sidebar clinicName={clinic?.name || 'Clinike'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} />
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopBar
-          clinicName={clinic?.name || 'Clinike'}
-          userName={userData?.name || ''}
-          userRole={userData?.role || 'viewer'}
-          trialDaysLeft={trialDaysLeft}
-          userId={user.id}
-        />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pl-safe pr-safe">
-          <div className="px-4 py-4 md:px-8 md:py-6 pb-28 md:pb-6 max-w-full">{children}</div>
-        </main>
-      </div>
-      <BottomNav userRole={userData?.role || 'viewer'} activeModules={activeModules} />
+    <AppProviders
+      userRole={userData?.role || 'viewer'}
+      activeModules={activeModules}
+      clinicId={userData.clinic_id}
+    >
+      <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden">
+        <Sidebar clinicName={clinic?.name || 'Clinike'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} />
+        <div className="flex-1 flex flex-col min-w-0">
+          <TopBar
+            clinicName={clinic?.name || 'Clinike'}
+            userName={userData?.name || ''}
+            userRole={userData?.role || 'viewer'}
+            trialDaysLeft={trialDaysLeft}
+            userId={user.id}
+          />
+          <main className="flex-1 overflow-y-auto overflow-x-hidden pl-safe pr-safe">
+            <div className="px-4 py-4 md:px-8 md:py-6 pb-28 md:pb-6 max-w-full">{children}</div>
+          </main>
+        </div>
+        <BottomNav userRole={userData?.role || 'viewer'} activeModules={activeModules} />
 
-      <ChatWidget
-        currentUserId={user.id}
-        clinicId={userData.clinic_id}
-        users={clinicUsers || []}
-      />
-    </div>
+        <ChatWidget
+          currentUserId={user.id}
+          clinicId={userData.clinic_id}
+          users={clinicUsers || []}
+        />
+      </div>
+    </AppProviders>
   )
 }

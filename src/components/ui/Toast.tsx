@@ -1,100 +1,248 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
-import Icon from './Icon'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import Icon from '@/components/ui/Icon'
 
-type ToastType = 'success' | 'error' | 'warning' | 'info'
+type ToastVariant = 'success' | 'error' | 'info' | 'loading'
 
-type Toast = {
+export type ToastAction = {
+  label: string
+  onClick: () => void
+}
+
+export type ToastInput = {
+  title: string
+  description?: string
+  variant?: ToastVariant
+  duration?: number // ms; 0 = nao fecha sozinho
+  action?: ToastAction
+}
+
+type Toast = ToastInput & {
   id: string
-  type: ToastType
-  message: string
-  duration?: number
+  createdAt: number
 }
 
-type ToastContextType = {
-  toasts: Toast[]
-  showToast: (type: ToastType, message: string, duration?: number) => void
-  success: (message: string) => void
-  error: (message: string) => void
-  warning: (message: string) => void
-  info: (message: string) => void
+type ToastContextValue = {
+  show: (t: ToastInput) => string
   dismiss: (id: string) => void
+  success: (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) => string
+  error: (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) => string
+  info: (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) => string
+  /**
+   * Helper "undo": executa a acao, mostra toast com botao Desfazer.
+   * Se o usuario clicar Desfazer dentro de `duration`, chama `onUndo`.
+   */
+  undo: (opts: {
+    title: string
+    description?: string
+    duration?: number
+    onUndo: () => void | Promise<void>
+  }) => string
 }
 
-const ToastContext = createContext<ToastContextType | null>(null)
+const ToastContext = createContext<ToastContextValue | null>(null)
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function useToast() {
+  const ctx = useContext(ToastContext)
+  if (!ctx) throw new Error('useToast must be used inside <ToastProvider>')
+  return ctx
+}
+
+function makeId() {
+  return `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+export default function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const dismiss = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id))
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+    const tm = timers.current.get(id)
+    if (tm) {
+      clearTimeout(tm)
+      timers.current.delete(id)
+    }
   }, [])
 
-  const showToast = useCallback((type: ToastType, message: string, duration = 4000) => {
-    const id = `toast-${Date.now()}`
-    const toast: Toast = { id, type, message, duration }
-    
-    setToasts(prev => [...prev, toast])
+  const show = useCallback(
+    (t: ToastInput) => {
+      const id = makeId()
+      const toast: Toast = {
+        id,
+        createdAt: Date.now(),
+        variant: t.variant ?? 'info',
+        duration: t.duration ?? 4000,
+        ...t,
+      }
+      setToasts((prev) => [...prev, toast])
+      const dur = toast.duration ?? 4000
+      if (dur > 0) {
+        const tm = setTimeout(() => dismiss(id), dur)
+        timers.current.set(id, tm)
+      }
+      return id
+    },
+    [dismiss],
+  )
 
-    if (duration > 0) {
-      setTimeout(() => dismiss(id), duration)
+  const success = useCallback(
+    (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) =>
+      show({ title, variant: 'success', ...opts }),
+    [show],
+  )
+  const error = useCallback(
+    (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) =>
+      show({ title, variant: 'error', duration: 6000, ...opts }),
+    [show],
+  )
+  const info = useCallback(
+    (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) =>
+      show({ title, variant: 'info', ...opts }),
+    [show],
+  )
+
+  const undo = useCallback<ToastContextValue['undo']>(
+    ({ title, description, duration = 5000, onUndo }) => {
+      let undone = false
+      const id = show({
+        title,
+        description,
+        variant: 'info',
+        duration,
+        action: {
+          label: 'Desfazer',
+          onClick: async () => {
+            if (undone) return
+            undone = true
+            await onUndo()
+            dismiss(id)
+          },
+        },
+      })
+      return id
+    },
+    [show, dismiss],
+  )
+
+  // Limpa timers quando o componente sai
+  useEffect(() => {
+    return () => {
+      timers.current.forEach((tm) => clearTimeout(tm))
+      timers.current.clear()
     }
-  }, [dismiss])
+  }, [])
 
-  const success = useCallback((message: string) => showToast('success', message), [showToast])
-  const error = useCallback((message: string) => showToast('error', message, 6000), [showToast])
-  const warning = useCallback((message: string) => showToast('warning', message), [showToast])
-  const info = useCallback((message: string) => showToast('info', message), [showToast])
+  const value = useMemo<ToastContextValue>(
+    () => ({ show, dismiss, success, error, info, undo }),
+    [show, dismiss, success, error, info, undo],
+  )
 
   return (
-    <ToastContext.Provider value={{ toasts, showToast, success, error, warning, info, dismiss }}>
+    <ToastContext.Provider value={value}>
       {children}
-      <ToastContainer toasts={toasts} dismiss={dismiss} />
+      <ToastViewport toasts={toasts} onClose={dismiss} />
     </ToastContext.Provider>
   )
 }
 
-function ToastContainer({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: string) => void }) {
+function ToastViewport({ toasts, onClose }: { toasts: Toast[]; onClose: (id: string) => void }) {
   if (toasts.length === 0) return null
-
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
-      {toasts.map(toast => (
-        <ToastItem key={toast.id} toast={toast} onDismiss={() => dismiss(toast.id)} />
+    <div
+      role="region"
+      aria-label="Notificacoes"
+      className="fixed z-[100] right-3 left-3 bottom-3 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[380px] flex flex-col gap-2 pointer-events-none"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      {toasts.map((t) => (
+        <ToastItem key={t.id} toast={t} onClose={() => onClose(t.id)} />
       ))}
     </div>
   )
 }
 
-function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-  const config = {
-    success: { bg: 'bg-emerald-500', icon: 'check' },
-    error: { bg: 'bg-red-500', icon: 'x' },
-    warning: { bg: 'bg-amber-500', icon: 'bell' },
-    info: { bg: 'bg-blue-500', icon: 'bell' },
-  }[toast.type]
+function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+  const { variant = 'info' } = toast
+  const [enter, setEnter] = useState(false)
+
+  useEffect(() => {
+    const r = requestAnimationFrame(() => setEnter(true))
+    return () => cancelAnimationFrame(r)
+  }, [])
+
+  const accent =
+    variant === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : variant === 'error'
+        ? 'border-rose-200 bg-rose-50 text-rose-900'
+        : variant === 'loading'
+          ? 'border-violet-200 bg-violet-50 text-violet-900'
+          : 'border-slate-200 bg-white text-slate-900'
+
+  const iconName =
+    variant === 'success'
+      ? 'check'
+      : variant === 'error'
+        ? 'alertCircle'
+        : variant === 'loading'
+          ? 'sparkles'
+          : 'info'
+
+  const iconColor =
+    variant === 'success'
+      ? 'text-emerald-600'
+      : variant === 'error'
+        ? 'text-rose-600'
+        : variant === 'loading'
+          ? 'text-violet-600'
+          : 'text-slate-500'
 
   return (
-    <div 
-      className={`${config.bg} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-slide-up`}
-      role="alert"
+    <div
+      role="status"
+      aria-live="polite"
+      className={`pointer-events-auto rounded-2xl border shadow-lg backdrop-blur-md px-4 py-3 transition-all duration-200 ${accent} ${
+        enter ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+      }`}
     >
-      <Icon name={config.icon} className="w-5 h-5 flex-shrink-0" />
-      <p className="flex-1 text-sm font-medium">{toast.message}</p>
-      <button onClick={onDismiss} className="hover:opacity-70 transition-opacity">
-        <Icon name="x" className="w-4 h-4" />
-      </button>
+      <div className="flex items-start gap-3">
+        <div className={`shrink-0 mt-0.5 ${iconColor}`}>
+          <Icon name={iconName as any} className={`w-5 h-5 ${variant === 'loading' ? 'animate-spin' : ''}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold leading-tight truncate">{toast.title}</p>
+          {toast.description ? (
+            <p className="text-xs text-slate-600 mt-0.5 leading-snug">{toast.description}</p>
+          ) : null}
+        </div>
+        {toast.action ? (
+          <button
+            type="button"
+            onClick={toast.action.onClick}
+            className="shrink-0 text-xs font-bold uppercase tracking-wide text-violet-600 hover:text-violet-800 px-2 py-1 rounded-md hover:bg-violet-100/60 transition-colors"
+          >
+            {toast.action.label}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar"
+          className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          <Icon name="x" className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   )
 }
-
-export function useToast() {
-  const context = useContext(ToastContext)
-  if (!context) {
-    throw new Error('useToast must be used within ToastProvider')
-  }
-  return context
-}
-
-export default ToastProvider

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
@@ -8,6 +8,7 @@ import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
+import { useCommandPalette } from '@/components/ui/CommandPalette'
 
 type Props = { 
   clinicName: string
@@ -22,6 +23,11 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const cmd = useCommandPalette()
+  const [isMac, setIsMac] = useState(false)
+  useEffect(() => {
+    setIsMac(typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform))
+  }, [])
   
   // Filtra por role E por módulos ativos (se houver módulos configurados)
   const nav = NAV_ITEMS.filter(i => {
@@ -79,6 +85,28 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
             <p className="text-white/50 text-xs font-medium">Clinike</p>
           </div>
         </div>
+      </div>
+
+      {/* Busca rapida (Ctrl/Cmd + K) */}
+      <div className="px-4 pb-3 relative">
+        <button
+          type="button"
+          onClick={cmd.open}
+          className="w-full group flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 text-white/70 hover:text-white transition-all"
+          title="Busca rapida (Ctrl+K)"
+          aria-label="Busca rapida"
+        >
+          <Icon name="search" className="w-4 h-4" />
+          <span className="flex-1 text-left text-sm">Buscar...</span>
+          <span className="flex items-center gap-0.5">
+            <kbd className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/15 text-white/80 border border-white/10">
+              {isMac ? '⌘' : 'Ctrl'}
+            </kbd>
+            <kbd className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/15 text-white/80 border border-white/10">
+              K
+            </kbd>
+          </span>
+        </button>
       </div>
 
       {/* Trial Banner - DESATIVADO POR ENQUANTO
@@ -195,31 +223,6 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
         })}
       </nav>
 
-      {/* Atalho "Como funciona" — sempre visivel, ajuda rapida */}
-      <div className="px-4 pb-2">
-        <Link
-          href="/dashboard/como-funciona"
-          className={`group flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-300 ${
-            pathname.startsWith('/dashboard/como-funciona')
-              ? 'bg-white text-slate-900 shadow-lg'
-              : 'text-white/70 hover:bg-white/10 hover:text-white'
-          }`}
-          title="Guia visual do dia-a-dia"
-        >
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-            pathname.startsWith('/dashboard/como-funciona')
-              ? 'gradient-bg shadow-lg'
-              : 'bg-white/10 group-hover:bg-white/20'
-          }`}>
-            <Icon name="info" className={`w-5 h-5 ${pathname.startsWith('/dashboard/como-funciona') ? 'text-white' : 'text-white/80'}`} />
-          </div>
-          <span className="flex-1">Como funciona</span>
-          <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-gradient-to-r from-emerald-400 to-teal-500 text-white">
-            GUIA
-          </span>
-        </Link>
-      </div>
-
       {/* User Section */}
       <div className="p-4 border-t border-white/10">
         <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-white/5 backdrop-blur-xl">
@@ -231,6 +234,14 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
             <p className="text-xs text-white/50 capitalize">{userRole}</p>
           </div>
           <div className="flex items-center gap-1">
+            <Link
+              href="/dashboard/como-funciona"
+              className="p-2.5 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+              title="Como funciona — guia rapido"
+              aria-label="Como funciona"
+            >
+              <Icon name="info" className="w-5 h-5" />
+            </Link>
             {userId && (
               <div className="[&_button]:text-white/50 [&_button:hover]:text-white [&_button:hover]:bg-white/10">
                 <NotificationBell userId={userId} />
