@@ -239,7 +239,10 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
   if (!currentUserId || !clinicId) return null
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div
+      className="fixed right-4 z-50 bottom-20 md:bottom-4"
+      style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+    >
       {/* Chat Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}

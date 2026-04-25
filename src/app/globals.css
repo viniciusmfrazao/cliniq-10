@@ -2,6 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================
+   MOBILE / PWA — comporta-se como app no celular e tablet
+   ========================================================== */
+:root {
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-left: env(safe-area-inset-left);
+  --safe-right: env(safe-area-inset-right);
+}
+
+html, body {
+  /* Evita "puxar pra atualizar" indesejado fora do contexto certo */
+  overscroll-behavior-y: none;
+  /* Em iOS standalone evita o "bounce" do body */
+  -webkit-tap-highlight-color: transparent;
+  /* Suaviza scroll em iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Quando rodando como PWA instalado (modo standalone) */
+@media all and (display-mode: standalone) {
+  html, body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* Mantem texto selecionavel onde faz sentido */
+  input, textarea, [contenteditable], .selectable, p, span, h1, h2, h3, h4, h5, h6 {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+}
+
+/* Inputs com font-size >= 16px no mobile evita o auto-zoom do iOS */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Botoes/links com area de toque confortavel (>= 44x44 quando possivel) */
+button, [role="button"], a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Scroll horizontal em chips/tabs sem mostrar scrollbar */
+.scroll-x-snap {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-x-snap::-webkit-scrollbar { display: none; }
+.scroll-x-snap > * { scroll-snap-align: start; }
+
+/* Helpers de safe-area pra topbar e botoes flutuantes */
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pl-safe { padding-left: env(safe-area-inset-left); }
+.pr-safe { padding-right: env(safe-area-inset-right); }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
 :root {
   --primary: #7C3AED;
   --primary-light: #8B5CF6;

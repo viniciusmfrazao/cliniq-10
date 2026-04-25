@@ -32,7 +32,10 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
 
   return (
     <>
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-700 flex-shrink-0 sticky top-0 z-40">
+      <header
+        className="md:hidden flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-700 flex-shrink-0 sticky top-0 z-40"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+      >
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMenuOpen(true)}

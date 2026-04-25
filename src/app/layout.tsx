@@ -1,15 +1,54 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import PWAProvider from '@/components/PWAProvider'
 
 export const metadata: Metadata = {
-  title: 'Clinike',
-  description: 'Gestão inteligente para clínicas de estética',
-  icons: {
-    icon: '/logo.svg',
-    shortcut: '/logo.svg',
-    apple: '/logo.svg',
+  title: {
+    default: 'Clinike',
+    template: '%s · Clinike',
   },
+  description: 'Gestão inteligente para clínicas de estética e saúde',
+  applicationName: 'Clinike',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'Clinike',
+    statusBarStyle: 'default',
+  },
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/logo.svg', type: 'image/svg+xml', sizes: 'any' },
+    ],
+    shortcut: '/logo.svg',
+    apple: [
+      { url: '/logo.svg', sizes: '180x180' },
+    ],
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'default',
+    'apple-mobile-web-app-title': 'Clinike',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#7C3AED' },
+    { media: '(prefers-color-scheme: dark)', color: '#0F172A' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: 'cover',
 }
 
 const themeScript = `
@@ -42,6 +81,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider>{children}</ThemeProvider>
+        <PWAProvider />
       </body>
     </html>
   )

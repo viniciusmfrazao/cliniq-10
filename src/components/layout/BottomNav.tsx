@@ -21,32 +21,30 @@ export default function BottomNav({ userRole, activeModules = [] }: Props) {
   const isActive = (href: string) => href === '/dashboard' ? pathname === href : pathname.startsWith(href)
 
   return (
-    <nav 
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-t border-slate-200"
+    <nav
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-700"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="flex items-center justify-around px-1 py-1">
         {items.map(item => {
           const active = isActive(item.href)
           return (
-            <Link 
-              key={item.href} 
+            <Link
+              key={item.href}
               href={item.href}
-              className="flex flex-col items-center justify-center flex-1 py-2 active:opacity-70 transition-opacity"
+              className="flex flex-col items-center justify-center flex-1 min-h-[48px] py-1.5 active:scale-95 active:opacity-80 transition-all"
+              style={{ touchAction: 'manipulation' }}
             >
               <div className={`relative flex items-center justify-center w-12 h-10 rounded-2xl transition-all duration-200 ${
                 active ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/30' : ''
               }`}>
-                <Icon 
-                  name={item.icon} 
-                  className={`w-5 h-5 transition-colors ${active ? 'text-white' : 'text-slate-400'}`} 
+                <Icon
+                  name={item.icon}
+                  className={`w-5 h-5 transition-colors ${active ? 'text-white' : 'text-slate-400'}`}
                 />
-                {active && (
-                  <div className="absolute -bottom-1 w-1 h-1 bg-violet-500 rounded-full" />
-                )}
               </div>
-              <span className={`text-[10px] font-semibold mt-1 transition-colors ${
-                active ? 'text-violet-600' : 'text-slate-400'
+              <span className={`text-[10px] font-semibold mt-0.5 transition-colors ${
+                active ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400'
               }`}>
                 {item.label}
               </span>
