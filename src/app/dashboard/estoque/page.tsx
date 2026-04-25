@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import ProductList from './product-list'
 import StockAlerts from './stock-alerts'
+import { formatBRL, formatBRLCompact } from '@/lib/format'
 
 export default async function EstoquePage() {
   const supabase = await createClient()
@@ -64,49 +65,50 @@ export default async function EstoquePage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div className="card p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-200">
-              <Icon name="box" className="w-5 h-5 text-white" />
+        <div className="card p-3 md:p-4 min-w-0">
+          <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
+            <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-200 flex-shrink-0">
+              <Icon name="box" className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{products?.length || 0}</p>
-              <p className="text-xs text-slate-500">Produtos</p>
-            </div>
-          </div>
-        </div>
-        <div className="card p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg shadow-red-200">
-              <Icon name="trending" className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{lowStock.length}</p>
-              <p className="text-xs text-slate-500">Estoque baixo</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl md:text-2xl font-bold text-slate-900 truncate">{products?.length || 0}</p>
+              <p className="text-xs text-slate-500 truncate">Produtos</p>
             </div>
           </div>
         </div>
-        <div className="card p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center shadow-lg shadow-amber-200">
-              <Icon name="clock" className="w-5 h-5 text-white" />
+        <div className="card p-3 md:p-4 min-w-0">
+          <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
+            <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg shadow-red-200 flex-shrink-0">
+              <Icon name="trending" className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{expiringSoon.length + expired.length}</p>
-              <p className="text-xs text-slate-500">Vencendo</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl md:text-2xl font-bold text-slate-900 truncate">{lowStock.length}</p>
+              <p className="text-xs text-slate-500 truncate">Estoque baixo</p>
             </div>
           </div>
         </div>
-        <div className="card p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-lg shadow-emerald-200">
-              <Icon name="dollar" className="w-5 h-5 text-white" />
+        <div className="card p-3 md:p-4 min-w-0">
+          <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
+            <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center shadow-lg shadow-amber-200 flex-shrink-0">
+              <Icon name="clock" className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">
-                {totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            <div className="min-w-0 flex-1">
+              <p className="text-xl md:text-2xl font-bold text-slate-900 truncate">{expiringSoon.length + expired.length}</p>
+              <p className="text-xs text-slate-500 truncate">Vencendo</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-3 md:p-4 min-w-0">
+          <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
+            <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-lg shadow-emerald-200 flex-shrink-0">
+              <Icon name="dollar" className="w-4 h-4 md:w-5 md:h-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-base md:text-2xl font-bold text-slate-900 truncate" title={formatBRL(totalValue)}>
+                <span className="md:hidden">{formatBRLCompact(totalValue)}</span>
+                <span className="hidden md:inline">{formatBRL(totalValue)}</span>
               </p>
-              <p className="text-xs text-slate-500">Valor em estoque</p>
+              <p className="text-xs text-slate-500 truncate">Valor em estoque</p>
             </div>
           </div>
         </div>

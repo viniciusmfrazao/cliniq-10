@@ -1,9 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { formatBRL, formatBRLCompact } from '@/lib/format'
 
 function fmt(v: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
+  return formatBRL(v || 0)
+}
+function fmtCompact(v: number) {
+  return formatBRLCompact(v || 0)
 }
 
 export default async function FinanceiroPage() {
@@ -85,65 +89,83 @@ export default async function FinanceiroPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
+          <div className="flex items-center gap-3 mb-2 md:mb-3">
+            <div className="w-9 h-9 md:w-10 md:h-10 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <Icon name="trendingUp" className="w-5 h-5 text-emerald-600" />
             </div>
           </div>
-          <p className="text-2xl font-black text-slate-900">{fmt(receitaHoje)}</p>
-          <p className="text-sm text-slate-500">Receita hoje</p>
+          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(receitaHoje)}>
+            <span className="md:hidden">{fmtCompact(receitaHoje)}</span>
+            <span className="hidden md:inline">{fmt(receitaHoje)}</span>
+          </p>
+          <p className="text-xs md:text-sm text-slate-500 truncate">Receita hoje</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
+          <div className="flex items-center gap-3 mb-2 md:mb-3">
+            <div className="w-9 h-9 md:w-10 md:h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <Icon name="dollarSign" className="w-5 h-5 text-blue-600" />
             </div>
           </div>
-          <p className="text-2xl font-black text-slate-900">{fmt(receitaMes)}</p>
-          <p className="text-sm text-slate-500">Receita do mês</p>
+          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(receitaMes)}>
+            <span className="md:hidden">{fmtCompact(receitaMes)}</span>
+            <span className="hidden md:inline">{fmt(receitaMes)}</span>
+          </p>
+          <p className="text-xs md:text-sm text-slate-500 truncate">Receita do mês</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
+          <div className="flex items-center gap-3 mb-2 md:mb-3">
+            <div className="w-9 h-9 md:w-10 md:h-10 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <Icon name="activity" className="w-5 h-5 text-violet-600" />
             </div>
           </div>
-          <p className="text-2xl font-black text-slate-900">{fmt(liquidoMes)}</p>
-          <p className="text-sm text-slate-500">Líquido do mês</p>
+          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(liquidoMes)}>
+            <span className="md:hidden">{fmtCompact(liquidoMes)}</span>
+            <span className="hidden md:inline">{fmt(liquidoMes)}</span>
+          </p>
+          <p className="text-xs md:text-sm text-slate-500 truncate">Líquido do mês</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
+          <div className="flex items-center gap-3 mb-2 md:mb-3">
+            <div className="w-9 h-9 md:w-10 md:h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <Icon name="receipt" className="w-5 h-5 text-amber-600" />
             </div>
           </div>
-          <p className="text-2xl font-black text-slate-900">{fmt(ticketMedio)}</p>
-          <p className="text-sm text-slate-500">Ticket médio</p>
+          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(ticketMedio)}>
+            <span className="md:hidden">{fmtCompact(ticketMedio)}</span>
+            <span className="hidden md:inline">{fmt(ticketMedio)}</span>
+          </p>
+          <p className="text-xs md:text-sm text-slate-500 truncate">Ticket médio</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
+          <div className="flex items-center gap-3 mb-2 md:mb-3">
+            <div className="w-9 h-9 md:w-10 md:h-10 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <Icon name="trendingDown" className="w-5 h-5 text-rose-600" />
             </div>
           </div>
-          <p className="text-2xl font-black text-slate-900">{fmt(despesasMes)}</p>
-          <p className="text-sm text-slate-500">Saídas do mês</p>
+          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(despesasMes)}>
+            <span className="md:hidden">{fmtCompact(despesasMes)}</span>
+            <span className="hidden md:inline">{fmt(despesasMes)}</span>
+          </p>
+          <p className="text-xs md:text-sm text-slate-500 truncate">Saídas do mês</p>
         </div>
 
-        <div className={`rounded-2xl p-5 border shadow-sm ${resultadoMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${resultadoMes >= 0 ? 'bg-emerald-200' : 'bg-rose-200'}`}>
+        <div className={`rounded-2xl p-4 md:p-5 border shadow-sm min-w-0 ${resultadoMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+          <div className="flex items-center gap-3 mb-2 md:mb-3">
+            <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${resultadoMes >= 0 ? 'bg-emerald-200' : 'bg-rose-200'}`}>
               <Icon name={resultadoMes >= 0 ? 'trendingUp' : 'trendingDown'} className={`w-5 h-5 ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} />
             </div>
           </div>
-          <p className={`text-2xl font-black ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{fmt(resultadoMes)}</p>
-          <p className={`text-sm ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado</p>
+          <p className={`text-lg md:text-2xl font-black truncate ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} title={fmt(resultadoMes)}>
+            <span className="md:hidden">{fmtCompact(resultadoMes)}</span>
+            <span className="hidden md:inline">{fmt(resultadoMes)}</span>
+          </p>
+          <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado</p>
         </div>
       </div>
 

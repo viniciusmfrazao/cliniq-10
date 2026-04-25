@@ -41,8 +41,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           trialDaysLeft={trialDaysLeft}
           userId={user.id}
         />
-        <main className="flex-1 overflow-y-auto pl-safe pr-safe">
-          <div className="px-4 py-4 md:px-8 md:py-6 pb-28 md:pb-6">{children}</div>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pl-safe pr-safe">
+          <div className="px-4 py-4 md:px-8 md:py-6 pb-28 md:pb-6 max-w-full">{children}</div>
         </main>
       </div>
       <BottomNav userRole={userData?.role || 'viewer'} activeModules={activeModules} />

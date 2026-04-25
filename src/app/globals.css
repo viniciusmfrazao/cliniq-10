@@ -15,6 +15,9 @@
 html, body {
   /* Evita "puxar pra atualizar" indesejado fora do contexto certo */
   overscroll-behavior-y: none;
+  /* Evita scroll horizontal acidental quando algum filho estoura a viewport */
+  overflow-x: hidden;
+  max-width: 100vw;
   /* Em iOS standalone evita o "bounce" do body */
   -webkit-tap-highlight-color: transparent;
   /* Suaviza scroll em iOS */

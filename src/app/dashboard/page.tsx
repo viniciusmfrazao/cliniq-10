@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import WeeklyChart from '@/components/dashboard/WeeklyChart'
+import { formatBRL, formatBRLCompact } from '@/lib/format'
 
 // Tradução de entity_type para português
 const ENTITY_LABELS: Record<string, string> = {
@@ -245,21 +246,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {/* Consultas Hoje */}
-        <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+        <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
           <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20 flex-shrink-0">
               <Icon name="calendar" className="w-5 h-5 text-white" />
             </div>
             {appointmentsDiff !== 0 && (
-              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+              <span className={`text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0 ${
                 appointmentsDiff > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
               }`}>
                 {appointmentsDiff > 0 ? '+' : ''}{appointmentsDiff}
               </span>
             )}
           </div>
-          <p className="text-2xl md:text-3xl font-black text-slate-900">{appointmentsToday || 0}</p>
-          <p className="text-xs md:text-sm text-slate-500 mt-1">Consultas hoje</p>
+          <p className="text-2xl md:text-3xl font-black text-slate-900 truncate">{appointmentsToday || 0}</p>
+          <p className="text-xs md:text-sm text-slate-500 mt-1 truncate">Consultas hoje</p>
           <div className="mt-2 flex flex-wrap gap-1">
             <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{completedToday || 0} finalizados</span>
             <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{checkedIn || 0} aguardando</span>
@@ -267,18 +268,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         </div>
 
         {/* Pacientes */}
-        <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+        <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
           <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-500 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/20">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-500 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/20 flex-shrink-0">
               <Icon name="users" className="w-5 h-5 text-white" />
             </div>
             {(newPatientsMonth || 0) > 0 && (
-              <span className="text-xs font-bold px-2 py-1 rounded-lg bg-violet-100 text-violet-700">
+              <span className="text-xs font-bold px-2 py-1 rounded-lg bg-violet-100 text-violet-700 flex-shrink-0 truncate max-w-[60%]">
                 +{newPatientsMonth} mês
               </span>
             )}
           </div>
-          <p className="text-2xl md:text-3xl font-black text-slate-900">{totalPatients || 0}</p>
+          <p className="text-2xl md:text-3xl font-black text-slate-900 truncate">{totalPatients || 0}</p>
           <p className="text-xs md:text-sm text-slate-500 mt-1">Pacientes cadastrados</p>
           <Link href="/dashboard/pacientes" className="mt-2 text-xs text-violet-600 font-semibold inline-flex items-center gap-1">
             Ver todos <Icon name="arrowRight" className="w-3 h-3" />
@@ -287,16 +288,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
         {/* Receita do Mês - só se módulo financeiro ativo */}
         {hasModule('/dashboard/financeiro') && (
-          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
                 <Icon name="dollarSign" className="w-5 h-5 text-white" />
               </div>
             </div>
-            <p className="text-2xl md:text-3xl font-black text-slate-900">
-              {monthlyRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+            <p
+              className="text-xl md:text-3xl font-black text-slate-900 truncate"
+              title={formatBRL(monthlyRevenue, { maximumFractionDigits: 0 })}
+            >
+              <span className="md:hidden">{formatBRLCompact(monthlyRevenue)}</span>
+              <span className="hidden md:inline">
+                {formatBRL(monthlyRevenue, { maximumFractionDigits: 0 })}
+              </span>
             </p>
-            <p className="text-xs md:text-sm text-slate-500 mt-1">Receita do mês</p>
+            <p className="text-xs md:text-sm text-slate-500 mt-1 truncate">Receita do mês</p>
             <Link href="/dashboard/financeiro" className="mt-2 text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
               Ver financeiro <Icon name="arrowRight" className="w-3 h-3" />
             </Link>
@@ -305,14 +312,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
         {/* Leads CRM - só se módulo ativo */}
         {hasModule('/dashboard/crm') && (
-          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
                 <Icon name="target" className="w-5 h-5 text-white" />
               </div>
             </div>
-            <p className="text-2xl md:text-3xl font-black text-slate-900">{leadsCount || 0}</p>
-            <p className="text-xs md:text-sm text-slate-500 mt-1">Leads ativos</p>
+            <p className="text-2xl md:text-3xl font-black text-slate-900 truncate">{leadsCount || 0}</p>
+            <p className="text-xs md:text-sm text-slate-500 mt-1 truncate">Leads ativos</p>
             <Link href="/dashboard/crm" className="mt-2 text-xs text-amber-600 font-semibold inline-flex items-center gap-1">
               Ver CRM <Icon name="arrowRight" className="w-3 h-3" />
             </Link>
@@ -321,14 +328,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
         {/* Lista de Espera - só se CRM não ativo (para preencher) */}
         {!hasModule('/dashboard/crm') && hasModule('/dashboard/lista-espera') && (
-          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm">
+          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
                 <Icon name="clock" className="w-5 h-5 text-white" />
               </div>
             </div>
-            <p className="text-2xl md:text-3xl font-black text-slate-900">{waitingList || 0}</p>
-            <p className="text-xs md:text-sm text-slate-500 mt-1">Lista de espera</p>
+            <p className="text-2xl md:text-3xl font-black text-slate-900 truncate">{waitingList || 0}</p>
+            <p className="text-xs md:text-sm text-slate-500 mt-1 truncate">Lista de espera</p>
             <Link href="/dashboard/lista-espera" className="mt-2 text-xs text-amber-600 font-semibold inline-flex items-center gap-1">
               Gerenciar <Icon name="arrowRight" className="w-3 h-3" />
             </Link>
