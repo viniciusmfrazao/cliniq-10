@@ -19,8 +19,9 @@ export default async function NovoAgendamentoPage({
 
   const { data: procedures } = await supabase
     .from('procedures')
-    .select('id, name, duration_minutes, price')
+    .select('id, name, duration_minutes, price, professional_ids')
     .eq('clinic_id', userData?.clinic_id)
+    .eq('active', true)
     .order('name')
 
   // Buscar TODOS os usuários e filtrar no código (evita problemas com enum)

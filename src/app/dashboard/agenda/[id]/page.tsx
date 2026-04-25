@@ -32,7 +32,7 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
 
   const { data: procedures } = await supabase
     .from('procedures')
-    .select('id, name, duration_minutes, price')
+    .select('id, name, duration_minutes, price, professional_ids')
     .eq('clinic_id', userData?.clinic_id)
     .eq('active', true)
 

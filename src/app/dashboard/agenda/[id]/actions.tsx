@@ -19,7 +19,7 @@ type Props = {
   }
   clinicId: string
   patients: { id: string; name: string }[]
-  procedures: { id: string; name: string; duration_minutes: number; price: number }[]
+  procedures: { id: string; name: string; duration_minutes: number; price: number; professional_ids?: string[] | null }[]
   professionals: { id: string; name: string }[]
   rooms: { id: string; name: string }[]
 }

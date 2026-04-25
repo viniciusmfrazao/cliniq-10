@@ -8,7 +8,7 @@ import PatientSearch from '@/components/ui/PatientSearch'
 import QuickPatientModal from '@/components/ui/QuickPatientModal'
 
 type Patient = { id: string; name: string }
-type Procedure = { id: string; name: string; duration_minutes: number; price: number }
+type Procedure = { id: string; name: string; duration_minutes: number; price: number; professional_ids?: string[] | null }
 type Professional = { id: string; name: string }
 type Room = { id: string; name: string }
 
@@ -94,6 +94,37 @@ export default function AppointmentForm({
       setForm(prev => ({ ...prev, duration: totalDuration.toString() }))
     }
   }, [selectedProcedures, procedures])
+
+  // Profissionais elegíveis = interseção dos professional_ids dos procedimentos selecionados
+  // Se nenhum procedimento foi selecionado, ou se o procedimento não tem profs vinculados,
+  // qualquer profissional pode realizar.
+  const eligibleProfessionals = (() => {
+    if (selectedProcedures.length === 0) return professionals
+    const selectedProcs = selectedProcedures
+      .map(id => procedures.find(p => p.id === id))
+      .filter(Boolean) as Procedure[]
+
+    let allowed: Set<string> | null = null
+    for (const proc of selectedProcs) {
+      const ids = (proc.professional_ids || []).filter(Boolean)
+      if (ids.length === 0) continue
+      const set = new Set(ids)
+      allowed = allowed === null ? set : new Set([...allowed].filter(id => set.has(id)))
+    }
+    if (allowed === null) return professionals
+    return professionals.filter(p => allowed!.has(p.id))
+  })()
+
+  // Se o profissional atual deixou de ser elegível, limpar
+  useEffect(() => {
+    if (
+      form.professional_id &&
+      eligibleProfessionals.length > 0 &&
+      !eligibleProfessionals.some(p => p.id === form.professional_id)
+    ) {
+      setForm(prev => ({ ...prev, professional_id: '' }))
+    }
+  }, [selectedProcedures]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Busca slots disponíveis quando profissional + data + duração mudarem
   useEffect(() => {
@@ -258,14 +289,25 @@ export default function AppointmentForm({
           value={form.professional_id}
           onChange={e => update('professional_id', e.target.value)}
           required
+          disabled={eligibleProfessionals.length === 0}
         >
           <option value="">⚠️ Selecione quem vai atender</option>
-          {professionals.map(p => (
+          {eligibleProfessionals.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        {!form.professional_id && (
+        {!form.professional_id && eligibleProfessionals.length > 0 && (
           <p className="text-xs text-amber-600 mt-1">Obrigatório: selecione o profissional responsável</p>
+        )}
+        {selectedProcedures.length > 0 && eligibleProfessionals.length === 0 && (
+          <p className="text-xs text-red-600 mt-1">
+            Nenhum profissional está vinculado aos procedimentos selecionados. Revise em Procedimentos.
+          </p>
+        )}
+        {selectedProcedures.length > 0 && eligibleProfessionals.length > 0 && eligibleProfessionals.length < professionals.length && (
+          <p className="text-xs text-slate-400 mt-1">
+            Mostrando apenas profissionais que realizam o(s) procedimento(s) selecionado(s).
+          </p>
         )}
       </div>
 

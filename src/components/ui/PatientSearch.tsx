@@ -1,12 +1,20 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Icon from './Icon'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 type Patient = {
   id: string
   name: string
 }
+
+// Remove acentos pra busca mais flexível ("jose" encontra "José")
+const normalize = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
 
 type Props = {
   patients: Patient[]
@@ -23,15 +31,26 @@ export default function PatientSearch({ patients, value, onChange, placeholder =
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
+  // Debounce pra evitar filtrar a cada keystroke em listas grandes
+  const debouncedSearch = useDebouncedValue(search, 120)
+
+  // Index normalizado memoizado (reconstruído só quando `patients` muda)
+  const patientsIndex = useMemo(
+    () => patients.map(p => ({ patient: p, normalized: normalize(p.name) })),
+    [patients]
+  )
+
   // Encontrar paciente selecionado
   const selectedPatient = patients.find(p => p.id === value)
 
-  // Filtrar pacientes baseado na busca
-  const filteredPatients = search.length > 0
-    ? patients.filter(p => 
-        p.name.toLowerCase().includes(search.toLowerCase())
-      )
-    : patients
+  // Filtrar pacientes baseado na busca (memoizado)
+  const filteredPatients = useMemo(() => {
+    if (debouncedSearch.length === 0) return patients
+    const needle = normalize(debouncedSearch)
+    return patientsIndex
+      .filter(({ normalized }) => normalized.includes(needle))
+      .map(({ patient }) => patient)
+  }, [debouncedSearch, patients, patientsIndex])
 
   // Reset highlight quando lista muda
   useEffect(() => {

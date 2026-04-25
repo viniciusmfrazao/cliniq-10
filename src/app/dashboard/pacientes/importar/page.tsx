@@ -4,7 +4,14 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
-import * as XLSX from 'xlsx'
+
+// xlsx é carregado dinamicamente (~600kb) só quando o usuário abre o uploader
+type XLSXModule = typeof import('xlsx')
+let xlsxPromise: Promise<XLSXModule> | null = null
+const loadXLSX = () => {
+  if (!xlsxPromise) xlsxPromise = import('xlsx')
+  return xlsxPromise
+}
 
 type PatientRow = {
   name: string
@@ -78,8 +85,9 @@ export default function ImportarPacientesPage() {
     if (!file) return
 
     const reader = new FileReader()
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       const data = evt.target?.result
+      const XLSX = await loadXLSX()
       const workbook = XLSX.read(data, { type: 'binary' })
       const sheetName = workbook.SheetNames[0]
       const sheet = workbook.Sheets[sheetName]
@@ -119,11 +127,13 @@ export default function ImportarPacientesPage() {
     reader.readAsBinaryString(file)
   }
 
-  const processMapping = () => {
+  const processMapping = async () => {
     if (!mapping.name) {
       alert('O campo "Nome" é obrigatório. Selecione a coluna correspondente.')
       return
     }
+
+    const XLSX = await loadXLSX()
 
     const colIndexes: Record<string, number> = {}
     columns.forEach((col, idx) => { colIndexes[col] = idx })

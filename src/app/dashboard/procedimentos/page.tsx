@@ -7,9 +7,11 @@ export const metadata = {
   title: 'Procedimentos | Clinike',
 }
 
+const PROFESSIONAL_ROLES = ['doctor', 'biomedic', 'nurse', 'esthetician', 'physiotherapist', 'nutritionist', 'psychologist']
+
 export default async function ProcedimentosPage() {
   const supabase = await createClient()
-  
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
@@ -21,12 +23,24 @@ export default async function ProcedimentosPage() {
 
   if (!userData?.clinic_id) redirect('/login')
 
-  const { data: procedures } = await supabase
-    .from('procedures')
-    .select('*')
-    .eq('clinic_id', userData.clinic_id)
-    .order('category', { ascending: true })
-    .order('name', { ascending: true })
+  const [proceduresResult, professionalsResult] = await Promise.all([
+    supabase
+      .from('procedures')
+      .select('*')
+      .eq('clinic_id', userData.clinic_id)
+      .order('category', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('users')
+      .select('id, name, role, active')
+      .eq('clinic_id', userData.clinic_id)
+      .order('name'),
+  ])
+
+  const procedures = proceduresResult.data || []
+  const professionals = (professionalsResult.data || []).filter(
+    (u: any) => PROFESSIONAL_ROLES.includes(u.role) && u.active !== false
+  )
 
   const isAdmin = userData.role === 'admin'
 
@@ -37,7 +51,7 @@ export default async function ProcedimentosPage() {
           Procedimentos
         </h1>
         <p className="text-sm text-slate-500">
-          Gerencie os procedimentos da clínica
+          Gerencie os procedimentos da clínica e quem realiza cada um
         </p>
       </div>
 
@@ -46,7 +60,7 @@ export default async function ProcedimentosPage() {
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
             Adicionar procedimento
           </h2>
-          <ProcedureForm clinicId={userData.clinic_id} />
+          <ProcedureForm clinicId={userData.clinic_id} professionals={professionals} />
         </div>
       )}
 
@@ -54,7 +68,12 @@ export default async function ProcedimentosPage() {
         <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
           Procedimentos cadastrados
         </h2>
-        <ProcedureList procedures={procedures || []} isAdmin={isAdmin} />
+        <ProcedureList
+          procedures={procedures as any}
+          professionals={professionals}
+          clinicId={userData.clinic_id}
+          isAdmin={isAdmin}
+        />
       </div>
     </div>
   )

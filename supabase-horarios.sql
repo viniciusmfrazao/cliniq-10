@@ -71,13 +71,15 @@ CREATE INDEX IF NOT EXISTS idx_prof_unavail_prof
 --   p_professional_id - opcional (NULL = todos profissionais ativos com schedule)
 --   p_duration_min    - duração do slot em minutos (default 30)
 --   p_period          - 'manha' | 'tarde' | 'noite' | NULL
+--   p_procedure_id    - opcional: filtra profissionais elegíveis pelo procedimento
 -- ============================================
 CREATE OR REPLACE FUNCTION get_available_slots(
   p_clinic_id UUID,
   p_date DATE,
   p_professional_id UUID DEFAULT NULL,
   p_duration_min INT DEFAULT 30,
-  p_period TEXT DEFAULT NULL
+  p_period TEXT DEFAULT NULL,
+  p_procedure_id UUID DEFAULT NULL
 )
 RETURNS TABLE (
   professional_id UUID,
@@ -92,7 +94,16 @@ AS $$
 DECLARE
   v_dow SMALLINT := EXTRACT(DOW FROM p_date)::SMALLINT;
   v_duration INTERVAL := make_interval(mins => COALESCE(p_duration_min, 30));
+  v_proc_prof_ids UUID[];
 BEGIN
+  -- Se um procedimento foi informado, descobrir quais profissionais o realizam
+  IF p_procedure_id IS NOT NULL THEN
+    SELECT professional_ids INTO v_proc_prof_ids
+    FROM procedures
+    WHERE id = p_procedure_id AND clinic_id = p_clinic_id;
+    -- v_proc_prof_ids NULL ou array vazio => qualquer profissional pode (não filtra)
+  END IF;
+
   RETURN QUERY
   WITH schedules AS (
     SELECT
@@ -107,19 +118,24 @@ BEGIN
       AND u.active = true
       AND ps.day_of_week = v_dow
       AND (p_professional_id IS NULL OR ps.professional_id = p_professional_id)
+      AND (
+        v_proc_prof_ids IS NULL
+        OR cardinality(v_proc_prof_ids) = 0
+        OR ps.professional_id = ANY(v_proc_prof_ids)
+      )
   ),
   slots AS (
     SELECT
       s.professional_id,
       s.professional_name,
-      (slot_start)::TIME AS slot_time,
-      ((p_date::TIMESTAMP + slot_start)::TIMESTAMPTZ) AS slot_datetime
+      slot_ts::TIME                    AS slot_time,
+      slot_ts AT TIME ZONE 'America/Sao_Paulo' AS slot_datetime
     FROM schedules s
     CROSS JOIN LATERAL generate_series(
-      s.start_time::TIME,
-      (s.end_time - v_duration)::TIME,
+      (p_date::TIMESTAMP + s.start_time),
+      (p_date::TIMESTAMP + s.end_time - v_duration),
       v_duration
-    ) AS slot_start
+    ) AS slot_ts
   ),
   busy AS (
     SELECT
@@ -171,7 +187,10 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION get_available_slots(UUID, DATE, UUID, INT, TEXT)
+-- Drop antigas assinaturas (sem p_procedure_id) para evitar ambiguidade
+DROP FUNCTION IF EXISTS get_available_slots(UUID, DATE, UUID, INT, TEXT);
+
+GRANT EXECUTE ON FUNCTION get_available_slots(UUID, DATE, UUID, INT, TEXT, UUID)
   TO authenticated, service_role, anon;
 
 
@@ -285,4 +304,5 @@ END $$;
 -- ============================================
 -- DROP TABLE IF EXISTS professional_unavailability CASCADE;
 -- DROP TABLE IF EXISTS professional_schedules CASCADE;
+-- DROP FUNCTION IF EXISTS get_available_slots(UUID, DATE, UUID, INT, TEXT, UUID);
 -- DROP FUNCTION IF EXISTS get_available_slots(UUID, DATE, UUID, INT, TEXT);

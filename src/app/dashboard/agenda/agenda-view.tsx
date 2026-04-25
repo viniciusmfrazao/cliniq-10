@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type Appointment = {
   id: string
@@ -54,7 +55,7 @@ const PROFESSIONAL_COLORS = [
 ]
 
 // Componente de Card de Agendamento com preview e ações rápidas
-function AppointmentCard({ 
+const AppointmentCard = React.memo(function AppointmentCard({ 
   apt, 
   onStatusChange,
   onCheckIn,
@@ -254,9 +255,9 @@ function AppointmentCard({
       )}
     </div>
   )
-}
+})
 
-export default function AgendaView({ appointments, viewMode, selectedDate, professionals, selectedProfessional, clinicId }: Props) {
+export default function AgendaView({ appointments: allAppointments, viewMode, selectedDate, professionals, selectedProfessional, clinicId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null)
@@ -265,32 +266,42 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
     ? professionals 
     : professionals.filter(p => p.id === selectedProfessional)
 
+  // Aplica filtro de profissional em TODAS as views (corrige bug semana/mes)
+  const appointments = selectedProfessional === 'all'
+    ? allAppointments
+    : allAppointments.filter(a => a.professional_id === selectedProfessional)
+
+  // Realtime: qualquer mudança em appointments da clínica dispara refresh (debounced)
+  useRealtimeRefresh({
+    table: 'appointments',
+    filter: { column: 'clinic_id', value: clinicId },
+  })
+
   // Atualizar status do agendamento
-  async function handleStatusChange(appointmentId: string, newStatus: string) {
+  const handleStatusChange = useCallback(async (appointmentId: string, newStatus: string) => {
     const { error } = await supabase
       .from('appointments')
       .update({ status: newStatus })
       .eq('id', appointmentId)
-    
+
     if (!error) {
       router.refresh()
     }
-  }
+  }, [supabase, router])
 
   // Registrar check-in do paciente
-  async function handleCheckIn(appointmentId: string) {
+  const handleCheckIn = useCallback(async (appointmentId: string) => {
     const apt = appointments.find(a => a.id === appointmentId)
-    
+
     const { error } = await supabase
       .from('appointments')
-      .update({ 
+      .update({
         checked_in_at: new Date().toISOString(),
         status: 'confirmed'
       })
       .eq('id', appointmentId)
-    
+
     if (!error) {
-      // Enviar notificação para o profissional
       if (apt?.professional_id) {
         await supabase.from('notifications').insert({
           user_id: apt.professional_id,
@@ -302,13 +313,12 @@ export default function AgendaView({ appointments, viewMode, selectedDate, profe
       }
       router.refresh()
     }
-  }
+  }, [appointments, supabase, router])
 
-  // Drag and drop handlers
-  function handleDragStart(e: React.DragEvent, apt: Appointment) {
+  const handleDragStart = useCallback((e: React.DragEvent, apt: Appointment) => {
     setDraggedAppointment(apt)
     e.dataTransfer.effectAllowed = 'move'
-  }
+  }, [])
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()

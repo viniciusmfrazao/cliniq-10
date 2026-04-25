@@ -3,6 +3,10 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Icon from '@/components/ui/Icon'
+import ProcedureForm from './procedure-form'
+
+type Professional = { id: string; name: string; role?: string }
 
 type Procedure = {
   id: string
@@ -12,12 +16,23 @@ type Procedure = {
   price: number
   category: string | null
   active: boolean
+  professional_ids: string[] | null
+  includes_return: boolean | null
+  return_days: number | null
 }
 
-export default function ProcedureList({ procedures, isAdmin }: { procedures: Procedure[]; isAdmin: boolean }) {
+type Props = {
+  procedures: Procedure[]
+  professionals: Professional[]
+  clinicId: string
+  isAdmin: boolean
+}
+
+export default function ProcedureList({ procedures, professionals, clinicId, isAdmin }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [editing, setEditing] = useState<Procedure | null>(null)
 
   async function handleDelete(id: string) {
     if (!confirm('Excluir este procedimento?')) return
@@ -32,6 +47,13 @@ export default function ProcedureList({ procedures, isAdmin }: { procedures: Pro
     router.refresh()
   }
 
+  const profMap = new Map(professionals.map(p => [p.id, p.name]))
+  function firstName(full: string) {
+    return (full.startsWith('Dra.') || full.startsWith('Dr.'))
+      ? full.split(' ').slice(0, 2).join(' ')
+      : full.split(' ')[0]
+  }
+
   if (procedures.length === 0) {
     return (
       <div className="text-center py-8">
@@ -40,7 +62,6 @@ export default function ProcedureList({ procedures, isAdmin }: { procedures: Pro
     )
   }
 
-  // Agrupar por categoria
   const grouped = procedures.reduce((acc, proc) => {
     const cat = proc.category || 'Sem categoria'
     if (!acc[cat]) acc[cat] = []
@@ -49,52 +70,121 @@ export default function ProcedureList({ procedures, isAdmin }: { procedures: Pro
   }, {} as Record<string, Procedure[]>)
 
   return (
-    <div className="space-y-6">
-      {Object.entries(grouped).map(([category, procs]) => (
-        <div key={category}>
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-            {category}
-          </h3>
-          <div className="space-y-2">
-            {procs.map(proc => (
-              <div 
-                key={proc.id} 
-                className={`flex items-center justify-between p-3 rounded-xl border ${
-                  proc.active ? 'bg-white border-slate-100' : 'bg-slate-50 border-slate-200 opacity-60'
-                }`}
-              >
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-900">{proc.name}</p>
-                  <p className="text-xs text-slate-500">
-                    {proc.duration_minutes} min • R$ {proc.price.toFixed(2)}
-                  </p>
-                </div>
-                {isAdmin && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => toggleActive(proc.id, proc.active)}
-                      className={`text-xs px-2 py-1 rounded ${
-                        proc.active 
-                          ? 'text-amber-600 hover:bg-amber-50' 
-                          : 'text-green-600 hover:bg-green-50'
-                      }`}
-                    >
-                      {proc.active ? 'Desativar' : 'Ativar'}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(proc.id)}
-                      disabled={deleting === proc.id}
-                      className="text-xs text-red-500 hover:text-red-700 px-2 py-1"
-                    >
-                      {deleting === proc.id ? '...' : 'Excluir'}
-                    </button>
+    <>
+      <div className="space-y-6">
+        {Object.entries(grouped).map(([category, procs]) => (
+          <div key={category}>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+              {category}
+            </h3>
+            <div className="space-y-2">
+              {procs.map(proc => {
+                const profIds = proc.professional_ids || []
+                const profNames = profIds
+                  .map(id => profMap.get(id))
+                  .filter(Boolean) as string[]
+                const allDoIt = profIds.length === 0
+
+                return (
+                  <div
+                    key={proc.id}
+                    className={`flex items-start justify-between gap-3 p-3 rounded-xl border ${
+                      proc.active ? 'bg-white border-slate-100' : 'bg-slate-50 border-slate-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900">{proc.name}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {proc.duration_minutes} min • R$ {Number(proc.price).toFixed(2)}
+                        {proc.includes_return && proc.return_days != null && (
+                          <> • retorno {proc.return_days}d</>
+                        )}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1 mt-2">
+                        {allDoIt ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                            Qualquer profissional
+                          </span>
+                        ) : profNames.length > 0 ? (
+                          profNames.map(name => (
+                            <span
+                              key={name}
+                              className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100"
+                            >
+                              {firstName(name)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                            Nenhum profissional vinculado
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => setEditing(proc)}
+                          className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                          title="Editar"
+                        >
+                          <Icon name="edit" className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => toggleActive(proc.id, proc.active)}
+                          className={`text-xs px-2 py-1 rounded ${
+                            proc.active
+                              ? 'text-amber-600 hover:bg-amber-50'
+                              : 'text-green-600 hover:bg-green-50'
+                          }`}
+                        >
+                          {proc.active ? 'Desativar' : 'Ativar'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(proc.id)}
+                          disabled={deleting === proc.id}
+                          className="text-xs text-red-500 hover:text-red-700 px-2 py-1"
+                        >
+                          {deleting === proc.id ? '...' : 'Excluir'}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Modal de edição */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-100 p-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Editar procedimento</h2>
+                <p className="text-xs text-slate-500">{editing.name}</p>
               </div>
-            ))}
+              <button
+                onClick={() => setEditing(null)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
+              >
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4">
+              <ProcedureForm
+                clinicId={clinicId}
+                professionals={professionals}
+                procedure={editing}
+                onSaved={() => setEditing(null)}
+                onCancel={() => setEditing(null)}
+              />
+            </div>
           </div>
         </div>
-      ))}
-    </div>
+      )}
+    </>
   )
 }
