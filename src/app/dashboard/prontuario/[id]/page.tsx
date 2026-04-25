@@ -59,7 +59,14 @@ export default async function ProntuarioPatientPage({ params }: { params: { id: 
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
+        <Link href="/dashboard/prontuario" className="hover:text-slate-700">Prontuarios</Link>
+        <span>›</span>
+        <span className="text-slate-700">{patient.name}</span>
+      </div>
+
+      <div className="flex items-start justify-between mb-6 gap-3 flex-wrap">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-brand-100 rounded-2xl flex items-center justify-center">
             <span className="text-brand-700 text-xl font-bold">
@@ -67,22 +74,24 @@ export default async function ProntuarioPatientPage({ params }: { params: { id: 
             </span>
           </div>
           <div>
+            <p className="text-xs font-semibold text-violet-600 uppercase tracking-wide">Prontuario</p>
             <h1 className="text-xl font-bold text-slate-900">{patient.name}</h1>
             <p className="text-sm text-slate-500">
-              {age ? `${age} anos` : ''} 
+              {age ? `${age} anos` : ''}
               {patient.phone ? ` • ${patient.phone}` : ''}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Link 
+          <Link
             href={`/dashboard/pacientes/${params.id}`}
             className="btn-secondary w-auto px-4 py-2 text-sm"
+            title="Abrir cadastro do paciente (dados de contato, etc)"
           >
-            Ver ficha
+            Editar cadastro
           </Link>
-          <NewEvolutionButton 
-            patientId={params.id} 
+          <NewEvolutionButton
+            patientId={params.id}
             clinicId={userData?.clinic_id}
             professionalId={userData?.id}
             professionalName={userData?.name}
