@@ -22,28 +22,36 @@ const ROLE_KEY = 'clinike.welcome.role.v1'
  * Usa localStorage pra:
  * - Lembrar a escolha de papel.
  * - Esconder de vez quando o usuario marca "Ja entendi".
+ *
+ * As animacoes ficam em globals.css (.guide-* / guide-fade-up etc.)
+ * pra evitar styled-jsx em client component.
  */
 export default function WelcomeCard({ userRole, userName }: Props) {
   // Comeca escondido pra evitar flash em quem ja dispensou
   const [mounted, setMounted] = useState(false)
   const [dismissed, setDismissed] = useState(true)
-  const [activeId, setActiveId] = useState<string>(
-    defaultGuideForRole(userRole || null).id,
-  )
+  const [activeId, setActiveId] = useState<string>(() => {
+    try {
+      return defaultGuideForRole(userRole || null).id
+    } catch {
+      return GUIDES[0].id
+    }
+  })
 
   useEffect(() => {
     setMounted(true)
     try {
-      const dismiss = localStorage.getItem(STORAGE_KEY)
+      const dismiss = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null
       setDismissed(dismiss === '1')
-      const savedRole = localStorage.getItem(ROLE_KEY)
+      const savedRole = typeof window !== 'undefined' ? window.localStorage.getItem(ROLE_KEY) : null
       if (savedRole && GUIDES.find((g) => g.id === savedRole)) {
         setActiveId(savedRole)
       } else {
         setActiveId(defaultGuideForRole(userRole || null).id)
       }
     } catch {
-      // ignore
+      // sem localStorage (privacidade) -> mostra normal
+      setDismissed(false)
     }
   }, [userRole])
 
@@ -53,24 +61,24 @@ export default function WelcomeCard({ userRole, userName }: Props) {
   function dismiss() {
     setDismissed(true)
     try {
-      localStorage.setItem(STORAGE_KEY, '1')
+      window.localStorage.setItem(STORAGE_KEY, '1')
     } catch {}
   }
 
   function chooseRole(id: string) {
     setActiveId(id)
     try {
-      localStorage.setItem(ROLE_KEY, id)
+      window.localStorage.setItem(ROLE_KEY, id)
     } catch {}
   }
 
   if (!mounted || dismissed) return null
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl md:rounded-3xl text-white guide-welcome-card bg-gradient-to-br ${guide.gradient}`}>
-      {/* Bolhas */}
-      <div className="pointer-events-none absolute -top-16 -right-10 w-56 h-56 bg-white/15 rounded-full blur-3xl welcome-float-slow" />
-      <div className="pointer-events-none absolute -bottom-16 -left-10 w-48 h-48 bg-white/10 rounded-full blur-3xl welcome-float" />
+    <div className={`relative overflow-hidden rounded-2xl md:rounded-3xl text-white guide-hero-bg guide-fade-up bg-gradient-to-br ${guide.gradient}`}>
+      {/* Bolhas decorativas (animadas via globals.css) */}
+      <div className="pointer-events-none absolute -top-16 -right-10 w-56 h-56 bg-white/15 rounded-full blur-3xl guide-float-slow" />
+      <div className="pointer-events-none absolute -bottom-16 -left-10 w-48 h-48 bg-white/10 rounded-full blur-3xl guide-float" />
 
       <div className="relative p-5 md:p-8">
         <div className="flex items-start justify-between gap-3">
@@ -122,7 +130,7 @@ export default function WelcomeCard({ userRole, userName }: Props) {
           {preview.map((step, i) => (
             <div
               key={`${guide.id}-${i}`}
-              className="welcome-step bg-white/15 backdrop-blur rounded-xl p-3 border border-white/10 hover:bg-white/25 transition-colors"
+              className="guide-step-in bg-white/15 backdrop-blur rounded-xl p-3 border border-white/10 hover:bg-white/25 transition-colors"
               style={{ animationDelay: `${i * 80}ms` }}
             >
               <div className="flex items-center gap-2">
@@ -157,38 +165,6 @@ export default function WelcomeCard({ userRole, userName }: Props) {
           </button>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes welcome-fade-in {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes welcome-float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-        @keyframes welcome-float-slow {
-          0%, 100% { transform: translateY(0) translateX(0); }
-          50% { transform: translateY(-16px) translateX(8px); }
-        }
-        @keyframes welcome-step-in {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .guide-welcome-card {
-          background-size: 200% 200%;
-          animation:
-            welcome-fade-in 0.5s ease-out both,
-            welcome-grad 14s ease-in-out infinite;
-        }
-        @keyframes welcome-grad {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        .welcome-float { animation: welcome-float 6s ease-in-out infinite; }
-        .welcome-float-slow { animation: welcome-float-slow 9s ease-in-out infinite; }
-        .welcome-step { animation: welcome-step-in 0.5s ease-out both; }
-      `}</style>
     </div>
   )
 }

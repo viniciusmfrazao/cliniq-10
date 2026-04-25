@@ -28,52 +28,6 @@ export default function GuideView({ initialRoleId, userName }: Props) {
       <StepFlow active={active} />
 
       <FooterCTA />
-
-      {/* Animacoes globais usadas na pagina */}
-      <style jsx global>{`
-        @keyframes guide-gradient-shift {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        @keyframes guide-float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-12px); }
-        }
-        @keyframes guide-float-slow {
-          0%, 100% { transform: translateY(0px) translateX(0px); }
-          50% { transform: translateY(-20px) translateX(10px); }
-        }
-        @keyframes guide-pulse-ring {
-          0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.45); }
-          70% { box-shadow: 0 0 0 12px rgba(139, 92, 246, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
-        }
-        @keyframes guide-fade-up {
-          from { opacity: 0; transform: translateY(28px) scale(0.96); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes guide-draw {
-          from { stroke-dashoffset: 100%; }
-          to { stroke-dashoffset: 0; }
-        }
-        @keyframes guide-shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        .guide-hero-bg {
-          background-size: 200% 200%;
-          animation: guide-gradient-shift 14s ease-in-out infinite;
-        }
-        .guide-float { animation: guide-float 6s ease-in-out infinite; }
-        .guide-float-slow { animation: guide-float-slow 9s ease-in-out infinite; }
-        .guide-pulse-ring { animation: guide-pulse-ring 2.4s ease-out infinite; }
-        .guide-fade-up { animation: guide-fade-up 0.6s ease-out both; }
-        .guide-shimmer {
-          background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
-          background-size: 200% 100%;
-          animation: guide-shimmer 2.6s linear infinite;
-        }
-      `}</style>
     </div>
   )
 }
@@ -223,9 +177,6 @@ function StepFlow({ active }: { active: GuideRole }) {
             stroke="url(#guide-line-grad)"
             strokeWidth="2"
             strokeDasharray="6 6"
-            style={{ animation: 'guide-draw 1.4s ease-out both' }}
-            pathLength={100}
-            strokeDashoffset={0}
           />
           <defs>
             <linearGradient id="guide-line-grad" x1="0" y1="0" x2="0" y2="1">

@@ -495,3 +495,56 @@ body {
     transform: scale(0.95);
   }
 }
+
+/* ==========================================================
+   Animacoes do "Como funciona" / WelcomeCard
+   Mantidas globais (em vez de styled-jsx) pra evitar
+   problemas de hidratacao em client components.
+   ========================================================== */
+@keyframes guide-gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes guide-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes guide-float-slow {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-20px) translateX(10px); }
+}
+@keyframes guide-pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.45); }
+  70% { box-shadow: 0 0 0 12px rgba(139, 92, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+}
+@keyframes guide-fade-up {
+  from { opacity: 0; transform: translateY(28px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes guide-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes guide-step-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.guide-hero-bg {
+  background-size: 200% 200%;
+  animation: guide-gradient-shift 14s ease-in-out infinite;
+}
+.guide-float { animation: guide-float 6s ease-in-out infinite; }
+.guide-float-slow { animation: guide-float-slow 9s ease-in-out infinite; }
+.guide-pulse-ring { animation: guide-pulse-ring 2.4s ease-out infinite; }
+.guide-fade-up { animation: guide-fade-up 0.6s ease-out both; }
+.guide-shimmer {
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: guide-shimmer 2.6s linear infinite;
+}
+.guide-step-in {
+  animation: guide-step-in 0.5s ease-out both;
+}
+
