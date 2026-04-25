@@ -4,6 +4,7 @@ import Icon from '@/components/ui/Icon'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import WeeklyChart from '@/components/dashboard/WeeklyChart'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
+import WelcomeCard from '@/components/onboarding/WelcomeCard'
 
 // Tradução de entity_type para português
 const ENTITY_LABELS: Record<string, string> = {
@@ -185,6 +186,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Card de boas-vindas com guia por papel (some quando o usuario dispensa) */}
+      <WelcomeCard userRole={userData?.role} userName={firstName} />
+
       {/* Welcome Banner */}
       {searchParams.welcome === '1' && (
         <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-5 md:p-8 text-white">
