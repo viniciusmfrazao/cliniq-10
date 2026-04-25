@@ -2,35 +2,70 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function isSuperAdmin(): Promise<boolean> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) return false
-  
-  // Use service role to check super_admins table (bypasses RLS)
-  const serviceSupabase = createServiceClient()
-  const { data } = await serviceSupabase
-    .from('super_admins')
-    .select('id')
-    .eq('id', user.id)
-    .single()
-  
-  return !!data
+  const { data: userData, error: userErr } = await supabase.auth.getUser()
+  if (userErr || !userData?.user) {
+    console.warn('[isSuperAdmin] no auth user', userErr?.message)
+    return false
+  }
+  const userId = userData.user.id
+
+  // Caminho 1: RPC via cliente autenticado (a função SQL is_super_admin tem SECURITY DEFINER)
+  const { data: rpcData, error: rpcErr } = await supabase.rpc('is_super_admin', { user_id: userId })
+  if (!rpcErr && typeof rpcData === 'boolean') {
+    return rpcData
+  }
+  if (rpcErr) console.warn('[isSuperAdmin] rpc error, falling back', rpcErr.message)
+
+  // Caminho 2: fallback service role
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[isSuperAdmin] SUPABASE_SERVICE_ROLE_KEY ausente em runtime')
+    return false
+  }
+
+  try {
+    const svc = createServiceClient()
+    const { data, error } = await svc
+      .from('super_admins')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle()
+    if (error) {
+      console.error('[isSuperAdmin] service select error', error.message)
+      return false
+    }
+    return !!data
+  } catch (e) {
+    console.error('[isSuperAdmin] service client failed', e instanceof Error ? e.message : e)
+    return false
+  }
 }
 
 export async function getSuperAdminData() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  
   if (!user) return null
-  
-  const serviceSupabase = createServiceClient()
-  const { data } = await serviceSupabase
+
+  // Tenta via cliente autenticado primeiro (precisa de policy ou de ser o próprio super_admin)
+  const { data: own } = await supabase
     .from('super_admins')
     .select('*')
     .eq('id', user.id)
-    .single()
-  
-  return data
+    .maybeSingle()
+  if (own) return own
+
+  // Fallback service role
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+  try {
+    const svc = createServiceClient()
+    const { data } = await svc
+      .from('super_admins')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle()
+    return data
+  } catch {
+    return null
+  }
 }
 
 export async function getAdminMetrics() {
