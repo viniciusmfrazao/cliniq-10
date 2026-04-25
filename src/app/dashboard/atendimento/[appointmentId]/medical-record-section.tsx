@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import AutoTextarea from '@/components/ui/AutoTextarea'
 
 type Props = {
   patient: { id: string; name: string }
@@ -145,12 +146,12 @@ export default function MedicalRecordSection({
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Queixa principal
               </label>
-              <textarea
+              <AutoTextarea
                 value={form.complaint}
                 onChange={e => setForm({ ...form, complaint: e.target.value })}
                 placeholder="O que trouxe a paciente hoje..."
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all resize-none"
-                rows={3}
+                minRows={3}
+                maxRows={10}
               />
             </div>
 
@@ -159,12 +160,12 @@ export default function MedicalRecordSection({
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Conduta / Procedimento realizado
               </label>
-              <textarea
+              <AutoTextarea
                 value={form.conduct}
                 onChange={e => setForm({ ...form, conduct: e.target.value })}
                 placeholder="Descreva o procedimento realizado..."
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all resize-none"
-                rows={4}
+                minRows={4}
+                maxRows={14}
               />
             </div>
 
@@ -173,12 +174,12 @@ export default function MedicalRecordSection({
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Observações
               </label>
-              <textarea
+              <AutoTextarea
                 value={form.observations}
                 onChange={e => setForm({ ...form, observations: e.target.value })}
                 placeholder="Notas adicionais, recomendações..."
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all resize-none"
-                rows={3}
+                minRows={3}
+                maxRows={10}
               />
             </div>
 

@@ -208,7 +208,7 @@ export default function SendAnamneseForm({ clinicId, clinicName, patients, userI
                 value={searchPatient}
                 onChange={e => setSearchPatient(e.target.value)}
                 placeholder="Buscar paciente..."
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-700 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all"
+                className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow]"
               />
             </div>
             <div className="max-h-80 overflow-y-auto space-y-2">

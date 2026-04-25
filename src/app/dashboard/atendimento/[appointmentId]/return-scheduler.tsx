@@ -141,7 +141,7 @@ export default function ReturnScheduler({ patientId, clinicId, currentAppointmen
                   value={form.date}
                   onChange={e => setForm({ ...form, date: e.target.value })}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow]"
                 />
               </div>
 
@@ -153,7 +153,7 @@ export default function ReturnScheduler({ patientId, clinicId, currentAppointmen
                 <select
                   value={form.time}
                   onChange={e => setForm({ ...form, time: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow]"
                 >
                   {Array.from({ length: 20 }, (_, i) => {
                     const hour = Math.floor(i / 2) + 8
@@ -175,7 +175,7 @@ export default function ReturnScheduler({ patientId, clinicId, currentAppointmen
                   value={form.notes}
                   onChange={e => setForm({ ...form, notes: e.target.value })}
                   placeholder="Ex: Retorno para avaliação do resultado..."
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all resize-none"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow] resize-none"
                   rows={2}
                 />
               </div>

@@ -210,9 +210,12 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   const age = calculateAge(patient.birth_date)
 
   return (
-    <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+    // No mobile, header NAO e sticky pra nao brigar com o teclado virtual
+    // (causa o "danca" da tela quando voce digita nos textareas).
+    // No desktop fica sticky normal pra acompanhar o scroll.
+    <div className="md:sticky md:top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
       <div className="max-w-[1600px] mx-auto px-4">
-        <div className="flex items-center justify-between h-16 md:h-20">
+        <div className="flex items-center justify-between gap-3 py-3 md:py-0 md:h-20 flex-wrap md:flex-nowrap">
           {/* Voltar + Info Paciente */}
           <div className="flex items-center gap-4">
             <Link

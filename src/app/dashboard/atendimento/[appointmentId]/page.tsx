@@ -82,8 +82,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .eq('appointment_id', params.appointmentId)
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header Fixo */}
+    <div className="min-h-[100dvh] bg-slate-50">
       <AttendanceHeader
         appointment={appointment}
         patient={patient}
@@ -91,9 +90,8 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
         clinicId={userData?.clinic_id || ''}
       />
 
-      {/* Conteudo Principal */}
-      <div className="max-w-[1600px] mx-auto px-4 py-6">
-        <div className="grid lg:grid-cols-2 gap-6">
+      <div className="max-w-[1600px] mx-auto px-4 py-4 md:py-6 pb-24 md:pb-8">
+        <div className="grid lg:grid-cols-2 gap-4 md:gap-6">
           {/* Coluna Esquerda - Prontuario */}
           <MedicalRecordSection
             patient={patient}

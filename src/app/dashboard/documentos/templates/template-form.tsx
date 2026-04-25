@@ -107,7 +107,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
             type="text"
             value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
-            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow]"
             placeholder="Ex: Termo de Consentimento - Botox"
             required
           />
@@ -119,7 +119,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
             type="text"
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
-            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow]"
             placeholder="Breve descricao do documento"
           />
         </div>
@@ -129,7 +129,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
           <select
             value={form.category}
             onChange={e => setForm({ ...form, category: e.target.value })}
-            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow]"
           >
             <option value="termo">Termo de consentimento</option>
             <option value="contrato">Contrato</option>
@@ -208,7 +208,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
             <textarea
               value={form.content}
               onChange={e => setForm({ ...form, content: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all resize-none font-mono text-sm"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow] resize-none font-mono text-sm"
               rows={15}
               placeholder="Digite o conteudo do documento aqui..."
               required

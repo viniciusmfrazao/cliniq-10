@@ -269,7 +269,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
               value={searchPatient}
               onChange={e => setSearchPatient(e.target.value)}
               placeholder="Buscar paciente..."
-              className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all"
+              className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow]"
             />
           </div>
           <div className="max-h-80 overflow-y-auto space-y-2">
@@ -410,7 +410,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-700 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-all font-mono text-sm resize-none"
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow] font-mono text-sm resize-none"
                 rows={15}
               />
               <p className="text-xs text-slate-500 mt-2">
