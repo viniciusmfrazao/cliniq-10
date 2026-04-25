@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { todayBR } from '@/lib/datetime'
 
 type Debito = {
   id: string
@@ -42,7 +43,7 @@ export default function DevedoresList({ debitos, pacientes, clinicId }: Props) {
     paciente_id: '',
     valor: '',
     descricao: '',
-    data_vencimento: new Date().toISOString().split('T')[0],
+    data_vencimento: todayBR(),
   })
 
   async function handleSubmit(e: React.FormEvent) {
@@ -69,7 +70,7 @@ export default function DevedoresList({ debitos, pacientes, clinicId }: Props) {
       return
     }
 
-    setForm({ paciente_id: '', valor: '', descricao: '', data_vencimento: new Date().toISOString().split('T')[0] })
+    setForm({ paciente_id: '', valor: '', descricao: '', data_vencimento: todayBR() })
     setShowForm(false)
     setLoading(false)
     router.refresh()

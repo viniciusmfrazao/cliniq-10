@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
+import { todayBR, startOfMonthBR, endOfMonthBR } from '@/lib/datetime'
 
 function fmt(v: number) {
   return formatBRL(v || 0)
@@ -16,10 +17,10 @@ export default async function FinanceiroPage() {
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id
 
-  const today = new Date()
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
-  const todayStr = today.toISOString().split('T')[0]
+  // Tudo no fuso de Brasilia (servidor roda em UTC)
+  const todayStr = todayBR()
+  const startOfMonth = startOfMonthBR().slice(0, 10)
+  const endOfMonth = endOfMonthBR().slice(0, 10)
 
   const { data: entradasHoje } = await supabase
     .from('entradas')

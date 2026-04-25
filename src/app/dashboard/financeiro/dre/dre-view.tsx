@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { todayBR } from '@/lib/datetime'
 
 type Entrada = {
   data_venda: string
@@ -43,7 +44,7 @@ function fmtPct(v: number) {
 }
 
 export default function DreView({ entradas: initialEntradas, saidas: initialSaidas, clinicId }: Props) {
-  const [mes, setMes] = useState(new Date().toISOString().slice(0, 7))
+  const [mes, setMes] = useState(todayBR().slice(0, 7))
   const [entradas, setEntradas] = useState(initialEntradas)
   const [saidas, setSaidas] = useState(initialSaidas)
   const [loading, setLoading] = useState(false)

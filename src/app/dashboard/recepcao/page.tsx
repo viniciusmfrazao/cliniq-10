@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ReceptionView from './reception-view'
+import { todayBR, startOfDayBR, endOfDayBR } from '@/lib/datetime'
 
 export default async function RecepcaoPage() {
   const supabase = await createClient()
@@ -13,9 +14,10 @@ export default async function RecepcaoPage() {
     .eq('id', user.id)
     .single()
 
-  const today = new Date().toISOString().split('T')[0]
-  const todayStart = `${today}T00:00:00`
-  const todayEnd = `${today}T23:59:59`
+  // Sempre fuso de Brasilia: nao confunde "hoje" quando o servidor esta em UTC
+  const today = todayBR()
+  const todayStart = startOfDayBR(today)
+  const todayEnd = endOfDayBR(today)
 
   // Buscar agendamentos de hoje
   const { data: appointments } = await supabase

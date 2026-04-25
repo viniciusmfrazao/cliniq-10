@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import PatientSearch from '@/components/ui/PatientSearch'
 import QuickPatientModal from '@/components/ui/QuickPatientModal'
+import { todayBR } from '@/lib/datetime'
 
 type Patient = { id: string; name: string }
 type Procedure = { id: string; name: string; duration_minutes: number; price: number; professional_ids?: string[] | null }
@@ -51,7 +52,7 @@ export default function AppointmentForm({
   const supabase = createClient()
   const isEditing = !!appointment
 
-  const defaultStartDate = defaultDate || new Date().toISOString().split('T')[0]
+  const defaultStartDate = defaultDate || todayBR()
   const defaultStartTime = defaultTime || '09:00'
 
   const [patients, setPatients] = useState(initialPatients)

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import DreView from './dre-view'
+import { startOfMonthBR, endOfMonthBR } from '@/lib/datetime'
 
 export default async function DrePage() {
   const supabase = await createClient()
@@ -9,9 +10,9 @@ export default async function DrePage() {
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id
 
-  const today = new Date()
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
+  // Mes corrente no fuso de Brasilia (servidor roda em UTC)
+  const startOfMonth = startOfMonthBR().slice(0, 10)
+  const endOfMonth = endOfMonthBR().slice(0, 10)
 
   const { data: entradas } = await supabase
     .from('entradas')

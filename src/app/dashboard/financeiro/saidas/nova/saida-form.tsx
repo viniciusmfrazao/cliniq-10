@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { todayBR } from '@/lib/datetime'
 
 type Props = {
   clinicId: string
@@ -31,7 +32,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   
-  const [data, setData] = useState(new Date().toISOString().split('T')[0])
+  const [data, setData] = useState(todayBR())
   const [descricao, setDescricao] = useState('')
   const [categoria, setCategoria] = useState('')
   const [fornecedor, setFornecedor] = useState('')

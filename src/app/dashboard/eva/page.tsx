@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { startOfDayBR, startOfMonthBR } from '@/lib/datetime'
 
 export const metadata = {
   title: 'Eva IA | Clinike',
@@ -21,9 +22,9 @@ export default async function EvaPage() {
 
   if (!userData?.clinic_id) redirect('/login')
 
-  // Buscar estatísticas de conversas
-  const today = new Date().toISOString().split('T')[0]
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+  // Estatisticas: tudo no fuso de Brasilia (servidor roda em UTC)
+  const startOfToday = startOfDayBR()
+  const startOfMonth = startOfMonthBR()
 
   const { count: totalConversations } = await supabase
     .from('eva_conversations')
@@ -34,13 +35,13 @@ export default async function EvaPage() {
     .from('eva_conversations')
     .select('*', { count: 'exact', head: true })
     .eq('clinic_id', userData.clinic_id)
-    .gte('created_at', `${today}T00:00:00`)
+    .gte('created_at', startOfToday)
 
   const { count: monthConversations } = await supabase
     .from('eva_conversations')
     .select('*', { count: 'exact', head: true })
     .eq('clinic_id', userData.clinic_id)
-    .gte('created_at', `${startOfMonth}T00:00:00`)
+    .gte('created_at', startOfMonth)
 
   // Buscar leads gerados pela Eva
   const { count: leadsFromEva } = await supabase

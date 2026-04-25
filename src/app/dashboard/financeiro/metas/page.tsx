@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import MetasView from './metas-view'
+import { startOfMonthBR, endOfMonthBR } from '@/lib/datetime'
 
 export default async function MetasPage() {
   const supabase = await createClient()
@@ -9,10 +10,10 @@ export default async function MetasPage() {
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id
 
-  const today = new Date()
-  const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-  const startOfMonth = `${currentMonth}-01`
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
+  // Mes corrente no fuso de Brasilia
+  const startOfMonth = startOfMonthBR().slice(0, 10)
+  const endOfMonth = endOfMonthBR().slice(0, 10)
+  const currentMonth = startOfMonth.slice(0, 7)
 
   const { data: metas } = await supabase
     .from('metas_financeiras')

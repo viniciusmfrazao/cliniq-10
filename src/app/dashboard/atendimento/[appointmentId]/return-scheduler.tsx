@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
+import { todayBR } from '@/lib/datetime'
 
 type Props = {
   patientId: string
@@ -140,7 +141,7 @@ export default function ReturnScheduler({ patientId, clinicId, currentAppointmen
                   type="date"
                   value={form.date}
                   onChange={e => setForm({ ...form, date: e.target.value })}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={todayBR()}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow]"
                 />
               </div>

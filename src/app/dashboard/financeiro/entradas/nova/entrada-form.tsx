@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { todayBR } from '@/lib/datetime'
 
 type Props = {
   pacientes: { id: string; name: string }[]
@@ -48,7 +49,7 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, c
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   
-  const [dataVenda, setDataVenda] = useState(new Date().toISOString().split('T')[0])
+  const [dataVenda, setDataVenda] = useState(todayBR())
   const [pacienteId, setPacienteId] = useState('')
   const [pacienteNome, setPacienteNome] = useState('')
   const [procedimentoId, setProcedimentoId] = useState('')

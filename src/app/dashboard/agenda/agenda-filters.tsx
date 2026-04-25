@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+import { todayBR } from '@/lib/datetime'
 
 type Props = {
   currentDate: string
@@ -36,7 +37,7 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
   }
 
   function goToToday() {
-    updateParams('date', new Date().toISOString().split('T')[0])
+    updateParams('date', todayBR())
   }
 
   const formatDateDisplay = () => {

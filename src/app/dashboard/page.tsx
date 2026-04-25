@@ -5,6 +5,15 @@ import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import WeeklyChart from '@/components/dashboard/WeeklyChart'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
 import WelcomeCard from '@/components/onboarding/WelcomeCard'
+import {
+  todayBR,
+  yesterdayBR,
+  startOfDayBR,
+  endOfDayBR,
+  startOfMonthBR,
+  addDaysBR,
+  BR_TZ,
+} from '@/lib/datetime'
 
 // Tradução de entity_type para português
 const ENTITY_LABELS: Record<string, string> = {
@@ -45,36 +54,40 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const trialDaysLeft = clinic?.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at).getTime() - Date.now()) / 86400000))
     : 0
-  const h = new Date().getHours()
-  const greeting = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'
+  // Saudacao: hora local do Brasil, nao UTC
+  const hourBR = Number(
+    new Date().toLocaleString('en-US', { timeZone: BR_TZ, hour: '2-digit', hour12: false }),
+  )
+  const greeting = hourBR < 12 ? 'Bom dia' : hourBR < 18 ? 'Boa tarde' : 'Boa noite'
 
-  const today = new Date().toISOString().split('T')[0]
-  const startOfDay = `${today}T00:00:00`
-  const endOfDay = `${today}T23:59:59`
+  // Tudo abaixo usa fuso BR (America/Sao_Paulo) pra evitar conflito com servidor UTC
+  const today = todayBR()
+  const startOfDay = startOfDayBR(today)
+  const endOfDay = endOfDayBR(today)
 
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
-  const startOfYesterday = `${yesterday}T00:00:00`
-  const endOfYesterday = `${yesterday}T23:59:59`
+  const yesterday = yesterdayBR()
+  const startOfYesterday = startOfDayBR(yesterday)
+  const endOfYesterday = endOfDayBR(yesterday)
 
   // Buscar dados da semana para gráfico
   const weekData: { day: string; count: number }[] = []
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
   
   for (let i = 6; i >= 0; i--) {
-    const date = new Date()
-    date.setDate(date.getDate() - i)
-    const dateStr = date.toISOString().split('T')[0]
-    
+    const dateStr = addDaysBR(today, -i) // YYYY-MM-DD no fuso BR
+    // Dia da semana baseado no proprio dia BR (12h pra evitar borda de fuso)
+    const weekday = new Date(`${dateStr}T12:00:00-03:00`).getDay()
+
     const { count } = await supabase
       .from('appointments')
       .select('*', { count: 'exact', head: true })
       .eq('clinic_id', userData?.clinic_id)
-      .gte('start_time', `${dateStr}T00:00:00`)
-      .lte('start_time', `${dateStr}T23:59:59`)
+      .gte('start_time', startOfDayBR(dateStr))
+      .lte('start_time', endOfDayBR(dateStr))
       .neq('status', 'cancelled')
     
     weekData.push({
-      day: dayNames[date.getDay()],
+      day: dayNames[weekday],
       count: count || 0
     })
   }
@@ -100,7 +113,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .select('*', { count: 'exact', head: true })
     .eq('clinic_id', userData?.clinic_id)
 
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+  const startOfMonth = startOfMonthBR()
+  const startOfMonthDate = startOfMonth.slice(0, 10) // YYYY-MM-DD pra colunas tipo `date`
   const { count: newPatientsMonth } = await supabase
     .from('patients')
     .select('*', { count: 'exact', head: true })
@@ -142,7 +156,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       .from('entradas')
       .select('valor_liquido')
       .eq('clinic_id', userData?.clinic_id)
-      .gte('data_venda', startOfMonth.split('T')[0])
+      .gte('data_venda', startOfMonthDate)
     
     monthlyRevenue = entradas?.reduce((sum, e) => sum + (e.valor_liquido || 0), 0) || 0
   }

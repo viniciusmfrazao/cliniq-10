@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import FaceMapEditor from './face-map-editor'
 import Icon from '@/components/ui/Icon'
+import { todayBR } from '@/lib/datetime'
 
 type Product = {
   id: string
@@ -41,7 +42,7 @@ export default function NewApplicationButton({ patientId, clinicId, professional
     product_brand: '',
     lot_number: '',
     notes: '',
-    application_date: new Date().toISOString().split('T')[0],
+    application_date: todayBR(),
   })
   const [points, setPoints] = useState<any[]>([])
 
@@ -136,7 +137,7 @@ export default function NewApplicationButton({ patientId, clinicId, professional
       product_brand: '',
       lot_number: '',
       notes: '',
-      application_date: new Date().toISOString().split('T')[0],
+      application_date: todayBR(),
     })
     setPoints([])
     router.refresh()

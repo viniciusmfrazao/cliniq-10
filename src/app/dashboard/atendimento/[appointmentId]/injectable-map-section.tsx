@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import FaceMap from '@/components/ui/FaceMap'
 import { createLogger } from '@/lib/logger'
+import { todayBR } from '@/lib/datetime'
 
 const log = createLogger('InjectableMap')
 
@@ -184,7 +185,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           product_brand: product?.brand || null,
           total_units: units,
           stock_deducted: false,
-          application_date: new Date().toISOString().split('T')[0],
+          application_date: todayBR(),
           type: productType,
           notes: manualNotes || null
         })
@@ -256,7 +257,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           product_brand: product?.brand || null,
           total_units: totalProductUnits,
           stock_deducted: false,
-          application_date: new Date().toISOString().split('T')[0],
+          application_date: todayBR(),
           type: productType
         }
 

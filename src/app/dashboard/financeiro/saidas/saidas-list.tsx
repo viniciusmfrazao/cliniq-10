@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { todayBR } from '@/lib/datetime'
 
 type Saida = {
   id: string
@@ -36,7 +37,7 @@ function fmt(v: number) {
 export default function SaidasList({ saidas, clinicId }: Props) {
   const [list, setList] = useState(saidas)
   const [search, setSearch] = useState('')
-  const [mes, setMes] = useState(new Date().toISOString().slice(0, 7))
+  const [mes, setMes] = useState(todayBR().slice(0, 7))
   const [categoria, setCategoria] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
   const supabase = createClient()

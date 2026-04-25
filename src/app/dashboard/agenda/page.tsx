@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import AgendaView from './agenda-view'
 import AgendaFilters from './agenda-filters'
+import { todayBR, startOfDayBR, endOfDayBR, addDaysBR, BR_OFFSET } from '@/lib/datetime'
 
 export const revalidate = 30
 
@@ -18,35 +19,38 @@ export default async function AgendaPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Data selecionada ou hoje
-  const selectedDate = searchParams.date || new Date().toISOString().split('T')[0]
+  // Data selecionada ou hoje (sempre no fuso de Brasilia)
+  const selectedDate = searchParams.date || todayBR()
   const viewMode = searchParams.view || 'day'
   const selectedProfessional = searchParams.professional || 'all'
   const selectedStatus = searchParams.status || 'all'
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayBR()
 
-  // Calcular range de datas baseado na view
+  // Calcular range de datas baseado na view (timestamps com offset BR explicito)
   let startDate: string
   let endDate: string
 
   if (viewMode === 'day') {
-    startDate = `${selectedDate}T00:00:00`
-    endDate = `${selectedDate}T23:59:59`
+    startDate = startOfDayBR(selectedDate)
+    endDate = endOfDayBR(selectedDate)
   } else if (viewMode === 'week') {
-    const date = new Date(selectedDate)
-    const dayOfWeek = date.getDay()
-    const start = new Date(date)
-    start.setDate(date.getDate() - dayOfWeek)
-    const end = new Date(start)
-    end.setDate(start.getDate() + 6)
-    startDate = `${start.toISOString().split('T')[0]}T00:00:00`
-    endDate = `${end.toISOString().split('T')[0]}T23:59:59`
+    // Dia da semana baseado no horario do meio-dia BR pra evitar borda
+    const refDate = new Date(`${selectedDate}T12:00:00${BR_OFFSET}`)
+    const dayOfWeek = refDate.getDay()
+    const startStr = addDaysBR(selectedDate, -dayOfWeek)
+    const endStr = addDaysBR(startStr, 6)
+    startDate = startOfDayBR(startStr)
+    endDate = endOfDayBR(endStr)
   } else {
-    const date = new Date(selectedDate)
-    const start = new Date(date.getFullYear(), date.getMonth(), 1)
-    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0)
-    startDate = `${start.toISOString().split('T')[0]}T00:00:00`
-    endDate = `${end.toISOString().split('T')[0]}T23:59:59`
+    // Mes do `selectedDate`
+    const [yStr, mStr] = selectedDate.split('-')
+    const y = Number(yStr)
+    const m = Number(mStr)
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate()
+    const startStr = `${yStr}-${mStr}-01`
+    const endStr = `${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}`
+    startDate = startOfDayBR(startStr)
+    endDate = endOfDayBR(endStr)
   }
 
   // Buscar clinic_id do usuário
@@ -89,8 +93,8 @@ export default async function AgendaPage({
       .from('appointments')
       .select('status')
       .eq('clinic_id', clinicId)
-      .gte('start_time', `${today}T00:00:00`)
-      .lte('start_time', `${today}T23:59:59`)
+      .gte('start_time', startOfDayBR(today))
+      .lte('start_time', endOfDayBR(today))
       .neq('status', 'cancelled')
   ])
 

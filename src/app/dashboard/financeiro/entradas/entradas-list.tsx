@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { todayBR } from '@/lib/datetime'
 
 type Entrada = {
   id: string
@@ -33,7 +34,7 @@ function fmt(v: number) {
 export default function EntradasList({ entradas, clinicId }: Props) {
   const [list, setList] = useState(entradas)
   const [search, setSearch] = useState('')
-  const [mes, setMes] = useState(new Date().toISOString().slice(0, 7))
+  const [mes, setMes] = useState(todayBR().slice(0, 7))
   const [deleting, setDeleting] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
