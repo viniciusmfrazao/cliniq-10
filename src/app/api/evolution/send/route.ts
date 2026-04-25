@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 
+/**
+ * @deprecated Use POST /api/whatsapp/send.
+ * Esta rota recebe `config` no body (acoplado a uma única clínica) e será removida na Fase 5.
+ * Mantida temporariamente para compatibilidade com integrações externas antigas.
+ */
 export async function POST(request: Request) {
   try {
     const { config, phone, message } = await request.json()

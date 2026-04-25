@@ -150,11 +150,10 @@ export default function WhatsAppPage() {
     
     setSending(true)
     try {
-      const response = await fetch('/api/evolution/send', {
+      const response = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          config,
           phone: selectedConversation.phone,
           message: newMessage
         })
