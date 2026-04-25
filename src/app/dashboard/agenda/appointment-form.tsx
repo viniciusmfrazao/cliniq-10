@@ -106,13 +106,22 @@ export default function AppointmentForm({
 
     let allowed: Set<string> | null = null
     for (const proc of selectedProcs) {
-      const ids = (proc.professional_ids || []).filter(Boolean)
+      const ids: string[] = (proc.professional_ids || []).filter((id): id is string => !!id)
       if (ids.length === 0) continue
-      const set = new Set(ids)
-      allowed = allowed === null ? set : new Set([...allowed].filter(id => set.has(id)))
+      const set = new Set<string>(ids)
+      if (allowed === null) {
+        allowed = set
+      } else {
+        const intersection = new Set<string>()
+        allowed.forEach(id => {
+          if (set.has(id)) intersection.add(id)
+        })
+        allowed = intersection
+      }
     }
     if (allowed === null) return professionals
-    return professionals.filter(p => allowed!.has(p.id))
+    const allowedFinal = allowed
+    return professionals.filter(p => allowedFinal.has(p.id))
   })()
 
   // Se o profissional atual deixou de ser elegível, limpar
