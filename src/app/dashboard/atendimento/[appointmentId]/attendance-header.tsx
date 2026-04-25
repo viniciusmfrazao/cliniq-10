@@ -210,23 +210,22 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   const age = calculateAge(patient.birth_date)
 
   return (
-    // No mobile, header NAO e sticky pra nao brigar com o teclado virtual
-    // (causa o "danca" da tela quando voce digita nos textareas).
-    // No desktop fica sticky normal pra acompanhar o scroll.
-    <div className="md:sticky md:top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
-      <div className="max-w-[1600px] mx-auto px-4">
-        <div className="flex items-center justify-between gap-3 py-3 md:py-0 md:h-20 flex-wrap md:flex-nowrap">
+    // Header sticky no topo do <main> do dashboard (que e o scroll container).
+    // Fundo opaco com leve blur evita o conteudo "vazar" por tras quando rola.
+    <div className="sticky top-0 z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-slate-200 shadow-sm">
+      <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2.5 md:py-3">
+        <div className="flex items-center justify-between gap-3">
           {/* Voltar + Info Paciente */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <Link
               href="/dashboard/agenda"
-              className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+              className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors flex-shrink-0"
+              aria-label="Voltar para agenda"
             >
               <Icon name="arrowLeft" className="w-5 h-5 text-slate-600" />
             </Link>
 
-            {/* Avatar */}
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg overflow-hidden">
+            <div className="hidden sm:flex w-10 h-10 md:w-11 md:h-11 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
               {patient.photo_url ? (
                 <img src={patient.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -234,80 +233,83 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
               )}
             </div>
 
-            {/* Nome e Info */}
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-slate-900">{patient.name}</h1>
-                {age && <span className="text-sm text-slate-500">{age} anos</span>}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-base md:text-lg font-bold text-slate-900 truncate">
+                  {patient.name}
+                </h1>
+                {age && (
+                  <span className="hidden md:inline text-sm text-slate-500 flex-shrink-0">
+                    {age} anos
+                  </span>
+                )}
               </div>
-              <p className="text-sm text-slate-500">
+              <p className="text-xs md:text-sm text-slate-500 truncate">
                 {procedure?.name || 'Consulta'} • {new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>
 
-          {/* Status + Timer + Ações */}
-          <div className="flex items-center gap-4">
-            {/* Badge Status */}
-            <div className={`hidden md:flex items-center gap-2 px-4 py-2 rounded-full ${
-              status === 'in_progress' 
-                ? 'bg-blue-100 text-blue-700' 
+          {/* Status + Cronometro + Acoes */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full ${
+              status === 'in_progress'
+                ? 'bg-blue-100 text-blue-700'
                 : status === 'completed'
                 ? 'bg-emerald-100 text-emerald-700'
                 : 'bg-amber-100 text-amber-700'
             }`}>
               <span className={`w-2 h-2 rounded-full ${
-                status === 'in_progress' ? 'bg-blue-500 animate-pulse' : 
+                status === 'in_progress' ? 'bg-blue-500 animate-pulse' :
                 status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'
               }`} />
-              <span className="text-sm font-semibold">
-                {status === 'in_progress' ? 'Em atendimento' : 
+              <span className="text-xs font-semibold">
+                {status === 'in_progress' ? 'Em atendimento' :
                  status === 'completed' ? 'Finalizado' : 'Aguardando'}
               </span>
             </div>
 
-            {/* Cronometro */}
             {status === 'in_progress' && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-full">
-                <Icon name="clock" className="w-4 h-4 text-slate-600" />
-                <span className="text-sm font-mono font-semibold text-slate-700">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 rounded-full">
+                <Icon name="clock" className="w-3.5 h-3.5 text-slate-600" />
+                <span className="text-xs md:text-sm font-mono font-semibold text-slate-700">
                   {formatTime(elapsedTime)}
                 </span>
               </div>
             )}
 
-            {/* Botões de Ação */}
-            {status === 'confirmed' || status === 'scheduled' ? (
+            {(status === 'confirmed' || status === 'scheduled') && (
               <button
                 onClick={startAttendance}
                 disabled={loading}
-                className="btn-primary w-auto px-6 flex items-center gap-2"
+                className="btn-primary w-auto px-3 md:px-4 py-2 flex items-center gap-1.5 text-sm"
               >
                 {loading ? (
                   <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
                 ) : (
                   <>
                     <Icon name="zap" className="w-4 h-4" />
-                    Iniciar atendimento
+                    <span className="hidden sm:inline">Iniciar</span>
                   </>
                 )}
               </button>
-            ) : status === 'in_progress' ? (
+            )}
+            {status === 'in_progress' && (
               <button
                 onClick={finishAttendance}
                 disabled={loading}
-                className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold flex items-center gap-2 transition-colors"
+                className="px-3 md:px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white rounded-xl font-semibold flex items-center gap-1.5 transition-colors text-sm"
               >
                 {loading ? (
                   <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
                 ) : (
                   <>
                     <Icon name="check" className="w-4 h-4" />
-                    Finalizar
+                    <span className="hidden sm:inline">Finalizar</span>
                   </>
                 )}
               </button>
-            ) : null}
+            )}
           </div>
         </div>
       </div>

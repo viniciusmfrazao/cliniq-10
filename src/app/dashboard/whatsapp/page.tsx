@@ -183,7 +183,7 @@ export default function WhatsAppPage() {
 
   if (loading) {
     return (
-      <div className="h-[calc(100vh-120px)] flex items-center justify-center">
+      <div className="h-[calc(100dvh-180px)] md:h-[calc(100dvh-140px)] flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-600 dark:text-slate-300">Carregando...</p>
@@ -194,7 +194,7 @@ export default function WhatsAppPage() {
 
   if (!configured) {
     return (
-      <div className="h-[calc(100vh-120px)] flex items-center justify-center">
+      <div className="h-[calc(100dvh-180px)] md:h-[calc(100dvh-140px)] flex items-center justify-center">
         <div className="text-center max-w-md">
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
             <svg className="w-10 h-10 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
@@ -220,7 +220,7 @@ export default function WhatsAppPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col">
+    <div className="h-[calc(100dvh-180px)] md:h-[calc(100dvh-140px)] flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white">WhatsApp</h1>

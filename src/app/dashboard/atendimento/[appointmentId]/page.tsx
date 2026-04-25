@@ -82,7 +82,9 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .eq('appointment_id', params.appointmentId)
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50">
+    // Negative margins compensam o padding do <main> (px-4 py-4 md:px-8 md:py-6)
+    // pra que o AttendanceHeader sticky encoste no topo do scroll container.
+    <div className="-mx-4 -mt-4 md:-mx-8 md:-mt-6 -mb-28 md:-mb-6">
       <AttendanceHeader
         appointment={appointment}
         patient={patient}
@@ -90,7 +92,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
         clinicId={userData?.clinic_id || ''}
       />
 
-      <div className="max-w-[1600px] mx-auto px-4 py-4 md:py-6 pb-24 md:pb-8">
+      <div className="max-w-[1600px] mx-auto px-4 pt-4 md:px-8 md:pt-6 pb-28 md:pb-12">
         <div className="grid lg:grid-cols-2 gap-4 md:gap-6">
           {/* Coluna Esquerda - Prontuario */}
           <MedicalRecordSection
@@ -133,3 +135,4 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     </div>
   )
 }
+
