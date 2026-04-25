@@ -35,11 +35,49 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
   const [editing, setEditing] = useState<Procedure | null>(null)
 
   async function handleDelete(id: string) {
-    if (!confirm('Excluir este procedimento?')) return
     setDeleting(id)
-    await supabase.from('procedures').delete().eq('id', id)
-    setDeleting(null)
-    router.refresh()
+    try {
+      // Conta referencias em paralelo (head:true so traz o count, sem dados)
+      const [apptRes, entradaRes, leadRes, waitRes] = await Promise.all([
+        supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('procedure_id', id),
+        supabase.from('entradas').select('id', { count: 'exact', head: true }).eq('procedimento_id', id),
+        supabase.from('leads').select('id', { count: 'exact', head: true }).eq('procedure_id', id),
+        supabase.from('waiting_list').select('id', { count: 'exact', head: true }).eq('procedure_id', id),
+      ])
+
+      const totalRefs =
+        (apptRes.count || 0) + (entradaRes.count || 0) + (leadRes.count || 0) + (waitRes.count || 0)
+
+      if (totalRefs > 0) {
+        const partes: string[] = []
+        if (apptRes.count) partes.push(`${apptRes.count} agendamento(s)`)
+        if (entradaRes.count) partes.push(`${entradaRes.count} venda(s)`)
+        if (leadRes.count) partes.push(`${leadRes.count} lead(s)`)
+        if (waitRes.count) partes.push(`${waitRes.count} na fila de espera`)
+
+        const msg =
+          `Este procedimento esta vinculado a:\n  • ${partes.join('\n  • ')}\n\n` +
+          `Por isso nao pode ser excluido (apagaria o historico).\n\n` +
+          `Deseja DESATIVAR no lugar? Ele some das listas de novo agendamento mas o historico fica preservado.`
+
+        if (confirm(msg)) {
+          await supabase.from('procedures').update({ active: false }).eq('id', id)
+          router.refresh()
+        }
+        return
+      }
+
+      if (!confirm('Excluir este procedimento? Esta acao nao pode ser desfeita.')) return
+
+      const { error } = await supabase.from('procedures').delete().eq('id', id)
+      if (error) {
+        alert('Nao foi possivel excluir: ' + error.message)
+        return
+      }
+      router.refresh()
+    } finally {
+      setDeleting(null)
+    }
   }
 
   async function toggleActive(id: string, active: boolean) {

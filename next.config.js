@@ -8,54 +8,48 @@ const nextConfig = {
   },
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '*.supabase.co' }],
+    formats: ['image/avif', 'image/webp'],
   },
-  
-  // Performance optimizations
+
+  // optimizePackageImports faz tree-shaking seguro nas libs grandes.
+  // (modularizeImports manual para supabase-js foi removido: estava
+  // mapeando pra um caminho que nem todas as versoes do SDK expoem.)
   experimental: {
-    optimizePackageImports: ['@supabase/supabase-js'],
+    optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr'],
   },
-  
-  // Compression
+
   compress: true,
-  
-  // Headers for caching
+  poweredByHeader: false,
+  reactStrictMode: true,
+
   async headers() {
     return [
       {
         source: '/:path*',
         headers: [
-          {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on'
-          },
+          { key: 'X-DNS-Prefetch-Control', value: 'on' },
         ],
       },
       {
         source: '/dashboard/:path*',
         headers: [
-          {
-            key: 'Cache-Control',
-            value: 'private, no-cache, no-store, must-revalidate',
-          },
+          // Dashboard contem dados privados — nao cacheia em proxies/CDN
+          { key: 'Cache-Control', value: 'private, no-cache, no-store, must-revalidate' },
         ],
       },
       {
         source: '/_next/static/:path*',
         headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        source: '/_next/image(.*)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
     ]
-  },
-  
-  // Reduce bundle size
-  modularizeImports: {
-    '@supabase/supabase-js': {
-      transform: '@supabase/supabase-js/dist/module/{{member}}',
-    },
   },
 }
 module.exports = nextConfig

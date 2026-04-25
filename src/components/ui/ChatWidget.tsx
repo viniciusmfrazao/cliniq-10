@@ -40,31 +40,104 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
 
   useEffect(() => {
     if (!currentUserId || !clinicId) return
-    
+
     loadUnreadCounts()
 
-    // Polling a cada 30 segundos (reduzido para evitar lag)
-    const interval = setInterval(loadUnreadCounts, 30000)
+    // Realtime: novas mensagens recebidas atualizam o contador na hora
+    const uniq = Math.random().toString(36).slice(2, 10)
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    try {
+      channel = supabase
+        .channel(`rt:chat-unread:${currentUserId}:${uniq}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'chat_messages',
+            filter: `receiver_id=eq.${currentUserId}`,
+          },
+          (payload) => {
+            const senderId = (payload.new as { sender_id?: string })?.sender_id
+            if (!senderId) return
+            // Se ja esta com a conversa aberta com esse remetente, nao soma unread
+            setUnreadCounts(prev => {
+              if (selectedUserRef.current?.id === senderId) return prev
+              return { ...prev, [senderId]: (prev[senderId] || 0) + 1 }
+            })
+          }
+        )
+        .subscribe()
+    } catch (e) {
+      console.warn('[ChatWidget] realtime indisponivel', e)
+    }
+
+    // Fallback bem espaçado, só pra recuperar se o socket cair
+    const interval = setInterval(loadUnreadCounts, 5 * 60 * 1000)
 
     return () => {
+      if (channel) {
+        try { supabase.removeChannel(channel) } catch { /* noop */ }
+      }
       clearInterval(interval)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId, clinicId])
+
+  // Mantem ref do selectedUser pra usar dentro do callback do realtime
+  // (evita re-subscrever toda vez que selectedUser muda)
+  const selectedUserRef = useRef<User | null>(null)
+  useEffect(() => {
+    selectedUserRef.current = selectedUser
+  }, [selectedUser])
 
   useEffect(() => {
     if (!selectedUser) return
-    
+
     loadMessages(selectedUser.id)
     markMessagesAsRead(selectedUser.id)
 
-    // Polling de mensagens a cada 5 segundos quando em conversa
-    const interval = setInterval(() => {
-      loadMessages(selectedUser.id)
-    }, 5000)
+    // Realtime: mensagens da conversa atual chegam instantaneamente
+    const uniq = Math.random().toString(36).slice(2, 10)
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    try {
+      channel = supabase
+        .channel(`rt:chat-conv:${currentUserId}:${selectedUser.id}:${uniq}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'chat_messages',
+            // sem filter (or de pares nao e suportado): filtramos no cliente
+          },
+          (payload) => {
+            const m = payload.new as Message
+            const a = currentUserId
+            const b = selectedUser.id
+            const isThisConv =
+              (m.sender_id === a && m.receiver_id === b) ||
+              (m.sender_id === b && m.receiver_id === a)
+            if (!isThisConv) return
+            setMessages(prev => (prev.some(x => x.id === m.id) ? prev : [...prev, m]))
+            if (m.sender_id === b) markMessagesAsRead(b)
+          }
+        )
+        .subscribe()
+    } catch (e) {
+      console.warn('[ChatWidget] realtime conv indisponivel', e)
+    }
+
+    // Fallback ocasional
+    const interval = setInterval(() => loadMessages(selectedUser.id), 60_000)
 
     return () => {
+      if (channel) {
+        try { supabase.removeChannel(channel) } catch { /* noop */ }
+      }
       clearInterval(interval)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser])
 
   useEffect(() => {
