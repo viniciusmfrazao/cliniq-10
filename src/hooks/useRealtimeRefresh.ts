@@ -44,32 +44,50 @@ export function useRealtimeRefresh({
   useEffect(() => {
     if (!enabled) return
 
+    // Nome unico por mount evita colisao com canal ainda pendente de remocao
+    // (React Strict Mode e remounts rapidos crashavam com "after subscribe()")
+    const uniq = Math.random().toString(36).slice(2, 10)
     const supabase = createClient()
-    const channelName = `rt:${table}:${filter?.column ?? 'all'}:${filter?.value ?? 'all'}`
-
+    const channelName = `rt:${table}:${filter?.column ?? 'all'}:${filter?.value ?? 'all'}:${uniq}`
     const filterString = filter ? `${filter.column}=eq.${filter.value}` : undefined
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes' as never,
-        { event, schema: 'public', table, ...(filterString ? { filter: filterString } : {}) },
-        (payload: unknown) => {
-          if (onChange) {
-            onChange(payload)
-            return
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes' as never,
+          { event, schema: 'public', table, ...(filterString ? { filter: filterString } : {}) },
+          (payload: unknown) => {
+            if (onChange) {
+              onChange(payload)
+              return
+            }
+            if (debounceRef.current) clearTimeout(debounceRef.current)
+            debounceRef.current = setTimeout(() => {
+              router.refresh()
+            }, debounceMs)
           }
-          if (debounceRef.current) clearTimeout(debounceRef.current)
-          debounceRef.current = setTimeout(() => {
-            router.refresh()
-          }, debounceMs)
-        }
-      )
-      .subscribe()
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            // Realtime nao habilitado / rede caiu — ignora em silencio,
+            // a pagina continua funcionando normalmente via SSR/refresh.
+          }
+        })
+    } catch (e) {
+      console.warn('[useRealtimeRefresh] falha ao subscrever', table, e)
+    }
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      supabase.removeChannel(channel)
+      if (channel) {
+        try {
+          supabase.removeChannel(channel)
+        } catch {
+          /* noop */
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, event, filter?.column, filter?.value, enabled])

@@ -43,37 +43,54 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
     loadNotifications()
 
-    // Realtime: inscreve em INSERT/UPDATE/DELETE de notifications do usuário
-    const channel = supabase
-      .channel(`rt:notifications:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 20))
-          } else if (payload.eventType === 'UPDATE') {
-            setNotifications(prev =>
-              prev.map(n => (n.id === (payload.new as Notification).id ? (payload.new as Notification) : n))
-            )
-          } else if (payload.eventType === 'DELETE') {
-            const oldId = (payload.old as { id?: string })?.id
-            if (oldId) setNotifications(prev => prev.filter(n => n.id !== oldId))
-          }
-        }
-      )
-      .subscribe()
+    // Nome de canal unico por mount (evita colisao com remount no Strict Mode)
+    const uniq = Math.random().toString(36).slice(2, 10)
+    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    // Fallback: polling a cada 2 min caso o socket caia (keep-alive barato)
+    try {
+      channel = supabase
+        .channel(`rt:notifications:${userId}:${uniq}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 20))
+            } else if (payload.eventType === 'UPDATE') {
+              setNotifications(prev =>
+                prev.map(n => (n.id === (payload.new as Notification).id ? (payload.new as Notification) : n))
+              )
+            } else if (payload.eventType === 'DELETE') {
+              const oldId = (payload.old as { id?: string })?.id
+              if (oldId) setNotifications(prev => prev.filter(n => n.id !== oldId))
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            // Realtime nao habilitado ou rede caiu — ok, polling cobre
+          }
+        })
+    } catch (e) {
+      console.warn('[NotificationBell] realtime indisponivel, usando polling', e)
+    }
+
+    // Fallback: polling a cada 2 min (funciona mesmo se o realtime falhar)
     const interval = setInterval(loadNotifications, 120000)
 
     return () => {
-      supabase.removeChannel(channel)
+      if (channel) {
+        try {
+          supabase.removeChannel(channel)
+        } catch {
+          /* noop */
+        }
+      }
       clearInterval(interval)
     }
   }, [userId, supabase, loadNotifications])
