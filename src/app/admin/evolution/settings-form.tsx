@@ -123,7 +123,11 @@ export default function EvolutionSettingsForm({ initial }: { initial: Record<str
   ]
 
   return (
-    <div className="space-y-6">
+    <form
+      className="space-y-6"
+      autoComplete="off"
+      onSubmit={e => e.preventDefault()}
+    >
       {groups.map(g => (
         <section
           key={g.id}
@@ -135,10 +139,31 @@ export default function EvolutionSettingsForm({ initial }: { initial: Record<str
           </header>
 
           <div className="p-5 space-y-4">
+            {/* hidden honeypot pra evitar autofill agressivo do Chrome */}
+            <input
+              type="text"
+              name="email"
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+              defaultValue=""
+              onChange={() => {}}
+            />
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+              defaultValue=""
+              onChange={() => {}}
+            />
             {FIELDS.filter(f => f.group === g.id).map(f => {
               const isSecret = initial[f.key]?.is_secret ?? false
               const visible = show[f.key]
-              const inputType = isSecret && !visible ? 'password' : 'text'
+              const inputType = isSecret && !visible ? 'password' : f.isUrl ? 'url' : 'text'
               return (
                 <div key={f.key}>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
@@ -147,6 +172,14 @@ export default function EvolutionSettingsForm({ initial }: { initial: Record<str
                   <div className="flex gap-2">
                     <input
                       type={inputType}
+                      name={`cfg-${f.key}`}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-form-type="other"
                       value={values[f.key] ?? ''}
                       onChange={e => update(f.key, e.target.value)}
                       placeholder={f.placeholder}
@@ -211,6 +244,6 @@ export default function EvolutionSettingsForm({ initial }: { initial: Record<str
           {pending ? 'Salvando…' : 'Salvar configurações'}
         </button>
       </div>
-    </div>
+    </form>
   )
 }
