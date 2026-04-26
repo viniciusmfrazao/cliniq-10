@@ -54,15 +54,16 @@ export default function WhatsAppPage() {
       
       if (!userData?.clinic_id) return
       
-      const { data: integration } = await supabase
-        .from('clinic_integrations')
-        .select('*')
+      // Fase 2: a config global vive em app_settings (super admin) e a instance da clínica
+      // em clinic_whatsapp. Aqui só precisamos saber se a clínica tem instance conectada.
+      const { data: instance } = await supabase
+        .from('clinic_whatsapp')
+        .select('status, instance_name')
         .eq('clinic_id', userData.clinic_id)
-        .eq('provider', 'evolution_api')
-        .single()
+        .maybeSingle()
       
-      if (integration?.config?.url && integration?.config?.api_key) {
-        setConfig(integration.config)
+      if (instance?.status === 'connected') {
+        setConfig({ instance_name: instance.instance_name } as never)
         setConfigured(true)
         loadConversations(userData.clinic_id)
       } else {
@@ -207,7 +208,7 @@ export default function WhatsAppPage() {
             Configure a Evolution API nas integrações para usar o chat do WhatsApp.
           </p>
           <Link
-            href="/dashboard/config/integracoes"
+            href="/dashboard/config/whatsapp"
             className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600 transition-colors"
           >
             <Icon name="settings" className="w-5 h-5" />
