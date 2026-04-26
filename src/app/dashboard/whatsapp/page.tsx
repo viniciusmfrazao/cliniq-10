@@ -134,13 +134,13 @@ export default function WhatsAppPage() {
       })))
     }
     
-    // Buscar dados do paciente
+    // Buscar dados do paciente (maybeSingle para evitar 406 quando o telefone não tem paciente cadastrado)
     const { data: patientData } = await supabase
       .from('patients')
       .select('*')
       .eq('clinic_id', userData?.clinic_id)
       .eq('phone', phone)
-      .single()
+      .maybeSingle()
     
     setPatient(patientData)
   }

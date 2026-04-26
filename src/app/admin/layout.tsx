@@ -16,9 +16,9 @@ export default async function AdminLayout({
   const adminData = await getSuperAdminData()
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
+    <div className="h-screen flex flex-col bg-slate-100 dark:bg-slate-900 overflow-hidden">
       {/* Top Bar */}
-      <header className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+      <header className="flex-shrink-0 bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/admin" className="text-xl font-bold">
             🛡️ Super Admin
@@ -37,9 +37,9 @@ export default async function AdminLayout({
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
-        <aside className="w-64 bg-white dark:bg-slate-800 min-h-[calc(100vh-64px)] border-r border-slate-200 dark:border-slate-700 p-4">
+        <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-4 overflow-y-auto flex-shrink-0">
           <nav className="space-y-2">
             <Link 
               href="/admin"
@@ -94,7 +94,7 @@ export default async function AdminLayout({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 overflow-y-auto p-6">
           {children}
         </main>
       </div>
