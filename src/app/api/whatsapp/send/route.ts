@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { getSettings } from '@/lib/app-settings'
 
 /**
  * POST /api/whatsapp/send
  *
- * 2 modos de autenticação:
+ * 3 modos de autenticação:
  *
  * 1) Usuário logado (UI):
  *    Body: { phone, message }
  *    -> clinic_id é deduzido do user logado.
  *
- * 2) Server-to-server (pg_cron, N8N, jobs internos):
- *    Header: x-cron-secret: <CRON_SECRET>
+ * 2) Server-to-server CRON (pg_cron, jobs internos):
+ *    Header: x-cron-secret: <CRON_SECRET (env)>
+ *    Body: { clinic_id, phone, message }
+ *
+ * 3) Server-to-server N8N (Donna):
+ *    Header: x-cliniq-secret: <n8n_donna_secret (app_settings)>
  *    Body: { clinic_id, phone, message }
  */
 export async function POST(req: NextRequest) {
@@ -31,7 +36,17 @@ export async function POST(req: NextRequest) {
   let clinicId: string | undefined
 
   const cronSecret = req.headers.get('x-cron-secret')
-  if (cronSecret && cronSecret === process.env.CRON_SECRET) {
+  const cliniqSecret = req.headers.get('x-cliniq-secret')
+
+  // Pegamos o n8n_donna_secret de app_settings (cache 60s) pra validar o N8N
+  const settings = cliniqSecret ? await getSettings(['n8n_donna_secret']) : null
+  const expectedCliniqSecret = settings?.n8n_donna_secret
+
+  const isValidCron = cronSecret && cronSecret === process.env.CRON_SECRET
+  const isValidCliniq =
+    cliniqSecret && expectedCliniqSecret && cliniqSecret === expectedCliniqSecret
+
+  if (isValidCron || isValidCliniq) {
     if (!body.clinic_id) {
       return NextResponse.json(
         { ok: false, error: 'clinic_id é obrigatório em chamadas server-to-server' },
