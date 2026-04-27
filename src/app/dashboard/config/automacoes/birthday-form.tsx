@@ -83,7 +83,9 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
   const router = useRouter()
   const supabase = createClient()
   const [enabled, setEnabled] = useState(initial.enabled)
-  const [hour, setHour] = useState(initial.hour)
+  // Horário fixo às 09h no plano Hobby da Vercel (cron 1x/dia).
+  // Mantemos o estado pra quando voltar a ser configurável.
+  const [hour] = useState(initial.hour || 9)
   const [optinRequired, setOptinRequired] = useState(initial.optinRequired)
   const [template, setTemplate] = useState(initial.template)
   const [saving, setSaving] = useState(false)
@@ -191,26 +193,18 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
       </label>
 
       <div className={enabled ? '' : 'opacity-50 pointer-events-none'}>
-        {/* Horário */}
+        {/* Horário (fixo no plano atual) */}
         <div className="space-y-2 mb-6">
           <label className="block text-sm font-medium text-slate-900">
             Horário do envio
             <span className="ml-2 text-xs text-slate-500">(fuso de Brasília)</span>
           </label>
           <div className="flex items-center gap-3">
-            <select
-              value={hour}
-              onChange={(e) => setHour(parseInt(e.target.value, 10))}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            >
-              {Array.from({ length: 24 }, (_, i) => (
-                <option key={i} value={i}>
-                  {String(i).padStart(2, '0')}:00
-                </option>
-              ))}
-            </select>
+            <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium">
+              09:00
+            </div>
             <p className="text-xs text-slate-500">
-              Recomendado entre 08h e 11h (mais engajamento)
+              Envio diário fixo às 09h. Horário customizável em breve.
             </p>
           </div>
         </div>

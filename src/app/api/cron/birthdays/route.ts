@@ -5,19 +5,22 @@ import { sendWhatsappMessage } from '@/lib/whatsapp'
 /**
  * GET /api/cron/birthdays
  *
- * Cron de aniversários — roda 1x por hora (configurado em vercel.json).
+ * Cron de aniversários — roda 1x por dia às 09h BRT (12h UTC).
+ * Plano Hobby da Vercel limita cron a uma execução por dia.
  *
- * A cada hora, pra cada clínica:
- *  1) Confere se a hora local (America/Sao_Paulo) bate com a hora configurada
- *     na clínica (clinic_automations.aniversario_hora, default 9).
- *  2) Confere toggle aniversario=true e template_aniversario preenchido.
- *  3) Confere clinic_whatsapp.status = 'connected'.
- *  4) Pega aniversariantes do dia que ainda não receberam mensagem este ano.
- *  5) Filtra opt-in se a clínica exigir (aniversario_optin_required=true).
- *  6) Pra cada aniversariante:
+ * A cada dia, pra cada clínica:
+ *  1) Confere toggle aniversario=true e template_aniversario preenchido.
+ *  2) Confere clinic_whatsapp.status = 'connected'.
+ *  3) Pega aniversariantes do dia que ainda não receberam mensagem este ano.
+ *  4) Filtra opt-in se a clínica exigir (aniversario_optin_required=true).
+ *  5) Pra cada aniversariante:
  *       - Renderiza o template
  *       - Envia via Evolution
  *       - Loga em birthday_messages_log (UNIQUE garante idempotência)
+ *
+ * O campo aniversario_hora segue na tabela mas só vale como referência visual
+ * (UI mostra "envio às 9h"). Quando migrarmos pro plano Pro, voltamos a
+ * checar a hora customizada.
  *
  * Auth: Header Authorization: Bearer ${CRON_SECRET}.
  *       Vercel Cron seta esse header automaticamente quando CRON_SECRET
@@ -93,15 +96,13 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url)
   const dryRun = url.searchParams.get('dry') === '1'
-  // Permite forçar uma hora específica em modo de teste manual:
-  // ?force_hour=9
-  const forceHour = url.searchParams.get('force_hour')
-  const currentHour = forceHour ? parseInt(forceHour, 10) : getBRHour()
+  const currentHour = getBRHour()
   const year = getBRYear()
 
   const svc = createServiceClient()
 
-  // 1) Carrega clínicas com aniversário ligado e na hora certa
+  // 1) Carrega clínicas com aniversário ligado e template preenchido.
+  // (aniversario_hora não é mais filtrado — Vercel Hobby roda só 1x/dia.)
   const { data: automations, error: errAuto } = await svc
     .from('clinic_automations')
     .select(
@@ -117,10 +118,7 @@ export async function GET(req: NextRequest) {
   }
 
   const matchingClinics = (automations as ClinicSettings[] | null)?.filter(
-    (a) =>
-      a.aniversario_hora === currentHour &&
-      a.template_aniversario &&
-      a.template_aniversario.trim().length > 0,
+    (a) => a.template_aniversario && a.template_aniversario.trim().length > 0,
   )
 
   if (!matchingClinics || matchingClinics.length === 0) {
@@ -129,7 +127,7 @@ export async function GET(req: NextRequest) {
       currentHour,
       year,
       processed: 0,
-      reason: 'no_matching_clinics_at_this_hour',
+      reason: 'no_clinics_with_birthday_enabled',
     })
   }
 
