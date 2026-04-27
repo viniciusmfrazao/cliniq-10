@@ -164,7 +164,14 @@ export async function POST(
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
-  const event = (body.event ?? '').toString().toUpperCase()
+  // Evolution manda em formatos distintos por versao:
+  //   v1.x: 'MESSAGES_UPSERT'
+  //   v2.x: 'messages.upsert'
+  // Normalizamos: lower + troca '.' e '-' por '_'
+  const event = (body.event ?? '')
+    .toString()
+    .toLowerCase()
+    .replace(/[.-]/g, '_')
   const data = body.data ?? {}
   const clinicId = row.clinic_id
 
@@ -181,7 +188,7 @@ export async function POST(
 
   try {
     switch (event) {
-      case 'QRCODE_UPDATED': {
+      case 'qrcode_updated': {
         const qrcode = (data as { qrcode?: { base64?: string } }).qrcode
         const base64 = qrcode?.base64 ?? null
         await svc
@@ -196,7 +203,7 @@ export async function POST(
         break
       }
 
-      case 'CONNECTION_UPDATE': {
+      case 'connection_update': {
         const state = (data as { state?: string }).state ?? 'unknown'
         const mapped = mapEvolutionStateToStatus(state)
         const updates: Record<string, unknown> = {
@@ -220,7 +227,7 @@ export async function POST(
         break
       }
 
-      case 'MESSAGES_UPSERT': {
+      case 'messages_upsert': {
         const key = (data as { key?: { remoteJid?: string; fromMe?: boolean; id?: string } }).key
         const fromMe = key?.fromMe === true
         const phone = jidToPhone(key?.remoteJid)
