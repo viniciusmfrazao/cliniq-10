@@ -50,9 +50,15 @@ export async function GET() {
 
   const expectedWebhook = buildWebhookUrl(row.instance_name, row.webhook_token)
 
-  const [stateRes, webhookRes] = await Promise.all([
+  const [stateRes, webhookRes, logsRes] = await Promise.all([
     getConnectionState(row.instance_name),
     getWebhookInfo(row.instance_name),
+    svc
+      .from('evolution_webhook_logs')
+      .select('id, event, status_code, error, created_at, body')
+      .eq('instance', row.instance_name)
+      .order('created_at', { ascending: false })
+      .limit(10),
   ])
 
   return NextResponse.json({
@@ -76,7 +82,37 @@ export async function GET() {
         ? webhookRes.data
         : { error: webhookRes.error, status: webhookRes.status },
     },
+    recent_webhook_logs: logsRes.error
+      ? { error: logsRes.error.message }
+      : (logsRes.data ?? []).map((l) => ({
+          id: l.id,
+          at: l.created_at,
+          event: l.event,
+          status: l.status_code,
+          error: l.error,
+          summary: summarizeBody(l.body),
+        })),
   })
+}
+
+function summarizeBody(body: unknown): Record<string, unknown> {
+  if (!body || typeof body !== 'object') return { raw: body }
+  const b = body as Record<string, unknown>
+  const data = (b.data as Record<string, unknown> | undefined) ?? {}
+  const key = data.key as Record<string, unknown> | undefined
+  const message = data.message as Record<string, unknown> | undefined
+  return {
+    event: b.event,
+    instance: b.instance,
+    fromMe: key?.fromMe,
+    remoteJid: key?.remoteJid,
+    pushName: data.pushName,
+    text:
+      typeof message?.conversation === 'string'
+        ? (message.conversation as string).slice(0, 80)
+        : undefined,
+    state: data.state,
+  }
 }
 
 export async function POST() {

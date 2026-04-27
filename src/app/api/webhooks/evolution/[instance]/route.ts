@@ -49,6 +49,31 @@ function jidToPhone(jid: string | undefined | null): string | null {
   return cleaned.replace(/[^0-9]/g, '') || null
 }
 
+async function logWebhook(args: {
+  svc: ReturnType<typeof createServiceClient>
+  instance: string
+  event?: string | null
+  statusCode: number
+  error?: string | null
+  body?: unknown
+  headers?: Record<string, string>
+  query?: Record<string, string>
+}) {
+  try {
+    await args.svc.from('evolution_webhook_logs').insert({
+      instance: args.instance,
+      event: args.event ?? null,
+      status_code: args.statusCode,
+      error: args.error ?? null,
+      body: args.body ?? null,
+      headers: args.headers ?? null,
+      query: args.query ?? null,
+    })
+  } catch (e) {
+    console.error('[evolution-webhook] falha ao gravar log:', e)
+  }
+}
+
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ instance: string }> },
@@ -56,15 +81,55 @@ export async function POST(
   const { instance } = await context.params
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
+  const svc = createServiceClient()
+
+  // Captura headers e query crus pra log (limita a chaves seguras)
+  const headerSnapshot: Record<string, string> = {}
+  for (const [k, v] of req.headers.entries()) {
+    if (/^(content-type|user-agent|x-forwarded-for|x-real-ip|host|accept|content-length)$/i.test(k)) {
+      headerSnapshot[k] = v
+    }
+  }
+  const querySnapshot: Record<string, string> = {}
+  for (const [k, v] of url.searchParams.entries()) {
+    querySnapshot[k] = k === 'token' ? `${v.slice(0, 4)}…(${v.length})` : v
+  }
 
   if (!instance) {
+    await logWebhook({
+      svc,
+      instance: 'unknown',
+      statusCode: 400,
+      error: 'instance ausente',
+      headers: headerSnapshot,
+      query: querySnapshot,
+    })
     return NextResponse.json({ error: 'instance ausente' }, { status: 400 })
   }
-  if (!token) {
-    return NextResponse.json({ error: 'token ausente' }, { status: 401 })
+
+  // Lê o body cedo (uma única vez); guarda raw mesmo se falhar
+  const rawText = await req.text()
+  let body: WebhookBody = {}
+  let parseError: string | null = null
+  try {
+    body = rawText ? (JSON.parse(rawText) as WebhookBody) : {}
+  } catch (e) {
+    parseError = e instanceof Error ? e.message : 'JSON inválido'
   }
 
-  const svc = createServiceClient()
+  if (!token) {
+    await logWebhook({
+      svc,
+      instance,
+      event: body.event,
+      statusCode: 401,
+      error: 'token ausente',
+      body: parseError ? { __raw: rawText.slice(0, 4000), __parseError: parseError } : body,
+      headers: headerSnapshot,
+      query: querySnapshot,
+    })
+    return NextResponse.json({ error: 'token ausente' }, { status: 401 })
+  }
 
   const { data: row } = await svc
     .from('clinic_whatsapp')
@@ -73,19 +138,46 @@ export async function POST(
     .maybeSingle()
 
   if (!row || row.webhook_token !== token) {
+    await logWebhook({
+      svc,
+      instance,
+      event: body.event,
+      statusCode: 401,
+      error: 'token invalido ou instance nao encontrada',
+      body: parseError ? { __raw: rawText.slice(0, 4000), __parseError: parseError } : body,
+      headers: headerSnapshot,
+      query: querySnapshot,
+    })
     return NextResponse.json({ error: 'não autorizado' }, { status: 401 })
   }
 
-  let body: WebhookBody
-  try {
-    body = await req.json()
-  } catch {
+  if (parseError) {
+    await logWebhook({
+      svc,
+      instance,
+      statusCode: 400,
+      error: `JSON inválido: ${parseError}`,
+      body: { __raw: rawText.slice(0, 4000) },
+      headers: headerSnapshot,
+      query: querySnapshot,
+    })
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
   const event = (body.event ?? '').toString().toUpperCase()
   const data = body.data ?? {}
   const clinicId = row.clinic_id
+
+  // Loga TODO webhook autorizado pra debug (mantem 7 dias)
+  await logWebhook({
+    svc,
+    instance,
+    event,
+    statusCode: 200,
+    body,
+    headers: headerSnapshot,
+    query: querySnapshot,
+  })
 
   try {
     switch (event) {
@@ -201,6 +293,16 @@ export async function POST(
     }
   } catch (err) {
     console.error('[evolution-webhook] erro processando evento', event, err)
+    await logWebhook({
+      svc,
+      instance,
+      event,
+      statusCode: 500,
+      error: err instanceof Error ? err.message : String(err),
+      body,
+      headers: headerSnapshot,
+      query: querySnapshot,
+    })
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 
