@@ -288,3 +288,24 @@ export async function setInstanceWebhook(args: {
     }
   )
 }
+
+export type WebhookInfo = {
+  enabled?: boolean
+  url?: string
+  webhookByEvents?: boolean
+  webhookBase64?: boolean
+  events?: string[]
+} & Record<string, unknown>
+
+/**
+ * Lê o webhook atualmente configurado em uma instance.
+ * Versões diferentes da Evolution expõem em /webhook/find/{instance}.
+ */
+export async function getWebhookInfo(
+  instanceName: string,
+): Promise<FetchResult<WebhookInfo>> {
+  return evolutionFetch<WebhookInfo>(
+    `/webhook/find/${encodeURIComponent(instanceName)}`,
+    { method: 'GET' },
+  )
+}

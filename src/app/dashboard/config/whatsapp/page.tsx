@@ -38,11 +38,32 @@ function timeAgo(iso: string | null | undefined): string {
   return `há ${d} dia${d > 1 ? 's' : ''}`
 }
 
+type DiagnoseResult = {
+  ok: boolean
+  local?: {
+    instance_name?: string
+    status?: string
+    phone_number?: string | null
+    connected_at?: string | null
+    last_event_at?: string | null
+    webhook_token_len?: number
+  } | null
+  expected?: { webhook_url?: string }
+  evolution?: {
+    connection?: unknown
+    webhook?: unknown
+  }
+  message?: string
+  error?: string
+}
+
 export default function WhatsappConfigPage() {
   const [state, setState] = useState<InstanceState | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [diag, setDiag] = useState<DiagnoseResult | null>(null)
+  const [diagOpen, setDiagOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
@@ -126,6 +147,36 @@ export default function WhatsappConfigPage() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
       await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function runDiagnose() {
+    setError(null)
+    setBusy('diagnose')
+    try {
+      const r = await fetch('/api/whatsapp/instance/diagnose', { cache: 'no-store' })
+      const j: DiagnoseResult = await r.json()
+      setDiag(j)
+      setDiagOpen(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function refixWebhook() {
+    setError(null)
+    setBusy('refix')
+    try {
+      const r = await fetch('/api/whatsapp/instance/diagnose', { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      await runDiagnose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro')
     } finally {
@@ -405,6 +456,44 @@ export default function WhatsappConfigPage() {
           <li>Se cair, é só voltar aqui e gerar um novo QR.</li>
         </ul>
       </div>
+
+      {/* Diagnóstico avançado */}
+      <details
+        className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden"
+        open={diagOpen}
+        onToggle={(e) => setDiagOpen((e.target as HTMLDetailsElement).open)}
+      >
+        <summary className="cursor-pointer p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 select-none hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          🔧 Diagnóstico avançado
+        </summary>
+        <div className="p-4 pt-0 space-y-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Se as mensagens não estão chegando mesmo com o WhatsApp conectado, use estas
+            ferramentas pra verificar a integração com a Evolution.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={runDiagnose}
+              disabled={busy !== null}
+              className="px-3 py-1.5 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
+            >
+              {busy === 'diagnose' ? 'Verificando…' : 'Verificar configuração'}
+            </button>
+            <button
+              onClick={refixWebhook}
+              disabled={busy !== null}
+              className="px-3 py-1.5 text-xs rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+            >
+              {busy === 'refix' ? 'Refixando…' : 'Refixar webhook na Evolution'}
+            </button>
+          </div>
+          {diag && (
+            <pre className="mt-2 p-3 bg-slate-900 text-emerald-300 rounded-lg text-[11px] leading-relaxed overflow-x-auto max-h-96">
+              {JSON.stringify(diag, null, 2)}
+            </pre>
+          )}
+        </div>
+      </details>
     </div>
   )
 }
