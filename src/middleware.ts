@@ -13,8 +13,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Skip auth check for static files and API routes that don't need auth
-  if (path.startsWith('/api/') && !path.startsWith('/api/webhooks')) {
+  // APIs autenticam por conta propria (Supabase token, webhook_token, CRON_SECRET, etc).
+  // Especialmente webhooks de servicos externos (Evolution, n8n) NUNCA podem cair no
+  // auth check do middleware — sao chamados sem cookie de sessao, e redirect pra
+  // /login faz o servico externo descartar a chamada.
+  if (path.startsWith('/api/')) {
     return NextResponse.next()
   }
 
