@@ -175,16 +175,9 @@ export async function POST(
   const data = body.data ?? {}
   const clinicId = row.clinic_id
 
-  // Loga TODO webhook autorizado pra debug (mantem 7 dias)
-  await logWebhook({
-    svc,
-    instance,
-    event,
-    statusCode: 200,
-    body,
-    headers: headerSnapshot,
-    query: querySnapshot,
-  })
+  // Acumula erros internos pra serem persistidos junto com o log final
+  const internalErrors: string[] = []
+  const debugTrace: string[] = []
 
   try {
     switch (event) {
@@ -235,42 +228,67 @@ export async function POST(
         const pushName = (data as { pushName?: string }).pushName
         const messageId = key?.id
 
-        if (!phone || !text) break
+        debugTrace.push(
+          `parsed: phone=${phone ?? 'null'} text_len=${text?.length ?? 0} fromMe=${fromMe} pushName=${pushName ?? 'null'}`,
+        )
 
-        // Salva conversa multi-tenant
-        await svc.from('eva_conversations').insert({
+        if (!phone || !text) {
+          internalErrors.push(
+            `mensagem ignorada: phone=${phone ?? 'null'} text=${text ? '"' + text.slice(0, 30) + '"' : 'null'}`,
+          )
+          break
+        }
+
+        // Salva conversa multi-tenant — VERIFICA error retornado
+        const insertConv = await svc.from('eva_conversations').insert({
           clinic_id: clinicId,
           phone,
           role: fromMe ? 'assistant' : 'user',
           content: text,
           metadata: { evolution_message_id: messageId, push_name: pushName },
         })
+        if (insertConv.error) {
+          internalErrors.push(
+            `insert eva_conversations: ${insertConv.error.message} (code=${insertConv.error.code})`,
+          )
+        } else {
+          debugTrace.push('eva_conversations inserted ok')
+        }
 
-        await svc
+        const updateLast = await svc
           .from('clinic_whatsapp')
           .update({ last_event_at: new Date().toISOString() })
           .eq('clinic_id', clinicId)
+        if (updateLast.error) {
+          internalErrors.push(
+            `update clinic_whatsapp.last_event_at: ${updateLast.error.message}`,
+          )
+        }
 
-        // Mensagem entrante (não enviada pela clínica): atualiza CRM/Donna
         if (!fromMe) {
-          // Tenta achar paciente; se não tem, garante lead
-          const { data: patient } = await svc
+          const patientRes = await svc
             .from('patients')
             .select('id')
             .eq('clinic_id', clinicId)
             .eq('phone', phone)
             .maybeSingle()
+          if (patientRes.error) {
+            internalErrors.push(`select patients: ${patientRes.error.message}`)
+          }
 
-          if (!patient) {
-            const { data: existingLead } = await svc
+          if (!patientRes.data) {
+            const leadRes = await svc
               .from('leads')
               .select('id')
               .eq('clinic_id', clinicId)
               .eq('phone', phone)
               .maybeSingle()
+            if (leadRes.error) {
+              internalErrors.push(`select leads: ${leadRes.error.message}`)
+            }
 
-            if (!existingLead) {
-              await svc.from('leads').insert({
+            if (!leadRes.data) {
+              const insertLead = await svc.from('leads').insert({
                 clinic_id: clinicId,
                 name: pushName || 'Lead WhatsApp',
                 phone,
@@ -278,18 +296,27 @@ export async function POST(
                 status: 'new',
                 notes: `Primeira mensagem: ${text}`,
               })
+              if (insertLead.error) {
+                internalErrors.push(`insert leads: ${insertLead.error.message}`)
+              } else {
+                debugTrace.push('lead created')
+              }
             }
           }
 
-          // Encaminha pra Donna (N8N) se configurado
-          await forwardToDonna({
-            clinicId,
-            phone,
-            message: text,
-            pushName,
-          }).catch(err =>
-            console.error('[evolution-webhook] forward Donna falhou:', err),
-          )
+          try {
+            await forwardToDonna({
+              clinicId,
+              phone,
+              message: text,
+              pushName,
+            })
+            debugTrace.push('forward Donna ok')
+          } catch (err) {
+            internalErrors.push(
+              `forward Donna: ${err instanceof Error ? err.message : String(err)}`,
+            )
+          }
         }
         break
       }
@@ -305,7 +332,7 @@ export async function POST(
       instance,
       event,
       statusCode: 500,
-      error: err instanceof Error ? err.message : String(err),
+      error: `THROWN: ${err instanceof Error ? err.message : String(err)}`,
       body,
       headers: headerSnapshot,
       query: querySnapshot,
@@ -313,6 +340,21 @@ export async function POST(
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 
+  // Log final consolidado: ok=200, mas se teve erros internos eles ficam visiveis no campo error
+  await logWebhook({
+    svc,
+    instance,
+    event,
+    statusCode: 200,
+    error: internalErrors.length
+      ? `INTERNAL: ${internalErrors.join(' | ')} || TRACE: ${debugTrace.join(' -> ')}`
+      : debugTrace.length
+        ? `TRACE: ${debugTrace.join(' -> ')}`
+        : null,
+    body,
+    headers: headerSnapshot,
+    query: querySnapshot,
+  })
   return NextResponse.json({ ok: true })
 }
 
