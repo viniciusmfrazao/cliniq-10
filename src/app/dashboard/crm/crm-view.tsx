@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import CRMSettingsModal from './crm-settings-modal'
 
 type Lead = {
@@ -115,6 +116,13 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [showSettings, setShowSettings] = useState(false)
+
+  // Realtime: novos leads (Donna criando do WhatsApp) e mudancas de status
+  // aparecem na hora em todos os usuarios da clinica.
+  useRealtimeRefresh({
+    table: 'leads',
+    filter: { column: 'clinic_id', value: clinicId },
+  })
 
   // Usar configurações customizadas ou padrão
   const STAGES = settings?.custom_stages || DEFAULT_STAGES

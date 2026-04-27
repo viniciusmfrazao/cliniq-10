@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type Product = {
   id: string
@@ -20,11 +21,25 @@ type Product = {
 type Props = {
   products: Product[]
   categories: { id: string; label: string; icon: string }[]
+  clinicId?: string
 }
 
-export default function ProductList({ products, categories }: Props) {
+export default function ProductList({ products, categories, clinicId }: Props) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
+
+  // Realtime: novas vendas, recebimentos, ajustes ou produtos novos
+  // refletem direto na tela (KPIs e lista)
+  useRealtimeRefresh({
+    table: 'products',
+    filter: clinicId ? { column: 'clinic_id', value: clinicId } : undefined,
+    enabled: !!clinicId,
+  })
+  useRealtimeRefresh({
+    table: 'stock_movements',
+    filter: clinicId ? { column: 'clinic_id', value: clinicId } : undefined,
+    enabled: !!clinicId,
+  })
 
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||

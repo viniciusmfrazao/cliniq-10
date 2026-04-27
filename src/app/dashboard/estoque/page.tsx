@@ -115,7 +115,11 @@ export default async function EstoquePage() {
       </div>
 
       {/* Lista de Produtos */}
-      <ProductList products={products || []} categories={CATEGORIES} />
+      <ProductList
+        products={products || []}
+        categories={CATEGORIES}
+        clinicId={userData?.clinic_id || ''}
+      />
     </div>
   )
 }

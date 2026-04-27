@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type Appointment = {
   id: string
@@ -45,6 +46,13 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [incompleteModal, setIncompleteModal] = useState<{ show: boolean; apt: Appointment | null }>({ show: false, apt: null })
   const [notesModal, setNotesModal] = useState<{ show: boolean; apt: Appointment | null; notes: string }>({ show: false, apt: null, notes: '' })
+
+  // Realtime: check-in, status, novo agendamento do dia, tudo aparece ao vivo
+  useRealtimeRefresh({
+    table: 'appointments',
+    filter: clinicId ? { column: 'clinic_id', value: clinicId } : undefined,
+    enabled: !!clinicId,
+  })
 
   // Estatísticas
   const stats = {

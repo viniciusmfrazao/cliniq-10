@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type WaitingItem = {
   id: string
@@ -64,6 +65,13 @@ export default function WaitingListTable({ waitingList, patients, procedures, pr
   const supabase = createClient()
   const [loading, setLoading] = useState<string | null>(null)
   const [filter, setFilter] = useState<'todos' | 'aguardando' | 'contatado'>('todos')
+
+  // Realtime: novas entradas / mudancas de status / agendamentos refletem ao vivo
+  useRealtimeRefresh({
+    table: 'waiting_list',
+    filter: { column: 'clinic_id', value: clinicId },
+    enabled: !!clinicId,
+  })
 
   const filteredList = waitingList.filter(item => {
     if (filter === 'todos') return true
