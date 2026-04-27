@@ -130,6 +130,20 @@ export default async function ConfigPage() {
               </Link>
 
               <Link
+                href="/dashboard/config/automacoes"
+                className="flex items-center gap-4 p-4 bg-gradient-to-br from-pink-50 to-rose-50 hover:from-pink-100 hover:to-rose-100 rounded-xl transition-colors border border-pink-200"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shadow">
+                  <span className="text-lg">🎂</span>
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-pink-900">Automações de WhatsApp</p>
+                  <p className="text-xs text-pink-700">Mensagem de aniversário, lembretes e mais</p>
+                </div>
+                <Icon name="chevronRight" className="w-5 h-5 text-pink-400" />
+              </Link>
+
+              <Link
                 href="/dashboard/config/integracoes"
                 className="flex items-center gap-4 p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
               >

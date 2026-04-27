@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { notifyAppointmentReminder, notifyBirthday } from '@/lib/n8n'
+import { notifyAppointmentReminder } from '@/lib/n8n'
 
 // Cron job para enviar lembretes (executar a cada hora)
 // Configure no Vercel: Settings > Cron Jobs
@@ -108,37 +108,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // 3. ANIVERSARIANTES DO DIA (executar só às 8h)
-    if (now.getHours() === 8) {
-      const today = now.toISOString().slice(5, 10) // MM-DD
-
-      const { data: birthdays } = await supabase
-        .from('patients')
-        .select('id, name, phone, birth_date, clinics(name)')
-        .not('birth_date', 'is', null)
-        .not('phone', 'is', null)
-
-      for (const patient of birthdays || []) {
-        const clinic = Array.isArray(patient.clinics) ? patient.clinics[0] : patient.clinics
-        
-        if (patient.birth_date) {
-          const patientBday = patient.birth_date.slice(5, 10)
-          if (patientBday === today && patient.phone) {
-            const birthYear = parseInt(patient.birth_date.slice(0, 4))
-            const age = now.getFullYear() - birthYear
-
-            await notifyBirthday({
-              id: patient.id,
-              name: patient.name,
-              phone: patient.phone,
-              age,
-              clinic_name: clinic?.name || 'Clínica'
-            })
-            results.birthdays++
-          }
-        }
-      }
-    }
+    // 3. ANIVERSARIANTES — movido para /api/cron/birthdays
+    // (multi-tenant, com dedupe, opt-in e horário configurável por clínica)
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'

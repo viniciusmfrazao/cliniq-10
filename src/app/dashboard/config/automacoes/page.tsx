@@ -1,0 +1,128 @@
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
+import BirthdayAutomationForm from './birthday-form'
+import BirthdayHistory from './birthday-history'
+
+export const dynamic = 'force-dynamic'
+
+export default async function AutomacoesPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+
+  if (!userRow?.clinic_id) redirect('/dashboard')
+  if (!['admin', 'manager'].includes(userRow.role)) {
+    redirect('/dashboard/config')
+  }
+
+  const clinicId = userRow.clinic_id
+
+  const [{ data: automation }, { data: whatsapp }, { data: clinic }] = await Promise.all([
+    supabase
+      .from('clinic_automations')
+      .select(
+        'aniversario, aniversario_hora, aniversario_optin_required, template_aniversario',
+      )
+      .eq('clinic_id', clinicId)
+      .maybeSingle(),
+    supabase
+      .from('clinic_whatsapp')
+      .select('status, phone_number')
+      .eq('clinic_id', clinicId)
+      .maybeSingle(),
+    supabase.from('clinics').select('id, name').eq('id', clinicId).maybeSingle(),
+  ])
+
+  const whatsappConnected = whatsapp?.status === 'connected'
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <Link
+            href="/dashboard/config"
+            className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
+          >
+            <Icon name="chevronLeft" className="w-4 h-4" />
+            Voltar
+          </Link>
+          <h1 className="text-xl font-bold text-slate-900 mt-2">Automações</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Mensagens automáticas que o sistema envia pelos seus pacientes
+          </p>
+        </div>
+      </div>
+
+      {/* Status WhatsApp */}
+      {!whatsappConnected && (
+        <div className="card p-4 bg-amber-50 border border-amber-200">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+              <Icon name="alertCircle" className="w-5 h-5 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900">WhatsApp não conectado</p>
+              <p className="text-sm text-amber-700 mt-1">
+                As automações precisam que o WhatsApp da clínica esteja conectado pra enviar
+                mensagens. As mensagens são enfileiradas e perdem o lugar do dia se o número
+                não estiver pronto.
+              </p>
+              <Link
+                href="/dashboard/config/whatsapp"
+                className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-sm font-medium"
+              >
+                Configurar WhatsApp
+                <Icon name="chevronRight" className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aniversário */}
+      <div className="card overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shadow-md">
+            <span className="text-2xl">🎂</span>
+          </div>
+          <div className="flex-1">
+            <h2 className="font-semibold text-slate-900">Mensagem de aniversário</h2>
+            <p className="text-sm text-slate-500">
+              Enviada automaticamente no dia do aniversário do paciente
+            </p>
+          </div>
+        </div>
+
+        <BirthdayAutomationForm
+          clinicId={clinicId}
+          clinicName={clinic?.name || 'Clínica'}
+          initial={{
+            enabled: automation?.aniversario ?? true,
+            hour: automation?.aniversario_hora ?? 9,
+            optinRequired: automation?.aniversario_optin_required ?? true,
+            template: automation?.template_aniversario || '',
+          }}
+        />
+      </div>
+
+      {/* Histórico */}
+      <BirthdayHistory clinicId={clinicId} />
+
+      {/* Outras automações (placeholder) */}
+      <div className="card p-6 bg-slate-50 border-dashed border-2 border-slate-200">
+        <p className="text-sm text-slate-500 text-center">
+          Mais automações em breve: confirmação 24h antes, lembrete 2h, NPS pós-atendimento,
+          recall de inativos…
+        </p>
+      </div>
+    </div>
+  )
+}
