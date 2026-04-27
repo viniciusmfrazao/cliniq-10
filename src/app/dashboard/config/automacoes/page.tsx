@@ -4,6 +4,8 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import BirthdayAutomationForm from './birthday-form'
 import BirthdayHistory from './birthday-history'
+import AppointmentReminderForm from './reminder-form'
+import ReminderHistory from './reminder-history'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,12 +27,12 @@ export default async function AutomacoesPage() {
 
   const clinicId = userRow.clinic_id
 
+  // Usamos select('*') pra ser tolerante a schemas que ainda não rodaram
+  // os SQLs opcionais (supabase-birthday-automation.sql, etc).
   const [{ data: automation }, { data: whatsapp }, { data: clinic }] = await Promise.all([
     supabase
       .from('clinic_automations')
-      .select(
-        'aniversario, aniversario_hora, aniversario_optin_required, template_aniversario',
-      )
+      .select('*')
       .eq('clinic_id', clinicId)
       .maybeSingle(),
     supabase
@@ -40,6 +42,16 @@ export default async function AutomacoesPage() {
       .maybeSingle(),
     supabase.from('clinics').select('id, name').eq('id', clinicId).maybeSingle(),
   ])
+
+  type AutomationRow = {
+    aniversario?: boolean | null
+    aniversario_hora?: number | null
+    aniversario_optin_required?: boolean | null
+    template_aniversario?: string | null
+    confirma_24h?: boolean | null
+    template_confirma_24h?: string | null
+  }
+  const auto = (automation || null) as AutomationRow | null
 
   const whatsappConnected = whatsapp?.status === 'connected'
 
@@ -105,21 +117,48 @@ export default async function AutomacoesPage() {
           clinicId={clinicId}
           clinicName={clinic?.name || 'Clínica'}
           initial={{
-            enabled: automation?.aniversario ?? true,
-            hour: automation?.aniversario_hora ?? 9,
-            optinRequired: automation?.aniversario_optin_required ?? true,
-            template: automation?.template_aniversario || '',
+            enabled: auto?.aniversario ?? true,
+            hour: auto?.aniversario_hora ?? 9,
+            optinRequired: auto?.aniversario_optin_required ?? true,
+            template: auto?.template_aniversario || '',
           }}
         />
       </div>
 
-      {/* Histórico */}
+      {/* Histórico de aniversários */}
       <BirthdayHistory clinicId={clinicId} />
+
+      {/* Lembrete de consulta (D-1) */}
+      <div className="card overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md">
+            <span className="text-2xl">📅</span>
+          </div>
+          <div className="flex-1">
+            <h2 className="font-semibold text-slate-900">Lembrete de consulta</h2>
+            <p className="text-sm text-slate-500">
+              Enviado todo dia às 20h pra quem tem consulta no dia seguinte
+            </p>
+          </div>
+        </div>
+
+        <AppointmentReminderForm
+          clinicId={clinicId}
+          clinicName={clinic?.name || 'Clínica'}
+          initial={{
+            enabled: auto?.confirma_24h ?? true,
+            template: auto?.template_confirma_24h || '',
+          }}
+        />
+      </div>
+
+      {/* Histórico de lembretes */}
+      <ReminderHistory clinicId={clinicId} />
 
       {/* Outras automações (placeholder) */}
       <div className="card p-6 bg-slate-50 border-dashed border-2 border-slate-200">
         <p className="text-sm text-slate-500 text-center">
-          Mais automações em breve: confirmação 24h antes, lembrete 2h, NPS pós-atendimento,
+          Mais automações em breve: lembrete 2h antes (plano Pro), NPS pós-atendimento,
           recall de inativos…
         </p>
       </div>

@@ -7,8 +7,6 @@ import Icon from '@/components/ui/Icon'
 
 type Initial = {
   enabled: boolean
-  hour: number
-  optinRequired: boolean
   template: string
 }
 
@@ -21,70 +19,93 @@ type Props = {
 const SUGGESTIONS = [
   {
     id: 'amigavel',
-    label: 'Amigável e calorosa',
-    text: `Oi {{primeiro_nome}}! 🎉
+    label: 'Amigável',
+    text: `Oi {{primeiro_nome}}! 😊
 
-Hoje é o seu dia e a equipe da {{clinica}} faz questão de celebrar com você!
+Passando pra lembrar do seu agendamento na {{clinica}}:
 
-Desejamos um ano cheio de saúde, beleza e momentos especiais. ✨
+📅 {{dia_semana}}, {{data}}
+🕐 às {{hora}}
+✨ {{procedimento}}
+👩‍⚕️ com {{profissional}}
 
-Que tal comemorar com a gente? Te enviamos um mimo de aniversário — fala com a gente pra saber mais!`,
+Pode confirmar respondendo aqui? Se precisar reagendar, é só avisar.`,
   },
   {
-    id: 'elegante',
-    label: 'Elegante',
-    text: `Querida(o) {{primeiro_nome}}, hoje é seu dia! 💎
+    id: 'profissional',
+    label: 'Profissional',
+    text: `Olá {{nome}},
 
-A equipe da {{clinica}} se junta a você para celebrar mais um ano de vida.
+Lembrete da sua consulta:
+• Data: {{dia_semana}}, {{data}}
+• Horário: {{hora}}
+• Procedimento: {{procedimento}}
+• Profissional: {{profissional}}
 
-Que esse novo ciclo seja repleto de saúde, brilho e momentos inesquecíveis. ✨
+Por favor, confirme sua presença respondendo "SIM" ou "NÃO". Em caso de imprevistos, entre em contato pra reagendar.
 
-Conte sempre conosco.`,
+{{clinica}}`,
   },
   {
     id: 'curto',
     label: 'Curto e direto',
-    text: `Feliz aniversário, {{primeiro_nome}}! 🎂
+    text: `Oi {{primeiro_nome}}, lembrete: amanhã ({{data}}) às {{hora}} você tem {{procedimento}} com {{profissional}} aqui na {{clinica}}.
 
-Toda equipe da {{clinica}} torce por você hoje e sempre.
-
-Tem um carinho especial pra você no nosso espaço. Vem comemorar! 💕`,
+Confirma? 😊`,
   },
   {
     id: 'sem_emoji',
-    label: 'Profissional sem emoji',
-    text: `Olá {{primeiro_nome}}!
+    label: 'Sem emoji',
+    text: `Olá {{primeiro_nome}}, tudo bem?
 
-Hoje é um dia muito especial e a equipe da {{clinica}} faz questão de celebrar com você. Desejamos um ótimo dia e um ano cheio de conquistas, saúde e bem-estar.
+Estou passando para confirmar seu atendimento agendado para {{dia_semana}}, {{data}}, às {{hora}}, com {{profissional}}.
 
-Estamos aqui sempre que precisar.`,
+Por favor, responda confirmando sua presença. Caso precise alterar, entre em contato com a clínica.
+
+Atenciosamente,
+{{clinica}}`,
   },
 ]
 
 const PLACEHOLDERS = [
   { tag: '{{primeiro_nome}}', desc: 'Primeiro nome do paciente' },
   { tag: '{{nome}}', desc: 'Nome completo' },
+  { tag: '{{data}}', desc: 'Data da consulta (dd/mm/aaaa)' },
+  { tag: '{{hora}}', desc: 'Hora da consulta (hh:mm)' },
+  { tag: '{{dia_semana}}', desc: 'Dia da semana (segunda-feira, etc.)' },
+  { tag: '{{procedimento}}', desc: 'Nome do procedimento' },
+  { tag: '{{profissional}}', desc: 'Nome do profissional' },
   { tag: '{{clinica}}', desc: 'Nome da sua clínica' },
-  { tag: '{{idade}}', desc: 'Idade que está completando' },
 ]
 
 function renderPreview(
   template: string,
-  vars: { nome: string; primeiro_nome: string; clinica: string; idade: string },
+  vars: {
+    nome: string
+    primeiro_nome: string
+    clinica: string
+    profissional: string
+    procedimento: string
+    data: string
+    hora: string
+    dia_semana: string
+  },
 ) {
   return template
     .replace(/\{\{\s*nome\s*\}\}/g, vars.nome)
     .replace(/\{\{\s*primeiro_nome\s*\}\}/g, vars.primeiro_nome)
     .replace(/\{\{\s*clinica\s*\}\}/g, vars.clinica)
-    .replace(/\{\{\s*idade\s*\}\}/g, vars.idade)
+    .replace(/\{\{\s*profissional\s*\}\}/g, vars.profissional)
+    .replace(/\{\{\s*procedimento\s*\}\}/g, vars.procedimento)
+    .replace(/\{\{\s*data\s*\}\}/g, vars.data)
+    .replace(/\{\{\s*hora\s*\}\}/g, vars.hora)
+    .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
 }
 
-export default function BirthdayAutomationForm({ clinicId, clinicName, initial }: Props) {
+export default function AppointmentReminderForm({ clinicId, clinicName, initial }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [enabled, setEnabled] = useState(initial.enabled)
-  // Horário fixo às 09h BRT no plano Hobby da Vercel (cron 1x/dia).
-  const [optinRequired, setOptinRequired] = useState(initial.optinRequired)
   const [template, setTemplate] = useState(initial.template)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
@@ -92,50 +113,37 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
   const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [testing, setTesting] = useState(false)
 
-  const preview = useMemo(
-    () =>
-      renderPreview(template, {
-        nome: 'Maria Aparecida da Silva',
-        primeiro_nome: 'Maria',
-        clinica: clinicName,
-        idade: '32',
-      }),
-    [template, clinicName],
-  )
+  // Data fictícia "amanhã" pra preview
+  const previewVars = useMemo(() => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    return {
+      nome: 'Maria Aparecida da Silva',
+      primeiro_nome: 'Maria',
+      clinica: clinicName,
+      profissional: 'Dra. Sarah',
+      procedimento: 'Limpeza de pele',
+      data: tomorrow.toLocaleDateString('pt-BR'),
+      hora: '14:30',
+      dia_semana: tomorrow.toLocaleDateString('pt-BR', { weekday: 'long' }),
+    }
+  }, [clinicName])
+
+  const preview = useMemo(() => renderPreview(template, previewVars), [template, previewVars])
 
   async function save() {
     setSaving(true)
     setSavedAt(null)
     try {
-      // OBS: aniversario_hora foi removido do upsert porque a coluna pode não
-      // existir em todos os ambientes (Supabase) e o cron Hobby roda 1x/dia
-      // fixo às 9h. Quando voltar a ser configurável, rodar
-      // supabase-birthday-automation.sql e voltar o campo aqui.
-      type AutomationsUpsert = {
-        clinic_id: string
-        aniversario: boolean
-        template_aniversario: string
-        aniversario_optin_required?: boolean
-      }
-
-      const payload: AutomationsUpsert = {
-        clinic_id: clinicId,
-        aniversario: enabled,
-        template_aniversario: template,
-      }
-
-      // Tenta primeiro com optinRequired; se a coluna não existir no schema,
-      // refaz sem ela pra não quebrar.
-      let { error } = await supabase
+      const { error } = await supabase
         .from('clinic_automations')
-        .upsert({ ...payload, aniversario_optin_required: optinRequired }, { onConflict: 'clinic_id' })
-
-      if (error && /aniversario_optin_required/i.test(error.message)) {
-        const retry = await supabase
-          .from('clinic_automations')
-          .upsert(payload, { onConflict: 'clinic_id' })
-        error = retry.error
-      }
+        .upsert(
+          {
+            clinic_id: clinicId,
+            confirma_24h: enabled,
+            template_confirma_24h: template,
+          },
+          { onConflict: 'clinic_id' },
+        )
       if (error) {
         alert(`Erro ao salvar: ${error.message}`)
         return
@@ -156,10 +164,9 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
     setTestMsg(null)
     try {
       const text = renderPreview(template, {
+        ...previewVars,
         nome: 'Você (teste)',
         primeiro_nome: 'Você',
-        clinica: clinicName,
-        idade: '∞',
       })
       const r = await fetch('/api/whatsapp/send', {
         method: 'POST',
@@ -199,16 +206,16 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
           <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
         </div>
         <div className="flex-1">
-          <p className="font-semibold text-slate-900">Ativar envio automático</p>
+          <p className="font-semibold text-slate-900">Ativar lembrete automático</p>
           <p className="text-sm text-slate-500">
-            Quando ligado, o sistema envia uma mensagem de aniversário no dia do paciente, no
-            horário escolhido.
+            Quando ligado, o sistema envia um lembrete na noite anterior (20h) pra todos os
+            pacientes com consulta marcada no dia seguinte.
           </p>
         </div>
       </label>
 
       <div className={enabled ? '' : 'opacity-50 pointer-events-none'}>
-        {/* Horário (fixo no plano atual) */}
+        {/* Horário fixo */}
         <div className="space-y-2 mb-6">
           <label className="block text-sm font-medium text-slate-900">
             Horário do envio
@@ -216,41 +223,21 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
           </label>
           <div className="flex items-center gap-3">
             <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium">
-              09:00
+              20:00
             </div>
             <p className="text-xs text-slate-500">
-              Envio diário fixo às 09h. Horário customizável em breve.
+              Envio diário fixo às 20h (véspera). Lembrete 2h antes da consulta no plano Pro.
             </p>
           </div>
         </div>
-
-        {/* Opt-in */}
-        <label className="flex items-start gap-4 cursor-pointer mb-6">
-          <div className="relative inline-flex items-center mt-1">
-            <input
-              type="checkbox"
-              checked={optinRequired}
-              onChange={(e) => setOptinRequired(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-blue-500 transition-colors" />
-            <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-slate-900">Exigir consentimento (LGPD)</p>
-            <p className="text-sm text-slate-500">
-              Quando ligado, só envia para pacientes que marcaram <strong>opt-in de WhatsApp</strong>{' '}
-              na ficha. Mais seguro juridicamente. Quando desligado, envia para todos os
-              pacientes com telefone cadastrado.
-            </p>
-          </div>
-        </label>
 
         {/* Sugestões */}
         <div className="space-y-2 mb-3">
           <label className="block text-sm font-medium text-slate-900">
             Sugestões de texto
-            <span className="ml-2 text-xs text-slate-500">(clique pra usar como ponto de partida)</span>
+            <span className="ml-2 text-xs text-slate-500">
+              (clique pra usar como ponto de partida)
+            </span>
           </label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {SUGGESTIONS.map((s) => (
@@ -272,9 +259,9 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
           <textarea
             value={template}
             onChange={(e) => setTemplate(e.target.value)}
-            rows={8}
+            rows={10}
             className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-mono"
-            placeholder="Digite a mensagem... use {{primeiro_nome}}, {{clinica}}, {{idade}} pra personalizar"
+            placeholder="Digite a mensagem... use {{primeiro_nome}}, {{data}}, {{hora}} pra personalizar"
           />
         </div>
 
@@ -298,7 +285,9 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
           <div className="space-y-2 mb-6">
             <label className="block text-sm font-medium text-slate-900">
               Pré-visualização
-              <span className="ml-2 text-xs text-slate-500">(como o paciente vai receber)</span>
+              <span className="ml-2 text-xs text-slate-500">
+                (exemplo com consulta amanhã às 14h30)
+              </span>
             </label>
             <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
               <p className="text-sm text-slate-800 whitespace-pre-wrap">{preview}</p>
@@ -308,11 +297,9 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
 
         {/* Teste */}
         <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-          <p className="font-semibold text-sm text-slate-900 mb-2">
-            Enviar teste pra um número
-          </p>
+          <p className="font-semibold text-sm text-slate-900 mb-2">Enviar teste pra um número</p>
           <p className="text-xs text-slate-500 mb-3">
-            Recomendamos testar pro seu próprio celular antes de ativar pra todo mundo.
+            Recomendamos testar pro seu próprio celular antes de ativar.
           </p>
           <div className="flex gap-2">
             <input
