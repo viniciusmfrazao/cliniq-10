@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -21,69 +21,155 @@ type Props = {
     title: string
     content: string
     created_at: string
+    photos?: string[] | null
   }>
   clinicId: string
   professionalId: string
 }
 
-export default function MedicalRecordSection({ 
-  patient, 
-  appointmentId, 
-  pastAppointments, 
+type LocalPhoto = {
+  id: string
+  file: File
+  previewUrl: string
+  uploading?: boolean
+  error?: string | null
+}
+
+const MAX_PHOTO_SIZE = 20 * 1024 * 1024 // 20MB (alinhado com bucket)
+
+function sanitizeFilename(name: string): string {
+  const cleaned = name.toLowerCase().replace(/[^a-z0-9._-]/g, '-')
+  return cleaned.length > 80 ? cleaned.slice(-80) : cleaned
+}
+
+export default function MedicalRecordSection({
+  patient,
+  appointmentId,
+  pastAppointments,
   medicalRecords,
   clinicId,
-  professionalId 
+  professionalId,
 }: Props) {
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [photos, setPhotos] = useState<string[]>([])
-  
+  const [photos, setPhotos] = useState<LocalPhoto[]>([])
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
+
   const [form, setForm] = useState({
     complaint: '',
     conduct: '',
-    observations: ''
+    observations: '',
   })
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Quando entra na aba histórico, gera signed URLs pras fotos persistidas
+  useEffect(() => {
+    if (activeTab !== 'history') return
+    const allPaths = medicalRecords.flatMap((r) => r.photos ?? [])
+    const missing = allPaths.filter((p) => p && !signedUrls[p])
+    if (missing.length === 0) return
+
+    let cancelled = false
+    ;(async () => {
+      const { data, error } = await supabase.storage
+        .from('medical-attachments')
+        .createSignedUrls(missing, 60 * 60) // 1 hora
+      if (cancelled || error || !data) return
+      const next: Record<string, string> = {}
+      data.forEach((d) => {
+        if (d.path && d.signedUrl) next[d.path] = d.signedUrl
+      })
+      setSignedUrls((prev) => ({ ...prev, ...next }))
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, medicalRecords, signedUrls, supabase])
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files) return
 
+    const accepted: LocalPhoto[] = []
     for (const file of Array.from(files)) {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setPhotos(prev => [...prev, event.target!.result as string])
-        }
+      if (file.size > MAX_PHOTO_SIZE) {
+        alert(`"${file.name}" tem mais de 20MB e não pode ser anexada.`)
+        continue
       }
-      reader.readAsDataURL(file)
+      accepted.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      })
     }
+    if (accepted.length) {
+      setPhotos((prev) => [...prev, ...accepted])
+    }
+    // limpa o input pra permitir mesmo arquivo sequencial
+    e.target.value = ''
   }
 
-  const removePhoto = (index: number) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index))
+  const removePhoto = (id: string) => {
+    setPhotos((prev) => {
+      const removed = prev.find((p) => p.id === id)
+      if (removed) URL.revokeObjectURL(removed.previewUrl)
+      return prev.filter((p) => p.id !== id)
+    })
+  }
+
+  async function uploadPhotos(): Promise<string[]> {
+    const urls: string[] = []
+    for (const photo of photos) {
+      const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${sanitizeFilename(photo.file.name)}`
+      const path = `${clinicId}/${patient.id}/${filename}`
+
+      const { error: upErr } = await supabase.storage
+        .from('medical-attachments')
+        .upload(path, photo.file, {
+          contentType: photo.file.type || `image/${ext}`,
+          upsert: false,
+        })
+
+      if (upErr) {
+        // Sinaliza no estado pra UI
+        setPhotos((prev) =>
+          prev.map((p) => (p.id === photo.id ? { ...p, error: upErr.message } : p)),
+        )
+        throw new Error(`Falha no upload de "${photo.file.name}": ${upErr.message}`)
+      }
+      urls.push(path)
+    }
+    return urls
   }
 
   const saveMedicalRecord = async () => {
-    if (!form.complaint && !form.conduct && !form.observations) {
-      alert('Preencha pelo menos um campo do prontuário')
+    if (!form.complaint && !form.conduct && !form.observations && photos.length === 0) {
+      alert('Preencha algum campo do prontuário ou anexe pelo menos uma foto')
       return
     }
 
     setSaving(true)
 
     try {
+      // Marca todas como uploading
+      setPhotos((prev) => prev.map((p) => ({ ...p, uploading: true, error: null })))
+
+      const uploadedPaths = photos.length > 0 ? await uploadPhotos() : []
+
       const content = [
         form.complaint && `**Queixa:**\n${form.complaint}`,
         form.conduct && `**Conduta:**\n${form.conduct}`,
         form.observations && `**Observações:**\n${form.observations}`,
-        photos.length > 0 && `**Fotos:** ${photos.length} anexada(s)`
-      ].filter(Boolean).join('\n\n')
+      ]
+        .filter(Boolean)
+        .join('\n\n')
 
       const { error } = await supabase.from('evolutions').insert({
         clinic_id: clinicId,
@@ -92,6 +178,7 @@ export default function MedicalRecordSection({
         type: 'consultation',
         title: `Atendimento ${new Date().toLocaleDateString('pt-BR')}`,
         content,
+        photos: uploadedPaths,
       })
 
       if (error) {
@@ -100,12 +187,18 @@ export default function MedicalRecordSection({
         return
       }
 
+      // Limpa o estado: revoga blob URLs e zera fotos
+      photos.forEach((p) => URL.revokeObjectURL(p.previewUrl))
+      setPhotos([])
+      setForm({ complaint: '', conduct: '', observations: '' })
+
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (error) {
       console.error(error)
-      alert('Erro ao salvar prontuário')
+      alert(error instanceof Error ? error.message : 'Erro ao salvar prontuário')
     } finally {
+      setPhotos((prev) => prev.map((p) => ({ ...p, uploading: false })))
       setSaving(false)
     }
   }
@@ -187,18 +280,38 @@ export default function MedicalRecordSection({
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Fotos antes/depois
+                <span className="ml-2 text-xs text-slate-400">
+                  (até 20MB cada — JPG, PNG, WEBP)
+                </span>
               </label>
               <div className="flex flex-wrap gap-3">
-                {photos.map((photo, i) => (
-                  <div key={i} className="relative group">
-                    <img 
-                      src={photo} 
-                      alt={`Foto ${i + 1}`} 
-                      className="w-20 h-20 object-cover rounded-lg border border-slate-200"
+                {photos.map((photo) => (
+                  <div key={photo.id} className="relative group">
+                    <img
+                      src={photo.previewUrl}
+                      alt={photo.file.name}
+                      className={`w-20 h-20 object-cover rounded-lg border ${
+                        photo.error ? 'border-rose-400' : 'border-slate-200'
+                      } ${photo.uploading ? 'opacity-60' : ''}`}
                     />
+                    {photo.uploading && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Icon name="loader" className="w-5 h-5 text-white animate-spin drop-shadow" />
+                      </div>
+                    )}
+                    {photo.error && (
+                      <div
+                        className="absolute inset-x-0 bottom-0 bg-rose-500/90 text-white text-[10px] px-1 py-0.5 truncate rounded-b-lg"
+                        title={photo.error}
+                      >
+                        Erro
+                      </div>
+                    )}
                     <button
-                      onClick={() => removePhoto(i)}
-                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      type="button"
+                      onClick={() => removePhoto(photo.id)}
+                      disabled={photo.uploading}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-30"
                     >
                       <Icon name="x" className="w-3 h-3" />
                     </button>
@@ -293,6 +406,34 @@ export default function MedicalRecordSection({
                       <p className="text-sm text-slate-600 whitespace-pre-wrap line-clamp-4">
                         {record.content}
                       </p>
+                      {record.photos && record.photos.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {record.photos.map((path, idx) => {
+                            const url = signedUrls[path]
+                            return url ? (
+                              <a
+                                key={`${record.id}-${idx}`}
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block w-14 h-14 rounded-lg overflow-hidden border border-slate-200 hover:border-violet-400 transition-colors"
+                                title="Abrir foto"
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Foto ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </a>
+                            ) : (
+                              <div
+                                key={`${record.id}-${idx}`}
+                                className="w-14 h-14 rounded-lg bg-slate-200 animate-pulse"
+                              />
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

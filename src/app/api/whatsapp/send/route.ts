@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import {
+  sendWhatsappMessage,
+  sendWhatsappImage,
+  sendWhatsappAudio,
+} from '@/lib/whatsapp'
 import { getSettings } from '@/lib/app-settings'
+
+type SendBody = {
+  clinic_id?: string
+  phone?: string
+  message?: string
+  /** 'text' (default) | 'image' | 'audio' */
+  type?: 'text' | 'image' | 'audio'
+  /** base64 (puro ou data URL) ou URL pública pra mídia */
+  media?: string
+  mimetype?: string
+  fileName?: string
+  caption?: string
+}
 
 /**
  * POST /api/whatsapp/send
@@ -9,8 +26,7 @@ import { getSettings } from '@/lib/app-settings'
  * 3 modos de autenticação:
  *
  * 1) Usuário logado (UI):
- *    Body: { phone, message }
- *    -> clinic_id é deduzido do user logado.
+ *    Body: { phone, message } | { phone, type:'image', media, mimetype, caption? } | { phone, type:'audio', media }
  *
  * 2) Server-to-server CRON (pg_cron, jobs internos):
  *    Header: x-cron-secret: <CRON_SECRET (env)>
@@ -21,16 +37,28 @@ import { getSettings } from '@/lib/app-settings'
  *    Body: { clinic_id, phone, message }
  */
 export async function POST(req: NextRequest) {
-  let body: { clinic_id?: string; phone?: string; message?: string }
+  let body: SendBody
   try {
-    body = await req.json()
+    body = (await req.json()) as SendBody
   } catch {
     return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 })
   }
 
-  const { phone, message } = body
-  if (!phone || !message) {
-    return NextResponse.json({ ok: false, error: 'phone e message são obrigatórios' }, { status: 400 })
+  const { phone, message, type = 'text', media, mimetype, fileName, caption } = body
+  if (!phone) {
+    return NextResponse.json({ ok: false, error: 'phone é obrigatório' }, { status: 400 })
+  }
+  if (type === 'text' && !message) {
+    return NextResponse.json(
+      { ok: false, error: 'message é obrigatório pra type=text' },
+      { status: 400 },
+    )
+  }
+  if ((type === 'image' || type === 'audio') && !media) {
+    return NextResponse.json(
+      { ok: false, error: 'media (base64 ou url) é obrigatório pra mídia' },
+      { status: 400 },
+    )
   }
 
   let clinicId: string | undefined
@@ -38,7 +66,6 @@ export async function POST(req: NextRequest) {
   const cronSecret = req.headers.get('x-cron-secret')
   const cliniqSecret = req.headers.get('x-cliniq-secret')
 
-  // Pegamos o n8n_donna_secret de app_settings (cache 60s) pra validar o N8N
   const settings = cliniqSecret ? await getSettings(['n8n_donna_secret']) : null
   const expectedCliniqSecret = settings?.n8n_donna_secret
 
@@ -76,7 +103,25 @@ export async function POST(req: NextRequest) {
     clinicId = userRow.clinic_id
   }
 
-  const result = await sendWhatsappMessage({ clinicId: clinicId!, phone, message })
+  // Roteamento por tipo
+  const result =
+    type === 'image'
+      ? await sendWhatsappImage({
+          clinicId: clinicId!,
+          phone,
+          media: media!,
+          mimetype: mimetype || 'image/jpeg',
+          caption,
+          fileName,
+        })
+      : type === 'audio'
+        ? await sendWhatsappAudio({
+            clinicId: clinicId!,
+            phone,
+            audio: media!,
+          })
+        : await sendWhatsappMessage({ clinicId: clinicId!, phone, message: message! })
+
   if (!result.ok) {
     const status =
       result.code === 'not_configured' ? 412 :

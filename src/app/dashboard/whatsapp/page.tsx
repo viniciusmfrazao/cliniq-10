@@ -5,6 +5,14 @@ import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
+type MessageKind =
+  | 'text'
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'document'
+  | 'sticker'
+
 type Conversation = {
   id: string
   phone: string
@@ -21,6 +29,12 @@ type Message = {
   role: 'user' | 'assistant'
   created_at: string
   push_name?: string | null
+  kind: MessageKind
+  mediaUrl?: string | null
+  mediaPath?: string | null
+  mimetype?: string | null
+  fileName?: string | null
+  caption?: string | null
 }
 
 type EvaRow = {
@@ -30,7 +44,16 @@ type EvaRow = {
   role: 'user' | 'assistant' | null
   content: string | null
   created_at: string
-  metadata?: { push_name?: string; evolution_message_id?: string } | null
+  metadata?: {
+    push_name?: string
+    evolution_message_id?: string
+    kind?: MessageKind
+    mimetype?: string | null
+    file_name?: string | null
+    media_path?: string | null
+    media_url?: string | null
+    caption?: string | null
+  } | null
 }
 
 function rowToMessage(r: EvaRow): Message | null {
@@ -41,7 +64,38 @@ function rowToMessage(r: EvaRow): Message | null {
     role: r.role,
     created_at: r.created_at,
     push_name: r.metadata?.push_name ?? null,
+    kind: r.metadata?.kind ?? 'text',
+    mediaUrl: r.metadata?.media_url ?? null,
+    mediaPath: r.metadata?.media_path ?? null,
+    mimetype: r.metadata?.mimetype ?? null,
+    fileName: r.metadata?.file_name ?? null,
+    caption: r.metadata?.caption ?? null,
   }
+}
+
+const COMMON_EMOJIS = [
+  '😀', '😂', '😍', '😊', '🥰', '😘', '😉', '😎',
+  '🤔', '🙏', '👍', '👏', '🙌', '💪', '✨', '❤️',
+  '🥳', '🎉', '🌸', '💎', '💉', '💋', '😴', '😅',
+  '😢', '🤗', '🤝', '👌', '🔥', '💯', '⭐', '✅',
+]
+
+// Converte File pra base64 puro (sem prefixo data:)
+function fileToBase64(file: File): Promise<string> {
+  return blobToBase64(file)
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string
+      const base64 = dataUrl.split(',')[1] ?? ''
+      resolve(base64)
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
 }
 
 function buildConversationFromRow(
@@ -221,6 +275,33 @@ export default function WhatsAppPage() {
       const mapped = (msgs as EvaRow[])
         .map(rowToMessage)
         .filter((m): m is Message => m !== null)
+
+      // Regenera signed URLs frescos pras mídias persistidas.
+      // O webhook gera signed_url com TTL de 7 dias mas, pra UI confiável,
+      // regeramos toda vez que abrimos a conversa.
+      const paths = Array.from(
+        new Set(
+          mapped
+            .map((m) => m.mediaPath)
+            .filter((p): p is string => !!p),
+        ),
+      )
+      if (paths.length > 0) {
+        const { data, error } = await supabase.storage
+          .from('whatsapp-media')
+          .createSignedUrls(paths, 60 * 60 * 24) // 24h
+        if (!error && data) {
+          const map = new Map<string, string>()
+          data.forEach((d) => {
+            if (d.path && d.signedUrl) map.set(d.path, d.signedUrl)
+          })
+          for (const m of mapped) {
+            if (m.mediaPath && map.has(m.mediaPath)) {
+              m.mediaUrl = map.get(m.mediaPath)!
+            }
+          }
+        }
+      }
       setMessages(mapped)
     }
 
@@ -248,6 +329,7 @@ export default function WhatsAppPage() {
       content: newMessage,
       role: 'assistant',
       created_at: new Date().toISOString(),
+      kind: 'text',
     }
     setMessages((prev) => [...prev, optimistic])
     const text = newMessage
@@ -264,16 +346,97 @@ export default function WhatsAppPage() {
       })
 
       if (!response.ok) {
-        // remove a otimista se falhou
         setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
         const err = await response.json().catch(() => ({}))
         alert(`Falha ao enviar: ${err.error || response.status}`)
       }
-      // Quando o webhook do Evolution chegar com fromMe=true, a mensagem
-      // entrara via realtime e substituira a otimista (mesmo conteudo).
     } catch (error) {
       console.error('Error sending:', error)
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function sendImage(file: File, caption?: string) {
+    if (!selectedConversation || !config) return
+    setSending(true)
+    const previewUrl = URL.createObjectURL(file)
+    const optimistic: Message = {
+      id: `tmp-${Date.now()}`,
+      content: caption || '🖼️ Imagem',
+      role: 'assistant',
+      created_at: new Date().toISOString(),
+      kind: 'image',
+      mediaUrl: previewUrl,
+      mimetype: file.type,
+      caption: caption || null,
+    }
+    setMessages((prev) => [...prev, optimistic])
+
+    try {
+      const base64 = await fileToBase64(file)
+      const response = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: selectedConversation.phone,
+          type: 'image',
+          media: base64,
+          mimetype: file.type || 'image/jpeg',
+          caption,
+          fileName: file.name,
+        }),
+      })
+      if (!response.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+        const err = await response.json().catch(() => ({}))
+        alert(`Falha ao enviar imagem: ${err.error || response.status}`)
+      }
+    } catch (error) {
+      console.error('Error sending image:', error)
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+      alert('Erro inesperado ao enviar imagem')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function sendAudio(blob: Blob) {
+    if (!selectedConversation || !config) return
+    setSending(true)
+    const previewUrl = URL.createObjectURL(blob)
+    const optimistic: Message = {
+      id: `tmp-${Date.now()}`,
+      content: '🎤 Mensagem de voz',
+      role: 'assistant',
+      created_at: new Date().toISOString(),
+      kind: 'audio',
+      mediaUrl: previewUrl,
+      mimetype: blob.type,
+    }
+    setMessages((prev) => [...prev, optimistic])
+
+    try {
+      const base64 = await blobToBase64(blob)
+      const response = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: selectedConversation.phone,
+          type: 'audio',
+          media: base64,
+        }),
+      })
+      if (!response.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+        const err = await response.json().catch(() => ({}))
+        alert(`Falha ao enviar áudio: ${err.error || response.status}`)
+      }
+    } catch (error) {
+      console.error('Error sending audio:', error)
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+      alert('Erro inesperado ao enviar áudio')
     } finally {
       setSending(false)
     }
@@ -424,48 +587,21 @@ export default function WhatsAppPage() {
 
               {/* Mensagens */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {messages.map(msg => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.role === 'assistant' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[70%] px-4 py-2 rounded-2xl ${
-                        msg.role === 'assistant'
-                          ? 'bg-emerald-500 text-white rounded-br-md'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-bl-md'
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      <p className={`text-xs mt-1 ${msg.role === 'assistant' ? 'text-emerald-100' : 'text-slate-400'}`}>
-                        {new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
+                {messages.map((msg) => (
+                  <MessageBubble key={msg.id} msg={msg} />
                 ))}
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input */}
-              <div className="p-4 border-t border-slate-100 dark:border-slate-700">
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={e => setNewMessage(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && sendMessage()}
-                    placeholder="Digite sua mensagem..."
-                    className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    disabled={sending || !newMessage.trim()}
-                    className="px-6 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-50"
-                  >
-                    {sending ? '...' : 'Enviar'}
-                  </button>
-                </div>
-              </div>
+              {/* Input com mídia + emojis */}
+              <ChatComposer
+                value={newMessage}
+                onChange={setNewMessage}
+                onSendText={sendMessage}
+                onSendImage={sendImage}
+                onSendAudio={sendAudio}
+                disabled={sending}
+              />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
@@ -476,6 +612,371 @@ export default function WhatsAppPage() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function MessageBubble({ msg }: { msg: Message }) {
+  const isMine = msg.role === 'assistant'
+  const baseBubble =
+    'max-w-[75%] px-3 py-2 rounded-2xl ' +
+    (isMine
+      ? 'bg-emerald-500 text-white rounded-br-md'
+      : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-bl-md')
+
+  const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const timeCls = isMine ? 'text-emerald-100' : 'text-slate-400'
+
+  return (
+    <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+      <div className={baseBubble}>
+        {msg.kind === 'image' && msg.mediaUrl && (
+          <a
+            href={msg.mediaUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block mb-1 -mx-1 -mt-1"
+          >
+            <img
+              src={msg.mediaUrl}
+              alt={msg.caption || 'Imagem'}
+              className="rounded-xl max-w-[260px] max-h-[260px] object-cover"
+            />
+          </a>
+        )}
+
+        {msg.kind === 'image' && !msg.mediaUrl && (
+          <div className="mb-1 px-3 py-2 rounded-xl bg-black/10 text-xs italic">
+            🖼️ Imagem (carregando...)
+          </div>
+        )}
+
+        {msg.kind === 'audio' && msg.mediaUrl && (
+          <audio controls src={msg.mediaUrl} className="max-w-[240px] mt-0.5">
+            Seu navegador não suporta áudio.
+          </audio>
+        )}
+
+        {msg.kind === 'audio' && !msg.mediaUrl && (
+          <div className="px-2 py-1 rounded-lg bg-black/10 text-xs italic flex items-center gap-2">
+            <Icon name="mic" className="w-3 h-3" />
+            Áudio recebido (carregando…)
+          </div>
+        )}
+
+        {msg.kind === 'video' && (
+          <div className={`px-3 py-2 rounded-xl ${isMine ? 'bg-emerald-600/40' : 'bg-black/10'} text-xs flex items-center gap-2`}>
+            <span>🎬</span>
+            <span>Vídeo recebido — confira no celular</span>
+          </div>
+        )}
+
+        {msg.kind === 'document' && (
+          <div className={`px-3 py-2 rounded-xl ${isMine ? 'bg-emerald-600/40' : 'bg-black/10'} text-xs flex items-center gap-2`}>
+            <span>📎</span>
+            <span className="truncate max-w-[200px]">
+              {msg.fileName || 'Documento'}
+            </span>
+            {msg.mediaUrl && (
+              <a
+                href={msg.mediaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline ml-1"
+              >
+                abrir
+              </a>
+            )}
+          </div>
+        )}
+
+        {msg.kind === 'sticker' && msg.mediaUrl && (
+          <img
+            src={msg.mediaUrl}
+            alt="Figurinha"
+            className="w-32 h-32 object-contain"
+          />
+        )}
+
+        {/* Texto / caption */}
+        {(msg.kind === 'text' || (msg.caption && msg.caption.trim())) && (
+          <p className="text-sm whitespace-pre-wrap break-words">
+            {msg.kind === 'text' ? msg.content : msg.caption}
+          </p>
+        )}
+
+        <p className={`text-[10px] mt-0.5 text-right ${timeCls}`}>{time}</p>
+      </div>
+    </div>
+  )
+}
+
+type ComposerProps = {
+  value: string
+  onChange: (v: string) => void
+  onSendText: () => void
+  onSendImage: (file: File, caption?: string) => void
+  onSendAudio: (blob: Blob) => void
+  disabled?: boolean
+}
+
+function ChatComposer({
+  value,
+  onChange,
+  onSendText,
+  onSendImage,
+  onSendAudio,
+  disabled,
+}: ComposerProps) {
+  const [showEmoji, setShowEmoji] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const [pendingImage, setPendingImage] = useState<{ file: File; preview: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingStartRef = useRef<number>(0)
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const insertEmoji = (emoji: string) => {
+    onChange(value + emoji)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 16 * 1024 * 1024) {
+      alert('Imagem muito grande (máximo 16MB)')
+      e.target.value = ''
+      return
+    }
+    setPendingImage({ file, preview: URL.createObjectURL(file) })
+    e.target.value = ''
+  }
+
+  const confirmImage = (caption: string) => {
+    if (!pendingImage) return
+    onSendImage(pendingImage.file, caption || undefined)
+    URL.revokeObjectURL(pendingImage.preview)
+    setPendingImage(null)
+    onChange('')
+  }
+
+  const cancelImage = () => {
+    if (pendingImage) URL.revokeObjectURL(pendingImage.preview)
+    setPendingImage(null)
+  }
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+      const mime = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || ''
+      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+      audioChunksRef.current = []
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+      rec.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: rec.mimeType || 'audio/webm' })
+        stream.getTracks().forEach((t) => t.stop())
+        if (blob.size > 0) onSendAudio(blob)
+      }
+      mediaRecorderRef.current = rec
+      rec.start()
+      recordingStartRef.current = Date.now()
+      setRecordingTime(0)
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(Math.floor((Date.now() - recordingStartRef.current) / 1000))
+      }, 250)
+      setRecording(true)
+    } catch (err) {
+      console.error(err)
+      alert('Não foi possível acessar o microfone. Permita o acesso e tente novamente.')
+    }
+  }
+
+  const stopRecording = (cancel = false) => {
+    const rec = mediaRecorderRef.current
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+    if (rec) {
+      if (cancel) {
+        // descarta: troca o handler antes de parar
+        rec.onstop = () => {
+          rec.stream?.getTracks().forEach((t) => t.stop())
+        }
+      }
+      rec.stop()
+    }
+    setRecording(false)
+    setRecordingTime(0)
+  }
+
+  // Modal de pré-visualização da imagem
+  if (pendingImage) {
+    return (
+      <div className="border-t border-slate-100 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-900">
+        <div className="flex items-start gap-3 mb-3">
+          <img
+            src={pendingImage.preview}
+            alt="Pré-visualização"
+            className="w-24 h-24 rounded-lg object-cover border border-slate-200"
+          />
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && confirmImage(value)}
+            placeholder="Legenda (opcional)"
+            className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800"
+            autoFocus
+          />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={cancelImage}
+            disabled={disabled}
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => confirmImage(value)}
+            disabled={disabled}
+            className="px-4 py-2 text-sm font-semibold bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50"
+          >
+            {disabled ? 'Enviando…' : 'Enviar imagem'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (recording) {
+    return (
+      <div className="p-4 border-t border-slate-100 dark:border-slate-700 flex items-center gap-3">
+        <button
+          onClick={() => stopRecording(true)}
+          className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-200"
+          title="Cancelar"
+        >
+          <Icon name="x" className="w-4 h-4" />
+        </button>
+        <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-rose-50 dark:bg-rose-900/20 rounded-xl">
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-70" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
+          </span>
+          <Icon name="mic" className="w-4 h-4 text-rose-600" />
+          <span className="text-sm text-rose-700 dark:text-rose-300 font-medium">
+            Gravando… {String(Math.floor(recordingTime / 60)).padStart(1, '0')}:
+            {String(recordingTime % 60).padStart(2, '0')}
+          </span>
+        </div>
+        <button
+          onClick={() => stopRecording(false)}
+          className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600"
+          title="Enviar áudio"
+        >
+          <Icon name="send" className="w-4 h-4" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-4 border-t border-slate-100 dark:border-slate-700 relative">
+      {showEmoji && (
+        <div
+          className="absolute bottom-full left-2 mb-2 z-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg p-2 grid grid-cols-8 gap-1"
+          onMouseLeave={() => setShowEmoji(false)}
+        >
+          {COMMON_EMOJIS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => {
+                insertEmoji(e)
+              }}
+              className="w-8 h-8 flex items-center justify-center text-lg hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShowEmoji((s) => !s)}
+          disabled={disabled}
+          className="w-10 h-10 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center disabled:opacity-50"
+          title="Emojis"
+        >
+          <Icon name="smile" className="w-5 h-5" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled}
+          className="w-10 h-10 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center disabled:opacity-50"
+          title="Enviar imagem"
+        >
+          <Icon name="image" className="w-5 h-5" />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              if (value.trim()) onSendText()
+            }
+          }}
+          placeholder="Digite sua mensagem..."
+          disabled={disabled}
+          className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50"
+        />
+
+        {value.trim() ? (
+          <button
+            type="button"
+            onClick={onSendText}
+            disabled={disabled}
+            className="w-12 h-12 rounded-full bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center"
+            title="Enviar mensagem"
+          >
+            <Icon name="send" className="w-5 h-5" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={startRecording}
+            disabled={disabled}
+            className="w-12 h-12 rounded-full bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center"
+            title="Gravar áudio"
+          >
+            <Icon name="mic" className="w-5 h-5" />
+          </button>
+        )}
       </div>
     </div>
   )
