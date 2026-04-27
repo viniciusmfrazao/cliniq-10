@@ -34,7 +34,13 @@ export async function POST() {
       .from('clinic_whatsapp')
       .update({ status: 'error', last_event_at: new Date().toISOString() })
       .eq('clinic_id', ctx.clinicId)
-    return NextResponse.json({ error: `Evolution: ${r.error}` }, { status: 502 })
+    let msg = `Evolution: ${r.error}`
+    if (r.status === 401 || r.status === 403) {
+      msg = `Evolution rejeitou a master key (${r.status}). Verifique URL e Master API Key em /admin/evolution.`
+    } else if (r.status === 404) {
+      msg = `Instance não encontrada na Evolution. Pode ter sido apagada lá. Tente "Remover instance" e configurar de novo.`
+    }
+    return NextResponse.json({ error: msg, evolution_status: r.status }, { status: 502 })
   }
 
   const base64 = r.data.base64 ?? null

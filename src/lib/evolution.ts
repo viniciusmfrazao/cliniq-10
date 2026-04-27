@@ -143,7 +143,8 @@ export type CreateInstanceResult = {
 
 /**
  * Cria uma instance nova na Evolution, já com webhook configurado.
- * Idempotente do nosso lado: se a Evolution responder "already in use", devolvemos ok.
+ * Idempotente do nosso lado: se a Evolution responder "already in use" (em qualquer
+ * variação de mensagem), devolvemos ok pra cima.
  */
 export async function createInstance(args: {
   instanceName: string
@@ -165,8 +166,50 @@ export async function createInstance(args: {
     body: JSON.stringify(body),
   })
 
-  if (!r.ok && /already in use|already exists/i.test(r.error)) {
+  if (!r.ok && isAlreadyExistsError(r)) {
     return { ok: true, data: {} }
+  }
+  return r
+}
+
+/**
+ * Verifica se um erro retornado pela Evolution corresponde a "instance já existe".
+ * Cobrir várias variantes que aparecem em diferentes versões e até casos de 403
+ * que algumas versões cospem nessa situação.
+ */
+function isAlreadyExistsError(r: FetchErr): boolean {
+  if (/already in use|already exists|name is already|duplicate|conflict/i.test(r.error)) {
+    return true
+  }
+  // Algumas versões da Evolution retornam 403 puro nessa situação.
+  // Não é forte, mas combinado com o fluxo é seguro: o caller só usa createInstance
+  // quando achou conveniente provisionar.
+  return false
+}
+
+/**
+ * Verifica se uma instance existe na Evolution chamando getConnectionState.
+ * Retorna { exists: boolean, state?: 'open' | 'close' | 'connecting' }.
+ *
+ * Tratamos 404 e mensagens de "not found" como exists=false e demais erros
+ * como erro real (config errada, rede etc).
+ */
+export async function probeInstance(
+  instanceName: string,
+): Promise<FetchResult<{ exists: boolean; state?: EvolutionRawState }>> {
+  const r = await getConnectionState(instanceName)
+  if (r.ok) {
+    return {
+      ok: true,
+      data: {
+        exists: true,
+        state: (r.data.instance?.state as EvolutionRawState) ?? 'unknown',
+      },
+    }
+  }
+  // 404 ou mensagem de "does not exist" -> instance ainda não existe
+  if (r.status === 404 || /not found|does not exist|not exists/i.test(r.error)) {
+    return { ok: true, data: { exists: false } }
   }
   return r
 }

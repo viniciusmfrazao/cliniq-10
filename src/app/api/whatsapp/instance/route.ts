@@ -8,16 +8,20 @@ import {
   generateInstanceName,
   getConnectionState,
   mapEvolutionStateToStatus,
+  probeInstance,
+  setInstanceWebhook,
 } from '@/lib/evolution'
 
 /**
  * Provisiona (ou reutiliza) a instance da clínica do usuário logado.
  *
- * Comportamento:
- * - Se não existe row em clinic_whatsapp -> cria nome novo + chama Evolution.createInstance
- *   + insere row com status 'qr_pending'.
- * - Se existe -> reutiliza o instance_name (evita quebrar instances já conectadas) e
- *   garante que o webhook na Evolution está apontando pra cá.
+ * Estratégia idempotente:
+ * 1. Decide o nome (reusa do banco se já tiver, senão gera).
+ * 2. Faz probeInstance pra ver se ela já existe na Evolution.
+ *    - Existe -> só atualiza o webhook pra apontar pra cá (usuário trocou domínio,
+ *      veio de migração antiga, etc) e já refaz o estado local.
+ *    - Não existe -> cria do zero com webhook embutido.
+ * 3. Garante row em clinic_whatsapp.
  */
 export async function POST() {
   const ctx = await getCurrentUserClinic()
@@ -42,20 +46,52 @@ export async function POST() {
     existing?.webhook_token ?? crypto.randomUUID().replace(/-/g, '')
   const webhookUrl = buildWebhookUrl(instanceName, webhookToken)
 
-  const created = await createInstance({ instanceName, webhookUrl })
-  if (!created.ok) {
+  // 1) Sondar se a instance já existe na Evolution
+  const probe = await probeInstance(instanceName)
+  if (!probe.ok) {
     return NextResponse.json(
-      { error: `Evolution: ${created.error}` },
+      {
+        error: humanizeEvolutionError(probe.error, probe.status),
+        evolution_status: probe.status,
+      },
       { status: 502 },
     )
   }
 
+  let liveState: 'open' | 'connecting' | 'close' | 'unknown' = 'unknown'
+
+  if (probe.data.exists) {
+    // 2a) Existe -> só (re)setar webhook
+    liveState = (probe.data.state as typeof liveState) ?? 'unknown'
+    const wh = await setInstanceWebhook({ instanceName, webhookUrl })
+    if (!wh.ok) {
+      // Não falhamos a operação; o webhook pode ser corrigido depois,
+      // mas avisamos no payload pra debug.
+      console.warn('[whatsapp/instance] setInstanceWebhook falhou:', wh.error)
+    }
+  } else {
+    // 2b) Não existe -> criar
+    const created = await createInstance({ instanceName, webhookUrl })
+    if (!created.ok) {
+      return NextResponse.json(
+        {
+          error: humanizeEvolutionError(created.error, created.status),
+          evolution_status: created.status,
+        },
+        { status: 502 },
+      )
+    }
+    liveState = 'connecting'
+  }
+
+  // 3) Garantir row no banco com status sincronizado
+  const status = mapEvolutionStateToStatus(liveState)
   if (!existing) {
     const { error } = await svc.from('clinic_whatsapp').insert({
       clinic_id: ctx.clinicId,
       instance_name: instanceName,
       webhook_token: webhookToken,
-      status: 'qr_pending',
+      status,
     })
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -64,7 +100,7 @@ export async function POST() {
     await svc
       .from('clinic_whatsapp')
       .update({
-        status: existing.status === 'connected' ? 'connected' : 'qr_pending',
+        status,
         last_event_at: new Date().toISOString(),
       })
       .eq('clinic_id', ctx.clinicId)
@@ -73,7 +109,21 @@ export async function POST() {
   return NextResponse.json({
     ok: true,
     instance_name: instanceName,
+    status,
   })
+}
+
+/**
+ * Tradução amigável de erros mais comuns da Evolution.
+ */
+function humanizeEvolutionError(error: string, status?: number): string {
+  if (status === 401 || status === 403 || /unauthorized|forbidden|invalid api/i.test(error)) {
+    return `Evolution rejeitou a master key (${status ?? 'sem status'}). Verifique URL e Master API Key em /admin/evolution.`
+  }
+  if (status === 404 || /not found/i.test(error)) {
+    return `Evolution não encontrou o recurso (${status ?? '404'}). URL pode estar errada em /admin/evolution.`
+  }
+  return `Evolution: ${error}`
 }
 
 /**
