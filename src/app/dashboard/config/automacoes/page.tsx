@@ -6,6 +6,8 @@ import BirthdayAutomationForm from './birthday-form'
 import BirthdayHistory from './birthday-history'
 import AppointmentReminderForm from './reminder-form'
 import ReminderHistory from './reminder-history'
+import RecallForm from './recall-form'
+import RecallHistory from './recall-history'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +52,9 @@ export default async function AutomacoesPage() {
     template_aniversario?: string | null
     confirma_24h?: boolean | null
     template_confirma_24h?: string | null
+    recall_inativos?: boolean | null
+    recall_dias?: number | null
+    template_recall?: string | null
   }
   const auto = (automation || null) as AutomationRow | null
 
@@ -155,11 +160,39 @@ export default async function AutomacoesPage() {
       {/* Histórico de lembretes */}
       <ReminderHistory clinicId={clinicId} />
 
+      {/* Recall de inativos */}
+      <div className="card overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md">
+            <span className="text-2xl">💌</span>
+          </div>
+          <div className="flex-1">
+            <h2 className="font-semibold text-slate-900">Recall de inativos</h2>
+            <p className="text-sm text-slate-500">
+              Mensagem todo dia às 10h pra pacientes que não voltam há um tempo
+            </p>
+          </div>
+        </div>
+
+        <RecallForm
+          clinicId={clinicId}
+          clinicName={clinic?.name || 'Clínica'}
+          initial={{
+            enabled: auto?.recall_inativos ?? false,
+            diasInativo: auto?.recall_dias ?? 150,
+            template: auto?.template_recall || '',
+          }}
+        />
+      </div>
+
+      {/* Histórico de recall */}
+      <RecallHistory clinicId={clinicId} />
+
       {/* Outras automações (placeholder) */}
       <div className="card p-6 bg-slate-50 border-dashed border-2 border-slate-200">
         <p className="text-sm text-slate-500 text-center">
           Mais automações em breve: lembrete 2h antes (plano Pro), NPS pós-atendimento,
-          recall de inativos…
+          follow-up de lead, reativação de lead perdido…
         </p>
       </div>
     </div>
