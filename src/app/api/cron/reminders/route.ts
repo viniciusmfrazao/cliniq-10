@@ -7,11 +7,18 @@ import { notifyAppointmentReminder } from '@/lib/n8n'
 // Ou use o n8n para chamar este endpoint periodicamente
 
 export async function GET(request: Request) {
-  // Verificar token de autorização (para segurança)
+  // Verificar token de autorização (para segurança).
+  // Falha-fechada: sem CRON_SECRET configurado, nada roda — evita
+  // endpoint publico capaz de disparar mensagens em massa.
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+
+  if (!cronSecret) {
+    console.error('[cron/reminders] CRON_SECRET ausente em runtime')
+    return NextResponse.json({ error: 'cron_not_configured' }, { status: 503 })
+  }
+
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 

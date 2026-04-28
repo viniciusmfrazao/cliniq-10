@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getClientIp } from '@/lib/client-ip'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,11 +45,14 @@ export async function POST(
   try {
     const { token } = params
     const body = await request.json()
-    const { signature, ip } = body
+    const { signature } = body
 
     if (!signature) {
       return NextResponse.json({ error: 'Assinatura obrigatória' }, { status: 400 })
     }
+
+    // IP confiável extraído dos headers (não do body)
+    const clientIp = getClientIp(request.headers)
 
     // Find document
     const { data: doc, error: findError } = await supabaseAdmin
@@ -76,7 +80,7 @@ export async function POST(
         status: 'signed',
         signed_at: new Date().toISOString(),
         signature_data: signature,
-        signature_ip: ip || null,
+        signature_ip: clientIp,
       })
       .eq('id', doc.id)
 

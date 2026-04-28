@@ -1,10 +1,40 @@
-import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { getSetting } from '@/lib/app-settings'
 import { NextRequest, NextResponse } from 'next/server'
 
-// Webhook para receber dados do n8n (ex: respostas do WhatsApp)
+/**
+ * Webhook para receber dados do n8n (ex: respostas do WhatsApp).
+ *
+ * Autenticação (obrigatória):
+ *   - Header `x-cliniq-secret` deve bater com `app_settings.n8n_donna_secret`
+ *     OU com a env var `N8N_WEBHOOK_SECRET` (fallback p/ ambientes sem
+ *     a tabela populada).
+ *
+ * Sem secret válido devolvemos 401. Antes desta correção a rota era
+ * pública — qualquer um podia confirmar/cancelar agendamentos por ID.
+ */
 export async function POST(request: NextRequest) {
   try {
+    // ========== AUTH ==========
+    const provided = request.headers.get('x-cliniq-secret')
+    const fromSettings = await getSetting('n8n_donna_secret')
+    const fromEnv = process.env.N8N_WEBHOOK_SECRET || null
+    const expected = fromSettings || fromEnv
+
+    if (!expected) {
+      // Falha-fechada: sem secret configurado, ninguem entra.
+      console.error('[webhook/n8n] sem secret configurado (app_settings.n8n_donna_secret nem N8N_WEBHOOK_SECRET)')
+      return NextResponse.json(
+        { error: 'Webhook nao configurado' },
+        { status: 503 },
+      )
+    }
+
+    if (!provided || provided !== expected) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
+
+    // ========== PAYLOAD ==========
     const body = await request.json()
     const { event, data, clinic_id } = body
 
@@ -99,15 +129,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET para testar se o webhook está funcionando
+// GET para testar se o webhook está funcionando.
+// Não exige secret pra facilitar healthcheck — só devolve status, sem
+// manipular dados.
 export async function GET() {
-  return NextResponse.json({ 
-    status: 'ok', 
+  return NextResponse.json({
+    status: 'ok',
     message: 'Webhook n8n ativo',
+    auth: 'header x-cliniq-secret obrigatorio para POST',
     events: [
       'whatsapp_message_received',
-      'appointment_confirmed', 
-      'appointment_cancelled'
-    ]
+      'appointment_confirmed',
+      'appointment_cancelled',
+    ],
   })
 }

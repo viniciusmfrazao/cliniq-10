@@ -142,8 +142,14 @@ function renderTemplate(
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
-  const expected = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null
-  if (expected && auth !== expected) {
+  const secret = process.env.CRON_SECRET
+  if (!secret) {
+    // Sem secret configurado, falha-fechada — evita endpoint publico
+    // capaz de disparar mensagens de WhatsApp em massa.
+    console.error('[cron/nps] CRON_SECRET ausente em runtime')
+    return NextResponse.json({ ok: false, error: 'cron_not_configured' }, { status: 503 })
+  }
+  if (auth !== `Bearer ${secret}`) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
   }
 

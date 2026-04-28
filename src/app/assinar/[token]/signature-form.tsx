@@ -109,7 +109,6 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           signature: signatureData,
-          ip: 'captured',
         }),
       })
 

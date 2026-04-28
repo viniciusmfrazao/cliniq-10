@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getClientIp } from '@/lib/client-ip'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,11 +49,15 @@ export async function POST(
   try {
     const { token } = params
     const body = await request.json()
-    const { responses, signature, ip } = body
+    const { responses, signature } = body
 
     if (!responses || !signature) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
     }
+
+    // IP é extraído do header (não do body) — body é controlado pelo
+    // paciente/atacante e não tem valor probatório.
+    const clientIp = getClientIp(request.headers)
 
     // Find anamnese
     const { data: anamnese, error: findError } = await supabaseAdmin
@@ -80,7 +85,7 @@ export async function POST(
         status: 'completed',
         responses,
         signature_data: signature,
-        signature_ip: ip || null,
+        signature_ip: clientIp,
         completed_at: new Date().toISOString(),
       })
       .eq('id', anamnese.id)

@@ -139,7 +139,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
         body: JSON.stringify({
           responses,
           signature,
-          ip: null,
         }),
       })
 

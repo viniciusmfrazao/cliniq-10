@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import PatientSearchInjectable from './patient-search'
+import { sanitizeSearchTerm } from '@/lib/search'
 
 export default async function InjetaveisPage({ 
   searchParams 
@@ -11,14 +12,18 @@ export default async function InjetaveisPage({
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
 
-  // Buscar pacientes se tiver query
+  // Buscar pacientes se tiver query.
+  // sanitizeSearchTerm remove caracteres do parser do PostgREST
+  // (`,()*\\%_`) que de outra forma poderiam quebrar a query ou
+  // estender filtros (ex: `,clinic_id.neq.xxx`).
   let patients: any[] = []
-  if (searchParams.q) {
+  const safeQuery = sanitizeSearchTerm(searchParams.q)
+  if (safeQuery) {
     const { data } = await supabase
       .from('patients')
       .select('*')
       .eq('clinic_id', userData?.clinic_id)
-      .or(`name.ilike.%${searchParams.q}%,phone.ilike.%${searchParams.q}%`)
+      .or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%`)
       .order('name')
       .limit(20)
     patients = data || []

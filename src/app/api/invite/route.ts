@@ -52,36 +52,60 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Este usuário já faz parte da equipe' }, { status: 400 })
     }
 
-    // Verificar se usuário já existe no Auth
+    // Verificar se usuário já existe no Auth.
+    //
+    // IMPORTANTE: antes a gente *resetava a senha* do usuário Auth pré-existente
+    // pra reaproveitar o mesmo `id`. Isso era um vetor de takeover entre
+    // clínicas: o admin de uma clínica conseguia trocar a senha de qualquer
+    // pessoa cuja conta já existisse no Supabase Auth.
+    //
+    // Como o schema atual usa `users.id = auth.users.id` (PK 1:1), o mesmo
+    // auth user *não pode* fazer parte de duas clínicas — seria conflito de PK.
+    // Então: se o e-mail já tem conta no Auth, recusamos o convite e pedimos
+    // outro e-mail. Quando virmos multi-clínica (clinic_memberships), isso
+    // muda.
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
     const existingAuthUser = existingUsers?.users?.find(u => u.email === email)
 
-    let userId: string
-
     if (existingAuthUser) {
-      // Usuário já existe no Auth - atualizar senha e usar o ID dele
-      userId = existingAuthUser.id
-      
-      // Atualizar senha do usuário existente
-      await supabaseAdmin.auth.admin.updateUserById(userId, {
-        password,
-        email_confirm: true
-      })
-    } else {
-      // Criar novo usuário no Auth com a senha definida pelo admin
-      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: { invited: true }
-      })
-
-      if (createError || !newUser.user) {
-        return NextResponse.json({ error: createError?.message || 'Erro ao criar usuário' }, { status: 500 })
-      }
-
-      userId = newUser.user.id
+      return NextResponse.json(
+        {
+          error:
+            'Já existe uma conta com este e-mail no sistema. Use outro e-mail ou peça para o titular acessar com a senha dele.',
+        },
+        { status: 409 },
+      )
     }
+
+    // Criar novo usuário no Auth com a senha definida pelo admin
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { invited: true }
+    })
+
+    // Caso raro: a listUsers() é paginada (default 50). Se o e-mail estiver
+    // numa página posterior, cai aqui no createUser com erro de duplicado.
+    // Tratamos como o mesmo 409 acima.
+    if (createError) {
+      const msg = (createError.message || '').toLowerCase()
+      if (msg.includes('already registered') || msg.includes('user already')) {
+        return NextResponse.json(
+          {
+            error:
+              'Já existe uma conta com este e-mail no sistema. Use outro e-mail ou peça para o titular acessar com a senha dele.',
+          },
+          { status: 409 },
+        )
+      }
+      return NextResponse.json({ error: createError.message || 'Erro ao criar usuário' }, { status: 500 })
+    }
+    if (!newUser?.user) {
+      return NextResponse.json({ error: 'Erro ao criar usuário' }, { status: 500 })
+    }
+
+    const userId = newUser.user.id
 
     // Inserir na tabela users
     const { error: dbError } = await supabaseAdmin.from('users').insert({
