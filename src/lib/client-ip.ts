@@ -32,3 +32,31 @@ export function getClientIp(headers: Headers): string | null {
   }
   return null
 }
+
+/**
+ * Retorna o User-Agent do cliente (parte do conjunto probatório de
+ * assinaturas). Limita a 500 chars pra evitar absurdos.
+ */
+export function getUserAgent(headers: Headers): string | null {
+  const ua = headers.get('user-agent')
+  if (!ua) return null
+  return ua.trim().slice(0, 500) || null
+}
+
+/**
+ * Retorna o código ISO do país de origem da requisição.
+ *
+ * Em Vercel, vem em `x-vercel-ip-country` (ex: 'BR', 'US').
+ * Em Cloudflare, vem em `cf-ipcountry`.
+ *
+ * É geolocalização aproximada (por IP) — não é prova absoluta de
+ * onde a pessoa está, mas é evidência adicional que ajuda a
+ * caracterizar a origem do ato.
+ */
+export function getClientCountry(headers: Headers): string | null {
+  const vercel = headers.get('x-vercel-ip-country')
+  if (vercel) return vercel.trim().toUpperCase().slice(0, 4) || null
+  const cf = headers.get('cf-ipcountry')
+  if (cf) return cf.trim().toUpperCase().slice(0, 4) || null
+  return null
+}

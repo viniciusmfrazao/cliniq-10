@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { getClientIp } from '@/lib/client-ip'
+import { getClientIp, getUserAgent, getClientCountry } from '@/lib/client-ip'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -55,9 +55,13 @@ export async function POST(
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
     }
 
-    // IP é extraído do header (não do body) — body é controlado pelo
-    // paciente/atacante e não tem valor probatório.
+    // IP, User-Agent e país são extraídos dos headers (não do body)
+    // — body é controlado pelo paciente/atacante e não tem valor
+    // probatório. Esse trio compõe o conjunto probatório da
+    // assinatura eletrônica simples (Lei 14.063/2020).
     const clientIp = getClientIp(request.headers)
+    const userAgent = getUserAgent(request.headers)
+    const country = getClientCountry(request.headers)
 
     // Find anamnese
     const { data: anamnese, error: findError } = await supabaseAdmin
@@ -86,6 +90,8 @@ export async function POST(
         responses,
         signature_data: signature,
         signature_ip: clientIp,
+        signature_user_agent: userAgent,
+        signature_country: country,
         completed_at: new Date().toISOString(),
       })
       .eq('id', anamnese.id)
