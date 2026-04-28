@@ -101,6 +101,14 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
       setLoading(false)
       return
     }
+    // Valida o dígito verificador. Antes a gente só checava 11 dígitos,
+    // o que deixava passar coisas como "11111111111" e gerava
+    // duplicatas no banco por erro de digitação.
+    if (!validateCPF(form.cpf)) {
+      setError('CPF inválido — confira os dígitos')
+      setLoading(false)
+      return
+    }
     if (!form.birth_date) {
       setError('Data de nascimento é obrigatória')
       setLoading(false)
@@ -190,14 +198,24 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
         <div>
           <label className="label">CPF *</label>
           <input
-            className="input"
+            className={`input ${
+              form.cpf.length === 11 && !validateCPF(form.cpf)
+                ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+                : ''
+            }`}
             type="text"
             placeholder="000.000.000-00"
             value={maskCPF(form.cpf)}
             onChange={e => update('cpf', unmask(e.target.value).slice(0, 11))}
             maxLength={14}
             required
+            aria-invalid={form.cpf.length === 11 && !validateCPF(form.cpf)}
           />
+          {form.cpf.length === 11 && !validateCPF(form.cpf) && (
+            <p className="text-xs text-red-600 mt-1">
+              CPF inválido — confira os dígitos
+            </p>
+          )}
         </div>
 
         <div>
