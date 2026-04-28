@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { isSuperAdmin } from '@/lib/super-admin'
+import { sanitizeSearchTerm } from '@/lib/search'
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,16 +34,23 @@ export async function GET(request: NextRequest) {
       query = query.eq('clinic_id', clinic_id)
     }
 
-    if (action) {
-      query = query.ilike('action', `%${action}%`)
+    // Sanitiza tudo que vai pra .ilike()/.or() do PostgREST. Sem isso,
+    // caracteres como `,` `(` `)` `*` `%` `_` `\` `'` `"` quebram a
+    // query ou permitem injetar cláusulas adicionais.
+    const safeAction = sanitizeSearchTerm(action)
+    if (safeAction) {
+      query = query.ilike('action', `%${safeAction}%`)
     }
 
     if (entity_type) {
       query = query.eq('entity_type', entity_type)
     }
 
-    if (search) {
-      query = query.or(`action.ilike.%${search}%,entity_name.ilike.%${search}%,entity_type.ilike.%${search}%`)
+    const safeSearch = sanitizeSearchTerm(search)
+    if (safeSearch) {
+      query = query.or(
+        `action.ilike.%${safeSearch}%,entity_name.ilike.%${safeSearch}%,entity_type.ilike.%${safeSearch}%`,
+      )
     }
 
     if (date_from) {
