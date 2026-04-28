@@ -5,6 +5,9 @@ import MedicalRecordSection from './medical-record-section'
 import InjectableMapSection from './injectable-map-section'
 import ProductsUsedSection from './products-used-section'
 import ReturnScheduler from './return-scheduler'
+import AnamneseSummaryCard from '@/components/anamnese/AnamneseSummaryCard'
+import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
   const { appointmentId } = params
@@ -82,6 +85,31 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .select('*, products(name, unit)')
     .eq('appointment_id', appointmentId)
 
+  // Anamnese mais recente preenchida pelo paciente — se não houver
+  // preenchida ainda, mostramos a pendente (pra avisar o profissional
+  // que tem ficha esperando preenchimento). Carregamos `responses` pra
+  // popular os chips de alerta (gestante, alergias, fumante, ...).
+  const { data: latestCompletedAnamnese } = await supabase
+    .from('anamneses')
+    .select('id, status, responses, completed_at, created_at')
+    .eq('patient_id', patient.id)
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let latestAnamnese = latestCompletedAnamnese
+  if (!latestAnamnese) {
+    const { data: pending } = await supabase
+      .from('anamneses')
+      .select('id, status, responses, completed_at, created_at')
+      .eq('patient_id', patient.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    latestAnamnese = pending
+  }
+
   return (
     // Negative margins compensam o padding do <main> (px-4 py-4 md:px-8 md:py-6)
     // pra que o AttendanceHeader sticky encoste no topo do scroll container.
@@ -95,15 +123,46 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
 
       <div className="max-w-[1600px] mx-auto px-4 pt-4 md:px-8 md:pt-6 pb-28 md:pb-12">
         <div className="grid lg:grid-cols-2 gap-4 md:gap-6">
-          {/* Coluna Esquerda - Prontuario */}
-          <MedicalRecordSection
-            patient={patient}
-            appointmentId={appointmentId}
-            pastAppointments={pastAppointments || []}
-            medicalRecords={medicalRecords || []}
-            clinicId={userData?.clinic_id || ''}
-            professionalId={user.id}
-          />
+          {/* Coluna Esquerda - Prontuario + Anamnese mais recente */}
+          <div className="space-y-4 md:space-y-6">
+            <MedicalRecordSection
+              patient={patient}
+              appointmentId={appointmentId}
+              pastAppointments={pastAppointments || []}
+              medicalRecords={medicalRecords || []}
+              clinicId={userData?.clinic_id || ''}
+              professionalId={user.id}
+            />
+
+            {latestAnamnese ? (
+              <AnamneseSummaryCard
+                anamnese={latestAnamnese}
+                variant="full"
+                highlightRecent
+              />
+            ) : (
+              <div className="card p-5 border-dashed">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center">
+                      <Icon name="file" className="w-5 h-5 text-violet-500" />
+                    </span>
+                    <div>
+                      <h2 className="text-sm font-semibold text-slate-900">Anamnese</h2>
+                      <p className="text-xs text-slate-500">Esse paciente ainda não tem ficha.</p>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/dashboard/anamnese/enviar?patient=${patient.id}`}
+                    className="text-xs font-medium text-violet-700 hover:text-violet-800 flex items-center gap-1"
+                  >
+                    Enviar agora
+                    <Icon name="chevronRight" className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Coluna Direita - Mapa de Injetaveis + Produtos */}
           <div className="space-y-6">

@@ -335,11 +335,20 @@ async function EvolucoesTab({
   professionalName: string
 }) {
   const supabase = await createClient()
-  const { data: evolutions } = await supabase
-    .from('evolutions')
-    .select('*, users(name)')
-    .eq('patient_id', patientId)
-    .order('created_at', { ascending: false })
+  // Evoluções e anamneses em paralelo — vão pro mesmo timeline e ficam
+  // misturadas por data no client.
+  const [{ data: evolutions }, { data: anamneses }] = await Promise.all([
+    supabase
+      .from('evolutions')
+      .select('*, users(name)')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('anamneses')
+      .select('id, status, responses, completed_at, created_at')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false }),
+  ])
 
   // Signed URLs em batch pras fotos do bucket privado.
   const allPhotoPaths = Array.from(
@@ -362,7 +371,7 @@ async function EvolucoesTab({
   return (
     <div className="card p-5">
       <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-        <h2 className="text-sm font-semibold text-slate-900">Timeline de evoluções</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Histórico do paciente</h2>
         <NewEvolutionButton
           patientId={patientId}
           clinicId={clinicId}
@@ -370,7 +379,11 @@ async function EvolucoesTab({
           professionalName={professionalName}
         />
       </div>
-      <EvolutionTimeline evolutions={evolutions || []} photoUrls={photoUrls} />
+      <EvolutionTimeline
+        evolutions={evolutions || []}
+        anamneses={anamneses || []}
+        photoUrls={photoUrls}
+      />
     </div>
   )
 }

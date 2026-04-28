@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import PhotoLightbox from '@/components/ui/PhotoLightbox'
+import AnamneseSummaryCard from '@/components/anamnese/AnamneseSummaryCard'
 
 type Evolution = {
   id: string
@@ -14,16 +15,32 @@ type Evolution = {
   users: { name: string } | null
 }
 
+type AnamneseTimelineItem = {
+  id: string
+  status: 'pending' | 'viewed' | 'completed' | string
+  responses: Record<string, unknown> | null
+  completed_at: string | null
+  created_at: string
+  signature_data?: string | null
+}
+
 const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
   consultation: { icon: '🩺', color: 'bg-blue-100 text-blue-700', label: 'Consulta' },
   procedure: { icon: '💉', color: 'bg-purple-100 text-purple-700', label: 'Procedimento' },
   note: { icon: '📝', color: 'bg-slate-100 text-slate-700', label: 'Anotacao' },
   prescription: { icon: '💊', color: 'bg-green-100 text-green-700', label: 'Prescricao' },
   exam: { icon: '🔬', color: 'bg-amber-100 text-amber-700', label: 'Exame' },
+  anamnese: { icon: '📋', color: 'bg-violet-100 text-violet-700', label: 'Anamnese' },
 }
 
 type Props = {
   evolutions: Evolution[]
+  /**
+   * Anamneses do paciente pra mesclar na timeline. Mostradas inline com
+   * o resto, ordenadas por data (completed_at quando preenchidas, senão
+   * created_at). Opcional pra manter compat com chamadas antigas.
+   */
+  anamneses?: AnamneseTimelineItem[]
   /**
    * Map de path -> signed URL pras fotos. Geramos no server pra evitar
    * que o componente client chame storage.createSignedUrl. Se um path
@@ -33,13 +50,22 @@ type Props = {
 }
 
 const FILTERS: Array<{ id: string; label: string }> = [
-  { id: 'all', label: 'Todas' },
+  { id: 'all', label: 'Tudo' },
   { id: 'consultation', label: 'Consultas' },
   { id: 'procedure', label: 'Procedimentos' },
   { id: 'note', label: 'Notas' },
   { id: 'prescription', label: 'Prescrições' },
   { id: 'exam', label: 'Exames' },
+  { id: 'anamnese', label: 'Anamneses' },
 ]
+
+/**
+ * Item unificado da timeline. Todo card é um destes — `kind` decide
+ * qual renderizador usa.
+ */
+type TimelineItem =
+  | { kind: 'evolution'; sortDate: string; data: Evolution }
+  | { kind: 'anamnese'; sortDate: string; data: AnamneseTimelineItem }
 
 /**
  * Quantas thumbs a gente mostra no card recolhido. O resto vira um badge
@@ -47,17 +73,41 @@ const FILTERS: Array<{ id: string; label: string }> = [
  */
 const COLLAPSED_THUMBS = 4
 
-export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props) {
+export default function EvolutionTimeline({
+  evolutions,
+  anamneses = [],
+  photoUrls = {},
+}: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
 
   // State do lightbox: qual evolução abriu e em qual índice começa.
   const [lightbox, setLightbox] = useState<{ evoId: string; index: number } | null>(null)
 
-  const filtered = useMemo(
-    () => (filter === 'all' ? evolutions : evolutions.filter((e) => e.type === filter)),
-    [filter, evolutions],
-  )
+  // Constrói lista unificada e ordenada (mais recente primeiro).
+  // Anamnese usa completed_at (quando preenchida) ou created_at como
+  // data-âncora pra timeline.
+  const items: TimelineItem[] = useMemo(() => {
+    const evoItems: TimelineItem[] = evolutions.map((e) => ({
+      kind: 'evolution',
+      sortDate: e.created_at,
+      data: e,
+    }))
+    const anamItems: TimelineItem[] = anamneses.map((a) => ({
+      kind: 'anamnese',
+      sortDate: a.completed_at || a.created_at,
+      data: a,
+    }))
+    return [...evoItems, ...anamItems].sort((a, b) =>
+      a.sortDate < b.sortDate ? 1 : a.sortDate > b.sortDate ? -1 : 0,
+    )
+  }, [evolutions, anamneses])
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return items
+    if (filter === 'anamnese') return items.filter((i) => i.kind === 'anamnese')
+    return items.filter((i) => i.kind === 'evolution' && i.data.type === filter)
+  }, [filter, items])
 
   // URLs do lightbox: só as fotos da evolução aberta, com signed URL
   // resolvida. Mantemos os paths (índice) alinhados pra navegação coerente.
@@ -70,13 +120,13 @@ export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props)
       .filter((u): u is string => !!u)
   }, [lightbox, evolutions, photoUrls])
 
-  if (evolutions.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
           <span className="text-2xl">📋</span>
         </div>
-        <p className="text-sm text-slate-500">Nenhuma evolução registrada</p>
+        <p className="text-sm text-slate-500">Nenhum registro ainda</p>
         <p className="text-xs text-slate-400 mt-1">
           Clique em &quot;+ Nova evolução&quot; para adicionar
         </p>
@@ -89,8 +139,10 @@ export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props)
       {/* Filtros por tipo */}
       <div className="flex flex-wrap gap-1.5 mb-4 -mt-1">
         {FILTERS.map((f) => {
-          const count =
-            f.id === 'all' ? evolutions.length : evolutions.filter((e) => e.type === f.id).length
+          let count: number
+          if (f.id === 'all') count = items.length
+          else if (f.id === 'anamnese') count = anamneses.length
+          else count = evolutions.filter((e) => e.type === f.id).length
           if (f.id !== 'all' && count === 0) return null
           return (
             <button
@@ -115,10 +167,29 @@ export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props)
         <div className="space-y-4">
           {filtered.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-sm text-slate-500">Nenhuma evolução nesse filtro</p>
+              <p className="text-sm text-slate-500">Nenhum registro nesse filtro</p>
             </div>
           )}
-          {filtered.map((evo) => {
+          {filtered.map((item) => {
+            // Anamnese tem renderização própria (delegada pro card
+            // reutilizável) com ícone na lateral pra manter o ritmo da
+            // timeline.
+            if (item.kind === 'anamnese') {
+              const a = item.data
+              const cfg = TYPE_CONFIG.anamnese
+              return (
+                <div key={`anam-${a.id}`} className="relative pl-10">
+                  <div
+                    className={`absolute left-0 w-8 h-8 rounded-full flex items-center justify-center text-sm ${cfg.color}`}
+                  >
+                    {cfg.icon}
+                  </div>
+                  <AnamneseSummaryCard anamnese={a} variant="compact" />
+                </div>
+              )
+            }
+
+            const evo = item.data
             const config = TYPE_CONFIG[evo.type] || TYPE_CONFIG.note
             const isExpanded = expandedId === evo.id
             const photos = evo.photos ?? []
