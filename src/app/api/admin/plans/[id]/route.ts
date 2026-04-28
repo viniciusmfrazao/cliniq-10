@@ -7,6 +7,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = params
     const isAdmin = await isSuperAdmin()
     if (!isAdmin) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
@@ -17,8 +18,8 @@ export async function GET(
     const { data, error } = await supabase
       .from('admin_plans')
       .select('*')
-      .eq('id', params.id)
-      .single()
+      .eq('id', id)
+      .maybeSingle()
 
     if (error || !data) {
       return NextResponse.json({ error: 'Plano não encontrado' }, { status: 404 })
@@ -36,6 +37,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = params
     const isAdmin = await isSuperAdmin()
     if (!isAdmin) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
@@ -58,9 +60,9 @@ export async function PATCH(
         active,
         updated_at: new Date().toISOString()
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) {
       console.error('Error updating plan:', error)
@@ -79,6 +81,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = params
     const isAdmin = await isSuperAdmin()
     if (!isAdmin) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
@@ -89,7 +92,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('admin_plans')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (error) {
       console.error('Error deleting plan:', error)

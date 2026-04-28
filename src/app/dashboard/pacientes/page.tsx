@@ -2,19 +2,23 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PatientSearch from './patient-search'
+import { sanitizeSearchTerm } from '@/lib/search'
 
 const PER_PAGE = 50
 
 export default async function PacientesPage({ 
   searchParams 
 }: { 
-  searchParams: { q?: string; filter?: string; page?: string } 
+  searchParams: { q?: string; filter?: string; page?: string }
 }) {
+  const sp = searchParams
+  const safeQuery = sanitizeSearchTerm(sp.q)
+  const filter = sp.filter
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).maybeSingle()
 
-  const currentPage = Math.max(1, parseInt(searchParams.page || '1'))
+  const currentPage = Math.max(1, parseInt(sp.page || '1'))
   const offset = (currentPage - 1) * PER_PAGE
 
   // Contar totais em paralelo
@@ -41,17 +45,17 @@ export default async function PacientesPage({
     .order('name', { ascending: true })
 
   // Aplicar filtro de busca
-  if (searchParams.q) {
-    query = query.or(`name.ilike.%${searchParams.q}%,phone.ilike.%${searchParams.q}%,email.ilike.%${searchParams.q}%,cpf.ilike.%${searchParams.q}%`)
+  if (safeQuery) {
+    query = query.or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,cpf.ilike.%${safeQuery}%`)
   }
 
   // Aplicar filtro de pendentes
-  if (searchParams.filter === 'pendentes') {
+  if (filter === 'pendentes') {
     query = query.or('cpf.is.null,birth_date.is.null')
   }
 
   // Contar para paginação (com filtros aplicados)
-  const activeTotal = searchParams.filter === 'pendentes' ? totalPending : totalPatients
+  const activeTotal = filter === 'pendentes' ? totalPending : totalPatients
   const totalPages = Math.ceil(activeTotal / PER_PAGE)
 
   // Aplicar paginação
@@ -82,7 +86,7 @@ export default async function PacientesPage({
       </div>
 
       {/* Alerta de cadastros pendentes */}
-      {totalPending > 0 && !searchParams.filter && (
+      {totalPending > 0 && !filter && (
         <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center">
@@ -101,7 +105,7 @@ export default async function PacientesPage({
       )}
 
       <div className="card p-4 mb-4">
-        <PatientSearch initialQuery={searchParams.q || ''} clinicId={userData?.clinic_id || ''} />
+        <PatientSearch initialQuery={safeQuery} clinicId={userData?.clinic_id || ''} />
       </div>
 
       {/* Filtros rápidos */}
@@ -109,7 +113,7 @@ export default async function PacientesPage({
         <Link
           href="/dashboard/pacientes"
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            !searchParams.filter
+            !filter
               ? 'bg-violet-100 text-violet-700'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -119,7 +123,7 @@ export default async function PacientesPage({
         <Link
           href="/dashboard/pacientes?filter=pendentes"
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-            searchParams.filter === 'pendentes'
+            filter === 'pendentes'
               ? 'bg-amber-100 text-amber-700'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -136,11 +140,11 @@ export default async function PacientesPage({
               <Icon name="users" className="w-6 h-6 text-slate-400" />
             </div>
             <p className="text-sm text-slate-500">
-              {searchParams.filter === 'pendentes' 
+              {filter === 'pendentes' 
                 ? 'Todos os cadastros estão completos!' 
                 : 'Nenhum paciente encontrado'}
             </p>
-            {!searchParams.filter && (
+            {!filter && (
               <Link href="/dashboard/pacientes/novo" className="text-sm text-violet-600 font-medium mt-2 inline-block">
                 Cadastrar primeiro paciente
               </Link>
@@ -157,8 +161,11 @@ export default async function PacientesPage({
               >
                 {/* Avatar */}
                 <div className="relative">
-                  <div className="w-11 h-11 bg-gradient-to-br from-violet-400 to-pink-400 rounded-full flex items-center justify-center flex-shrink-0">
-                    {patient.photo_url ? (
+                  <div className="w-11 h-11 bg-gradient-to-br from-violet-400 to-pink-400 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {/* photo_url: se for URL externa (http/https) renderiza; se for path
+                        de bucket privado (sem signed URL) renderiza fallback. Bucket de
+                        foto de perfil ainda não existe, então hoje quase sempre cai no fallback. */}
+                    {patient.photo_url && /^https?:\/\//.test(patient.photo_url) ? (
                       <img src={patient.photo_url} alt="" className="w-11 h-11 rounded-full object-cover" />
                     ) : (
                       <span className="text-white font-bold text-lg">
@@ -214,7 +221,7 @@ export default async function PacientesPage({
           <div className="flex gap-2">
             {currentPage > 1 && (
               <Link
-                href={`/dashboard/pacientes?page=${currentPage - 1}${searchParams.q ? `&q=${searchParams.q}` : ''}${searchParams.filter ? `&filter=${searchParams.filter}` : ''}`}
+                href={`/dashboard/pacientes?page=${currentPage - 1}${safeQuery ? `&q=${encodeURIComponent(safeQuery)}` : ''}${filter ? `&filter=${filter}` : ''}`}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center gap-1"
               >
                 <Icon name="chevronLeft" className="w-4 h-4" />
@@ -226,7 +233,7 @@ export default async function PacientesPage({
             </span>
             {currentPage < totalPages && (
               <Link
-                href={`/dashboard/pacientes?page=${currentPage + 1}${searchParams.q ? `&q=${searchParams.q}` : ''}${searchParams.filter ? `&filter=${searchParams.filter}` : ''}`}
+                href={`/dashboard/pacientes?page=${currentPage + 1}${safeQuery ? `&q=${encodeURIComponent(safeQuery)}` : ''}${filter ? `&filter=${filter}` : ''}`}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center gap-1"
               >
                 Próxima

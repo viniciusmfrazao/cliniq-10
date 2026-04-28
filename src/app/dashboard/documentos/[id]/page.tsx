@@ -6,6 +6,7 @@ import DocumentActions from './document-actions'
 import DocumentLinkCard from './document-link-card'
 
 export default async function DocumentoDetalhePage({ params }: { params: { id: string } }) {
+  const { id } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -13,8 +14,8 @@ export default async function DocumentoDetalhePage({ params }: { params: { id: s
   const { data: doc } = await supabase
     .from('documents_sent')
     .select('*, patients(name, email, phone), users(name)')
-    .eq('id', params.id)
-    .single()
+    .eq('id', id)
+    .maybeSingle()
 
   if (!doc) redirect('/dashboard/documentos')
 

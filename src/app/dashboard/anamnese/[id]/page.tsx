@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon'
 import Image from 'next/image'
 
 export default async function AnamneseDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -13,8 +14,8 @@ export default async function AnamneseDetailPage({ params }: { params: { id: str
   const { data: anamnese, error } = await supabase
     .from('anamneses')
     .select('*, patients(name, phone, email, cpf, birth_date), clinics(name)')
-    .eq('id', params.id)
-    .single()
+    .eq('id', id)
+    .maybeSingle()
   
   if (error || !anamnese) notFound()
 

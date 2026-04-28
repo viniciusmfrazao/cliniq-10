@@ -6,9 +6,10 @@ import Icon from '@/components/ui/Icon'
 import AppointmentActions from './actions'
 
 export default async function AppointmentDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).maybeSingle()
 
   const { data: appointment } = await supabase
     .from('appointments')
@@ -19,8 +20,8 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
       users(id, name),
       rooms(id, name, color)
     `)
-    .eq('id', params.id)
-    .single()
+    .eq('id', id)
+    .maybeSingle()
 
   if (!appointment) notFound()
 

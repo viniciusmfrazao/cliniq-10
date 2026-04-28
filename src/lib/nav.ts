@@ -12,9 +12,11 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Recepção',       href: '/dashboard/recepcao',     icon: 'userCheck', roles: ['admin','receptionist'] },
   { label: 'Agenda',         href: '/dashboard/agenda',       icon: 'calendar',  roles: ['admin','doctor','esthetician','receptionist'] },
   { label: 'Lista de Espera',href: '/dashboard/lista-espera', icon: 'clock',     roles: ['admin','doctor','esthetician','receptionist'] },
+  // "Pacientes" agora unifica cadastro + prontuário + consultas + anamneses
+  // + injetáveis em uma "Central do Paciente" com tabs (em /pacientes/[id]).
+  // Por isso removemos o item separado de "Prontuario" da sidebar.
   { label: 'Pacientes',      href: '/dashboard/pacientes',    icon: 'users',     roles: ['admin','doctor','esthetician','receptionist'] },
   { label: 'Procedimentos',  href: '/dashboard/procedimentos',icon: 'clipboard', roles: ['admin','doctor','esthetician'] },
-  { label: 'Prontuario',     href: '/dashboard/prontuario',   icon: 'file',      roles: ['admin','doctor','esthetician'] },
   { label: 'Injetaveis',     href: '/dashboard/injetaveis',   icon: 'syringe',   roles: ['admin','doctor','esthetician'] },
   { label: 'Estoque',        href: '/dashboard/estoque',      icon: 'box',       roles: ['admin','doctor','esthetician'] },
   { label: 'Eva IA',         href: '/dashboard/eva',          icon: 'sparkles',  roles: ['admin','doctor','esthetician','receptionist'] },

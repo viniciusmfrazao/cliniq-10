@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -50,6 +51,7 @@ export default function MedicalRecordSection({
   clinicId,
   professionalId,
 }: Props) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -175,6 +177,7 @@ export default function MedicalRecordSection({
         clinic_id: clinicId,
         patient_id: patient.id,
         professional_id: professionalId,
+        appointment_id: appointmentId, // vincula a evolução ao atendimento atual
         type: 'consultation',
         title: `Atendimento ${new Date().toLocaleDateString('pt-BR')}`,
         content,
@@ -194,6 +197,9 @@ export default function MedicalRecordSection({
 
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+      // Recarrega os medicalRecords passados via props (server) pra a aba
+      // Histórico mostrar a evolução recém-criada sem precisar de F5
+      router.refresh()
     } catch (error) {
       console.error(error)
       alert(error instanceof Error ? error.message : 'Erro ao salvar prontuário')
@@ -367,7 +373,7 @@ export default function MedicalRecordSection({
           <div className="space-y-4 max-h-[500px] overflow-y-auto">
             {/* Link para prontuário completo */}
             <Link
-              href={`/dashboard/prontuario/${patient.id}`}
+              href={`/dashboard/pacientes/${patient.id}?tab=evolucoes`}
               className="flex items-center justify-center gap-2 w-full py-3 bg-violet-50 text-violet-700 rounded-xl font-semibold hover:bg-violet-100 transition-colors"
             >
               <Icon name="file" className="w-5 h-5" />

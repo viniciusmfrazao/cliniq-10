@@ -6,6 +6,7 @@ import StockMovementForm from './stock-movement-form'
 import MovementHistory from './movement-history'
 
 export default async function ProductDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -13,15 +14,15 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
   const { data: product } = await supabase
     .from('products')
     .select('*')
-    .eq('id', params.id)
-    .single()
+    .eq('id', id)
+    .maybeSingle()
 
   if (!product) notFound()
 
   const { data: movements } = await supabase
     .from('stock_movements')
     .select('*, users(name), patients(name)')
-    .eq('product_id', params.id)
+    .eq('product_id', id)
     .order('created_at', { ascending: false })
     .limit(20)
 

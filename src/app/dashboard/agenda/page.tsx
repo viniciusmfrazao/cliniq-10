@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -11,8 +12,9 @@ export const revalidate = 30
 export default async function AgendaPage({ 
   searchParams 
 }: { 
-  searchParams: { date?: string; view?: string; professional?: string; status?: string } 
+  searchParams: { date?: string; view?: string; professional?: string; status?: string }
 }) {
+  const sp = searchParams
   const supabase = await createClient()
   
   // Auth check
@@ -20,10 +22,10 @@ export default async function AgendaPage({
   if (!user) redirect('/login')
 
   // Data selecionada ou hoje (sempre no fuso de Brasilia)
-  const selectedDate = searchParams.date || todayBR()
-  const viewMode = searchParams.view || 'day'
-  const selectedProfessional = searchParams.professional || 'all'
-  const selectedStatus = searchParams.status || 'all'
+  const selectedDate = sp.date || todayBR()
+  const viewMode = sp.view || 'day'
+  const selectedProfessional = sp.professional || 'all'
+  const selectedStatus = sp.status || 'all'
   const today = todayBR()
 
   // Calcular range de datas baseado na view (timestamps com offset BR explicito)
@@ -58,7 +60,7 @@ export default async function AgendaPage({
     .from('users')
     .select('clinic_id')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
   const clinicId = userData?.clinic_id
 
@@ -156,13 +158,16 @@ export default async function AgendaPage({
       </div>
 
       {/* Filtros */}
-      <AgendaFilters 
-        currentDate={selectedDate}
-        currentView={viewMode}
-        currentProfessional={selectedProfessional}
-        currentStatus={selectedStatus}
-        professionals={professionals || []}
-      />
+      {/* Suspense é obrigatório no Next 15 pq AgendaFilters usa useSearchParams */}
+      <Suspense fallback={<div className="card p-4 mb-6 h-16 animate-pulse bg-slate-50" />}>
+        <AgendaFilters 
+          currentDate={selectedDate}
+          currentView={viewMode}
+          currentProfessional={selectedProfessional}
+          currentStatus={selectedStatus}
+          professionals={professionals || []}
+        />
+      </Suspense>
 
       {/* Agenda */}
       <AgendaView 

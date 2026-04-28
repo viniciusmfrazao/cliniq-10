@@ -130,10 +130,10 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Pré-leia o histórico do paciente',
         description:
-          'Antes do atendimento, abra Prontuário e clique no paciente. Veja evoluções anteriores, fotos antes/depois e anamnese — assim você chega preparada.',
+          'Antes do atendimento, abra a Central do Paciente e use a aba "Evoluções". Veja procedimentos anteriores, fotos antes/depois e anamneses — assim você chega preparada.',
         tip: 'Procedimento contínuo (botox/preenchimento)? Compare com a foto de 6 meses atrás.',
         icon: 'file',
-        href: '/dashboard/prontuario',
+        href: '/dashboard/pacientes',
         color: 'from-purple-500 to-pink-500',
       },
       {

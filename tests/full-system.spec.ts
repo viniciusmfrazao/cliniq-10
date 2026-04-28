@@ -109,10 +109,12 @@ test.describe('Pacientes', () => {
   })
 })
 
-test.describe('Prontuário', () => {
-  test('deve carregar página de prontuários', async ({ page }) => {
+test.describe('Prontuário (Central do Paciente)', () => {
+  test('rota antiga /prontuario redireciona pra /pacientes', async ({ page }) => {
     await page.goto('/dashboard/prontuario')
-    await expect(page.locator('h1:has-text("Prontu")')).toBeVisible()
+    // Redirect 301 — devemos cair em /dashboard/pacientes
+    await expect(page).toHaveURL(/\/dashboard\/pacientes/)
+    await expect(page.locator('h1:has-text("Pacientes")')).toBeVisible()
   })
 })
 

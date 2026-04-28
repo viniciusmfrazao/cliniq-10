@@ -3,13 +3,14 @@ import { notFound } from 'next/navigation'
 import PatientForm from '../../patient-form'
 
 export default async function EditarPacientePage({ params }: { params: { id: string } }) {
+  const { id } = params
   const supabase = await createClient()
   
   const { data: patient } = await supabase
     .from('patients')
     .select('*')
-    .eq('id', params.id)
-    .single()
+    .eq('id', id)
+    .maybeSingle()
 
   if (!patient) notFound()
 

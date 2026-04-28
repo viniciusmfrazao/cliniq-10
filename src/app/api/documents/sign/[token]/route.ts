@@ -11,11 +11,12 @@ export async function GET(
   { params }: { params: { token: string } }
 ) {
   try {
+    const { token } = params
     const { data: doc, error } = await supabaseAdmin
       .from('documents_sent')
       .select('*, patients(name), clinics(name)')
-      .eq('sign_token', params.token)
-      .single()
+      .eq('sign_token', token)
+      .maybeSingle()
 
     if (error || !doc) {
       return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 })
@@ -41,6 +42,7 @@ export async function POST(
   { params }: { params: { token: string } }
 ) {
   try {
+    const { token } = params
     const body = await request.json()
     const { signature, ip } = body
 
@@ -52,8 +54,8 @@ export async function POST(
     const { data: doc, error: findError } = await supabaseAdmin
       .from('documents_sent')
       .select('id, status')
-      .eq('sign_token', params.token)
-      .single()
+      .eq('sign_token', token)
+      .maybeSingle()
 
     if (findError || !doc) {
       return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 })

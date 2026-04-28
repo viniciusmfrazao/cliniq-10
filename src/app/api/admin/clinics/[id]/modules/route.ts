@@ -7,6 +7,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = params
     const isAdmin = await isSuperAdmin()
     if (!isAdmin) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
@@ -25,8 +26,8 @@ export async function PATCH(
     const { data: clinic } = await supabase
       .from('clinics')
       .select('settings')
-      .eq('id', params.id)
-      .single()
+      .eq('id', id)
+      .maybeSingle()
 
     const currentSettings = clinic?.settings || {}
 
@@ -40,7 +41,7 @@ export async function PATCH(
         },
         updated_at: new Date().toISOString()
       })
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (error) {
       console.error('Error updating modules:', error)

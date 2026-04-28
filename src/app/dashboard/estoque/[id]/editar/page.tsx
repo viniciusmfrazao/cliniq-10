@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon'
 import ProductForm from '../../product-form'
 
 export default async function EditProductPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -12,8 +13,8 @@ export default async function EditProductPage({ params }: { params: { id: string
   const { data: product } = await supabase
     .from('products')
     .select('*')
-    .eq('id', params.id)
-    .single()
+    .eq('id', id)
+    .maybeSingle()
 
   if (!product) notFound()
 

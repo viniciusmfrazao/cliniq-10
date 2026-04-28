@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { sanitizeSearchTerm } from '@/lib/search'
 
 type Patient = {
   id: string
@@ -35,12 +36,18 @@ export default function PatientSearch({ initialQuery, clinicId }: { initialQuery
     const timer = setTimeout(async () => {
       setLoading(true)
       const supabase = createClient()
+      const safeQuery = sanitizeSearchTerm(query)
+      if (!safeQuery) {
+        setResults([])
+        setLoading(false)
+        return
+      }
       
       const { data } = await supabase
         .from('patients')
         .select('id, name, phone, email, cpf')
         .eq('clinic_id', clinicId)
-        .or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,cpf.ilike.%${query}%`)
+        .or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,cpf.ilike.%${safeQuery}%`)
         .order('name')
         .limit(10)
 

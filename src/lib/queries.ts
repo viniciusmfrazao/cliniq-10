@@ -5,6 +5,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { PROFESSIONAL_ROLES } from './constants'
+import { sanitizeSearchTerm } from './search'
 
 type SupabaseClientType = SupabaseClient<any, 'public', any>
 
@@ -87,7 +88,10 @@ export async function getPatients(
     .order(options?.orderBy || 'name')
 
   if (options?.search) {
-    query = query.or(`name.ilike.%${options.search}%,phone.ilike.%${options.search}%,cpf.ilike.%${options.search}%`)
+    const safe = sanitizeSearchTerm(options.search)
+    if (safe) {
+      query = query.or(`name.ilike.%${safe}%,phone.ilike.%${safe}%,cpf.ilike.%${safe}%`)
+    }
   }
 
   if (options?.limit) {

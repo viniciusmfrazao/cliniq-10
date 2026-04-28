@@ -226,7 +226,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
             </Link>
 
             <div className="hidden sm:flex w-10 h-10 md:w-11 md:h-11 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
-              {patient.photo_url ? (
+              {patient.photo_url && /^https?:\/\//.test(patient.photo_url) ? (
                 <img src={patient.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
                 patient.name.charAt(0).toUpperCase()

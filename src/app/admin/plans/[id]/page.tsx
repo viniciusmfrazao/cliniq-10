@@ -7,6 +7,7 @@ import ModuleSelector from '@/components/admin/ModuleSelector'
 import { type ModuleId } from '@/lib/modules'
 
 export default function EditPlanPage({ params }: { params: { id: string } }) {
+  const id = params.id
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -25,7 +26,7 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     async function loadPlan() {
       try {
-        const res = await fetch(`/api/admin/plans/${params.id}`)
+        const res = await fetch(`/api/admin/plans/${id}`)
         if (!res.ok) throw new Error('Plano não encontrado')
         
         const plan = await res.json()
@@ -45,7 +46,7 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
       }
     }
     loadPlan()
-  }, [params.id])
+  }, [id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,7 +54,7 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
     setError('')
 
     try {
-      const res = await fetch(`/api/admin/plans/${params.id}`, {
+      const res = await fetch(`/api/admin/plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -83,7 +84,7 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
     if (!confirm('Tem certeza que deseja excluir este plano?')) return
 
     try {
-      const res = await fetch(`/api/admin/plans/${params.id}`, {
+      const res = await fetch(`/api/admin/plans/${id}`, {
         method: 'DELETE'
       })
 

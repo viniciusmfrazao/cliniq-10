@@ -7,6 +7,7 @@ import ProductsUsedSection from './products-used-section'
 import ReturnScheduler from './return-scheduler'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
+  const { appointmentId } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -15,13 +16,13 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .from('users')
     .select('clinic_id, name')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
   const { data: appointment } = await supabase
     .from('appointments')
     .select(`*, patients(*), procedures(name, duration_minutes, price)`)
-    .eq('id', params.appointmentId)
-    .single()
+    .eq('id', appointmentId)
+    .maybeSingle()
 
   if (!appointment) notFound()
 
@@ -47,7 +48,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .from('appointments')
     .select('id, start_time, status, procedures(name)')
     .eq('patient_id', patient.id)
-    .neq('id', params.appointmentId)
+    .neq('id', appointmentId)
     .eq('status', 'completed')
     .order('start_time', { ascending: false })
     .limit(10)
@@ -73,13 +74,13 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
   const { data: currentInjections } = await supabase
     .from('injectable_applications')
     .select('*, injectable_points(*), products(name)')
-    .eq('appointment_id', params.appointmentId)
+    .eq('appointment_id', appointmentId)
 
   // Produtos já usados neste atendimento
   const { data: usedProducts } = await supabase
     .from('appointment_products')
     .select('*, products(name, unit)')
-    .eq('appointment_id', params.appointmentId)
+    .eq('appointment_id', appointmentId)
 
   return (
     // Negative margins compensam o padding do <main> (px-4 py-4 md:px-8 md:py-6)
@@ -97,7 +98,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
           {/* Coluna Esquerda - Prontuario */}
           <MedicalRecordSection
             patient={patient}
-            appointmentId={params.appointmentId}
+            appointmentId={appointmentId}
             pastAppointments={pastAppointments || []}
             medicalRecords={medicalRecords || []}
             clinicId={userData?.clinic_id || ''}
@@ -108,7 +109,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
           <div className="space-y-6">
             <InjectableMapSection
               patient={patient}
-              appointmentId={params.appointmentId}
+              appointmentId={appointmentId}
               products={productsForMap || []}
               currentInjections={currentInjections || []}
               clinicId={userData?.clinic_id || ''}
@@ -116,7 +117,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
 
             {/* Produtos Utilizados (seringas, fios, materiais) */}
             <ProductsUsedSection
-              appointmentId={params.appointmentId}
+              appointmentId={appointmentId}
               patientId={patient.id}
               clinicId={userData?.clinic_id || ''}
               products={productsForMap || []}
@@ -127,7 +128,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
             <ReturnScheduler
               patientId={patient.id}
               clinicId={userData?.clinic_id || ''}
-              currentAppointmentId={params.appointmentId}
+              currentAppointmentId={appointmentId}
             />
           </div>
         </div>

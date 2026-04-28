@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -5,16 +6,17 @@ import ApplicationHistory from './application-history'
 import NewApplicationButton from './new-application-button'
 
 export default async function PatientInjetaveisPage({ params }: { params: { patientId: string } }) {
+  const { patientId } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id, id, name').eq('id', user!.id).single()
+  const { data: userData } = await supabase.from('users').select('clinic_id, id, name').eq('id', user!.id).maybeSingle()
 
   // Buscar paciente
   const { data: patient } = await supabase
     .from('patients')
     .select('*')
-    .eq('id', params.patientId)
-    .single()
+    .eq('id', patientId)
+    .maybeSingle()
 
   if (!patient) notFound()
 
@@ -22,7 +24,7 @@ export default async function PatientInjetaveisPage({ params }: { params: { pati
   const { data: applications } = await supabase
     .from('injectable_applications')
     .select('*, users(name), injectable_points(*)')
-    .eq('patient_id', params.patientId)
+    .eq('patient_id', patientId)
     .order('application_date', { ascending: false })
 
   // Calcular estatisticas
@@ -53,18 +55,21 @@ export default async function PatientInjetaveisPage({ params }: { params: { pati
         </div>
         <div className="flex gap-3">
           <Link 
-            href={`/dashboard/prontuario/${params.patientId}`}
+            href={`/dashboard/pacientes/${patientId}?tab=evolucoes`}
             className="btn-secondary w-auto px-4 py-2.5"
           >
             Ver prontuario
           </Link>
-          <NewApplicationButton
-            patientId={params.patientId}
-            clinicId={userData?.clinic_id}
-            professionalId={userData?.id}
-            professionalName={userData?.name}
-            patientGender={patient.gender === 'M' ? 'male' : 'female'}
-          />
+          {/* Suspense é obrigatório no Next 15 pq o componente usa useSearchParams */}
+          <Suspense fallback={null}>
+            <NewApplicationButton
+              patientId={patientId}
+              clinicId={userData?.clinic_id}
+              professionalId={userData?.id}
+              professionalName={userData?.name}
+              patientGender={patient.gender === 'M' ? 'male' : 'female'}
+            />
+          </Suspense>
         </div>
       </div>
 
@@ -119,7 +124,7 @@ export default async function PatientInjetaveisPage({ params }: { params: { pati
       </div>
 
       {/* History */}
-      <ApplicationHistory applications={applications || []} patientId={params.patientId} patientGender={patient.gender === 'M' ? 'male' : 'female'} />
+      <ApplicationHistory applications={applications || []} patientId={patientId} patientGender={patient.gender === 'M' ? 'male' : 'female'} />
 
       <div className="mt-8">
         <Link href="/dashboard/injetaveis" className="text-sm text-slate-500 hover:text-slate-700">

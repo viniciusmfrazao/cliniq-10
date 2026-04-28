@@ -182,7 +182,10 @@ export const MODULE_ROUTES: Record<ModuleId, string[]> = {
   lista_espera: ['/dashboard/lista-espera'],
   pacientes: ['/dashboard/pacientes'],
   procedimentos: ['/dashboard/procedimentos'],
-  prontuario: ['/dashboard/prontuario'],
+  // O módulo "prontuario" foi fundido com "pacientes" (Central do Paciente
+  // tem tab Evoluções). Mantemos o ID por compat com planos já configurados
+  // — quem tem só `prontuario` ativo continua vendo a Central via Pacientes.
+  prontuario: ['/dashboard/pacientes'],
   injetaveis: ['/dashboard/injetaveis'],
   estoque: ['/dashboard/estoque'],
   eva_ia: ['/dashboard/eva'],

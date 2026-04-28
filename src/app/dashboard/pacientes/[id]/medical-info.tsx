@@ -15,12 +15,12 @@ type MedicalRecord = {
   notes: string | null
 }
 
-export default function MedicalInfo({ 
-  medicalRecord, 
-  patientId 
-}: { 
+export default function MedicalInfo({
+  medicalRecord,
+  patientId,
+}: {
   medicalRecord: MedicalRecord | null
-  patientId: string 
+  patientId: string
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -40,12 +40,18 @@ export default function MedicalInfo({
   async function handleSave() {
     setLoading(true)
     setError('')
-    
+
     const data = {
       blood_type: form.blood_type || null,
-      allergies: form.allergies ? form.allergies.split(',').map(s => s.trim()).filter(Boolean) : [],
-      chronic_conditions: form.chronic_conditions ? form.chronic_conditions.split(',').map(s => s.trim()).filter(Boolean) : [],
-      medications: form.medications ? form.medications.split(',').map(s => s.trim()).filter(Boolean) : [],
+      allergies: form.allergies
+        ? form.allergies.split(',').map((s) => s.trim()).filter(Boolean)
+        : [],
+      chronic_conditions: form.chronic_conditions
+        ? form.chronic_conditions.split(',').map((s) => s.trim()).filter(Boolean)
+        : [],
+      medications: form.medications
+        ? form.medications.split(',').map((s) => s.trim()).filter(Boolean)
+        : [],
       emergency_contact_name: form.emergency_contact_name || null,
       emergency_contact_phone: form.emergency_contact_phone || null,
       notes: form.notes || null,
@@ -70,14 +76,14 @@ export default function MedicalInfo({
   if (editing) {
     return (
       <div className="card p-5">
-        <h2 className="text-sm font-semibold text-slate-900 mb-4">Dados Medicos</h2>
+        <h2 className="text-sm font-semibold text-slate-900 mb-4">Dados médicos</h2>
         <div className="space-y-3">
           <div>
-            <label className="label">Tipo sanguineo</label>
-            <select 
+            <label className="label">Tipo sanguíneo</label>
+            <select
               className="input"
               value={form.blood_type}
-              onChange={e => setForm({ ...form, blood_type: e.target.value })}
+              onChange={(e) => setForm({ ...form, blood_type: e.target.value })}
             >
               <option value="">Selecione</option>
               <option value="A+">A+</option>
@@ -91,56 +97,60 @@ export default function MedicalInfo({
             </select>
           </div>
           <div>
-            <label className="label">Alergias (separar por virgula)</label>
-            <input 
+            <label className="label">Alergias (separar por vírgula)</label>
+            <input
               className="input"
               placeholder="Dipirona, Penicilina..."
               value={form.allergies}
-              onChange={e => setForm({ ...form, allergies: e.target.value })}
+              onChange={(e) => setForm({ ...form, allergies: e.target.value })}
             />
           </div>
           <div>
-            <label className="label">Condicoes cronicas</label>
-            <input 
+            <label className="label">Condições crônicas</label>
+            <input
               className="input"
-              placeholder="Diabetes, Hipertensao..."
+              placeholder="Diabetes, Hipertensão..."
               value={form.chronic_conditions}
-              onChange={e => setForm({ ...form, chronic_conditions: e.target.value })}
+              onChange={(e) => setForm({ ...form, chronic_conditions: e.target.value })}
             />
           </div>
           <div>
             <label className="label">Medicamentos em uso</label>
-            <input 
+            <input
               className="input"
               placeholder="Losartana 50mg, Metformina..."
               value={form.medications}
-              onChange={e => setForm({ ...form, medications: e.target.value })}
+              onChange={(e) => setForm({ ...form, medications: e.target.value })}
             />
           </div>
           <div>
-            <label className="label">Contato de emergencia</label>
+            <label className="label">Contato de emergência</label>
             <div className="grid grid-cols-2 gap-2">
-              <input 
+              <input
                 className="input"
                 placeholder="Nome"
                 value={form.emergency_contact_name}
-                onChange={e => setForm({ ...form, emergency_contact_name: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, emergency_contact_name: e.target.value })
+                }
               />
-              <input 
+              <input
                 className="input"
                 placeholder="Telefone"
                 value={form.emergency_contact_phone}
-                onChange={e => setForm({ ...form, emergency_contact_phone: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, emergency_contact_phone: e.target.value })
+                }
               />
             </div>
           </div>
           <div>
-            <label className="label">Observacoes gerais</label>
-            <textarea 
+            <label className="label">Observações gerais</label>
+            <textarea
               className="input min-h-[80px]"
-              placeholder="Outras informacoes relevantes..."
+              placeholder="Outras informações relevantes..."
               value={form.notes}
-              onChange={e => setForm({ ...form, notes: e.target.value })}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </div>
           {error && (
@@ -164,22 +174,27 @@ export default function MedicalInfo({
   return (
     <div className="card p-5">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-slate-900">Dados Medicos</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Dados médicos</h2>
         <button onClick={() => setEditing(true)} className="text-xs text-brand-600 font-medium">
           Editar
         </button>
       </div>
       <div className="space-y-3 text-sm">
         <div>
-          <p className="text-xs text-slate-400">Tipo sanguineo</p>
+          <p className="text-xs text-slate-400">Tipo sanguíneo</p>
           <p className="text-slate-900">{medicalRecord?.blood_type || '-'}</p>
         </div>
         <div>
           <p className="text-xs text-slate-400">Alergias</p>
           {medicalRecord?.allergies?.length ? (
             <div className="flex flex-wrap gap-1 mt-1">
-              {medicalRecord.allergies.map(a => (
-                <span key={a} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{a}</span>
+              {medicalRecord.allergies.map((a) => (
+                <span
+                  key={a}
+                  className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full"
+                >
+                  {a}
+                </span>
               ))}
             </div>
           ) : (
@@ -187,11 +202,16 @@ export default function MedicalInfo({
           )}
         </div>
         <div>
-          <p className="text-xs text-slate-400">Condicoes cronicas</p>
+          <p className="text-xs text-slate-400">Condições crônicas</p>
           {medicalRecord?.chronic_conditions?.length ? (
             <div className="flex flex-wrap gap-1 mt-1">
-              {medicalRecord.chronic_conditions.map(c => (
-                <span key={c} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{c}</span>
+              {medicalRecord.chronic_conditions.map((c) => (
+                <span
+                  key={c}
+                  className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full"
+                >
+                  {c}
+                </span>
               ))}
             </div>
           ) : (
@@ -203,12 +223,11 @@ export default function MedicalInfo({
           <p className="text-slate-900">{medicalRecord?.medications?.join(', ') || '-'}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-400">Emergencia</p>
+          <p className="text-xs text-slate-400">Emergência</p>
           <p className="text-slate-900">
-            {medicalRecord?.emergency_contact_name 
+            {medicalRecord?.emergency_contact_name
               ? `${medicalRecord.emergency_contact_name} - ${medicalRecord.emergency_contact_phone}`
-              : '-'
-            }
+              : '-'}
           </p>
         </div>
       </div>

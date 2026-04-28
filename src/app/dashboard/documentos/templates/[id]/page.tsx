@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon'
 import TemplateForm from '../template-form'
 
 export default async function EditTemplatePage({ params }: { params: { id: string } }) {
+  const { id } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -13,13 +14,13 @@ export default async function EditTemplatePage({ params }: { params: { id: strin
     .from('users')
     .select('clinic_id')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
   const { data: template } = await supabase
     .from('document_templates')
     .select('*')
-    .eq('id', params.id)
-    .single()
+    .eq('id', id)
+    .maybeSingle()
 
   if (!template) redirect('/dashboard/documentos/templates')
 
