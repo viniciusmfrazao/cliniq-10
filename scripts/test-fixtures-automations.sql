@@ -98,8 +98,8 @@ SELECT
     WHEN tp.rn IN (5,6) THEN (date_trunc('day', (now() AT TIME ZONE 'America/Sao_Paulo'))::date - 1 + time '16:00') AT TIME ZONE 'America/Sao_Paulo'
   END AS end_time,
   CASE
-    WHEN tp.rn IN (1,2,5,6) THEN 'completed'::appointment_status
-    WHEN tp.rn IN (3,4)     THEN 'scheduled'::appointment_status
+    WHEN tp.rn IN (1,2,5,6) THEN 'completed'
+    WHEN tp.rn IN (3,4)     THEN 'scheduled'
   END AS status,
   CASE
     WHEN tp.rn IN (1,2) THEN '[FIXTURE-RECALL]'
@@ -125,9 +125,9 @@ WHERE patient_id IN (
 -- BLOCO 4: verificacao
 -- ------------------------------------------------------------
 SELECT
-  notes AS cenario,
-  to_char(start_time AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS data_hora_br,
-  status,
+  a.notes AS cenario,
+  to_char(a.start_time AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS data_hora_br,
+  a.status,
   pa.name AS paciente,
   pa.phone AS phone_destino
 FROM appointments a
