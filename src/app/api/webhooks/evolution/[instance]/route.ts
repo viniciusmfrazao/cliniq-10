@@ -186,6 +186,47 @@ function jidToPhone(jid: string | undefined | null): string | null {
   return cleaned.replace(/[^0-9]/g, '') || null
 }
 
+/**
+ * Tenta extrair a nota NPS (1-5) de uma mensagem de texto.
+ *
+ * Formatos aceitos:
+ *  - "5"           — dígito puro
+ *  - "5 muito bom" — dígito + comentário
+ *  - "5️⃣"         — emoji keycap
+ *  - "⭐⭐⭐⭐⭐"   — estrelas (1-5)
+ *
+ * Retorna { score: null } se não bateu.
+ */
+function parseNpsScore(text: string): { score: number | null; comment: string | null } {
+  if (!text) return { score: null, comment: null }
+  const trimmed = text.trim()
+
+  // 1️⃣ a 5️⃣ keycap (digit + opcional VS-16 + combining enclosing keycap U+20E3)
+  const keycap = trimmed.match(/^([1-5])\uFE0F?\u20E3/u)
+  if (keycap) {
+    const rest = trimmed.slice(keycap[0].length).trim()
+    return { score: parseInt(keycap[1], 10), comment: rest || null }
+  }
+
+  // Dígito 1-5 no início (mensagem só com nota OU nota + comentário)
+  const digit = trimmed.match(/^([1-5])(?:\b|$)/)
+  if (digit) {
+    const rest = trimmed.slice(1).replace(/^[\s\.,!:;-]+/, '').trim()
+    return { score: parseInt(digit[1], 10), comment: rest || null }
+  }
+
+  // Estrelas (⭐ U+2B50 ou ★ U+2605) — mensagem só com estrelas
+  const starsOnly = trimmed.replace(/[\s\u2B50\u2605]/g, '').length === 0
+  if (starsOnly) {
+    const count = (trimmed.match(/[\u2B50\u2605]/g) || []).length
+    if (count >= 1 && count <= 5) {
+      return { score: count, comment: null }
+    }
+  }
+
+  return { score: null, comment: null }
+}
+
 async function logWebhook(args: {
   svc: ReturnType<typeof createServiceClient>
   instance: string
@@ -495,6 +536,47 @@ export async function POST(
             .maybeSingle()
           if (patientRes.error) {
             internalErrors.push(`select patients: ${patientRes.error.message}`)
+          }
+
+          // Captura automática de resposta NPS — só pra texto de pacientes
+          if (patientRes.data && parsed.kind === 'text' && parsed.text) {
+            const { score, comment } = parseNpsScore(parsed.text)
+            if (score != null) {
+              const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+              const { data: pendingNps, error: errPending } = await svc
+                .from('nps_responses')
+                .select('id')
+                .eq('clinic_id', clinicId)
+                .eq('patient_id', patientRes.data.id)
+                .is('replied_at', null)
+                .in('status', ['sent', 'skipped'])
+                .gte('sent_at', cutoff)
+                .order('sent_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+
+              if (errPending) {
+                // Tabela pode não existir ainda em ambientes sem o SQL rodado.
+                if (!/nps_responses/i.test(errPending.message)) {
+                  internalErrors.push(`select nps pending: ${errPending.message}`)
+                }
+              } else if (pendingNps?.id) {
+                const { error: updErr } = await svc
+                  .from('nps_responses')
+                  .update({
+                    score,
+                    comment,
+                    replied_at: new Date().toISOString(),
+                    status: 'replied',
+                  })
+                  .eq('id', pendingNps.id)
+                if (updErr) {
+                  internalErrors.push(`update nps reply: ${updErr.message}`)
+                } else {
+                  debugTrace.push(`NPS captured: score=${score}`)
+                }
+              }
+            }
           }
 
           if (!patientRes.data) {

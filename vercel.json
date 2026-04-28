@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/recall-inactive",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/nps",
+      "schedule": "0 14 * * *"
     }
   ]
 }
