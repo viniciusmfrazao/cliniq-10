@@ -45,6 +45,26 @@ export default async function ProntuarioPatientPage({ params }: { params: { id: 
     .eq('patient_id', params.id)
     .order('created_at', { ascending: false })
 
+  // Gera signed URLs (1h) pras fotos da timeline. As evolutions guardam
+  // apenas paths (ex: <clinic_id>/<patient_id>/<file>) — sem signed URL,
+  // o <img src> nao consegue acessar o bucket privado.
+  const allPhotoPaths = Array.from(
+    new Set(
+      ((evolutions ?? []) as Array<{ photos?: string[] | null }>)
+        .flatMap((e) => e.photos ?? [])
+        .filter((p): p is string => !!p),
+    ),
+  )
+  const photoUrls: Record<string, string> = {}
+  if (allPhotoPaths.length > 0) {
+    const { data: signed } = await supabase.storage
+      .from('medical-attachments')
+      .createSignedUrls(allPhotoPaths, 60 * 60)
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) photoUrls[item.path] = item.signedUrl
+    }
+  }
+
   // Buscar anamneses
   const { data: anamneses } = await supabase
     .from('anamneses')
@@ -171,7 +191,7 @@ export default async function ProntuarioPatientPage({ params }: { params: { id: 
               <h2 className="text-sm font-semibold text-slate-900">Timeline de Evolucoes</h2>
               <span className="text-xs text-slate-400">{evolutions?.length || 0} registros</span>
             </div>
-            <EvolutionTimeline evolutions={evolutions || []} />
+            <EvolutionTimeline evolutions={evolutions || []} photoUrls={photoUrls} />
           </div>
         </div>
       </div>

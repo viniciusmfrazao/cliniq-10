@@ -21,7 +21,18 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
   exam: { icon: '🔬', color: 'bg-amber-100 text-amber-700', label: 'Exame' },
 }
 
-export default function EvolutionTimeline({ evolutions }: { evolutions: Evolution[] }) {
+type Props = {
+  evolutions: Evolution[]
+  /**
+   * Map de path -> signed URL pras fotos. Geramos no server pra evitar
+   * que o componente client chame storage.createSignedUrl (poderia, mas
+   * uma chamada batched no SSR e mais rapido). Se um path nao tiver URL
+   * (sumiu do storage, expirou, etc), mostramos placeholder de erro.
+   */
+  photoUrls?: Record<string, string>
+}
+
+export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   if (evolutions.length === 0) {
@@ -94,14 +105,34 @@ export default function EvolutionTimeline({ evolutions }: { evolutions: Evolutio
 
                 {isExpanded && evo.photos && evo.photos.length > 0 && (
                   <div className="mt-3 flex gap-2 flex-wrap">
-                    {evo.photos.map((photo, i) => (
-                      <img 
-                        key={i} 
-                        src={photo} 
-                        alt={`Foto ${i + 1}`}
-                        className="w-20 h-20 object-cover rounded-lg"
-                      />
-                    ))}
+                    {evo.photos.map((path, i) => {
+                      const url = photoUrls[path]
+                      return url ? (
+                        <a
+                          key={`${evo.id}-${i}`}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block w-20 h-20 rounded-lg overflow-hidden border border-slate-200 hover:border-violet-400 transition-colors"
+                          title="Abrir foto"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <img
+                            src={url}
+                            alt={`Foto ${i + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </a>
+                      ) : (
+                        <div
+                          key={`${evo.id}-${i}`}
+                          className="w-20 h-20 rounded-lg bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-600 text-[10px] text-center px-1"
+                          title={`Nao foi possivel carregar: ${path}`}
+                        >
+                          Foto indispon.
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
 

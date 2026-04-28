@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { mapEvolutionStateToStatus } from '@/lib/evolution'
 import { getSettings } from '@/lib/app-settings'
-import { fetchEvolutionMediaBase64 } from '@/lib/whatsapp'
+import { fetchEvolutionMediaBase64, cleanMimeType, extFromMime } from '@/lib/whatsapp'
 
 /**
  * Webhook multi-tenant da Evolution.
@@ -128,41 +128,6 @@ function pickMessageDetails(message: unknown): ParsedMessage {
   }
 
   return empty
-}
-
-/**
- * Remove parametros tipo "; codecs=opus" do mimetype.
- * O bucket do Supabase Storage compara com `allowed_mime_types` por
- * match exato — se vier `audio/ogg; codecs=opus`, o upload é rejeitado
- * silenciosamente porque o bucket só aceita `audio/ogg`.
- */
-function cleanMimeType(mime: string | null | undefined): string | null {
-  if (!mime) return null
-  return mime.split(';')[0].trim().toLowerCase() || null
-}
-
-function extFromMime(mime: string | null | undefined): string {
-  const cleaned = cleanMimeType(mime)
-  if (!cleaned) return 'bin'
-  const map: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-    'image/gif': 'gif',
-    'audio/ogg': 'ogg',
-    'audio/mpeg': 'mp3',
-    'audio/mp4': 'm4a',
-    'audio/webm': 'webm',
-    'audio/wav': 'wav',
-    'video/mp4': 'mp4',
-    'video/3gpp': '3gp',
-    'video/quicktime': 'mov',
-    'video/webm': 'webm',
-    'application/pdf': 'pdf',
-  }
-  if (map[cleaned]) return map[cleaned]
-  return cleaned.split('/').pop() || 'bin'
 }
 
 function previewFor(kind: ParsedKind, caption: string | null): string {
@@ -520,28 +485,74 @@ export async function POST(
         const preview = previewFor(parsed.kind, parsed.text)
         const content = parsed.text || preview // sempre não-vazio
 
-        const insertConv = await svc.from('eva_conversations').insert({
-          clinic_id: clinicId,
-          phone,
-          role: fromMe ? 'assistant' : 'user',
-          content,
-          metadata: {
-            evolution_message_id: messageId,
-            push_name: pushName,
-            kind: parsed.kind,
-            mimetype: cleanMimeType(mimetype) ?? cleanMimeType(parsed.mimetype),
-            file_name: fileName ?? parsed.fileName,
-            media_path: mediaPath,
-            media_url: mediaUrl,
-            caption: parsed.text || null,
-          },
-        })
-        if (insertConv.error) {
-          internalErrors.push(
-            `insert eva_conversations: ${insertConv.error.message} (code=${insertConv.error.code})`,
-          )
-        } else {
-          debugTrace.push('eva_conversations inserted ok')
+        const finalMime = cleanMimeType(mimetype) ?? cleanMimeType(parsed.mimetype)
+        const baseMetadata = {
+          evolution_message_id: messageId,
+          push_name: pushName,
+          kind: parsed.kind,
+          mimetype: finalMime,
+          file_name: fileName ?? parsed.fileName,
+          media_path: mediaPath,
+          media_url: mediaUrl,
+          caption: parsed.text || null,
+        }
+
+        // Dedupe: se ja temos uma row pra esse messageId (porque o
+        // /api/whatsapp/send inseriu antes, no caso de outbound), so
+        // atualizamos media_path/media_url se a row nao tinha (pra texto
+        // o /send ja insere completo, entao nao tem o que atualizar).
+        let dedupHit = false
+        if (messageId) {
+          const { data: existing } = await svc
+            .from('eva_conversations')
+            .select('id, metadata')
+            .eq('clinic_id', clinicId)
+            .filter('metadata->>evolution_message_id', 'eq', messageId)
+            .limit(1)
+            .maybeSingle()
+          if (existing) {
+            dedupHit = true
+            const existingMeta =
+              (existing.metadata as Record<string, unknown> | null) ?? {}
+            // Se a row anterior nao tinha media_url e agora a temos,
+            // atualiza so essas chaves preservando o resto.
+            if (!existingMeta.media_url && mediaUrl) {
+              const merged = {
+                ...existingMeta,
+                media_path: mediaPath,
+                media_url: mediaUrl,
+                mimetype: finalMime ?? existingMeta.mimetype,
+              }
+              const { error: updErr } = await svc
+                .from('eva_conversations')
+                .update({ metadata: merged })
+                .eq('id', existing.id)
+              if (updErr) {
+                internalErrors.push(`update merged metadata: ${updErr.message}`)
+              } else {
+                debugTrace.push('dedup: merged media into outbound row')
+              }
+            } else {
+              debugTrace.push('dedup: outbound row ja completo')
+            }
+          }
+        }
+
+        if (!dedupHit) {
+          const insertConv = await svc.from('eva_conversations').insert({
+            clinic_id: clinicId,
+            phone,
+            role: fromMe ? 'assistant' : 'user',
+            content,
+            metadata: baseMetadata,
+          })
+          if (insertConv.error) {
+            internalErrors.push(
+              `insert eva_conversations: ${insertConv.error.message} (code=${insertConv.error.code})`,
+            )
+          } else {
+            debugTrace.push('eva_conversations inserted ok')
+          }
         }
 
         const updateLast = await svc

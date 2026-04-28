@@ -320,12 +320,30 @@ export default function WhatsAppPage() {
     setPatient(patientData)
   }
 
+  /**
+   * Apos o /api/whatsapp/send responder OK, recebemos o conversation_id real.
+   * Trocamos o id da mensagem optimista pelo real pra que o realtime
+   * subscription nao duplique quando o INSERT chegar (o handleNewRow ja
+   * dedupa por id).
+   */
+  function reconcileOptimistic(optimisticId: string, realId: string | undefined) {
+    if (!realId) return
+    setMessages((prev) => {
+      const hasReal = prev.some((m) => m.id === realId)
+      if (hasReal) {
+        return prev.filter((m) => m.id !== optimisticId)
+      }
+      return prev.map((m) => (m.id === optimisticId ? { ...m, id: realId } : m))
+    })
+  }
+
   async function sendMessage() {
     if (!newMessage.trim() || !selectedConversation || !config) return
 
     setSending(true)
+    const optimisticId = `tmp-${Date.now()}`
     const optimistic: Message = {
-      id: `tmp-${Date.now()}`,
+      id: optimisticId,
       content: newMessage,
       role: 'assistant',
       created_at: new Date().toISOString(),
@@ -344,15 +362,16 @@ export default function WhatsAppPage() {
           message: text,
         }),
       })
-
+      const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
-        const err = await response.json().catch(() => ({}))
-        alert(`Falha ao enviar: ${err.error || response.status}`)
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+        alert(`Falha ao enviar: ${data.error || response.status}`)
+      } else {
+        reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
       }
     } catch (error) {
       console.error('Error sending:', error)
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
     } finally {
       setSending(false)
     }
@@ -362,8 +381,9 @@ export default function WhatsAppPage() {
     if (!selectedConversation || !config) return
     setSending(true)
     const previewUrl = URL.createObjectURL(file)
+    const optimisticId = `tmp-${Date.now()}`
     const optimistic: Message = {
-      id: `tmp-${Date.now()}`,
+      id: optimisticId,
       content: caption || '🖼️ Imagem',
       role: 'assistant',
       created_at: new Date().toISOString(),
@@ -388,14 +408,16 @@ export default function WhatsAppPage() {
           fileName: file.name,
         }),
       })
+      const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
-        const err = await response.json().catch(() => ({}))
-        alert(`Falha ao enviar imagem: ${err.error || response.status}`)
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+        alert(`Falha ao enviar imagem: ${data.error || response.status}`)
+      } else {
+        reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
       }
     } catch (error) {
       console.error('Error sending image:', error)
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
       alert('Erro inesperado ao enviar imagem')
     } finally {
       setSending(false)
@@ -406,8 +428,9 @@ export default function WhatsAppPage() {
     if (!selectedConversation || !config) return
     setSending(true)
     const previewUrl = URL.createObjectURL(blob)
+    const optimisticId = `tmp-${Date.now()}`
     const optimistic: Message = {
-      id: `tmp-${Date.now()}`,
+      id: optimisticId,
       content: '🎤 Mensagem de voz',
       role: 'assistant',
       created_at: new Date().toISOString(),
@@ -426,16 +449,19 @@ export default function WhatsAppPage() {
           phone: selectedConversation.phone,
           type: 'audio',
           media: base64,
+          mimetype: blob.type || 'audio/ogg',
         }),
       })
+      const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
-        const err = await response.json().catch(() => ({}))
-        alert(`Falha ao enviar áudio: ${err.error || response.status}`)
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+        alert(`Falha ao enviar áudio: ${data.error || response.status}`)
+      } else {
+        reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
       }
     } catch (error) {
       console.error('Error sending audio:', error)
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
       alert('Erro inesperado ao enviar áudio')
     } finally {
       setSending(false)

@@ -5,10 +5,46 @@ export type SendResult =
   | { ok: true; result: unknown }
   | { ok: false; error: string; code: 'not_configured' | 'not_connected' | 'evolution_error' | 'unknown' }
 
-function normalizePhone(raw: string): string {
+export function normalizePhone(raw: string): string {
   let p = raw.replace(/\D/g, '')
   if (!p.startsWith('55')) p = '55' + p
   return p
+}
+
+/**
+ * Remove parametros tipo "; codecs=opus" do mimetype.
+ * Bucket Storage compara `allowed_mime_types` por match exato.
+ */
+export function cleanMimeType(mime: string | null | undefined): string | null {
+  if (!mime) return null
+  return mime.split(';')[0].trim().toLowerCase() || null
+}
+
+/**
+ * Mapa de mime -> extensao usada pelos paths no Storage.
+ */
+export function extFromMime(mime: string | null | undefined): string {
+  const cleaned = cleanMimeType(mime)
+  if (!cleaned) return 'bin'
+  const map: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'audio/ogg': 'ogg',
+    'audio/mpeg': 'mp3',
+    'audio/mp4': 'm4a',
+    'audio/webm': 'webm',
+    'audio/wav': 'wav',
+    'video/mp4': 'mp4',
+    'video/3gpp': '3gp',
+    'video/quicktime': 'mov',
+    'video/webm': 'webm',
+    'application/pdf': 'pdf',
+  }
+  if (map[cleaned]) return map[cleaned]
+  return cleaned.split('/').pop() || 'bin'
 }
 
 type ResolvedInstance = {

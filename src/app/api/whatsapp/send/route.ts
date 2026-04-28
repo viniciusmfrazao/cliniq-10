@@ -4,6 +4,10 @@ import {
   sendWhatsappMessage,
   sendWhatsappImage,
   sendWhatsappAudio,
+  base64ToBuffer,
+  cleanMimeType,
+  extFromMime,
+  normalizePhone,
 } from '@/lib/whatsapp'
 import { getSettings } from '@/lib/app-settings'
 
@@ -35,6 +39,12 @@ type SendBody = {
  * 3) Server-to-server N8N (Donna):
  *    Header: x-cliniq-secret: <n8n_donna_secret (app_settings)>
  *    Body: { clinic_id, phone, message }
+ *
+ * Persistência: depois do send bem-sucedido, inserimos a mensagem em
+ * eva_conversations com role='assistant'. Pra mídias, fazemos upload do
+ * mesmo base64 no bucket whatsapp-media. Isso garante que a UI mostra a
+ * mensagem mesmo quando a Evolution não echo de volta o webhook
+ * MESSAGES_UPSERT pra mensagens enviadas pela própria instance.
  */
 export async function POST(req: NextRequest) {
   let body: SendBody
@@ -129,5 +139,180 @@ export async function POST(req: NextRequest) {
       result.code === 'evolution_error' ? 502 : 500
     return NextResponse.json({ ok: false, error: result.error, code: result.code }, { status })
   }
-  return NextResponse.json({ ok: true, result: result.result })
+
+  // Persiste em eva_conversations pra a UI mostrar a mensagem mesmo se a
+  // Evolution nao echoar o webhook. Tudo daqui pra frente eh best-effort:
+  // se falhar, ainda retornamos ok (a mensagem foi entregue ao paciente).
+  const persistResult = await persistOutboundMessage({
+    clinicId: clinicId!,
+    phone,
+    type,
+    message,
+    caption,
+    media,
+    mimetype,
+    fileName,
+    evolutionResult: result.result,
+  })
+
+  return NextResponse.json({
+    ok: true,
+    result: result.result,
+    persisted: persistResult,
+  })
+}
+
+type PersistResult = {
+  ok: boolean
+  conversation_id?: string
+  evolution_message_id?: string | null
+  media_path?: string | null
+  warnings: string[]
+}
+
+async function persistOutboundMessage(args: {
+  clinicId: string
+  phone: string
+  type: 'text' | 'image' | 'audio'
+  message?: string
+  caption?: string
+  media?: string
+  mimetype?: string
+  fileName?: string
+  evolutionResult: unknown
+}): Promise<PersistResult> {
+  const warnings: string[] = []
+  const svc = createServiceClient()
+  const normalizedPhone = normalizePhone(args.phone)
+
+  // Tenta extrair messageId da resposta da Evolution (key.id).
+  // Formato pode variar entre versoes — defensivo no parsing.
+  const evolutionMessageId =
+    (args.evolutionResult as { key?: { id?: string } } | null | undefined)?.key?.id ?? null
+
+  let mediaPath: string | null = null
+  let mediaUrl: string | null = null
+  let cleanedMime: string | null = null
+
+  if ((args.type === 'image' || args.type === 'audio') && args.media) {
+    try {
+      // Detecta mime do data URL se nao veio explicito
+      const decoded = base64ToBuffer(args.media)
+      const inferredMime =
+        cleanMimeType(args.mimetype) ||
+        cleanMimeType(decoded.detectedMime) ||
+        (args.type === 'image' ? 'image/jpeg' : 'audio/ogg')
+      cleanedMime = inferredMime
+      const ext = extFromMime(inferredMime)
+      const safeId = (evolutionMessageId ?? `${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-')
+      const path = `${args.clinicId}/${normalizedPhone}/${safeId}.${ext}`
+
+      const up = await svc.storage.from('whatsapp-media').upload(path, decoded.buffer, {
+        contentType: cleanedMime,
+        upsert: true,
+      })
+
+      if (up.error) {
+        warnings.push(`storage upload (mime=${cleanedMime}): ${up.error.message}`)
+      } else {
+        mediaPath = path
+        const signed = await svc.storage
+          .from('whatsapp-media')
+          .createSignedUrl(path, 60 * 60 * 24 * 7)
+        if (signed.error) {
+          warnings.push(`signed url: ${signed.error.message}`)
+        } else if (signed.data?.signedUrl) {
+          mediaUrl = signed.data.signedUrl
+        }
+      }
+    } catch (err) {
+      warnings.push(
+        `decode/upload: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+
+  // Conteudo textual + preview
+  const previewByKind =
+    args.type === 'image' ? '🖼️ Imagem' : args.type === 'audio' ? '🎤 Mensagem de voz' : ''
+  const content = args.message || args.caption || previewByKind
+
+  // Dedupe: se ja temos uma row com esse evolution_message_id, nao duplica
+  // (caso o webhook MESSAGES_UPSERT tenha chegado antes). Se existe, ainda
+  // assim atualizamos media_path/media_url se a row anterior nao tinha.
+  if (evolutionMessageId) {
+    const { data: existing } = await svc
+      .from('eva_conversations')
+      .select('id, metadata')
+      .eq('clinic_id', args.clinicId)
+      .filter('metadata->>evolution_message_id', 'eq', evolutionMessageId)
+      .limit(1)
+      .maybeSingle()
+
+    if (existing) {
+      const existingMeta = (existing.metadata as Record<string, unknown> | null) ?? {}
+      const needsMedia =
+        !existingMeta.media_url && mediaUrl
+          ? { media_path: mediaPath, media_url: mediaUrl }
+          : null
+      if (needsMedia) {
+        await svc
+          .from('eva_conversations')
+          .update({ metadata: { ...existingMeta, ...needsMedia } })
+          .eq('id', existing.id)
+      }
+      return {
+        ok: true,
+        conversation_id: existing.id,
+        evolution_message_id: evolutionMessageId,
+        media_path: mediaPath,
+        warnings: [...warnings, 'dedup: row ja existia (webhook chegou primeiro)'],
+      }
+    }
+  }
+
+  const insertRes = await svc
+    .from('eva_conversations')
+    .insert({
+      clinic_id: args.clinicId,
+      phone: normalizedPhone,
+      role: 'assistant',
+      content,
+      metadata: {
+        evolution_message_id: evolutionMessageId,
+        kind: args.type,
+        mimetype: cleanedMime,
+        file_name: args.fileName ?? null,
+        media_path: mediaPath,
+        media_url: mediaUrl,
+        caption: args.caption ?? null,
+        outbound: true, // marca que foi via /api/whatsapp/send
+      },
+    })
+    .select('id')
+    .maybeSingle()
+
+  if (insertRes.error) {
+    warnings.push(`insert eva_conversations: ${insertRes.error.message}`)
+    return {
+      ok: false,
+      evolution_message_id: evolutionMessageId,
+      media_path: mediaPath,
+      warnings,
+    }
+  }
+
+  // Atualiza last_event_at da clinica pra a lista de conversas reordenar
+  await svc
+    .from('clinic_whatsapp')
+    .update({ last_event_at: new Date().toISOString() })
+    .eq('clinic_id', args.clinicId)
+
+  return {
+    ok: true,
+    conversation_id: insertRes.data?.id,
+    evolution_message_id: evolutionMessageId,
+    media_path: mediaPath,
+    warnings,
+  }
 }
