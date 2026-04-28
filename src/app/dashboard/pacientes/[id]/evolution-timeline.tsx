@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import PhotoLightbox from '@/components/ui/PhotoLightbox'
 
 type Evolution = {
   id: string
@@ -40,12 +41,34 @@ const FILTERS: Array<{ id: string; label: string }> = [
   { id: 'exam', label: 'Exames' },
 ]
 
+/**
+ * Quantas thumbs a gente mostra no card recolhido. O resto vira um badge
+ * "+N" que abre o lightbox direto na primeira foto.
+ */
+const COLLAPSED_THUMBS = 4
+
 export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
 
-  const filtered =
-    filter === 'all' ? evolutions : evolutions.filter((e) => e.type === filter)
+  // State do lightbox: qual evolução abriu e em qual índice começa.
+  const [lightbox, setLightbox] = useState<{ evoId: string; index: number } | null>(null)
+
+  const filtered = useMemo(
+    () => (filter === 'all' ? evolutions : evolutions.filter((e) => e.type === filter)),
+    [filter, evolutions],
+  )
+
+  // URLs do lightbox: só as fotos da evolução aberta, com signed URL
+  // resolvida. Mantemos os paths (índice) alinhados pra navegação coerente.
+  const lightboxUrls = useMemo(() => {
+    if (!lightbox) return [] as string[]
+    const evo = evolutions.find((e) => e.id === lightbox.evoId)
+    if (!evo?.photos) return []
+    return evo.photos
+      .map((p) => photoUrls[p])
+      .filter((u): u is string => !!u)
+  }, [lightbox, evolutions, photoUrls])
 
   if (evolutions.length === 0) {
     return (
@@ -54,7 +77,9 @@ export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props)
           <span className="text-2xl">📋</span>
         </div>
         <p className="text-sm text-slate-500">Nenhuma evolução registrada</p>
-        <p className="text-xs text-slate-400 mt-1">Clique em "+ Nova evolução" para adicionar</p>
+        <p className="text-xs text-slate-400 mt-1">
+          Clique em &quot;+ Nova evolução&quot; para adicionar
+        </p>
       </div>
     )
   }
@@ -96,6 +121,14 @@ export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props)
           {filtered.map((evo) => {
             const config = TYPE_CONFIG[evo.type] || TYPE_CONFIG.note
             const isExpanded = expandedId === evo.id
+            const photos = evo.photos ?? []
+            const hasPhotos = photos.length > 0
+
+            // Quando recolhido, mostramos só os primeiros N. Quando
+            // expandido, mostramos todos. O lightbox sempre navega no
+            // conjunto completo da evolução.
+            const visiblePhotos = isExpanded ? photos : photos.slice(0, COLLAPSED_THUMBS)
+            const hiddenCount = Math.max(0, photos.length - visiblePhotos.length)
 
             return (
               <div key={evo.id} className="relative pl-10">
@@ -114,12 +147,14 @@ export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props)
                   }`}
                   onClick={() => setExpandedId(isExpanded ? null : evo.id)}
                 >
-                  <div className="flex items-start justify-between mb-1">
-                    <div>
+                  <div className="flex items-start justify-between mb-1 gap-2">
+                    <div className="min-w-0">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${config.color}`}>
                         {config.label}
                       </span>
-                      <h3 className="text-sm font-medium text-slate-900 mt-1">{evo.title}</h3>
+                      <h3 className="text-sm font-medium text-slate-900 mt-1 truncate">
+                        {evo.title}
+                      </h3>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-xs text-slate-400">
@@ -154,30 +189,59 @@ export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props)
                     </p>
                   )}
 
-                  {isExpanded && evo.photos && evo.photos.length > 0 && (
-                    <div className="mt-3 flex gap-2 flex-wrap">
-                      {evo.photos.map((path, i) => {
+                  {/* Galeria de fotos: aparece SEMPRE que tem foto, não só
+                      quando o card está expandido. Antes (commit a645919) só
+                      aparecia no expandido — o profissional achava que as
+                      fotos do atendimento "tinham sumido". */}
+                  {hasPhotos && (
+                    <div className="mt-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                      {visiblePhotos.map((path, i) => {
                         const url = photoUrls[path]
+                        // O lightbox navega só nas fotos que TEM signed URL
+                        // (filtradas em lightboxUrls). Aqui mapeamos o índice
+                        // do thumb -> índice no array filtrado.
+                        const validUrls = photos
+                          .map((p) => photoUrls[p])
+                          .filter((u): u is string => !!u)
+                        const lightboxIndex = url ? validUrls.indexOf(url) : -1
+
                         return url ? (
-                          <a
+                          <button
                             key={`${evo.id}-${i}`}
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block w-20 h-20 rounded-lg overflow-hidden border border-slate-200 hover:border-violet-400 transition-colors"
-                            title="Abrir foto"
-                            onClick={(e) => e.stopPropagation()}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setLightbox({
+                                evoId: evo.id,
+                                index: lightboxIndex >= 0 ? lightboxIndex : 0,
+                              })
+                            }}
+                            className="relative block aspect-square rounded-lg overflow-hidden border border-slate-200 hover:border-violet-400 hover:ring-2 hover:ring-violet-100 transition-all group"
+                            title="Clique para ampliar"
                           >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={url}
-                              alt={`Foto ${i + 1}`}
-                              className="w-full h-full object-cover"
+                              alt={`Foto ${i + 1} da evolução`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              loading="lazy"
                             />
-                          </a>
+                            {/* Overlay no hover indicando que é clicável */}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                            {/* "+N" sobre a última thumb quando há mais fotos
+                                escondidas (somente no estado recolhido). */}
+                            {!isExpanded &&
+                              i === visiblePhotos.length - 1 &&
+                              hiddenCount > 0 && (
+                                <div className="absolute inset-0 bg-black/55 flex items-center justify-center text-white font-bold text-lg">
+                                  +{hiddenCount}
+                                </div>
+                              )}
+                          </button>
                         ) : (
                           <div
                             key={`${evo.id}-${i}`}
-                            className="w-20 h-20 rounded-lg bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-600 text-[10px] text-center px-1"
+                            className="aspect-square rounded-lg bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 text-[10px] text-center px-1"
                             title={`Não foi possível carregar: ${path}`}
                           >
                             Foto indispon.
@@ -196,6 +260,19 @@ export default function EvolutionTimeline({ evolutions, photoUrls = {} }: Props)
           })}
         </div>
       </div>
+
+      {/* Lightbox global pra galeria. Renderizado no topo do componente
+          (fora do map) pra ficar acima de qualquer card e cobrir toda tela. */}
+      <PhotoLightbox
+        open={!!lightbox && lightboxUrls.length > 0}
+        urls={lightboxUrls}
+        index={lightbox?.index ?? 0}
+        onClose={() => setLightbox(null)}
+        onIndexChange={(next) =>
+          setLightbox((prev) => (prev ? { ...prev, index: next } : prev))
+        }
+        altPrefix="Foto da evolução"
+      />
     </div>
   )
 }

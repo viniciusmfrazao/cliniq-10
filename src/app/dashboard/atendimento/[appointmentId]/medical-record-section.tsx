@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import AutoTextarea from '@/components/ui/AutoTextarea'
+import PhotoLightbox from '@/components/ui/PhotoLightbox'
 
 type Props = {
   patient: { id: string; name: string }
@@ -57,6 +58,18 @@ export default function MedicalRecordSection({
   const [saved, setSaved] = useState(false)
   const [photos, setPhotos] = useState<LocalPhoto[]>([])
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
+  // Lightbox: qual record + qual índice de foto está aberto.
+  const [lightbox, setLightbox] = useState<{ recordId: string; index: number } | null>(null)
+
+  // URLs do lightbox (só do record aberto, com signed URL resolvida).
+  const lightboxUrls = useMemo(() => {
+    if (!lightbox) return [] as string[]
+    const rec = medicalRecords.find((r) => r.id === lightbox.recordId)
+    if (!rec?.photos) return []
+    return rec.photos
+      .map((p) => signedUrls[p])
+      .filter((u): u is string => !!u)
+  }, [lightbox, medicalRecords, signedUrls])
 
   const [form, setForm] = useState({
     complaint: '',
@@ -413,28 +426,42 @@ export default function MedicalRecordSection({
                         {record.content}
                       </p>
                       {record.photos && record.photos.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-3 grid grid-cols-4 sm:grid-cols-5 gap-2">
                           {record.photos.map((path, idx) => {
                             const url = signedUrls[path]
+                            // Mapeia o índice do thumb pro índice no array
+                            // de URLs válidas (o lightbox navega só nelas).
+                            const validUrls = (record.photos ?? [])
+                              .map((p) => signedUrls[p])
+                              .filter((u): u is string => !!u)
+                            const lightboxIndex = url ? validUrls.indexOf(url) : -1
+
                             return url ? (
-                              <a
+                              <button
                                 key={`${record.id}-${idx}`}
-                                href={url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block w-14 h-14 rounded-lg overflow-hidden border border-slate-200 hover:border-violet-400 transition-colors"
-                                title="Abrir foto"
+                                type="button"
+                                onClick={() =>
+                                  setLightbox({
+                                    recordId: record.id,
+                                    index: lightboxIndex >= 0 ? lightboxIndex : 0,
+                                  })
+                                }
+                                className="relative block aspect-square rounded-lg overflow-hidden border border-slate-200 hover:border-violet-400 hover:ring-2 hover:ring-violet-100 transition-all group"
+                                title="Clique para ampliar"
                               >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                   src={url}
                                   alt={`Foto ${idx + 1}`}
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  loading="lazy"
                                 />
-                              </a>
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                              </button>
                             ) : (
                               <div
                                 key={`${record.id}-${idx}`}
-                                className="w-14 h-14 rounded-lg bg-slate-200 animate-pulse"
+                                className="aspect-square rounded-lg bg-slate-200 animate-pulse"
                               />
                             )
                           })}
@@ -467,6 +494,19 @@ export default function MedicalRecordSection({
           </div>
         )}
       </div>
+
+      {/* Lightbox de fotos do histórico — abre quando o pro clica em uma
+          thumb pra ver a foto em tamanho cheio com swipe/setas. */}
+      <PhotoLightbox
+        open={!!lightbox && lightboxUrls.length > 0}
+        urls={lightboxUrls}
+        index={lightbox?.index ?? 0}
+        onClose={() => setLightbox(null)}
+        onIndexChange={(next) =>
+          setLightbox((prev) => (prev ? { ...prev, index: next } : prev))
+        }
+        altPrefix="Foto do prontuário"
+      />
     </div>
   )
 }

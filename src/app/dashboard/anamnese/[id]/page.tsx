@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
-import Image from 'next/image'
+import CopyAnamneseLink from './copy-link-button'
 
 export default async function AnamneseDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
@@ -211,17 +211,7 @@ export default async function AnamneseDetailPage({ params }: { params: { id: str
           </div>
           <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Aguardando preenchimento</h3>
           <p className="text-slate-500 dark:text-slate-400 mb-4">O paciente ainda não preencheu esta ficha.</p>
-          <button
-            onClick={() => {
-              const url = `${window.location.origin}/anamnese/${anamnese.token}`
-              navigator.clipboard.writeText(url)
-              alert('Link copiado!')
-            }}
-            className="btn-secondary inline-flex items-center gap-2"
-          >
-            <Icon name="clipboard" className="w-4 h-4" />
-            Copiar link novamente
-          </button>
+          <CopyAnamneseLink token={anamnese.token} />
         </div>
       )}
 
