@@ -7,6 +7,9 @@
 > - [~] Em andamento
 > - [ ] Pendente
 
+> 🤖 **Roadmap da Donna (auto-atendimento WhatsApp):** ver [`ROADMAP-DONNA.md`](./ROADMAP-DONNA.md)
+>   — 9 milestones decididos com a clínica em 28/04/2026 (preços, lead-first, follow-up, escalonamento, confirmação D-1). Não esquecer.
+
 ---
 
 ## 1) Erros e pontos de atenção (achados na varredura)
