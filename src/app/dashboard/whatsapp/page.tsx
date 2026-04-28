@@ -649,9 +649,16 @@ function MessageBubble({ msg }: { msg: Message }) {
           </a>
         )}
 
-        {msg.kind === 'image' && !msg.mediaUrl && (
+        {msg.kind === 'image' && !msg.mediaUrl && msg.mediaPath && (
           <div className="mb-1 px-3 py-2 rounded-xl bg-black/10 text-xs italic">
-            🖼️ Imagem (carregando...)
+            🖼️ Imagem (carregando…)
+          </div>
+        )}
+
+        {msg.kind === 'image' && !msg.mediaUrl && !msg.mediaPath && (
+          <div className="mb-1 px-3 py-2 rounded-xl bg-amber-500/20 text-xs italic flex items-center gap-2">
+            <span>🖼️</span>
+            <span>Imagem (não foi possível baixar — confira no celular)</span>
           </div>
         )}
 
@@ -661,10 +668,17 @@ function MessageBubble({ msg }: { msg: Message }) {
           </audio>
         )}
 
-        {msg.kind === 'audio' && !msg.mediaUrl && (
+        {msg.kind === 'audio' && !msg.mediaUrl && msg.mediaPath && (
           <div className="px-2 py-1 rounded-lg bg-black/10 text-xs italic flex items-center gap-2">
             <Icon name="mic" className="w-3 h-3" />
-            Áudio recebido (carregando…)
+            Áudio (carregando…)
+          </div>
+        )}
+
+        {msg.kind === 'audio' && !msg.mediaUrl && !msg.mediaPath && (
+          <div className="px-2 py-1 rounded-lg bg-amber-500/20 text-xs italic flex items-center gap-2">
+            <Icon name="mic" className="w-3 h-3" />
+            Áudio (não foi possível baixar — confira no celular)
           </div>
         )}
 

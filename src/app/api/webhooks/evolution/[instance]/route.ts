@@ -130,8 +130,20 @@ function pickMessageDetails(message: unknown): ParsedMessage {
   return empty
 }
 
+/**
+ * Remove parametros tipo "; codecs=opus" do mimetype.
+ * O bucket do Supabase Storage compara com `allowed_mime_types` por
+ * match exato — se vier `audio/ogg; codecs=opus`, o upload é rejeitado
+ * silenciosamente porque o bucket só aceita `audio/ogg`.
+ */
+function cleanMimeType(mime: string | null | undefined): string | null {
+  if (!mime) return null
+  return mime.split(';')[0].trim().toLowerCase() || null
+}
+
 function extFromMime(mime: string | null | undefined): string {
-  if (!mime) return 'bin'
+  const cleaned = cleanMimeType(mime)
+  if (!cleaned) return 'bin'
   const map: Record<string, string> = {
     'image/jpeg': 'jpg',
     'image/jpg': 'jpg',
@@ -149,9 +161,7 @@ function extFromMime(mime: string | null | undefined): string {
     'video/webm': 'webm',
     'application/pdf': 'pdf',
   }
-  const cleaned = mime.split(';')[0].trim().toLowerCase()
   if (map[cleaned]) return map[cleaned]
-  // fallback: pega depois da barra
   return cleaned.split('/').pop() || 'bin'
 }
 
@@ -423,6 +433,8 @@ export async function POST(
         // base64 e salvar no Storage privado.
         let mediaUrl: string | null = null
         let mediaPath: string | null = null
+        let mimetype: string | null = parsed.mimetype
+        let fileName: string | null = parsed.fileName
         const isMedia =
           parsed.kind === 'image' ||
           parsed.kind === 'audio' ||
@@ -431,8 +443,6 @@ export async function POST(
 
         if (isMedia) {
           let base64: string | null = parsed.inlineBase64
-          let mimetype: string | null = parsed.mimetype
-          let fileName: string | null = parsed.fileName
 
           if (!base64 && messageId) {
             const fetched = await fetchEvolutionMediaBase64({
@@ -462,30 +472,47 @@ export async function POST(
               const ext = extFromMime(mimetype)
               const safeId = (messageId ?? `${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-')
               const path = `${clinicId}/${phone}/${safeId}.${ext}`
+              // Limpa parametros tipo "; codecs=opus" — o bucket compara com
+              // `allowed_mime_types` por match exato e rejeita silenciosamente
+              // se o mime tiver codec parameters.
+              const cleanedMime =
+                cleanMimeType(mimetype) || 'application/octet-stream'
+              debugTrace.push(
+                `media upload: kind=${parsed.kind} bytes=${buffer.length} mime=${cleanedMime}`,
+              )
               const up = await svc.storage
                 .from('whatsapp-media')
                 .upload(path, buffer, {
-                  contentType: mimetype || 'application/octet-stream',
+                  contentType: cleanedMime,
                   upsert: true,
                 })
               if (up.error) {
-                internalErrors.push(`storage upload: ${up.error.message}`)
+                internalErrors.push(
+                  `storage upload (mime=${cleanedMime}, ext=${ext}): ${up.error.message}`,
+                )
               } else {
                 mediaPath = path
                 // gera signed URL de 7 dias pra UI conseguir renderizar diretamente
                 const signed = await svc.storage
                   .from('whatsapp-media')
                   .createSignedUrl(path, 60 * 60 * 24 * 7)
-                if (signed.data?.signedUrl) {
+                if (signed.error) {
+                  internalErrors.push(`signed url: ${signed.error.message}`)
+                } else if (signed.data?.signedUrl) {
                   mediaUrl = signed.data.signedUrl
                 }
                 debugTrace.push(`media stored: ${path}`)
               }
+              // Atualiza o mimetype salvo no metadata pra a versao limpa
+              // (deixa o frontend tranquilo pra renderizar audio/video tag)
+              mimetype = cleanedMime
             } catch (err) {
               internalErrors.push(
                 `decode/upload base64: ${err instanceof Error ? err.message : String(err)}`,
               )
             }
+          } else {
+            internalErrors.push(`media sem base64 disponivel (kind=${parsed.kind})`)
           }
         }
 
@@ -502,8 +529,8 @@ export async function POST(
             evolution_message_id: messageId,
             push_name: pushName,
             kind: parsed.kind,
-            mimetype: parsed.mimetype,
-            file_name: parsed.fileName,
+            mimetype: cleanMimeType(mimetype) ?? cleanMimeType(parsed.mimetype),
+            file_name: fileName ?? parsed.fileName,
             media_path: mediaPath,
             media_url: mediaUrl,
             caption: parsed.text || null,

@@ -184,6 +184,27 @@ export default function WhatsappConfigPage() {
     }
   }
 
+  async function setupBuckets() {
+    setError(null)
+    setBusy('buckets')
+    try {
+      const r = await fetch('/api/admin/storage/setup', { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      const lines = (j.buckets ?? [])
+        .map(
+          (b: { bucket: string; action: string; error?: string }) =>
+            `• ${b.bucket}: ${b.action}${b.error ? ` (${b.error})` : ''}`,
+        )
+        .join('\n')
+      alert(`Buckets configurados!\n\n${lines}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function destroy() {
     if (
       !confirm(
@@ -485,6 +506,14 @@ export default function WhatsappConfigPage() {
               className="px-3 py-1.5 text-xs rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
             >
               {busy === 'refix' ? 'Refixando…' : 'Refixar webhook na Evolution'}
+            </button>
+            <button
+              onClick={setupBuckets}
+              disabled={busy !== null}
+              title="Cria/atualiza buckets de mídia (whatsapp-media e medical-attachments). Necessário pra áudio/imagem do chat e fotos do prontuário."
+              className="px-3 py-1.5 text-xs rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
+            >
+              {busy === 'buckets' ? 'Configurando…' : '🪣 Configurar buckets de mídia'}
             </button>
           </div>
           {diag && (
