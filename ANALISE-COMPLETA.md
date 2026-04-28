@@ -196,7 +196,7 @@ Diretórios vazios deixados por uma expansão de chaves que o PowerShell não in
 2. [x] Fix #2: Auth em `/api/evolution/test` (super admin only + validação de protocolo da URL).
 3. [x] Fix #3: `CRON_SECRET` ausente devolve 503 (cron_not_configured) em vez de liberar — em 5 rotas: nps, birthdays, appointment-reminders, recall-inactive, reminders.
 4. [x] Fix #4: `/api/invite` recusa convite (409) se e-mail já existe no Auth, em vez de trocar a senha. Sem mais takeover entre clínicas.
-5. [x] Fix #5: IP da assinatura (anamnese + documentos) lido de `x-forwarded-for` via novo helper `src/lib/client-ip.ts`. Front limpou `body.ip`.
+5. [x] Fix #5: IP da assinatura (anamnese + documentos) lido de `x-forwarded-for` via novo helper `src/lib/client-ip.ts`. Front limpou `body.ip`. **Validado em produção em 28/04/2026 12h05** via `scripts/auditoria-assinaturas.sql`: 2 anamneses pós-fix gravaram IPv4 brasileiros válidos (`189.39.25.96`, `200.251.129.101`); registros anteriores ao deploy (1 anamnese null + 1 documento `'captured'`) são histórico imutável.
 6. [x] Fix #6: `searchParams.q` em `/dashboard/injetaveis` passa por `sanitizeSearchTerm`.
 7. [x] Fix #7: Pastas-fantasma `src/{app/...` e `src/components/{layout,ui}` removidas.
 
@@ -206,31 +206,31 @@ Diretórios vazios deixados por uma expansão de chaves que o PowerShell não in
   - Reusa anamnese ativa (`pending`/`viewed`) com `expires_at` no futuro — sem duplicar.
   - Sem WhatsApp conectado ou paciente sem telefone: copia o link no clipboard e avisa.
   - Componente `src/app/dashboard/agenda/send-anamnese-button.tsx` plugado no popover do `AppointmentCard`.
+- [x] **Anamnese visível no atendimento e no histórico do paciente** (28/04/2026)
+  - Componente `src/components/anamnese/AnamneseSummaryCard.tsx` (compact|full) com chips de alerta clínico.
+  - Atendimento: card "Anamnese mais recente" abaixo do prontuário com gestante/lactante/alergias/herpes/auto-imune/fumante/medicamentos.
+  - Tab "evoluções" da Central do Paciente virou "Histórico do paciente" e mistura evoluções + anamneses por data, com filtro próprio.
 
-#### Como validar o `signature_ip` (Fix #5) no banco
-Depois que um paciente assinar pelo link, rodar no SQL Editor do Supabase:
-```sql
--- Últimas anamneses preenchidas: deve trazer IP real, não 'captured' nem null
-select id, clinic_id, patient_id, status, signature_ip,
-       length(coalesce(signature_data,'')) as signature_size,
-       completed_at, created_at
-from anamneses
-where status = 'completed'
-order by completed_at desc nulls last
-limit 10;
+#### Validação jurídica do `signature_ip` (Fix #5)
+Script versionado em `scripts/auditoria-assinaturas.sql` (auditoria reprodutível).
 
--- Documentos assinados: idem
-select id, clinic_id, patient_id, status, signature_ip,
-       length(coalesce(signature_data,'')) as signature_size,
-       signed_at, sent_at
-from documents_sent
-where signed_at is not null
-order by signed_at desc
-limit 10;
-```
-Esperado **depois** dos Fixes:
-- `signature_ip` populado com IP real (ex.: `200.x.x.x`) ou, em casos raros, `null` (quando o proxy não setar XFF).
-- Antes do Fix #5 ficava `'captured'` (literal) ou vinha do body falsificável.
+**Resultado da validação em produção (28/04/2026 12h05):**
+
+| Origem | OK (IP real) | Sem IP (null) | Bug antigo (`'captured'`) | Total |
+|---|---|---|---|---|
+| `anamneses` | 2 | 1 | 0 | 3 |
+| `documents_sent` | 0 | 0 | 1 | 1 |
+
+- Pós-fix: 2 anamneses gravaram IPv4 brasileiros válidos (`189.39.25.96`, `200.251.129.101`).
+- Pré-fix (24/04): 1 anamnese sem IP + 1 documento com `'captured'` — histórico imutável, mas novos registros vêm corretos.
+
+**Conjunto probatório por assinatura (LGPD + Lei 14.063/2020 — assinatura simples):**
+- `patient_id` → vínculo ao paciente (nome, CPF).
+- `completed_at` → timestamp do ato (com timezone).
+- `signature_ip` → origem da requisição (capturada via `x-forwarded-for`).
+- `signature_data` → imagem do canvas em PNG base64.
+- `token` → 32 chars gerados por `crypto.getRandomValues`, vincula a assinatura ao link enviado pra aquele paciente específico.
+- `sent_by` → user da clínica que disparou.
 
 ### 🟡 Próximas 2-3 semanas
 8. [ ] Paralelizar dashboard + índices faltantes.
