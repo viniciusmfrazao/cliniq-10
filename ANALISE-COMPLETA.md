@@ -173,12 +173,23 @@ Diretórios vazios deixados por uma expansão de chaves que o PowerShell não in
 - [ ] Logs de webhook (já existe `evolution_webhook_logs`) — adicionar UI de inspeção rápida em `/admin/webhooks/logs` (parcial em logs-viewer).
 
 ### 6.4 Setup que falta documentar
-- [ ] Variáveis obrigatórias por ambiente: `CRON_SECRET`, `N8N_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `evolution_*` em `app_settings`, `n8n_donna_*` em `app_settings`.
+- [ ] Variáveis **obrigatórias** por ambiente: `CRON_SECRET`, `N8N_WEBHOOK_SECRET` (env Vercel) **ou** `app_settings.n8n_donna_secret` (Supabase), `evolution_*` em `app_settings`, `n8n_donna_url` em `app_settings`.
+- [ ] `OPENAI_API_KEY` **não** é usada no código do app hoje — fica configurada no próprio n8n (Credentials). Só será necessária no Vercel quando implementarmos IA direto no Clinike (ex: simulador de botox).
 - [ ] Procedimento de "rotação de secret" (se vazar `n8n_donna_secret`, como atualizar sem quebrar webhook).
 
 ---
 
 ## 7) Resumo priorizado
+
+### Status da configuração de ambiente (28/04/2026 11h)
+- [x] `CRON_SECRET` adicionado no Vercel (Production + Preview, Sensitive)
+- [x] `N8N_WEBHOOK_SECRET` adicionado no Vercel (Production + Preview, Sensitive)
+- [ ] **`SUPABASE_SERVICE_ROLE_KEY` está com "Needs Attention"** — investigar e corrigir (provavelmente marcar como Sensitive)
+- [ ] Forçar **Redeploy** do último commit (sem cache) pra propagar as envs novas
+- [ ] **n8n**: criar Credential "Header Auth" (`x-cliniq-secret` = valor do `N8N_WEBHOOK_SECRET`)
+- [ ] **n8n**: aplicar essa Credential em todos os HTTP Request nodes que batem em `/api/webhooks/n8n`
+- [ ] Rodar os 5 testes via curl (cron 401/200, webhook 401/404, healthcheck 200)
+- [ ] Testar 1 fluxo real do n8n (ex: confirmação WhatsApp)
 
 ### 🔥 Esta semana — segurança e bugs sensíveis
 1. [x] Fix #1: Auth em `/api/webhooks/n8n` (header `x-cliniq-secret` validado contra `app_settings.n8n_donna_secret` ou env `N8N_WEBHOOK_SECRET`).
@@ -188,6 +199,38 @@ Diretórios vazios deixados por uma expansão de chaves que o PowerShell não in
 5. [x] Fix #5: IP da assinatura (anamnese + documentos) lido de `x-forwarded-for` via novo helper `src/lib/client-ip.ts`. Front limpou `body.ip`.
 6. [x] Fix #6: `searchParams.q` em `/dashboard/injetaveis` passa por `sanitizeSearchTerm`.
 7. [x] Fix #7: Pastas-fantasma `src/{app/...` e `src/components/{layout,ui}` removidas.
+
+### ✨ Quick-wins entregues após os fixes
+- [x] **Botão "Anamnese" no popover da agenda** (28/04/2026)
+  - `POST /api/anamnese/send` cria/reaproveita ficha pendente e dispara via Evolution.
+  - Reusa anamnese ativa (`pending`/`viewed`) com `expires_at` no futuro — sem duplicar.
+  - Sem WhatsApp conectado ou paciente sem telefone: copia o link no clipboard e avisa.
+  - Componente `src/app/dashboard/agenda/send-anamnese-button.tsx` plugado no popover do `AppointmentCard`.
+
+#### Como validar o `signature_ip` (Fix #5) no banco
+Depois que um paciente assinar pelo link, rodar no SQL Editor do Supabase:
+```sql
+-- Últimas anamneses preenchidas: deve trazer IP real, não 'captured' nem null
+select id, clinic_id, patient_id, status, signature_ip,
+       length(coalesce(signature_data,'')) as signature_size,
+       completed_at, created_at
+from anamneses
+where status = 'completed'
+order by completed_at desc nulls last
+limit 10;
+
+-- Documentos assinados: idem
+select id, clinic_id, patient_id, status, signature_ip,
+       length(coalesce(signature_data,'')) as signature_size,
+       signed_at, sent_at
+from documents_sent
+where signed_at is not null
+order by signed_at desc
+limit 10;
+```
+Esperado **depois** dos Fixes:
+- `signature_ip` populado com IP real (ex.: `200.x.x.x`) ou, em casos raros, `null` (quando o proxy não setar XFF).
+- Antes do Fix #5 ficava `'captured'` (literal) ou vinha do body falsificável.
 
 ### 🟡 Próximas 2-3 semanas
 8. [ ] Paralelizar dashboard + índices faltantes.

@@ -7,6 +7,7 @@ import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useToast } from '@/components/ui/Toast'
+import SendAnamneseButton from './send-anamnese-button'
 
 type Appointment = {
   id: string
@@ -251,6 +252,17 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 Abrir
               </Link>
             </div>
+
+            {apt.patients?.id && (
+              <div className="flex gap-2">
+                <SendAnamneseButton
+                  patientId={apt.patients.id}
+                  patientName={apt.patients.name}
+                  patientPhone={apt.patients.phone}
+                  appointmentId={apt.id}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
