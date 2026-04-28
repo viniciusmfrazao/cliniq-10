@@ -95,6 +95,7 @@ CREATE TABLE patients (
   zip_code text,
   notes text,
   tags text[],
+  whatsapp_opt_in boolean NOT NULL DEFAULT true,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );

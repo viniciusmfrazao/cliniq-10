@@ -161,6 +161,7 @@ export interface Patient {
   zip_code?: string
   notes?: string
   tags?: string[]
+  whatsapp_opt_in?: boolean
   created_at: string
   updated_at: string
 }

@@ -32,6 +32,20 @@ WHERE template_aniversario IS NULL OR template_aniversario = '';
 
 
 -- ------------------------------------------------------------
+-- 1.b) Coluna whatsapp_opt_in em patients
+-- ------------------------------------------------------------
+-- Necessária pelo cron de aniversário e pelo cron de recall-inactive.
+-- Default true = gentileza inicial pra não chegar 0 envios. Se a clínica
+-- preferir opt-in estrito, ela liga aniversario_optin_required=true em
+-- clinic_automations e ainda assim só manda pra quem tem opt-in.
+ALTER TABLE patients
+  ADD COLUMN IF NOT EXISTS whatsapp_opt_in boolean NOT NULL DEFAULT true;
+
+COMMENT ON COLUMN patients.whatsapp_opt_in IS
+  'Paciente autorizou recebimento de WhatsApp (aniversário, recall, NPS, lembretes). Default true.';
+
+
+-- ------------------------------------------------------------
 -- 2) Tabela de log de envios — garante 1 mensagem por paciente por ano
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS birthday_messages_log (
@@ -125,4 +139,5 @@ COMMENT ON VIEW birthday_today_pending IS
 -- Verificação rápida
 -- ------------------------------------------------------------
 SELECT 'clinic_automations' as tabela, count(*) FROM clinic_automations
-UNION ALL SELECT 'birthday_messages_log', count(*) FROM birthday_messages_log;
+UNION ALL SELECT 'birthday_messages_log', count(*) FROM birthday_messages_log
+UNION ALL SELECT 'patients_with_opt_in', count(*) FROM patients WHERE whatsapp_opt_in IS NOT NULL;
