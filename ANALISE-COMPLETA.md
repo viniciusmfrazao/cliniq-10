@@ -9,6 +9,9 @@
 
 > 🤖 **Roadmap da Donna (auto-atendimento WhatsApp):** ver [`ROADMAP-DONNA.md`](./ROADMAP-DONNA.md)
 >   — 9 milestones decididos com a clínica em 28/04/2026 (preços, lead-first, follow-up, escalonamento, confirmação D-1). Não esquecer.
+>
+> 🚀 **Melhorias com IA (diferencial competitivo):** ver [`MELHORIAS-INOVADORAS.md`](./MELHORIAS-INOVADORAS.md)
+>   — 13 features priorizadas (simulador estético, análise de pele, voice-to-text, predição de no-show, etc).
 
 ---
 
