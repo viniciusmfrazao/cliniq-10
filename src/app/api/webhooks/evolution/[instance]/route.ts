@@ -650,7 +650,10 @@ export async function POST(
           try {
             await forwardToDonna({
               clinicId,
+              instance,
               phone,
+              remoteJid: key?.remoteJid ?? `${phone}@s.whatsapp.net`,
+              messageId: messageId ?? null,
               message: parsed.text || preview,
               pushName,
               kind: parsed.kind,
@@ -705,7 +708,10 @@ export async function POST(
 
 async function forwardToDonna(payload: {
   clinicId: string
+  instance: string
   phone: string
+  remoteJid: string
+  messageId: string | null
   message: string
   pushName?: string
   kind?: ParsedKind
@@ -720,18 +726,44 @@ async function forwardToDonna(payload: {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (n8n_donna_secret) headers['x-cliniq-secret'] = n8n_donna_secret
 
+  // Payload no formato Evolution v2 (messages.upsert) pra preservar
+  // compatibilidade com workflows do n8n que foram desenhados pra
+  // receber direto da Evolution. Inclui campos extras (clinic_id,
+  // _cliniq) pra contexto multi-tenant futuro.
+  const evolutionLikeMessage =
+    payload.kind === 'text' || !payload.kind
+      ? { conversation: payload.message }
+      : payload.kind === 'image'
+        ? { imageMessage: { caption: payload.message, url: payload.mediaUrl ?? undefined } }
+        : payload.kind === 'audio'
+          ? { audioMessage: { url: payload.mediaUrl ?? undefined } }
+          : payload.kind === 'video'
+            ? { videoMessage: { caption: payload.message, url: payload.mediaUrl ?? undefined } }
+            : payload.kind === 'document'
+              ? { documentMessage: { caption: payload.message, url: payload.mediaUrl ?? undefined } }
+              : { conversation: payload.message }
+
   await fetch(n8n_donna_url, {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      event: 'whatsapp_message_received',
+      event: 'messages.upsert',
+      instance: payload.instance,
       clinic_id: payload.clinicId,
       data: {
-        phone: payload.phone,
-        message: payload.message,
-        name: payload.pushName,
+        key: {
+          remoteJid: payload.remoteJid,
+          fromMe: false,
+          id: payload.messageId ?? `cliniq-${Date.now()}`,
+        },
+        message: evolutionLikeMessage,
+        pushName: payload.pushName ?? null,
+        messageType: payload.kind ?? 'text',
+      },
+      _cliniq: {
         kind: payload.kind ?? 'text',
         media_url: payload.mediaUrl ?? null,
+        forwarded_from: 'cliniq-app',
       },
     }),
   })
