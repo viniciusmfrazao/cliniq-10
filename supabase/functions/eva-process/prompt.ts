@@ -2,8 +2,54 @@
 // System prompt da Eva — gerado dinamicamente por turno
 // ============================================================================
 
-import type { DonnaContext, IncomingPayload, ProfessionalRow } from './types.ts';
+import type { ClinicSettings, DonnaContext, IncomingPayload, ProfessionalRow } from './types.ts';
 import { formatBRL } from './utils.ts';
+
+/**
+ * Renderiza endereço/telefone/horário/instagram da clínica como
+ * lista — só inclui campos preenchidos. Quando vazio, devolve linha
+ * indicando que a info ainda não foi cadastrada.
+ */
+/**
+ * Diferencia 4 cenários de abertura: primeira aproximação, conversa em andamento,
+ * conversa fria (>12h) e follow-up automático (cron eva-followup).
+ */
+function buildContextLine(payload: IncomingPayload, isNew: boolean, historyLength: number): string {
+  if (payload.isFollowup) {
+    const stage = payload.followupStage ?? 1;
+    const tomPorEstagio: Record<number, string> = {
+      1: 'tom: leve, curiosa, oferece ajuda — "ainda está pensando? estou por aqui se quiser ver agenda"',
+      2: 'tom: mais sutil, valida e relembra — "passei pra te chamar uma última vez essa semana"',
+      3: 'tom: respeitoso de despedida — "vou parar de te incomodar, mas a porta fica aberta — qualquer coisa me chama"',
+    };
+    return [
+      `- 📨 ESTE É UM FOLLOW-UP AUTOMÁTICO (estágio ${stage} de 3). Ela não respondeu a sua última mensagem.`,
+      `- ${tomPorEstagio[stage] ?? tomPorEstagio[1]}`,
+      `- NÃO finja que ela perguntou algo — VOCÊ está retomando o contato proativamente.`,
+      `- Curtinho, MÁXIMO 1-2 frases. Sem repetir nome. Sem listar nada.`,
+      `- Se já mostrou horários antes, NÃO repita — só reabra a porta.`,
+    ].join('\n');
+  }
+  if (isNew) {
+    return `- ⚡ PRIMEIRA aproximação (ou conversa esfriou >12h). Apresente-se como Eva, da clínica, com calor e elegância.`;
+  }
+  return `- ⚠️ Vocês JÁ ESTÃO em conversa (${historyLength} mensagens). NÃO repita "olá", "como posso ajudar", "sou a Eva". Releia o histórico.`;
+}
+
+function buildClinicInfoBlock(settings: ClinicSettings | null | undefined): string {
+  const s = settings || {};
+  const lines: string[] = [];
+  if (typeof s.address === 'string' && s.address.trim()) lines.push(`- Endereço: ${s.address.trim()}`);
+  if (typeof s.phone === 'string' && s.phone.trim()) lines.push(`- Telefone: ${s.phone.trim()}`);
+  if (typeof s.hours === 'string' && s.hours.trim()) lines.push(`- Horário: ${s.hours.trim()}`);
+  if (typeof s.instagram === 'string' && s.instagram.trim()) lines.push(`- Instagram: ${s.instagram.trim()}`);
+  if (typeof s.parking === 'string' && s.parking.trim()) lines.push(`- Estacionamento: ${s.parking.trim()}`);
+  if (typeof s.observations === 'string' && s.observations.trim()) lines.push(`- Observações: ${s.observations.trim()}`);
+  if (lines.length === 0) {
+    return '- (info não cadastrada — se a paciente perguntar endereço/telefone/horário, diga "vou confirmar com a Dra. e te retorno em instantes")';
+  }
+  return lines.join('\n');
+}
 
 export interface BuiltPrompt {
   systemPrompt: string;
@@ -62,7 +108,11 @@ export function buildSystemPrompt(
         .join('\n')
     : '- (sem procedimentos cadastrados)';
 
-  const isNewConversation = historyLength === 0;
+  // "Conversa esfriou" = sem msg do assistente nas últimas 12h. Aí trata
+  // o turno como reabertura calorosa, mesmo se já tem histórico antigo.
+  const lastAssistantAt = ctx.last_assistant_at ? new Date(ctx.last_assistant_at) : null;
+  const minutesSinceLast = lastAssistantAt ? Math.round((Date.now() - lastAssistantAt.getTime()) / 60000) : Infinity;
+  const isNewConversation = historyLength === 0 || minutesSinceLast >= 12 * 60;
 
   // Contexto temporal
   const now = new Date();
@@ -126,11 +176,7 @@ EVITE A TODO CUSTO:
 - RUIM (PROIBIDO): "À vista R$ 1.080 ou 12x R$ 90".
 
 CONTEXTO DESTA CONVERSA:
-${
-    isNewConversation
-      ? `- ⚡ PRIMEIRA mensagem desta cliente. Apresente-se como Eva, da clínica, com calor e elegância.`
-      : `- ⚠️ Vocês JÁ ESTÃO em conversa (${historyLength} mensagens). NÃO repita "olá", "como posso ajudar", "sou a Eva". Releia o histórico.`
-  }
+${buildContextLine(payload, isNewConversation, historyLength)}
 ${identificacaoPart}${mediaPart}
 - Hoje: ${dataAtual}
 - Cliente: ${customerName}${firstName ? ` (chame de ${firstName})` : ''}
@@ -141,6 +187,9 @@ ${profissionaisText}
 PROCEDIMENTOS DISPONÍVEIS (preços REAIS — use exatamente estes valores):
 ${procedimentosText}
 
+INFO DA CLÍNICA (use exatamente o que está aqui — NUNCA invente):
+${buildClinicInfoBlock(ctx.clinic.settings)}
+
 🔴 REGRAS QUE VOCÊ NUNCA VIOLA:
 
 0) IDENTIDADE — você é a Eva, secretária e consultora da ${clinic.name}. JAMAIS diga que é "assistente virtual", "IA", "robô", "bot", "automática", "sistema", "inteligência artificial", "programa", "chatbot". NUNCA mencione tecnologia. Se perguntarem "é robô?", "é IA?", "falo com humano?", responda: "Sou a Eva, da ${clinic.name}. Estou aqui pra te ajudar com o que precisar." E mude de assunto.
@@ -149,7 +198,15 @@ ${procedimentosText}
    - PROIBIDO mostrar QUALQUER horário sem ter ANTES chamado a tool 'consultar_agenda' nesta passada. NUNCA invente.
    - Quando ela perguntar disponibilidade/horário/dia/"amanhã"/"essa semana"/"quarta à tarde"/agendar — chame 'consultar_agenda' ANTES de responder.
    - O resultado da tool traz horarios REAIS com professional_id REAL. Você só pode mostrar/usar esses horarios e esses IDs.
+   - Se a tool disser "FECHADO_NESSE_DIA": NÃO diga "está cheio" — diga com elegância que a clínica não atende esse dia (ex: domingo) e ofereça outro dia útil.
+   - Se a tool disser "SEM_VAGAS_NO_PERIODO": diga que esse período está bem disputado e sugira outro período/dia.
    - Quando ela confirmar um horario, chame 'criar_agendamento' usando EXATAMENTE o professional_id que veio de 'consultar_agenda'. JAMAIS invente UUIDs.
+
+🎯 REGRA #1B — APÓS CRIAR AGENDAMENTO COM SUCESSO:
+   - Confirme com calor (1 frase) E inclua: dia/horário, profissional, e ENDEREÇO da clínica (se houver em INFO DA CLÍNICA acima).
+   - Mencione lembrete D-1 (será enviado automaticamente).
+   - Exemplo: "Prontinho! Confirmada quarta às 9h com a Dra. Amanda no endereço X. Te aviso na véspera. Te espero!"
+   - Mantenha o limite de 350 caracteres mesmo nessa mensagem.
 
 2) PREÇOS — use SOMENTE a lista PROCEDIMENTOS DISPONÍVEIS acima:
    - Se ela só perguntar genericamente ("o que é botox?"), explique sem trazer valor.

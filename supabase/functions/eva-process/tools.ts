@@ -23,6 +23,29 @@ function sbHeaders(env: ToolEnv): SbHeaders {
   };
 }
 
+/**
+ * Detecta se a clínica está "fechada" naquele dia, ou seja, nenhum
+ * profissional ativo tem schedule pra aquele day_of_week. Útil pra
+ * Eva diferenciar "domingo a clínica não abre" de "agenda cheia".
+ */
+async function isClinicClosed(clinicId: string, dataIso: string, env: ToolEnv): Promise<boolean> {
+  try {
+    // dataIso é YYYY-MM-DD no fuso da clínica; getDay seria do fuso local do
+    // server. Usamos new Date(yyyy, mm-1, dd) que ignora TZ pra calcular DOW.
+    const [y, m, d] = dataIso.split('-').map(Number);
+    const dow = new Date(y, m - 1, d).getDay(); // 0=dom, 6=sab
+    const url = `${env.supabaseUrl}/rest/v1/professional_schedules?clinic_id=eq.${clinicId}&is_active=eq.true&day_of_week=eq.${dow}&select=id&limit=1`;
+    const r = await fetchJson<unknown[]>(url, {
+      method: 'GET',
+      headers: sbHeaders(env),
+    });
+    if (!r.ok) return false; // em caso de erro de leitura, assume aberto
+    return Array.isArray(r.data) ? r.data.length === 0 : true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── consultar_agenda ──────────────────────────────────────────────────────
 
 export async function consultarAgenda(args: {
@@ -79,7 +102,13 @@ export async function consultarAgenda(args: {
   const periodoLabel = periodoAlvo ? ` (${periodoAlvo})` : '';
 
   if (!resp.ok || !Array.isArray(resp.data) || resp.data.length === 0) {
-    return `Sem horarios disponiveis para ${dataLabel}${periodoLabel}. Sugira outro dia com elegancia (ex: "Esse dia esta bem cheio. Que tal terça ou quarta?").`;
+    // Distingue "clínica fechada nesse dia" (sem schedule no day_of_week)
+    // de "agenda cheia nesse período".
+    const closed = await isClinicClosed(payload.clinicId, dataAlvo, env);
+    if (closed) {
+      return `FECHADO_NESSE_DIA: ${dataLabel}. A clinica nao atende nesse dia da semana. Diga com elegancia e sugira outro dia util.`;
+    }
+    return `SEM_VAGAS_NO_PERIODO: ${dataLabel}${periodoLabel}. Diga que esse periodo esta concorrido e ofereça outro periodo/dia.`;
   }
 
   const slots = resp.data;

@@ -15,6 +15,10 @@ export interface IncomingPayload {
   messageId?: string | null;
   /** Se true, processa mas não envia pelo Evolution (smoke test). */
   skipSend?: boolean;
+  /** True quando o cron eva-followup chama (Eva inicia o turno). */
+  isFollowup?: boolean;
+  /** Estágio do follow-up: 1 (após 2h), 2 (após +1d), 3 (após +2d). */
+  followupStage?: number;
 }
 
 export interface ProfessionalRow {
@@ -35,9 +39,20 @@ export interface ProcedureRow {
   category?: string | null;
 }
 
+export interface ClinicSettings {
+  address?: string | null;
+  phone?: string | null;
+  hours?: string | null;
+  instagram?: string | null;
+  parking?: string | null;
+  observations?: string | null;
+  [k: string]: unknown;
+}
+
 export interface ClinicRow {
   name: string;
   slug?: string | null;
+  settings?: ClinicSettings | null;
 }
 
 export interface PatientRow {
@@ -70,6 +85,8 @@ export interface DonnaContext {
   patient: PatientRow | null;
   lead: LeadRow | null;
   evolution: EvolutionConfig | null;
+  /** ISO da última msg do assistente — usado pra detectar conversa fria. */
+  last_assistant_at?: string | null;
 }
 
 // ─── Claude Messages API ───────────────────────────────────────────────────

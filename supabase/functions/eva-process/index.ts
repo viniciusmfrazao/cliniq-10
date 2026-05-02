@@ -71,6 +71,8 @@ function validatePayload(input: unknown): { ok: true; payload: IncomingPayload }
       mediaUrl: typeof i.mediaUrl === 'string' ? i.mediaUrl : null,
       messageId: typeof i.messageId === 'string' ? i.messageId : null,
       skipSend: i.skipSend === true,
+      isFollowup: i.isFollowup === true,
+      followupStage: typeof i.followupStage === 'number' ? i.followupStage : undefined,
     },
   };
 }
@@ -104,10 +106,11 @@ async function loadContext(payload: IncomingPayload): Promise<{ ok: boolean; ctx
       history: Array.isArray(data.history) ? data.history : [],
       professionals: Array.isArray(data.professionals) ? data.professionals : [],
       procedures: Array.isArray(data.procedures) ? data.procedures : [],
-      clinic: data.clinic ?? { name: 'a clínica', slug: null },
+      clinic: data.clinic ?? { name: 'a clínica', slug: null, settings: {} },
       patient: data.patient ?? null,
       lead: data.lead ?? null,
       evolution: data.evolution ?? null,
+      last_assistant_at: data.last_assistant_at ?? null,
     },
   };
 }
@@ -145,6 +148,99 @@ async function ensureLead(payload: IncomingPayload, ctx: DonnaContext): Promise<
       procedure_id: null,
     };
   }
+}
+
+// ─── Follow-up: agenda próximo / cancela / marca lost ─────────────────────
+
+const FOLLOWUP_DELAYS_MS: Record<number, number> = {
+  // Após qual count, em quanto tempo deve disparar o PRÓXIMO:
+  // count=0 (acabou de responder) → próximo em 2h
+  // count=1 (mandei #1) → próximo em 24h
+  // count=2 (mandei #2) → próximo em 48h
+  // count=3 (mandei #3) → não há próximo, marca lost
+  0: 2 * 60 * 60 * 1000,
+  1: 24 * 60 * 60 * 1000,
+  2: 48 * 60 * 60 * 1000,
+};
+
+async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext, opts: {
+  appointmentCreated: boolean;
+  isFollowupRun: boolean;
+}): Promise<void> {
+  if (!ctx.lead?.id) return;
+
+  // Se a paciente está convertida (criou agendamento) → cancela follow-up
+  if (opts.appointmentCreated) {
+    await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        eva_followup_count: 0,
+        eva_next_followup_at: null,
+      }),
+    }).catch(() => {});
+    return;
+  }
+
+  if (opts.isFollowupRun) {
+    // Estamos respondendo a um cron de follow-up — incrementa o count e
+    // agenda o próximo (ou marca lost se já chegou no 3).
+    const newCount = ((ctx.lead as any).eva_followup_count ?? 0) + 1;
+    if (newCount >= 4) {
+      // Esgotou tentativas
+      await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eva_followup_count: 3,
+          eva_next_followup_at: null,
+          status: 'lost',
+          lost_reason: 'sem_resposta_72h',
+        }),
+      }).catch(() => {});
+      return;
+    }
+    const delay = FOLLOWUP_DELAYS_MS[newCount] ?? null;
+    const next = delay ? new Date(Date.now() + delay).toISOString() : null;
+    await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        eva_followup_count: newCount,
+        eva_next_followup_at: next,
+      }),
+    }).catch(() => {});
+    return;
+  }
+
+  // Caso normal: paciente respondeu → reseta contagem e agenda primeiro
+  // follow-up pra daqui a 2h. Importante: SÓ agenda se não chegou via cron.
+  const delay = FOLLOWUP_DELAYS_MS[0];
+  await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      eva_followup_count: 0,
+      eva_next_followup_at: new Date(Date.now() + delay).toISOString(),
+      last_whatsapp_at: new Date().toISOString(),
+    }),
+  }).catch(() => {});
 }
 
 // ─── Salvar turno (user + assistant) em eva_conversations ──────────────────
@@ -240,18 +336,36 @@ Deno.serve(async (req) => {
   const history = ctx.history.slice(-20);
   const messages: ClaudeMessage[] = [
     ...history.map((m) => ({ role: m.role, content: m.content })),
-    { role: 'user' as const, content: payload.userText },
   ];
+
+  // Em follow-up, o "user message" é virtual: pedimos pra Eva proativamente
+  // gerar a próxima mensagem com base no estágio. Mandamos isso como user
+  // turn pra Claude saber o que fazer.
+  if (payload.isFollowup) {
+    messages.push({
+      role: 'user',
+      content: '[SISTEMA — não responda essa frase: gere agora a mensagem de follow-up apropriada pro estágio descrito no system prompt. Curta, calorosa, sem repetir o que já foi dito.]',
+    });
+  } else {
+    messages.push({ role: 'user', content: payload.userText });
+  }
 
   // Remove o eco do userText caso ja tenha sido inserido pelo webhook
   // (evita duplicacao no contexto pra Claude)
-  while (messages.length >= 2 && messages[messages.length - 1].content === payload.userText && messages[messages.length - 2].role === 'user' && messages[messages.length - 2].content === payload.userText) {
+  while (
+    !payload.isFollowup &&
+    messages.length >= 2 &&
+    messages[messages.length - 1].content === payload.userText &&
+    messages[messages.length - 2].role === 'user' &&
+    messages[messages.length - 2].content === payload.userText
+  ) {
     messages.pop();
   }
 
   const built = buildSystemPrompt(ctx, payload, history.length);
 
-  // 4) Loop Claude
+  // 4) Loop Claude — captura se houve criar_agendamento bem sucedido
+  let appointmentCreated = false;
   const conv = await runConversation({
     apiKey: ANTHROPIC_API_KEY,
     systemPrompt: built.systemPrompt,
@@ -263,6 +377,9 @@ Deno.serve(async (req) => {
         supabaseUrl: SUPABASE_URL,
         serviceKey: SERVICE_ROLE_KEY,
       });
+      if (name === 'criar_agendamento' && r.meta?.appointmentCreated === true) {
+        appointmentCreated = true;
+      }
       return r.resultStr;
     },
   });
@@ -278,6 +395,12 @@ Deno.serve(async (req) => {
     ? { ok: true, error: 'skipSend=true' as string | undefined }
     : await sendViaEvolution(payload, ctx, finalText);
   if (!send.ok) errors.push(`sendEvolution: ${send.error}`);
+
+  // 7) Follow-up: agenda/cancela próxima ronda do cron eva-followup
+  await scheduleNextFollowup(payload, ctx, {
+    appointmentCreated,
+    isFollowupRun: payload.isFollowup === true,
+  }).catch((e) => errors.push(`scheduleNextFollowup: ${e?.message ?? e}`));
 
   const elapsedMs = Date.now() - t0;
 
