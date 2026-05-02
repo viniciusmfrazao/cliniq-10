@@ -103,7 +103,11 @@ export function buildSystemPrompt(
             : 'consultar valor';
           const profNames = (pr.professional_ids || []).map((id) => profById.get(id)).filter(Boolean);
           const profPart = profNames.length > 0 ? ` — Faz: ${profNames.join(', ')}` : '';
-          return `- ${pr.name} (${valorPart})${profPart}`;
+          // Descricao = regras/observacoes do procedimento (ex: "so nas pernas",
+          // "indicado para...", "contraindicado em..."). Eva DEVE respeitar.
+          const desc = pr.description?.trim();
+          const obsPart = desc ? `\n  📌 Obs: ${desc}` : '';
+          return `- ${pr.name} (${valorPart})${profPart}${obsPart}`;
         })
         .join('\n')
     : '- (sem procedimentos cadastrados)';
@@ -186,6 +190,11 @@ ${profissionaisText}
 
 PROCEDIMENTOS DISPONÍVEIS (preços REAIS — use exatamente estes valores):
 ${procedimentosText}
+
+⚠️ REGRA DOS PROCEDIMENTOS — RESPEITE AS OBSERVAÇÕES:
+- Todo item com "📌 Obs:" tem uma regra dura (área tratada, contraindicação, requisito). VOCÊ DEVE respeitar 100%.
+- Exemplo: se ela perguntar "vocês fazem microvasos no rosto?" e a Obs diz "tratamento exclusivo para pernas", você responde com elegância que esse tratamento é exclusivo para pernas e oferece uma alternativa adequada para o rosto (avaliação ou outro procedimento da lista).
+- NUNCA prometa um procedimento fora do que a Obs permite. Em caso de dúvida sobre área/indicação, ofereça avaliação presencial.
 
 INFO DA CLÍNICA (use exatamente o que está aqui — NUNCA invente):
 ${buildClinicInfoBlock(ctx.clinic.settings)}

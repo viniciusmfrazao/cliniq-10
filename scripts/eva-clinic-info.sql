@@ -13,7 +13,7 @@
 UPDATE clinics
 SET settings = jsonb_strip_nulls(jsonb_build_object(
   -- ENDEREÇO COMPLETO (obrigatório se quiser que ela informe local)
-  'address', 'Rua Exemplo, 123 - Sala 4 - Centro - Uberlandia/MG - CEP 38400-000',
+  'address', 'R. Roosevelt de Oliveira, 305 - Centro, Uberlândia/MG',
 
   -- TELEFONE de contato direto da recepção (opcional — paciente já está no WhatsApp)
   'phone', '(34) 3000-0000',
@@ -25,7 +25,7 @@ SET settings = jsonb_strip_nulls(jsonb_build_object(
   'instagram', '@clinicasarahpina',
 
   -- ESTACIONAMENTO/REFERÊNCIAS (opcional — útil pra tirar dúvidas comuns)
-  'parking', 'Estacionamento conveniado no edifício, R$ 5 por hora.',
+  'parking', 'Estacionamento disponível',
 
   -- OBSERVAÇÕES extras (opcional — qualquer coisa que ajude a Eva)
   'observations', 'Chegue 10 minutos antes do horário para confortável check-in.'
