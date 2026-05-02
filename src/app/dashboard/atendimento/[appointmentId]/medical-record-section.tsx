@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
@@ -58,17 +58,16 @@ export default function MedicalRecordSection({
   const [saved, setSaved] = useState(false)
   const [photos, setPhotos] = useState<LocalPhoto[]>([])
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
-  // Lightbox: qual record + qual índice de foto está aberto.
+
+  // State do lightbox: qual record abriu e em qual índice. Só é resolvido
+  // quando temos signed URLs disponíveis pra todas as fotos do record.
   const [lightbox, setLightbox] = useState<{ recordId: string; index: number } | null>(null)
 
-  // URLs do lightbox (só do record aberto, com signed URL resolvida).
   const lightboxUrls = useMemo(() => {
     if (!lightbox) return [] as string[]
-    const rec = medicalRecords.find((r) => r.id === lightbox.recordId)
-    if (!rec?.photos) return []
-    return rec.photos
-      .map((p) => signedUrls[p])
-      .filter((u): u is string => !!u)
+    const record = medicalRecords.find((r) => r.id === lightbox.recordId)
+    if (!record?.photos) return []
+    return record.photos.map((p) => signedUrls[p]).filter((u): u is string => !!u)
   }, [lightbox, medicalRecords, signedUrls])
 
   const [form, setForm] = useState({
@@ -429,8 +428,10 @@ export default function MedicalRecordSection({
                         <div className="mt-3 grid grid-cols-4 sm:grid-cols-5 gap-2">
                           {record.photos.map((path, idx) => {
                             const url = signedUrls[path]
-                            // Mapeia o índice do thumb pro índice no array
-                            // de URLs válidas (o lightbox navega só nelas).
+                            // Mapeia o índice do thumb pro índice na lista
+                            // de fotos válidas (com signed URL) — necessário
+                            // pro lightbox abrir na foto certa quando
+                            // alguma foto falhou ao gerar URL.
                             const validUrls = (record.photos ?? [])
                               .map((p) => signedUrls[p])
                               .filter((u): u is string => !!u)
@@ -449,10 +450,9 @@ export default function MedicalRecordSection({
                                 className="relative block aspect-square rounded-lg overflow-hidden border border-slate-200 hover:border-violet-400 hover:ring-2 hover:ring-violet-100 transition-all group"
                                 title="Clique para ampliar"
                               >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                   src={url}
-                                  alt={`Foto ${idx + 1}`}
+                                  alt={`Foto ${idx + 1} do atendimento`}
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                   loading="lazy"
                                 />
@@ -495,8 +495,7 @@ export default function MedicalRecordSection({
         )}
       </div>
 
-      {/* Lightbox de fotos do histórico — abre quando o pro clica em uma
-          thumb pra ver a foto em tamanho cheio com swipe/setas. */}
+      {/* Lightbox global pra ampliar fotos do histórico */}
       <PhotoLightbox
         open={!!lightbox && lightboxUrls.length > 0}
         urls={lightboxUrls}
@@ -505,7 +504,7 @@ export default function MedicalRecordSection({
         onIndexChange={(next) =>
           setLightbox((prev) => (prev ? { ...prev, index: next } : prev))
         }
-        altPrefix="Foto do prontuário"
+        altPrefix="Foto do atendimento"
       />
     </div>
   )
