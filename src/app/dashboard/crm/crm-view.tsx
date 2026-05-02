@@ -34,8 +34,27 @@ type Lead = {
   ai_priority: string | null
   ai_suggested_action: string | null
   ai_sentiment: string | null
+  // Eva follow-up
+  eva_followup_count: number | null
+  eva_next_followup_at: string | null
   created_at: string
   updated_at: string
+}
+
+/**
+ * Devolve um badge de follow-up pendente (Eva enviou msg e ta esperando
+ * resposta da paciente). null se nao tem follow-up ativo.
+ */
+function getFollowupBadge(lead: Lead): { label: string; tone: 'amber' | 'orange' | 'red' } | null {
+  if (!lead.eva_next_followup_at) return null
+  if (lead.status === 'converted' || lead.status === 'lost') return null
+  const count = lead.eva_followup_count ?? 0
+  // count = 0: aguardando 1a resposta da paciente, follow-up agendado p/ daqui 2h
+  // count = 1: ja mandou 1 follow-up, proxima tentativa em 24h
+  // count = 2: ja mandou 2 follow-ups, proxima (ultima) em 48h
+  if (count >= 2) return { label: 'Última chance', tone: 'red' }
+  if (count === 1) return { label: 'Aguardando 24h', tone: 'orange' }
+  return { label: 'Aguardando resposta', tone: 'amber' }
 }
 
 type CRMSettings = {
@@ -67,9 +86,9 @@ type Props = {
 
 const DEFAULT_STAGES = [
   { id: 'new', label: 'Novo Lead', color: 'slate', order: 0 },
-  { id: 'contacted', label: 'Contatado', color: 'blue', order: 1 },
-  { id: 'scheduled', label: 'Agendou', color: 'amber', order: 2 },
-  { id: 'converted', label: 'Convertido', color: 'emerald', order: 3 },
+  { id: 'contacted', label: 'Em Conversa', color: 'blue', order: 1 },
+  { id: 'scheduled', label: 'Agendado', color: 'amber', order: 2 },
+  { id: 'converted', label: 'Cliente', color: 'emerald', order: 3 },
   { id: 'lost', label: 'Perdido', color: 'red', order: 4 },
 ]
 
@@ -310,7 +329,15 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   const source = SOURCES.find(s => s.id === lead.source)
                   const aiPriority = lead.ai_priority ? AI_PRIORITY_CONFIG[lead.ai_priority as keyof typeof AI_PRIORITY_CONFIG] : null
                   const needsContact = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
-                  
+                  const followup = getFollowupBadge(lead)
+                  const followupClass =
+                    followup?.tone === 'red'
+                      ? 'bg-red-100 text-red-700 border-red-200'
+                      : followup?.tone === 'orange'
+                        ? 'bg-orange-100 text-orange-700 border-orange-200'
+                        : 'bg-amber-100 text-amber-700 border-amber-200'
+                  const followupEmoji = followup?.tone === 'red' ? '🔴' : followup?.tone === 'orange' ? '🟠' : '🟡'
+
                   return (
                     <div
                       key={lead.id}
@@ -330,6 +357,12 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                       </div>
                       {lead.phone && (
                         <p className="text-xs text-slate-500 mb-1">{lead.phone}</p>
+                      )}
+                      {followup && (
+                        <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md border mb-2 ${followupClass}`} title="Eva está aguardando resposta da paciente">
+                          <span>{followupEmoji}</span>
+                          <span className="font-medium">{followup.label}</span>
+                        </div>
                       )}
                       <div className="flex flex-wrap gap-1 mb-2">
                         {lead.interest && (
@@ -362,7 +395,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                               <button
                                 onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'contacted') }}
                                 className="p-1 text-blue-500 hover:bg-blue-50 rounded"
-                                title="Marcar como contatado"
+                                title="Mover para Em Conversa"
                               >
                                 <Icon name="phone" className="w-4 h-4" />
                               </button>
@@ -371,7 +404,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                               <button
                                 onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'scheduled') }}
                                 className="p-1 text-amber-500 hover:bg-amber-50 rounded"
-                                title="Marcar como agendou"
+                                title="Mover para Agendado"
                               >
                                 <Icon name="calendar" className="w-4 h-4" />
                               </button>
@@ -380,7 +413,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                               <button
                                 onClick={(e) => { e.stopPropagation(); updateLeadStatus(lead.id, 'converted') }}
                                 className="p-1 text-emerald-500 hover:bg-emerald-50 rounded"
-                                title="Marcar como convertido"
+                                title="Marcar como Cliente"
                               >
                                 <Icon name="check" className="w-4 h-4" />
                               </button>

@@ -93,6 +93,7 @@ async function loadContext(payload: IncomingPayload): Promise<{ ok: boolean; ctx
     body: JSON.stringify({
       p_clinic_id: payload.clinicId,
       p_phone: payload.phone,
+      p_customer_name: payload.customerName ?? null,
     }),
   });
   if (!r.ok || !r.data) {

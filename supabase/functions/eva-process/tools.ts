@@ -216,6 +216,10 @@ export async function criarAgendamento(args: {
   }
 
   // 3) Resolver/criar paciente
+  // Nome a usar: prioridade pro customerName real do WhatsApp (pushName),
+  // depois o nome que veio no contexto (lead/patient), depois o que Claude inventou.
+  const trustedName = (payload.customerName?.trim() || patient?.name || ctx.lead?.name || args.nome_paciente || '').trim();
+
   let patientId: string | null = patient?.id ?? null;
 
   if (!patientId) {
@@ -226,7 +230,7 @@ export async function criarAgendamento(args: {
       headers,
       body: JSON.stringify({
         clinic_id: payload.clinicId,
-        name: args.nome_paciente,
+        name: trustedName || args.nome_paciente,
         phone: payload.phone,
       }),
     });
@@ -280,7 +284,9 @@ export async function criarAgendamento(args: {
     };
   }
 
-  // 5) Se tinha lead → marcar convertido
+  // 5) Se tinha lead -> avanca pra 'scheduled' (Agendado).
+  // 'converted' = cliente que compareceu, sera marcado por trigger quando
+  // appointment virar 'completed'. Aqui apenas registramos o agendamento.
   let leadConvertedId: string | null = null;
   if (ctx.lead?.id) {
     leadConvertedId = ctx.lead.id;
@@ -289,24 +295,30 @@ export async function criarAgendamento(args: {
       method: 'PATCH',
       headers: sbHeaders(env),
       body: JSON.stringify({
-        status: 'converted',
-        converted_at: new Date().toISOString(),
-        conversion_notes: 'Convertido via Eva (WhatsApp)',
+        status: 'scheduled',
+        last_contact_at: new Date().toISOString(),
+        ai_priority: 'hot',
+        ai_suggested_action: `Agendou ${args.procedimento ?? 'consulta'} via Eva`,
+        ai_last_analysis: new Date().toISOString(),
+        // Para a Eva tambem: zera follow-up pendente, ja agendou
+        eva_followup_count: 0,
+        eva_next_followup_at: null,
       }),
     });
   }
 
   const [y, m, d] = args.data.split('-');
   const procPart = args.procedimento ? `Procedimento: ${args.procedimento}\n` : '';
+  const nomeFinal = trustedName || args.nome_paciente;
 
   return {
     toolResultStr: [
       'AGENDAMENTO CRIADO COM SUCESSO!',
-      `Paciente: ${args.nome_paciente}`,
+      `Paciente: ${nomeFinal}`,
       `Data: ${d}/${m}/${y} as ${args.horario}`,
       procPart.trim(),
       'Confirme com a paciente, mencione que ela recebera lembrete D-1 e seja calorosa. NAO repita o nome dela mais de uma vez.',
-      `[debug profSource=${profSource}]`,
+      `[debug profSource=${profSource} nameSource=${payload.customerName ? 'pushName' : (patient?.name ? 'patient' : 'claude')}]`,
     ].filter(Boolean).join('\n'),
     appointmentCreated: true,
     leadConvertedId,
@@ -343,6 +355,23 @@ export async function escalarHumano(
 
 // ─── registrar_interesse ───────────────────────────────────────────────────
 
+/**
+ * Sinais de "alto interesse" pra classificar lead como warm/hot.
+ * Usado pra dar prioridade no CRM sem atrapalhar o fluxo conversacional.
+ */
+function detectarPrioridade(observacoes: string | undefined, procedimento: string): 'cold' | 'warm' | 'hot' {
+  const txt = norm(`${observacoes ?? ''} ${procedimento}`);
+  // Hot: querendo agendar agora, perguntando preco, urgencia
+  if (/agendar|marcar|preco|valor|quanto|hoje|amanha|essa semana|urgente/.test(txt)) {
+    return 'hot';
+  }
+  // Warm: interesse claro, mas sem urgencia
+  if (/quero|gostaria|tenho interesse|me interesso|gostei|fazer/.test(txt)) {
+    return 'warm';
+  }
+  return 'cold';
+}
+
 export async function registrarInteresse(
   args: { procedimento: string; observacoes?: string },
   ctx: DonnaContext,
@@ -351,22 +380,42 @@ export async function registrarInteresse(
 ): Promise<string> {
   const procedimento = args.procedimento;
   const proc = ctx.procedures.find((p) => norm(p.name).includes(norm(procedimento)));
+  const prioridade = detectarPrioridade(args.observacoes, procedimento);
 
-  if (ctx.lead?.id) {
-    const url = `${env.supabaseUrl}/rest/v1/leads?id=eq.${ctx.lead.id}`;
-    await fetchJson(url, {
-      method: 'PATCH',
-      headers: sbHeaders(env),
-      body: JSON.stringify({
-        interest: procedimento,
-        procedure_id: proc?.id ?? null,
-        last_contact_at: new Date().toISOString(),
-        ...(args.observacoes ? { notes: args.observacoes.slice(0, 500) } : {}),
-      }),
-    });
+  if (!ctx.lead?.id) {
+    return `Interesse em "${procedimento}" anotado, mas sem lead vinculado no CRM. Continue a conversa naturalmente.`;
   }
 
-  return `Interesse em "${procedimento}" registrado no CRM. Continue a conversa naturalmente, sem mencionar registro/CRM. Conduza pra avaliacao se fizer sentido.`;
+  // Status: se ainda esta como 'new', avanca pra 'contacted'. Nao retrocede status.
+  const nextStatus = ctx.lead.status === 'new' ? 'contacted' : ctx.lead.status;
+
+  const patch: Record<string, unknown> = {
+    interest: procedimento,
+    procedure_id: proc?.id ?? null,
+    last_contact_at: new Date().toISOString(),
+    ai_priority: prioridade,
+    ai_last_analysis: new Date().toISOString(),
+    ai_suggested_action: `Interesse: ${procedimento}${args.observacoes ? ` — ${args.observacoes.slice(0, 200)}` : ''}`,
+  };
+  if (nextStatus && nextStatus !== ctx.lead.status) {
+    patch.status = nextStatus;
+  }
+  if (args.observacoes && args.observacoes.trim().length > 0) {
+    patch.notes = args.observacoes.slice(0, 500);
+  }
+
+  const url = `${env.supabaseUrl}/rest/v1/leads?id=eq.${ctx.lead.id}`;
+  const r = await fetchJson(url, {
+    method: 'PATCH',
+    headers: sbHeaders(env),
+    body: JSON.stringify(patch),
+  });
+
+  if (!r.ok) {
+    return `Falha ao registrar interesse no CRM (${r.error || 'erro desconhecido'}). Continue a conversa normalmente.`;
+  }
+
+  return `Interesse em "${procedimento}" registrado no CRM (prioridade: ${prioridade}). Continue a conversa naturalmente, sem mencionar registro/CRM. Conduza pra avaliacao se fizer sentido.`;
 }
 
 // ─── Dispatcher ────────────────────────────────────────────────────────────

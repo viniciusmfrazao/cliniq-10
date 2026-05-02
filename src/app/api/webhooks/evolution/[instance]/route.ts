@@ -617,12 +617,19 @@ export async function POST(
             }
           }
 
-          if (!patientRes.data) {
+          // CRM: sempre garante um lead vivo pra essa conversa, mesmo se ja
+          // existe paciente cadastrado com o mesmo telefone (paciente antigo
+          // voltando pra novo procedimento conta como oportunidade de CRM).
+          // Se ja tem lead, atualiza last_contact_at e o nome se estiver
+          // generico ("Lead WhatsApp"); senao, cria novo.
+          {
             const leadRes = await svc
               .from('leads')
-              .select('id')
+              .select('id, name, status')
               .eq('clinic_id', clinicId)
               .eq('phone', phone)
+              .order('created_at', { ascending: false })
+              .limit(1)
               .maybeSingle()
             if (leadRes.error) {
               internalErrors.push(`select leads: ${leadRes.error.message}`)
@@ -636,11 +643,39 @@ export async function POST(
                 source: 'whatsapp',
                 status: 'new',
                 notes: `Primeira mensagem: ${content.slice(0, 240)}`,
+                last_contact_at: new Date().toISOString(),
               })
               if (insertLead.error) {
                 internalErrors.push(`insert leads: ${insertLead.error.message}`)
               } else {
                 debugTrace.push('lead created')
+              }
+            } else {
+              // Touch no lead existente: atualiza last_contact_at, e se o nome
+              // estava generico ou vazio e agora temos pushName real, melhora.
+              const patch: Record<string, unknown> = {
+                last_contact_at: new Date().toISOString(),
+              }
+              const looksGeneric =
+                !leadRes.data.name ||
+                /^lead whatsapp$/i.test(leadRes.data.name) ||
+                leadRes.data.name.trim().length < 2
+              if (looksGeneric && pushName && pushName.trim().length >= 2) {
+                patch.name = pushName.trim()
+              }
+              // Se estava marcado como lost/converted e ele esta voltando,
+              // reativa pra contacted (oportunidade de re-engajar).
+              if (leadRes.data.status === 'lost') {
+                patch.status = 'contacted'
+              }
+              const updLead = await svc
+                .from('leads')
+                .update(patch)
+                .eq('id', leadRes.data.id)
+              if (updLead.error) {
+                internalErrors.push(`update lead touch: ${updLead.error.message}`)
+              } else {
+                debugTrace.push(`lead touched (id=${leadRes.data.id})`)
               }
             }
           }
