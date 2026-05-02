@@ -717,19 +717,32 @@ async function forwardToDonna(payload: {
   kind?: ParsedKind
   mediaUrl?: string | null
 }) {
-  const { n8n_donna_url, n8n_donna_secret } = await getSettings([
+  // Roteador: lê app_settings.eva_engine pra decidir entre n8n (legado) ou
+  // Edge Function eva-process (novo). Default: n8n (sem mudança).
+  const settings = await getSettings([
+    'eva_engine',
+    'eva_edge_url',
+    'eva_internal_secret',
     'n8n_donna_url',
     'n8n_donna_secret',
   ])
+  const engine = (settings.eva_engine || 'n8n').toLowerCase()
+
+  if (engine === 'edge') {
+    await forwardToEdgeFunction(payload, {
+      url: settings.eva_edge_url || '',
+      secret: settings.eva_internal_secret || '',
+    })
+    return
+  }
+
+  // ─── Legado: n8n ────────────────────────────────────────────────────────
+  const { n8n_donna_url, n8n_donna_secret } = settings
   if (!n8n_donna_url) return
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (n8n_donna_secret) headers['x-cliniq-secret'] = n8n_donna_secret
 
-  // Payload no formato Evolution v2 (messages.upsert) pra preservar
-  // compatibilidade com workflows do n8n que foram desenhados pra
-  // receber direto da Evolution. Inclui campos extras (clinic_id,
-  // _cliniq) pra contexto multi-tenant futuro.
   const evolutionLikeMessage =
     payload.kind === 'text' || !payload.kind
       ? { conversation: payload.message }
@@ -767,6 +780,69 @@ async function forwardToDonna(payload: {
       },
     }),
   })
+}
+
+/**
+ * Encaminha pra Edge Function eva-process (novo motor).
+ *
+ * Autenticação: usa SUPABASE_SERVICE_ROLE_KEY como Bearer. Se houver
+ * `eva_internal_secret` em app_settings, manda também em x-eva-secret pra
+ * dar uma camada extra de proteção.
+ */
+async function forwardToEdgeFunction(
+  payload: {
+    clinicId: string
+    instance: string
+    phone: string
+    message: string
+    pushName?: string
+    kind?: ParsedKind
+    mediaUrl?: string | null
+    messageId: string | null
+  },
+  cfg: { url: string; secret: string },
+) {
+  if (!cfg.url) {
+    console.error('[eva-edge] eva_edge_url nao configurado em app_settings')
+    return
+  }
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceRoleKey) {
+    console.error('[eva-edge] SUPABASE_SERVICE_ROLE_KEY ausente no env')
+    return
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    // O gateway do Supabase exige tanto `apikey` quanto `Authorization` em
+    // alguns projetos novos. Mandar os dois evita falhas silenciosas de auth.
+    apikey: serviceRoleKey,
+    Authorization: `Bearer ${serviceRoleKey}`,
+  }
+  if (cfg.secret) headers['x-eva-secret'] = cfg.secret
+
+  // Payload limpo (Edge Function valida)
+  const r = await fetch(cfg.url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      clinicId: payload.clinicId,
+      instance: payload.instance,
+      phone: payload.phone,
+      userText: payload.message,
+      customerName: payload.pushName ?? null,
+      kind: payload.kind ?? 'text',
+      mediaUrl: payload.mediaUrl ?? null,
+      messageId: payload.messageId ?? null,
+    }),
+  })
+
+  // Não esperamos resposta crítica — a Edge Function envia direto pra Evolution.
+  // Loga apenas falhas explícitas pro debug.
+  if (!r.ok) {
+    const txt = await r.text().catch(() => '')
+    console.error(`[eva-edge] resposta ${r.status}: ${txt.slice(0, 400)}`)
+  }
 }
 
 // Útil pra Evolution validar a URL ao configurar

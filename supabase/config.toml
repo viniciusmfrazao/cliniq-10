@@ -1,0 +1,10 @@
+# Supabase project config (only what we need for Edge Functions deploy)
+project_id = "yqrjbyaucimvmzpfipgs"
+
+[functions.eva-process]
+# verify_jwt = false: o gate do Supabase não força JWT (alguns projetos
+# novos rejeitam JWTs legacy com UNAUTHORIZED_INVALID_JWT_FORMAT).
+# A função em si valida payload (clinicId obrigatório etc) — pra
+# blindagem extra adicione header x-eva-secret = app_settings.eva_internal_secret
+# e cheque dentro do handler.
+verify_jwt = false

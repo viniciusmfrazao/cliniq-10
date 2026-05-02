@@ -1,0 +1,10 @@
+# Supabase CLI local
+.branches
+.temp
+.env
+
+# Não comitar arquivos gerados pelo CLI local
+seed.sql.bak
+
+# Logs de testes locais
+*.log

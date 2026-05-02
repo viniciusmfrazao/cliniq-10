@@ -6,6 +6,9 @@ export const SETTING_KEYS = [
   'evolution_webhook_secret',
   'n8n_donna_url',
   'n8n_donna_secret',
+  'eva_engine',
+  'eva_edge_url',
+  'eva_internal_secret',
 ] as const
 
 export type SettingKey = typeof SETTING_KEYS[number]

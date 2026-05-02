@@ -1,0 +1,216 @@
+// ============================================================================
+// Wrapper da API Anthropic (Messages) com prompt caching
+// Roda em loop até no máximo N iterações, alternando text ↔ tool_use.
+// ============================================================================
+
+import type { ClaudeContentBlock, ClaudeMessage, ClaudeResponse, ToolDef } from './types.ts';
+
+const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
+const MODEL = 'claude-sonnet-4-5';
+const MAX_TOKENS = 400;
+const MAX_TOOL_ITERATIONS = 4;
+
+interface CallOpts {
+  apiKey: string;
+  systemPrompt: string;
+  messages: ClaudeMessage[];
+  tools: ToolDef[];
+  /** Quando true, o system prompt é enviado como bloco com cache_control. */
+  useCache?: boolean;
+}
+
+interface CallResult {
+  ok: boolean;
+  status: number;
+  raw: ClaudeResponse | null;
+  error?: string;
+}
+
+async function callClaude(opts: CallOpts): Promise<CallResult> {
+  // Prompt caching: o system entra como array de blocks com cache_control.
+  // O cache_control marca a "fronteira" do que é estável (system + tools).
+  const systemPayload = opts.useCache
+    ? [{ type: 'text', text: opts.systemPrompt, cache_control: { type: 'ephemeral' } }]
+    : opts.systemPrompt;
+
+  const body: Record<string, unknown> = {
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    system: systemPayload,
+    messages: opts.messages,
+  };
+
+  if (opts.tools && opts.tools.length > 0) {
+    body.tools = opts.tools;
+    body.tool_choice = { type: 'auto', disable_parallel_tool_use: true };
+  }
+
+  try {
+    const r = await fetch(ANTHROPIC_API, {
+      method: 'POST',
+      headers: {
+        'x-api-key': opts.apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        // Beta header de prompt caching já é stable em sonnet-4-5, mas
+        // mantemos o opt-in pra deixar explícito.
+        'anthropic-beta': 'prompt-caching-2024-07-31',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const text = await r.text();
+    let parsed: ClaudeResponse | null = null;
+    try {
+      parsed = text ? (JSON.parse(text) as ClaudeResponse) : null;
+    } catch {
+      // mantém parsed=null
+    }
+
+    if (!r.ok) {
+      return {
+        ok: false,
+        status: r.status,
+        raw: parsed,
+        error: parsed?.error?.message ?? text.slice(0, 400),
+      };
+    }
+    return { ok: true, status: r.status, raw: parsed };
+  } catch (e) {
+    return { ok: false, status: 0, raw: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// ─── Conversation loop ─────────────────────────────────────────────────────
+
+export interface ConversationStepLog {
+  iteration: number;
+  stop_reason?: string;
+  toolName?: string;
+  toolInput?: Record<string, unknown>;
+  toolResult?: string;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+export interface RunConvOpts extends CallOpts {
+  /** Implementação da tool — recebe nome+input e retorna string. */
+  executeTool: (name: string, input: Record<string, unknown>) => Promise<string>;
+}
+
+export interface RunConvResult {
+  finalText: string;
+  steps: ConversationStepLog[];
+  totalUsage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens: number;
+    cache_creation_input_tokens: number;
+  };
+  errors: string[];
+}
+
+/**
+ * Executa o loop conversacional: chama Claude, executa tool quando pedido,
+ * repete até receber `stop_reason: end_turn`. Limita a MAX_TOOL_ITERATIONS.
+ */
+export async function runConversation(opts: RunConvOpts): Promise<RunConvResult> {
+  const steps: ConversationStepLog[] = [];
+  const errors: string[] = [];
+  const totalUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+
+  // messages é mutado a cada iteração (acumula tool_use + tool_result)
+  const messages: ClaudeMessage[] = [...opts.messages];
+
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const callRes = await callClaude({
+      apiKey: opts.apiKey,
+      systemPrompt: opts.systemPrompt,
+      messages,
+      tools: opts.tools,
+      useCache: opts.useCache,
+    });
+
+    if (!callRes.ok || !callRes.raw) {
+      errors.push(`[claude-call#${i}] ${callRes.status}: ${callRes.error ?? 'sem resposta'}`);
+      steps.push({ iteration: i, stop_reason: 'error' });
+      return {
+        finalText: 'Tive um pequeno contratempo aqui. Pode repetir, por favor?',
+        steps,
+        totalUsage,
+        errors,
+      };
+    }
+
+    const r = callRes.raw;
+    if (r.usage) {
+      totalUsage.input_tokens += r.usage.input_tokens || 0;
+      totalUsage.output_tokens += r.usage.output_tokens || 0;
+      totalUsage.cache_read_input_tokens += r.usage.cache_read_input_tokens || 0;
+      totalUsage.cache_creation_input_tokens += r.usage.cache_creation_input_tokens || 0;
+    }
+
+    const content: ClaudeContentBlock[] = r.content || [];
+    const toolUse = content.find((b) => b.type === 'tool_use');
+    const textBlock = content.find((b) => b.type === 'text');
+
+    const stepLog: ConversationStepLog = {
+      iteration: i,
+      stop_reason: r.stop_reason,
+      cacheReadTokens: r.usage?.cache_read_input_tokens,
+      cacheCreationTokens: r.usage?.cache_creation_input_tokens,
+      inputTokens: r.usage?.input_tokens,
+      outputTokens: r.usage?.output_tokens,
+    };
+
+    // Sem tool_use → resposta final
+    if (r.stop_reason !== 'tool_use' || !toolUse) {
+      steps.push(stepLog);
+      const text = textBlock?.text?.trim();
+      return {
+        finalText: text || 'Pode repetir, por favor? Quero te ajudar direitinho.',
+        steps,
+        totalUsage,
+        errors,
+      };
+    }
+
+    // Executa a tool
+    stepLog.toolName = toolUse.name;
+    stepLog.toolInput = toolUse.input as Record<string, unknown>;
+    let toolResultStr: string;
+    try {
+      toolResultStr = await opts.executeTool(toolUse.name!, toolUse.input as Record<string, unknown>);
+    } catch (e) {
+      toolResultStr = `Erro interno na tool ${toolUse.name}: ${e instanceof Error ? e.message : String(e)}. Peca desculpas com elegancia.`;
+      errors.push(`[tool#${i} ${toolUse.name}] ${toolResultStr.slice(0, 200)}`);
+    }
+    stepLog.toolResult = toolResultStr;
+    steps.push(stepLog);
+
+    // Empilha o turno do assistente (com tool_use) + nosso tool_result, e continua.
+    // Se houver tools paralelas (não deveria com disable_parallel_tool_use), garante
+    // que TODAS levem tool_result.
+    const allToolUses = content.filter((b) => b.type === 'tool_use');
+    const toolResults: ClaudeContentBlock[] = allToolUses.map((tu) => ({
+      type: 'tool_result',
+      tool_use_id: tu.id!,
+      content: tu.id === toolUse.id
+        ? toolResultStr
+        : 'Tool secundaria nao executada nesta passada. Use o resultado da tool principal acima.',
+    }));
+
+    messages.push({ role: 'assistant', content });
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  errors.push(`Loop esgotou ${MAX_TOOL_ITERATIONS} iteracoes`);
+  return {
+    finalText: 'Acho que precisamos retomar essa conversa em instantes — vou conferir com a equipe e te retorno.',
+    steps,
+    totalUsage,
+    errors,
+  };
+}

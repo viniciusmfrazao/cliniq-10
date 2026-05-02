@@ -281,6 +281,36 @@ Paciente → WhatsApp → Evolution → n8n
 
 ---
 
+### M10 — Persona da Donna editável pela clínica (multi-tenant) ➕ NOVO
+
+**Por quê:** hoje a personalidade/regras da Donna estão hard-coded no node 08 do workflow n8n. Pra editar precisa de skill técnica + acesso ao n8n. Cada clínica nova teria que ter um workflow separado pra customizar tom/exemplos.
+
+**Mudanças:**
+
+- Tabela: nova coluna `clinics.settings.donna_persona` (jsonb) com schema:
+  ```json
+  {
+    "nome_assistente": "Donna",
+    "tom": "elegante|descontraído|profissional",
+    "personalidade": "...",
+    "evite": ["girias", "frases longas", ...],
+    "exemplos": { "saudacao": [...], "fechamento": [...] },
+    "regras_extras": "..."
+  }
+  ```
+- RPC `donna_load_context` retorna o `donna_persona` da clínica (com fallback pro perfil oficial em `eva-profile.ts`).
+- Node 08 do n8n monta o systemPrompt a partir do `clinic.donna_persona` (não mais hard-coded).
+- Tela nova `/dashboard/configuracoes/donna` — clínica edita persona pela UI (textarea + chips de "evite" + exemplos).
+- Preview ao vivo: "como a Donna responderia a essa mensagem teste?"
+
+**Vantagem:** clínicas conseguem ajustar Donna sem código. Cada uma tem identidade própria (uma é elegante, outra é descontraída, etc).
+
+**Esforço:** 1-2 sessões.
+
+**Quando fazer:** quando aparecer 2ª/3ª clínica ou quando Sarah pedir customização específica do tom.
+
+---
+
 ## 4) Esforço total estimado
 
 | Milestone | Esforço |
@@ -292,8 +322,9 @@ Paciente → WhatsApp → Evolution → n8n
 | M5 — Confirmação D-1 | 1 sessão |
 | M6 — Listar consultas | 0.5 sessão |
 | M7 — Anamnese ao agendar | 0.5 sessão |
-| M8 — Multi-tenant | 1 sessão (não urgente) |
+| M8 — Multi-tenant (técnico) | 1 sessão (não urgente) |
 | M9 — Migrar pra `/api/webhooks/n8n` | 2-3 sessões (segurança) |
+| M10 — Persona editável pela clínica | 1-2 sessões |
 
 **Total essencial (M1-M5):** ~5-6 sessões.
 **Total completo:** ~9-11 sessões.

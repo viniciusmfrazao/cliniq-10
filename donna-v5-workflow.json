@@ -1,0 +1,937 @@
+{
+  "name": "Donna v5 - Memoria + CRM + 4 Tools + Multi-tenant",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "donna-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "v5-00-webhook",
+      "name": "00 - Webhook Evolution",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "donna-v5-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "ok",
+        "options": {}
+      },
+      "id": "v5-00-respond",
+      "name": "00b - Responder Evolution 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [
+            {
+              "id": "f1",
+              "leftValue": "={{ $json.body.data.key.fromMe }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "false" }
+            },
+            {
+              "id": "f2",
+              "leftValue": "={{ $json.body.data.key.remoteJid }}",
+              "rightValue": "@g.us",
+              "operator": { "type": "string", "operation": "notContains" }
+            },
+            {
+              "id": "f3",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "messages.upsert",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "v5-01-filter",
+      "name": "01 - Filtrar (paciente humano, nao grupo)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 02 - Extrair dados do payload\n// O app envia clinic_id no root + _cliniq.{kind, media_url}\n// ───────────────────────────────────────────────\nconst body = $json.body || {};\nconst data = body.data || {};\nconst msg = data.message || {};\n\nconst phone = (data.key?.remoteJid || '')\n  .replace('@s.whatsapp.net', '')\n  .replace('@c.us', '');\nconst customerName = data.pushName || 'Cliente';\n\n// Multi-tenant: clinic_id vem do app (forwardToDonna)\nconst clinicId = body.clinic_id || body.clinicId || data.clinic_id || null;\nconst instance = body.instance || null;\n\n// Tipo de mensagem e mídia\nconst kind = body._cliniq?.kind || data.messageType || 'text';\nconst mediaUrl = body._cliniq?.media_url || null;\n\nlet userText = '';\nif (msg.conversation) userText = msg.conversation;\nelse if (msg.extendedTextMessage?.text) userText = msg.extendedTextMessage.text;\nelse if (msg.imageMessage?.caption) userText = msg.imageMessage.caption || '[Imagem recebida — peça pra paciente descrever]';\nelse if (msg.audioMessage) userText = '[Audio recebido — peça pra paciente escrever a mensagem]';\nelse if (msg.videoMessage?.caption) userText = msg.videoMessage.caption || '[Video recebido — peça pra paciente descrever]';\nelse userText = '[Mensagem nao suportada — peça pra paciente reformular em texto]';\n\nuserText = String(userText).trim();\nif (!userText || !phone) throw new Error('[02] Mensagem sem texto ou telefone');\nif (!clinicId) throw new Error('[02] clinic_id ausente no payload — verifique forwardToDonna do app');\n\nreturn [{\n  phone,\n  customerName,\n  userText,\n  clinicId,\n  instance,\n  kind,\n  mediaUrl,\n  messageId: data.key?.id || null,\n  timestamp: Date.now()\n}];"
+      },
+      "id": "v5-02-extract",
+      "name": "02 - Extrair dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": { "amount": 3 },
+      "id": "v5-03-buffer",
+      "name": "03 - Buffer 3s (anti-spam)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [720, 0],
+      "webhookId": "donna-v5-buffer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://yqrjbyaucimvmzpfipgs.supabase.co/rest/v1/rpc/donna_load_context",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_clinic_id\": {{ JSON.stringify($json.clinicId) }},\n  \"p_phone\": {{ JSON.stringify($json.phone) }}\n}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-03b-rpc",
+      "name": "03b - RPC donna_load_context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [840, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────────────────\n// 04 - Processar contexto da RPC donna_load_context\n// Recebe $json = JSONB com { history, professionals, procedures,\n//                            clinic, patient, lead, evolution }\n// ───────────────────────────────────────────────────────────\nconst ctx = $('02 - Extrair dados').first().json;\nconst raw = $json;\n\n// PostgREST RPC pode retornar JSONB direto, ou wrapped em body, ou string\nlet data = raw;\nif (raw && typeof raw === 'object' && raw.history === undefined && raw.body !== undefined) {\n  data = raw.body;\n}\nif (typeof data === 'string') {\n  try { data = JSON.parse(data); } catch { data = {}; }\n}\nif (!data || typeof data !== 'object' || Array.isArray(data)) data = {};\n\nconst SUPABASE_URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co';\n\n// Histórico\nconst rawHistory = Array.isArray(data.history) ? data.history : [];\nlet historyMessages = rawHistory\n  .filter(r => r && r.content && String(r.content).trim().length > 0)\n  .map(r => ({\n    role: r.role === 'assistant' ? 'assistant' : 'user',\n    content: r.content\n  }));\n\nwhile (\n  historyMessages.length > 0 &&\n  historyMessages[historyMessages.length - 1].role === 'user' &&\n  historyMessages[historyMessages.length - 1].content === ctx.userText\n) {\n  historyMessages.pop();\n}\nhistoryMessages = historyMessages.slice(-40);\n\nconst professionals = Array.isArray(data.professionals) ? data.professionals : [];\nconst procedures   = Array.isArray(data.procedures)   ? data.procedures   : [];\nconst clinic       = (data.clinic && typeof data.clinic === 'object') ? data.clinic : { name: 'a clínica' };\nconst existingPatient = (data.patient && typeof data.patient === 'object' && data.patient.id) ? data.patient : null;\nconst existingLead    = (data.lead    && typeof data.lead    === 'object' && data.lead.id)    ? data.lead    : null;\nconst needCreateLead = !existingPatient && !existingLead;\n\n// Config Evolution (vem da RPC, sub-objeto evolution)\nconst ev = (data.evolution && typeof data.evolution === 'object') ? data.evolution : {};\nconst evoConfig = (ev.url && ev.master_key && ev.instance) ? {\n  evolution_url: String(ev.url).replace(/\\/$/, ''),\n  evolution_master_key: ev.master_key,\n  instance_name: ev.instance,\n  phone_number: ev.phone || null,\n  status: ev.status || null\n} : null;\n\nreturn [{\n  ...ctx,\n  supabaseUrl: SUPABASE_URL,\n  historyMessages,\n  professionals,\n  procedures,\n  clinic,\n  existingPatient,\n  existingLead,\n  needCreateLead,\n  evoConfig,\n  _debug: {\n    rawType: typeof raw,\n    rawIsArray: Array.isArray(raw),\n    rawHasHistory: typeof raw === 'object' && raw !== null && 'history' in raw,\n    historyCount: historyMessages.length,\n    professionalsCount: professionals.length,\n    proceduresCount: procedures.length,\n    isPatient: !!existingPatient,\n    isLead: !!existingLead,\n    needCreateLead,\n    hasEvoConfig: !!evoConfig,\n    evoUrl: evoConfig?.evolution_url || null,\n    evoInstance: evoConfig?.instance_name || null\n  }\n}];"
+      },
+      "id": "v5-04-context",
+      "name": "04 - Carregar contexto Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [
+            {
+              "id": "lead1",
+              "leftValue": "={{ $json.needCreateLead }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "v5-05-iflead",
+      "name": "05 - Precisa criar lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [1200, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://yqrjbyaucimvmzpfipgs.supabase.co/rest/v1/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"clinic_id\": {{ JSON.stringify($json.clinicId) }},\n  \"name\": {{ JSON.stringify($json.customerName) }},\n  \"phone\": {{ JSON.stringify($json.phone) }},\n  \"source\": \"whatsapp\",\n  \"status\": \"new\",\n  \"whatsapp_chat_id\": {{ JSON.stringify($json.phone) }},\n  \"last_whatsapp_at\": {{ JSON.stringify(new Date().toISOString()) }},\n  \"last_contact_at\": {{ JSON.stringify(new Date().toISOString()) }},\n  \"whatsapp_opt_in\": true\n}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-06-createlead",
+      "name": "06 - Criar lead novo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, -150]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 07 - Merge dos 2 ramos (lead novo OU já existe)\n// Pega contexto do node 04, e se veio de 06 enriquece com newLeadId\n// ───────────────────────────────────────────────\nconst ctx = $('04 - Carregar contexto Supabase').first().json;\n\n// Se chegou aqui pelo ramo 06, $json é a resposta do INSERT\nlet newLeadId = null;\nlet newLead = null;\nif (Array.isArray($json) && $json[0]?.id) {\n  newLeadId = $json[0].id;\n  newLead = $json[0];\n} else if ($json?.id && !$json.historyMessages) {\n  newLeadId = $json.id;\n  newLead = $json;\n}\n\nreturn [{\n  ...ctx,\n  existingLead: ctx.existingLead || newLead,\n  newLeadId\n}];"
+      },
+      "id": "v5-07-merge",
+      "name": "07 - Merge contexto + lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────────────────\n// 08 - Montar system prompt + messagesForClaude\n// Perfil oficial: elegante, sofisticada, vendedora sutil.\n// Dados dinâmicos: profissionais + procedimentos do banco.\n// ───────────────────────────────────────────────────────────\nconst ctx = $json;\nconst {\n  phone, customerName, userText, kind, mediaUrl,\n  historyMessages, professionals, procedures, clinic,\n  existingPatient, existingLead\n} = ctx;\n\n// Profissionais que efetivamente fazem procedimentos\nconst profIdsInProcs = new Set();\nprocedures.forEach(p => (p.professional_ids || []).forEach(id => profIdsInProcs.add(id)));\nconst profById = new Map(professionals.map(p => [p.id, p.name]));\nconst filteredProfs = professionals.filter(p => profIdsInProcs.has(p.id));\n\nconst profissionaisText = filteredProfs.length > 0\n  ? filteredProfs.map(p => `- ${p.name}${p.role && p.role !== 'admin' ? ` (${p.role})` : ''}`).join('\\n')\n  : '- (consultar lista de profissionais com a equipe)';\n\nconst drNomeRef = filteredProfs.length === 1\n  ? filteredProfs[0].name\n  : (filteredProfs[0]?.name || 'a especialista');\n\n// Procedimentos com preço/parcela/profissional\nfunction formatBRL(v) {\n  if (v == null || isNaN(v)) return null;\n  return Number(v).toFixed(2).replace('.', ',');\n}\n\nconst procedimentosText = procedures.length > 0\n  ? procedures.slice(0, 40).map(pr => {\n      const inst = pr.installments && pr.installments > 0 ? pr.installments : 12;\n      const parcela = pr.installment_price\n        ? pr.installment_price\n        : (pr.price ? pr.price / inst : null);\n      const valorPart = pr.price\n        ? `À vista R$ ${formatBRL(pr.price)}${parcela ? ` ou ${inst}x R$ ${formatBRL(parcela)} sem juros` : ''}`\n        : 'consultar valor';\n      const profNames = (pr.professional_ids || [])\n        .map(id => profById.get(id))\n        .filter(Boolean);\n      const profPart = profNames.length > 0 ? ` — Faz: ${profNames.join(', ')}` : '';\n      return `- ${pr.name} (${valorPart})${profPart}`;\n    }).join('\\n')\n  : '- (sem procedimentos cadastrados)';\n\n// messagesForClaude\nconst messagesForClaude = [\n  ...historyMessages,\n  { role: 'user', content: userText }\n];\n\nconst isNewConversation = historyMessages.length === 0;\n\n// Contexto temporal\nconst now = new Date();\nconst tz = 'America/Sao_Paulo';\nconst dataAtual = now.toLocaleString('pt-BR', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' });\nconst firstName = (customerName || '').split(/\\s+/)[0] || '';\n\n// Identificação da pessoa\nlet identificacaoPart = '';\nif (existingPatient) {\n  identificacaoPart = `- ${firstName || 'Esta pessoa'} já é PACIENTE da clínica (id: ${existingPatient.id}). Trate com familiaridade — vocês já se conhecem.`;\n} else if (existingLead) {\n  identificacaoPart = `- ${firstName || 'Esta pessoa'} é um LEAD em acompanhamento (status: ${existingLead.status})${existingLead.interest ? `, interesse anterior: ${existingLead.interest}` : ''}. Continue o relacionamento.`;\n} else {\n  identificacaoPart = `- Esta é a PRIMEIRA aproximação dela. Acolha com elegância especial.`;\n}\n\n// Aviso de mídia (se aplicável)\nlet mediaPart = '';\nif (kind === 'image') mediaPart = '\\n- Ela enviou uma IMAGEM (ainda não conseguimos analisar fotos). Peça com elegância para descrever o que está na imagem ou agendar uma avaliação presencial.';\nelse if (kind === 'audio') mediaPart = '\\n- Ela enviou um ÁUDIO (ainda não transcrevemos). Peça com elegância para escrever a mensagem em texto.';\nelse if (kind === 'video') mediaPart = '\\n- Ela enviou um VÍDEO (ainda não analisamos). Peça com elegância para descrever ou agendar avaliação.';\n\nconst systemPrompt = `Você é a Eva, da ${clinic.name}. Você é a secretária e consultora de estética da clínica — uma pessoa real para todos os efeitos da conversa.\n\nPERSONALIDADE (siga rigorosamente — perfil oficial da clínica):\n- Acolhedora, feminina, elegante e sofisticada — nunca fria, nunca robótica.\n- Linguagem leve e envolvente, em português brasileiro.\n- Vendedora sutil — você conduz, nunca pressiona.\n- Transmite exclusividade — a paciente está acessando algo diferenciado.\n- Valoriza ${drNomeRef} como referência de especialista, sempre.\n\nEVITE A TODO CUSTO:\n- Gírias (\"eai\", \"tô lá\", \"tipo\", \"mano\", \"show\", \"rolar\"), abreviações (\"vc\", \"pq\", \"tb\").\n- Linguagem informal demais ou de \"amiga próxima\".\n- Respostas secas, monossilábicas ou genéricas.\n- Soar como vendedora insistente.\n- Mais de 1 emoji por mensagem (use ✨ 💜 só quando casa naturalmente).\n\n🔥 REGRA CRÍTICA #1 — NÃO REPITA O NOME DO CLIENTE:\n- Você JÁ cumprimentou ele com o nome na PRIMEIRA mensagem. PRONTO. Não use mais o nome NAS PRÓXIMAS 4-5 mensagens.\n- PROIBIDO começar resposta com \"${firstName || 'Nome'},\". PROIBIDO terminar com \"${firstName || 'Nome'}?\". PROIBIDO usar vocativo no meio.\n- Use \"você\", \"te\", \"pra você\" no lugar do nome.\n- Só pode reusar o nome no FECHAMENTO de um agendamento (\"Prontinho! Confirmada pra dia X — te espero!\") ou em validação emocional MUITO forte (queixa séria).\n- VIOLAR essa regra é o erro #1 que faz a Eva soar robótica. Releia ANTES de mandar a mensagem: tem o nome dele aí? Se sim, tira (a menos que seja primeira mensagem ou fechamento).\n\n📝 REGRA CRÍTICA #2 — RESPOSTAS CURTAS, TEXTO CORRIDO, SEM PULAR LINHA:\n- ESCREVA EM TEXTO CORRIDO. Como WhatsApp natural. SEM quebras de linha. SEM listas. SEM títulos.\n- MÁXIMO 3 frases curtas (idealmente 1-2). LIMITE DURO: 350 caracteres por resposta. Se passar, está LONGO demais.\n- Tudo na MESMA linha — proibido usar \\n, \\n\\n, ENTER ou linhas em branco.\n- Foco em UMA ideia por mensagem — uma pergunta, um gancho, ou uma confirmação. Não jogue 3 informações de uma vez.\n- WhatsApp é troca rápida, não palestra. Se quiser saber mais, ela pergunta.\n\n💰 REGRA CRÍTICA #3 — PREÇO: SÓ EM PARCELA, NUNCA O VALOR TOTAL:\n- NUNCA passe o valor total/à vista. Diga SOMENTE \"12x R$ Y sem juros\" (ou o número de parcelas que o procedimento tem).\n- Se ela perguntar \"quanto à vista?\", \"valor cheio?\", \"valor total?\", responda: \"À vista a Dra. consegue uma condição especial — vou te confirmar pessoalmente. Mas no cartão sai 12x R$ Y sem juros, fica tranquilo no orçamento.\"\n- Se ela perguntar se tem juros, confirme: \"Sem juros nenhum, é o valor cheio dividido em 12x.\"\n- BOM: \"O preenchimento sai 12x R$ 90 sem juros. Posso verificar um horário pra avaliação?\"\n- RUIM (PROIBIDO): \"À vista R$ 1.080 ou 12x R$ 90\" / \"Vinicius! [enter] O preenchimento... [enter] O investimento... [enter] Vamos agendar?\"\n\nCONTEXTO DESTA CONVERSA:\n${isNewConversation\n  ? `- ⚡ PRIMEIRA mensagem desta cliente. Apresente-se como Eva, da clínica, com calor e elegância.`\n  : `- ⚠️ Vocês JÁ ESTÃO em conversa (${historyMessages.length} mensagens trocadas). NÃO repita \"olá\", \"como posso ajudar\", \"sou a Eva\". Continue de onde pararam, naturalmente. Releia o histórico antes de responder.`}\n${identificacaoPart}${mediaPart}\n- Hoje: ${dataAtual}\n- Cliente: ${customerName || 'cliente'}${firstName ? ` (chame de ${firstName})` : ''}\n- Telefone: ${phone}\n\nPROFISSIONAIS DA CLÍNICA:\n${profissionaisText}\n\nPROCEDIMENTOS DISPONÍVEIS (preços REAIS — use exatamente estes valores quando perguntada):\n${procedimentosText}\n\nFLUXO IDEAL DE ATENDIMENTO:\n1. ACOLHA — saudação calorosa e personalizada (só na primeira mensagem)\n2. DESCUBRA — entenda o que ela realmente busca, com perguntas certeiras\n3. VALIDE — mostre que entendeu, valorize a preocupação dela\n4. APRESENTE — explique como ${drNomeRef} pode ajudar\n5. AUTORIDADE — mencione que ${drNomeRef} é especialista nessa área\n6. EXCLUSIVIDADE — \"vou verificar se consigo te encaixar essa semana\", \"a agenda anda concorrida mas deixa eu olhar\"\n7. CONDUZA — direcione naturalmente para uma avaliação presencial\n8. FECHE — confirme com entusiasmo elegante\n\nEXEMPLOS DE FRASES (referência — adapte ao contexto, NÃO copie literal):\n- Saudação: \"Que bom te ter por aqui! Sou a Eva, da ${clinic.name}. Me conta, o que te trouxe até nós?\"\n- Empatia: \"Entendo perfeitamente — muitas das nossas pacientes chegam com essa mesma preocupação.\"\n- Autoridade: \"${drNomeRef} é especialista exatamente nesse tipo de procedimento e tem resultados incríveis.\"\n- Exclusividade: \"Temos poucas vagas pra avaliação essa semana, mas deixa eu verificar se consigo te encaixar.\"\n- Conversão: \"O ideal seria você vir pra uma avaliação, assim ${drNomeRef} pode analisar pessoalmente e montar um plano sob medida.\"\n- Fechamento: \"Prontinho! Você está confirmada para [data/hora]. Vai ser um prazer te receber.\"\n\n🔴 REGRAS QUE VOCÊ NUNCA VIOLA:\n\n0) IDENTIDADE — você é a Eva, secretária e consultora da ${clinic.name}. JAMAIS diga que é \"assistente virtual\", \"IA\", \"robô\", \"bot\", \"automática\", \"sistema\", \"inteligência artificial\", \"programa\", \"chatbot\" ou qualquer termo similar. NUNCA mencione tecnologia (Claude, GPT, n8n, automação). Se perguntarem \"é robô?\", \"é IA?\", \"é uma pessoa de verdade?\", \"falo com humano?\", responda apenas: \"Sou a Eva, da ${clinic.name}. Estou aqui pra te ajudar com o que precisar.\" — sem confirmar nem negar tecnologia. Mude o assunto com elegância pra como você pode ajudar. Nunca diga \"como posso te ajudar?\" duas vezes seguidas.\n\n1) AGENDA — você NÃO sabe horários de cabeça (REGRA DE OURO):\n   - PROIBIDO mostrar QUALQUER horário (\"13h30, 14h30, 15h30\", \"9h, 10h, 11h\", \"manhã livre\") sem ter ANTES chamado 'consultar_agenda' nesta passada. NUNCA invente.\n   - Quando ela perguntar disponibilidade/horário/dia/\"amanhã\"/\"essa semana\"/\"quarta à tarde\"/agendar — chame 'consultar_agenda' ANTES de responder.\n   - O resultado da tool traz horarios REAIS com professional_id REAL. Você só pode mostrar/usar esses horarios e esses IDs.\n   - Quando ela confirmar um horario (\"13h30\", \"pode marcar 09h\"), chame 'criar_agendamento' usando EXATAMENTE o professional_id que veio de consultar_agenda. JAMAIS invente UUIDs.\n   - Se o horario que ela quer não estava na lista de consultar_agenda, chame consultar_agenda DE NOVO (com a nova data/periodo) antes de responder.\n\n2) PREÇOS — use SOMENTE a lista PROCEDIMENTOS DISPONÍVEIS acima:\n   - Se ela só perguntar genericamente (\"o que é botox?\"), explique o procedimento SEM trazer valor de cara.\n   - SE ela perguntar preço EXPLICITAMENTE (\"quanto custa?\", \"valor?\", \"quanto fica?\"), responda APENAS com a parcela: \"12x R$ Y sem juros\" (ou o numero de parcelas do procedimento). Em seguida conduza pra avaliacao.\n   - JAMAIS mostre o valor total/a vista de cara. Se ela insistir em \"valor cheio\"/\"a vista\", diga: \"A Dra. consegue uma condicao especial a vista, vou te confirmar pessoalmente. No cartao sai 12x R$ Y sem juros.\"\n   - NUNCA invente preço. Se o procedimento não estiver na lista: \"Deixa eu confirmar esse valor com a equipe e te retorno em seguida, pode ser?\"\n\n3) QUEM FAZ O QUÊ — cada procedimento na lista mostra o profissional. Mencione com elegância: \"Esse procedimento é com ${drNomeRef}, que é especialista nessa área.\"\n\n4) DETECTOU INTERESSE em procedimento específico — chame 'registrar_interesse' com o nome para guardarmos no CRM.\n\n5) CANCELAR / REAGENDAR consulta já existente — você NÃO faz isso sozinha pelo WhatsApp. Chame 'escalar_humano' com motivo=\"cancelamento\" ou \"reagendamento\". Depois responda com elegância: \"Vou conversar pessoalmente com ${drNomeRef} sobre o seu horário e te retorno em instantes pra reorganizar tudo com calma.\"\n\n6) CONFIRMAÇÃO D-1 — se ela responder \"confirmo\", \"sim\", \"estarei\", \"tô lá\" em resposta a um lembrete de consulta amanhã, agradeça com elegância: \"Que bom! ${drNomeRef} te aguarda amanhã. Será um prazer te receber ✨\"\n\n7) EMERGÊNCIA MÉDICA — se descrever urgência (dor forte, sangramento, reação alérgica), oriente atendimento presencial imediato. Não dê palpite clínico.\n\n8) NÃO SEI: Se não souber algo específico, seja honesta com elegância: \"Deixa eu confirmar isso com ${drNomeRef} e te retorno em instantes, pode ser?\"\n\nOBJETIVO MAIOR: Cada paciente deve se sentir especial e acolhida desde a primeira palavra. Você não está vendendo — está cuidando. Mas sempre, naturalmente, conduzindo para uma avaliação presencial.`;\n\nreturn [{\n  ...ctx,\n  isNewConversation,\n  messagesForClaude,\n  systemPrompt,\n  drNomeRef\n}];"
+      },
+      "id": "v5-08-prompt",
+      "name": "08 - Montar contexto Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1920, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5\",\n  \"max_tokens\": 400,\n  \"system\": {{ JSON.stringify($json.systemPrompt) }},\n  \"messages\": {{ JSON.stringify($json.messagesForClaude) }},\n  \"tool_choice\": {\"type\":\"auto\",\"disable_parallel_tool_use\":true},\n  \"tools\": [\n    {\n      \"name\": \"consultar_agenda\",\n      \"description\": \"Consulta horarios REAIS disponiveis no banco da clinica. Use sempre que a paciente perguntar sobre disponibilidade, dia, agendar. Retorna horarios livres por profissional.\",\n      \"input_schema\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"periodo\": { \"type\": \"string\", \"description\": \"Texto livre: 'hoje', 'amanha', 'terca', '15/05', 'sexta de manha', etc.\" },\n          \"procedimento\": { \"type\": \"string\", \"description\": \"Nome do procedimento desejado (opcional, ajuda a filtrar profissional certo)\" }\n        },\n        \"required\": [\"periodo\"]\n      }\n    },\n    {\n      \"name\": \"criar_agendamento\",\n      \"description\": \"Cria um agendamento REAL. Use APENAS apos a paciente confirmar explicitamente um horario especifico mostrado pela consultar_agenda.\",\n      \"input_schema\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"professional_id\": { \"type\": \"string\", \"description\": \"UUID do profissional (sai do resultado de consultar_agenda)\" },\n          \"data\": { \"type\": \"string\", \"description\": \"Data no formato YYYY-MM-DD\" },\n          \"horario\": { \"type\": \"string\", \"description\": \"Hora no formato HH:MM (24h)\" },\n          \"nome_paciente\": { \"type\": \"string\", \"description\": \"Nome completo da paciente\" },\n          \"procedimento\": { \"type\": \"string\", \"description\": \"Nome do procedimento desejado (opcional)\" }\n        },\n        \"required\": [\"professional_id\", \"data\", \"horario\", \"nome_paciente\"]\n      }\n    },\n    {\n      \"name\": \"escalar_humano\",\n      \"description\": \"Sinaliza que a paciente precisa de atendimento humano (cancelamento, reagendamento, reclamação, situação delicada). Marca o lead como prioridade alta no CRM e a secretária recebe alerta.\",\n      \"input_schema\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"motivo\": { \"type\": \"string\", \"description\": \"Resumo curto do motivo: 'cancelamento', 'reagendamento', 'reclamacao', 'duvida_complexa', etc.\" },\n          \"detalhes\": { \"type\": \"string\", \"description\": \"Descrição com mais detalhes sobre o que a paciente precisa\" }\n        },\n        \"required\": [\"motivo\"]\n      }\n    },\n    {\n      \"name\": \"registrar_interesse\",\n      \"description\": \"Quando a paciente expressa interesse em um procedimento especifico (mesmo sem agendar ainda), registra no CRM para follow-up.\",\n      \"input_schema\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"procedimento\": { \"type\": \"string\", \"description\": \"Nome do procedimento que despertou interesse\" },\n          \"observacoes\": { \"type\": \"string\", \"description\": \"Observações adicionais sobre o que ela busca\" }\n        },\n        \"required\": [\"procedimento\"]\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "v5-09-claude1",
+      "name": "09 - Claude 1a chamada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2160, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZjqLGifg21SJM9Ap",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 10 - Analisar resposta do Claude\n// ───────────────────────────────────────────────\nconst claude = $json;\nconst ctx = $('08 - Montar contexto Claude').first().json;\n\nconst stop = claude.stop_reason;\nconst content = claude.content || [];\n\nconst toolUse = content.find(b => b.type === 'tool_use');\n\nif (stop === 'tool_use' && toolUse) {\n  return [{\n    ...ctx,\n    hasToolUse: true,\n    toolName: toolUse.name,\n    toolUseId: toolUse.id,\n    toolInput: toolUse.input,\n    claudeContentBlocks: content\n  }];\n}\n\nconst textBlock = content.find(b => b.type === 'text');\nfunction sanitize(t) {\n  if (!t) return t;\n  return String(t).replace(/\\r/g, '').replace(/\\n+/g, ' ').replace(/[ \\t]{2,}/g, ' ').trim();\n}\nreturn [{\n  ...ctx,\n  hasToolUse: false,\n  finalText: sanitize(textBlock?.text) || 'Desculpe, tive um problema. Pode repetir?'\n}];"
+      },
+      "id": "v5-10-analyze",
+      "name": "10 - Analisar resposta Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [
+            {
+              "id": "tool1",
+              "leftValue": "={{ $json.hasToolUse }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "v5-11-iftool",
+      "name": "11 - Tem tool_use?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [2640, 0]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+                "conditions": [
+                  {
+                    "id": "sw-consultar",
+                    "leftValue": "={{ $json.toolName }}",
+                    "rightValue": "consultar_agenda",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "consultar_agenda"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+                "conditions": [
+                  {
+                    "id": "sw-criar",
+                    "leftValue": "={{ $json.toolName }}",
+                    "rightValue": "criar_agendamento",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "criar_agendamento"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+                "conditions": [
+                  {
+                    "id": "sw-escalar",
+                    "leftValue": "={{ $json.toolName }}",
+                    "rightValue": "escalar_humano",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "escalar_humano"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+                "conditions": [
+                  {
+                    "id": "sw-interesse",
+                    "leftValue": "={{ $json.toolName }}",
+                    "rightValue": "registrar_interesse",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "registrar_interesse"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "v5-12-switch",
+      "name": "12 - Qual tool?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [2880, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// CONSULTAR_AGENDA — passo 1: parsear periodo e montar RPC\n// ───────────────────────────────────────────────\nconst ctx = $json;\nconst { toolInput, supabaseUrl, clinicId, toolUseId, claudeContentBlocks } = ctx;\n\nconst periodo = toolInput.periodo || 'hoje';\nconst tz = 'America/Sao_Paulo';\nconst now = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));\n\nfunction pulaFimDeSemana(d) {\n  while (d.getDay() === 0 || d.getDay() === 6) {\n    d.setDate(d.getDate() + 1);\n  }\n  return d;\n}\n\nfunction parseData(texto) {\n  const t = String(texto || '').toLowerCase()\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim();\n  const d = new Date(now);\n  if (t.includes('hoje')) return d;\n  if (t.includes('depois de amanha')) { d.setDate(d.getDate() + 2); return pulaFimDeSemana(d); }\n  if (t.includes('amanha')) { d.setDate(d.getDate() + 1); return pulaFimDeSemana(d); }\n  // 'semana que vem', 'proxima semana', 'sem que vem' => próxima segunda-feira\n  if (t.includes('semana que vem') || t.includes('proxima semana') || t.includes('sem que vem') || t.includes('outra semana')) {\n    const dow = d.getDay();\n    const daysToNextMon = ((1 - dow) + 7) % 7 || 7;\n    d.setDate(d.getDate() + daysToNextMon);\n    return d;\n  }\n  // 'essa semana', 'esta semana' => próximo dia útil\n  if (t.includes('essa semana') || t.includes('esta semana') || t.includes('nessa semana')) {\n    d.setDate(d.getDate() + 1);\n    return pulaFimDeSemana(d);\n  }\n  const diasSemana = {'domingo':0,'segunda':1,'terca':2,'quarta':3,'quinta':4,'sexta':5,'sabado':6};\n  for (const [dia, num] of Object.entries(diasSemana)) {\n    if (t.includes(dia)) {\n      const diff = ((num - d.getDay()) + 7) % 7 || 7;\n      d.setDate(d.getDate() + diff);\n      return d;\n    }\n  }\n  const m1 = t.match(/(\\d{1,2})\\/(\\d{1,2})(?:\\/(\\d{2,4}))?/);\n  if (m1) {\n    const dia = parseInt(m1[1]);\n    const mes = parseInt(m1[2]) - 1;\n    let ano = m1[3] ? parseInt(m1[3]) : d.getFullYear();\n    if (ano < 100) ano += 2000;\n    const p = new Date(ano, mes, dia);\n    if (p < now && !m1[3]) p.setFullYear(ano + 1);\n    return p;\n  }\n  // Fallback: próximo dia útil (não 'amanhã' cego)\n  d.setDate(d.getDate() + 1);\n  return pulaFimDeSemana(d);\n}\n\nfunction detectarPeriodo(texto) {\n  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n  if (t.includes('manha')) return 'manha';\n  if (t.includes('tarde')) return 'tarde';\n  if (t.includes('noite')) return 'noite';\n  return null;\n}\n\nconst dataAlvo = parseData(periodo);\nconst periodoAlvo = detectarPeriodo(periodo);\nconst dataStr = `${dataAlvo.getFullYear()}-${String(dataAlvo.getMonth()+1).padStart(2,'0')}-${String(dataAlvo.getDate()).padStart(2,'0')}`;\n\n// Procedimento: tenta resolver pelo nome (fuzzy match nos procedures)\nlet procedureId = null;\nif (toolInput.procedimento && Array.isArray(ctx.procedures)) {\n  const needle = String(toolInput.procedimento).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n  const found = ctx.procedures.find(p => {\n    const haystack = String(p.name).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n    return haystack.includes(needle) || needle.includes(haystack);\n  });\n  if (found) procedureId = found.id;\n}\n\nreturn [{\n  ...ctx,\n  rpcUrl: `${supabaseUrl}/rest/v1/rpc/get_available_slots`,\n  rpcBody: {\n    p_clinic_id: clinicId,\n    p_date: dataStr,\n    p_professional_id: null,\n    p_duration_min: 30,\n    p_period: periodoAlvo,\n    p_procedure_id: procedureId\n  },\n  dataAlvo: dataStr,\n  periodoAlvo\n}];"
+      },
+      "id": "v5-13a-extract",
+      "name": "13a - Extrair input (consultar_agenda)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3120, -300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.rpcUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpcBody) }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-14a-rpc",
+      "name": "14a - RPC get_available_slots",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3360, -300],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 15a - Formatar resposta da consulta (defensivo)\n// Lê de QUALQUER formato que o n8n entregar.\n// ───────────────────────────────────────────────\nconst ctx = $('13a - Extrair input (consultar_agenda)').first().json;\n\n// Coletar slots tentando todas as variantes\nconst allItems = $input.all();\nlet slots = [];\nconst variantes = [];\nfor (const it of allItems) {\n  const j = it.json;\n  if (Array.isArray(j)) {\n    slots = slots.concat(j);\n    variantes.push('array-direto');\n  } else if (j && Array.isArray(j.body)) {\n    slots = slots.concat(j.body);\n    variantes.push('body-array');\n  } else if (j && (j.professional_name || j.slot_time || j.slot_datetime)) {\n    slots.push(j);\n    variantes.push('item-row');\n  } else {\n    variantes.push('outro:' + (j ? Object.keys(j).slice(0,5).join(',') : 'null'));\n  }\n}\nslots = slots.filter(s => s && (s.professional_name || s.slot_time || s.slot_datetime));\n\nconst porProf = new Map();\nfor (const s of slots) {\n  const key = `${s.professional_name || 'Profissional'}|${s.professional_id || ''}`;\n  if (!porProf.has(key)) porProf.set(key, []);\n  let hh = '';\n  if (s.slot_time) hh = String(s.slot_time).slice(0, 5);\n  else if (s.slot_datetime) hh = String(s.slot_datetime).slice(11, 16);\n  if (hh) porProf.get(key).push(hh);\n}\n\nfunction formatarDataBR(iso) {\n  if (!iso) return '(data desconhecida)';\n  const [y,m,d] = iso.split('-').map(Number);\n  const dt = new Date(y, m-1, d);\n  const dias = ['domingo','segunda-feira','terca-feira','quarta-feira','quinta-feira','sexta-feira','sabado'];\n  return `${dias[dt.getDay()]}, ${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}`;\n}\n\nconst linhas = [];\nfor (const [key, horas] of porProf.entries()) {\n  const [nome, id] = key.split('|');\n  if (horas.length === 0) continue;\n  const topHoras = horas.slice(0, 6).join(', ');\n  linhas.push(`${nome} (id: ${id}): ${topHoras}`);\n}\n\nlet toolResultStr;\nif (linhas.length === 0) {\n  toolResultStr = `Sem horarios disponiveis para ${formatarDataBR(ctx.dataAlvo)}${ctx.periodoAlvo ? ' ('+ctx.periodoAlvo+')' : ''}. Sugira outro dia com elegancia (ex: \"Esse dia esta cheio. Que tal terca ou quarta?\").`;\n} else {\n  toolResultStr = `Horarios REAIS disponiveis para ${formatarDataBR(ctx.dataAlvo)}${ctx.periodoAlvo ? ' ('+ctx.periodoAlvo+')' : ''}:\\n${linhas.join('\\n')}\\n\\nQuando a paciente confirmar um horario, chame criar_agendamento com o professional_id correto. Apresente apenas 2-3 horarios pra ela escolher (nao a lista toda). Mantenha o tom elegante.`;\n}\n\nreturn [{\n  ...ctx,\n  toolResultStr,\n  _debug15a: {\n    itemsRecebidos: allItems.length,\n    variantes,\n    slotsCount: slots.length,\n    slotSample: slots[0] || null,\n    linhasGeradas: linhas.length\n  }\n}];"
+      },
+      "id": "v5-15a-format",
+      "name": "15a - Formatar resposta consulta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3600, -300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// CRIAR_AGENDAMENTO — passo 1: montar payloads\n// + VALIDAR professional_id (Claude as vezes alucina UUID)\n// + Fallback inteligente: nome do profissional no historico\n// ───────────────────────────────────────────────\nconst ctx = $json;\nconst {\n  toolInput, clinicId, phone, existingPatient,\n  professionals = [], procedures = [], historyMessages = []\n} = ctx;\n\nconst [hh, mm] = String(toolInput.horario).split(':').map(Number);\nconst startIso = `${toolInput.data}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00-03:00`;\nconst endMinutes = hh*60 + mm + 30;\nconst endH = Math.floor(endMinutes/60);\nconst endM = endMinutes % 60;\nconst endIso = `${toolInput.data}T${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}:00-03:00`;\n\nfunction norm(s) {\n  return String(s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n}\n\n// Resolver procedure_id pelo nome\nlet procedureId = null;\nif (toolInput.procedimento && Array.isArray(procedures)) {\n  const needle = norm(toolInput.procedimento);\n  const found = procedures.find(p => {\n    const hay = norm(p.name);\n    return hay.includes(needle) || needle.includes(hay);\n  });\n  if (found) procedureId = found.id;\n}\n\n// 🔥 VALIDAR professional_id\nconst validProfIds = new Set(professionals.map(p => p.id));\nlet professionalId = toolInput.professional_id;\nlet profSource = 'claude';\n\nif (!validProfIds.has(professionalId)) {\n  let matched = null;\n  // Fallback 1: nome do profissional mencionado nas ultimas msgs do assistant\n  const lastAssistantTexts = historyMessages.filter(m => m.role === 'assistant').slice(-3).map(m => norm(m.content));\n  for (const p of professionals) {\n    const pNorm = norm(p.name).replace(/^dra?\\.?\\s+/, '');\n    const firstName = pNorm.split(/\\s+/)[0];\n    if (!firstName) continue;\n    if (lastAssistantTexts.some(t => t.includes(firstName))) { matched = p; profSource = 'historico-assistant'; break; }\n  }\n  // Fallback 2: nome mencionado pelo usuario\n  if (!matched) {\n    const lastUserTexts = historyMessages.filter(m => m.role === 'user').slice(-3).map(m => norm(m.content));\n    for (const p of professionals) {\n      const pNorm = norm(p.name).replace(/^dra?\\.?\\s+/, '');\n      const firstName = pNorm.split(/\\s+/)[0];\n      if (!firstName) continue;\n      if (lastUserTexts.some(t => t.includes(firstName))) { matched = p; profSource = 'historico-user'; break; }\n    }\n  }\n  // Fallback 3: primeiro profissional do procedimento\n  if (!matched && procedureId) {\n    const proc = procedures.find(p => p.id === procedureId);\n    if (proc?.professional_ids?.length) {\n      matched = professionals.find(p => p.id === proc.professional_ids[0]);\n      if (matched) profSource = 'procedimento';\n    }\n  }\n  // Fallback 4: se so tem 1 profissional, usa ele\n  if (!matched && professionals.length === 1) {\n    matched = professionals[0];\n    profSource = 'unico-profissional';\n  }\n  if (matched) professionalId = matched.id;\n}\n\nconst profValid = validProfIds.has(professionalId);\n\n// Se NAO conseguimos validar/corrigir → bypass criacao e gera toolResult de erro\nif (!profValid) {\n  return [{\n    ...ctx,\n    skipCreate: true,\n    patientAlreadyExists: true, // bypass o IF 14b\n    patientId: existingPatient?.id || '00000000-0000-0000-0000-000000000000',\n    appointmentPayload: { clinic_id: clinicId },\n    toolResultStr: 'Profissional nao identificado. Responda com elegancia que precisa confirmar com qual profissional ela quer o horario. Apresente as opcoes de profissionais que fazem o procedimento (se aplicavel) e peca pra escolher.',\n    _debug13b: { profSource: 'NAO_RESOLVIDO', original: toolInput.professional_id, validIds: [...validProfIds] }\n  }];\n}\n\nconst patientAlreadyExists = !!existingPatient;\nconst patientId = existingPatient?.id || null;\n\nreturn [{\n  ...ctx,\n  skipCreate: false,\n  startIso,\n  endIso,\n  procedureId,\n  professionalIdResolved: professionalId,\n  patientAlreadyExists,\n  patientId,\n  patientCreatePayload: {\n    clinic_id: clinicId,\n    name: toolInput.nome_paciente,\n    phone\n  },\n  appointmentPayload: {\n    clinic_id: clinicId,\n    professional_id: professionalId,\n    procedure_id: procedureId,\n    start_time: startIso,\n    end_time: endIso,\n    status: 'scheduled',\n    notes: toolInput.procedimento ? `Procedimento: ${toolInput.procedimento} (agendado pela Eva)` : 'Agendado pela Eva via WhatsApp'\n  },\n  _debug13b: { profSource, originalProfId: toolInput.professional_id, finalProfId: professionalId }\n}];"
+      },
+      "id": "v5-13b-extract",
+      "name": "13b - Extrair input (criar_agendamento)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3120, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [
+            {
+              "id": "patexists",
+              "leftValue": "={{ $json.patientAlreadyExists }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "v5-14b-ifpat",
+      "name": "14b - Paciente ja existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [3360, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://yqrjbyaucimvmzpfipgs.supabase.co/rest/v1/patients",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.patientCreatePayload) }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-15b-createpat",
+      "name": "15b - Criar paciente novo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3600, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 16b - Resolver patient_id final (defensivo)\n// Aceita QUALQUER formato de resposta do 15b ou contexto do 14b.\n// ───────────────────────────────────────────────\nconst ctx = $('13b - Extrair input (criar_agendamento)').first().json;\n\nlet patientId = ctx.patientId;\nlet sourceUsed = 'ctx';\n\nif (!patientId) {\n  const r = $json;\n  if (r?.id) { patientId = r.id; sourceUsed = 'json.id'; }\n  else if (Array.isArray(r) && r[0]?.id) { patientId = r[0].id; sourceUsed = 'json[0].id'; }\n  else if (r?.body?.id) { patientId = r.body.id; sourceUsed = 'json.body.id'; }\n  else if (Array.isArray(r?.body) && r.body[0]?.id) { patientId = r.body[0].id; sourceUsed = 'json.body[0].id'; }\n  else if (r?.data?.id) { patientId = r.data.id; sourceUsed = 'json.data.id'; }\n  else if (Array.isArray(r?.data) && r.data[0]?.id) { patientId = r.data[0].id; sourceUsed = 'json.data[0].id'; }\n}\n\nif (!patientId) {\n  throw new Error('[16b] Não conseguiu extrair patient_id. JSON recebido: ' + JSON.stringify($json).slice(0, 400));\n}\n\nreturn [{\n  ...ctx,\n  patientId,\n  appointmentPayload: { ...ctx.appointmentPayload, patient_id: patientId },\n  _debug16b: { sourceUsed, jsonShape: Array.isArray($json) ? 'array' : typeof $json }\n}];"
+      },
+      "id": "v5-16b-resolve",
+      "name": "16b - Resolver patient_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3840, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://yqrjbyaucimvmzpfipgs.supabase.co/rest/v1/appointments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.appointmentPayload) }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-17b-createappt",
+      "name": "17b - Criar appointment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4080, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 18b - Marcar lead como convertido + formatar toolResult\n// SEMPRE retorna toolResultStr (sucesso, erro ou bypass)\n// ───────────────────────────────────────────────\nconst ctx = $('13b - Extrair input (criar_agendamento)').first().json;\nconst resp = $json;\n\n// Se 13b sinalizou skipCreate, respeita o toolResultStr de la\nif (ctx.skipCreate && ctx.toolResultStr) {\n  return [{ ...ctx, leadConvertedId: null, _debug18b: { branch: 'skipCreate' } }];\n}\n\n// Aceita resposta em qualquer formato\nlet created = null;\nif (resp && typeof resp === 'object') {\n  if (resp.id) created = resp;\n  else if (Array.isArray(resp) && resp[0]?.id) created = resp[0];\n  else if (Array.isArray(resp.body) && resp.body[0]?.id) created = resp.body[0];\n  else if (resp.body?.id) created = resp.body;\n}\n\nlet toolResultStr;\nlet leadConvertedId = null;\n\nif (created?.id) {\n  const [y,m,d] = String(ctx.toolInput.data).split('-');\n  const procPart = ctx.toolInput.procedimento ? `Procedimento: ${ctx.toolInput.procedimento}\\n` : '';\n  toolResultStr = `AGENDAMENTO CRIADO COM SUCESSO!\\nPaciente: ${ctx.toolInput.nome_paciente}\\nData: ${d}/${m}/${y} as ${ctx.toolInput.horario}\\n${procPart}Confirme com a paciente, mencione que ela recebera lembrete D-1 e seja calorosa. NAO repita o nome dela mais de uma vez.`;\n  if (ctx.existingLead?.id) leadConvertedId = ctx.existingLead.id;\n} else {\n  const errMsg = resp?.message || resp?.error || resp?.body?.message || resp?.hint\n               || (typeof resp === 'string' ? resp.slice(0, 200) : JSON.stringify(resp).slice(0, 200));\n  toolResultStr = `ERRO ao criar agendamento: ${errMsg}. Peca desculpas com elegancia, diga que vai re-verificar a agenda e sugira outro horario. NAO mencione detalhes tecnicos.`;\n}\n\nreturn [{\n  ...ctx,\n  toolResultStr,\n  leadConvertedId,\n  _debug18b: {\n    branch: created?.id ? 'sucesso' : 'erro',\n    respShape: Array.isArray(resp) ? 'array' : typeof resp,\n    respKeys: resp && typeof resp === 'object' && !Array.isArray(resp) ? Object.keys(resp).slice(0,8) : []\n  }\n}];"
+      },
+      "id": "v5-18b-format",
+      "name": "18b - Formatar criacao + converter lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4320, 0]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://yqrjbyaucimvmzpfipgs.supabase.co/rest/v1/leads?id=eq.{{ $json.leadConvertedId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"converted\",\n  \"converted_at\": {{ JSON.stringify(new Date().toISOString()) }},\n  \"conversion_notes\": \"Convertido via Donna (WhatsApp)\"\n}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-19b-leadconv",
+      "name": "19b - Marcar lead convertido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4560, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// ESCALAR_HUMANO — atualiza lead com prioridade alta\n// e sinaliza que precisa atendente humano.\n// ───────────────────────────────────────────────\nconst ctx = $json;\nconst { toolInput, existingLead, customerName, phone } = ctx;\n\nconst motivo = toolInput.motivo || 'duvida';\nconst detalhes = toolInput.detalhes || '';\n\nreturn [{\n  ...ctx,\n  needUpdateLead: !!existingLead?.id,\n  leadPatchUrl: existingLead?.id ? `${ctx.supabaseUrl}/rest/v1/leads?id=eq.${existingLead.id}` : null,\n  leadPatchBody: existingLead?.id ? {\n    ai_priority: 'hot',\n    ai_suggested_action: `[ESCALAR HUMANO] ${motivo}: ${detalhes}`.slice(0, 500),\n    ai_last_analysis: new Date().toISOString()\n  } : null,\n  toolResultStr: `Sinalizado para atendente humano. Motivo: ${motivo}. Lead foi marcado como hot no CRM. Responda à paciente com elegância: \"Vou avisar [profissional] pessoalmente, e nossa secretária entrará em contato com você em breve para resolver isso com calma. Pode aguardar?\"`\n}];"
+      },
+      "id": "v5-13c-escalate",
+      "name": "13c - Escalar humano (prep)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3120, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.leadPatchUrl || 'https://httpbin.org/patch' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.leadPatchBody || {}) }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-14c-escalate",
+      "name": "14c - Marcar lead hot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3360, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 15c - Pass-through: passa o ctx pra frente intacto\n// (o PATCH do lead pode ter dado erro silencioso, mas\n//  a Donna ja tem o toolResultStr montado).\n// ───────────────────────────────────────────────\nreturn [$('13c - Escalar humano (prep)').first().json];"
+      },
+      "id": "v5-15c-pass",
+      "name": "15c - Pass-through escalar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3600, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// REGISTRAR_INTERESSE — atualiza lead.interest no CRM\n// ───────────────────────────────────────────────\nconst ctx = $json;\nconst { toolInput, existingLead, procedures } = ctx;\n\nconst procedimento = toolInput.procedimento || '';\nconst observacoes = toolInput.observacoes || '';\n\n// Tentar resolver procedure_id pelo nome\nlet procedureId = null;\nif (procedimento && Array.isArray(procedures)) {\n  const needle = procedimento.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n  const found = procedures.find(p => {\n    const haystack = String(p.name).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n    return haystack.includes(needle) || needle.includes(haystack);\n  });\n  if (found) procedureId = found.id;\n}\n\nconst body = {\n  interest: procedimento,\n  procedure_id: procedureId,\n  ai_priority: 'warm',\n  ai_suggested_action: observacoes ? `Interesse em ${procedimento}. Obs: ${observacoes}` : `Interesse em ${procedimento}`,\n  ai_last_analysis: new Date().toISOString()\n};\n\nreturn [{\n  ...ctx,\n  needUpdateLead: !!existingLead?.id,\n  leadPatchUrl: existingLead?.id ? `${ctx.supabaseUrl}/rest/v1/leads?id=eq.${existingLead.id}` : null,\n  leadPatchBody: existingLead?.id ? body : null,\n  toolResultStr: `Interesse registrado no CRM: ${procedimento}. Continue a conversa naturalmente, sem mencionar que voce \"registrou\" nada — isso e bastidor. Apenas responda elegantemente ao que ela disse.`\n}];"
+      },
+      "id": "v5-13d-interest",
+      "name": "13d - Registrar interesse (prep)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3120, 600]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.leadPatchUrl || 'https://httpbin.org/patch' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.leadPatchBody || {}) }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-14d-interest",
+      "name": "14d - Update lead.interest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3360, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$('13d - Registrar interesse (prep)').first().json];"
+      },
+      "id": "v5-15d-pass",
+      "name": "15d - Pass-through interesse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3600, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// FALLBACK — Claude tentou usar tool desconhecida\n// ───────────────────────────────────────────────\nconst ctx = $json;\nreturn [{\n  ...ctx,\n  toolResultStr: `Tool '${ctx.toolName}' nao implementada no sistema. Responda à paciente normalmente sem mencionar isso, e siga conduzindo a conversa.`\n}];"
+      },
+      "id": "v5-13e-fallback",
+      "name": "13e - Fallback tool desconhecida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3120, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 19 - Preparar 2a chamada Claude com tool_result\n// Recebe de qualquer ramo de tool (15a, 18b, 15c, 15d, 13e, 19b)\n// IMPORTANTE: fecha TODOS os tool_uses presentes em claudeContentBlocks\n// (Claude as vezes pede 2 tools paralelas — todos precisam de tool_result).\n// ───────────────────────────────────────────────\nconst { toolResultStr, toolUseId, claudeContentBlocks, messagesForClaude, systemPrompt } = $json;\n\nif (!toolResultStr) {\n  throw new Error('[19] toolResultStr ausente — algum ramo de tool nao formatou resposta');\n}\n\nconst toolUsesPresent = (claudeContentBlocks || []).filter(b => b && b.type === 'tool_use');\nconst toolResults = toolUsesPresent.length > 0\n  ? toolUsesPresent.map((tu) => ({\n      type: 'tool_result',\n      tool_use_id: tu.id,\n      content: tu.id === toolUseId\n        ? toolResultStr\n        : 'Tool secundaria nao executada nesta passada. Use o resultado da tool principal acima.'\n    }))\n  : [{ type: 'tool_result', tool_use_id: toolUseId, content: toolResultStr }];\n\nconst messagesComTool = [\n  ...messagesForClaude,\n  { role: 'assistant', content: claudeContentBlocks },\n  { role: 'user', content: toolResults }\n];\n\nreturn [{\n  ...$json,\n  messagesComTool,\n  _debug19: {\n    toolUsesCount: toolUsesPresent.length,\n    toolUseIds: toolUsesPresent.map(t => t.id),\n    primaryToolUseId: toolUseId\n  }\n}];"
+      },
+      "id": "v5-19-prep2",
+      "name": "19 - Preparar Claude 2a chamada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4800, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5\",\n  \"max_tokens\": 400,\n  \"system\": {{ JSON.stringify($json.systemPrompt) }},\n  \"messages\": {{ JSON.stringify($json.messagesComTool) }}\n}",
+        "options": {}
+      },
+      "id": "v5-20-claude2",
+      "name": "20 - Claude 2a chamada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [5040, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZjqLGifg21SJM9Ap",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 21 - Extrair texto final apos tool\n// ───────────────────────────────────────────────\nconst ctx = $('19 - Preparar Claude 2a chamada').first().json;\nconst claude = $json;\nconst content = claude.content || [];\nconst textBlock = content.find(b => b.type === 'text');\nconst toolUseBlock = content.find(b => b.type === 'tool_use');\nfunction sanitize(t) {\n  if (!t) return t;\n  return String(t).replace(/\\r/g, '').replace(/\\n+/g, ' ').replace(/[ \\t]{2,}/g, ' ').trim();\n}\nlet finalText = sanitize(textBlock?.text);\nif (!finalText) {\n  // Tenta extrair de outros lugares antes do fallback\n  if (typeof claude.content === 'string') finalText = sanitize(claude.content);\n  else if (claude.error?.message) finalText = 'Tive um pequeno contratempo aqui. Pode repetir, por favor?';\n  else finalText = 'Pode repetir, por favor? Quero te ajudar direitinho.';\n}\nreturn [{\n  ...ctx,\n  finalText,\n  _debug21: {\n    stop_reason: claude.stop_reason || null,\n    blocksCount: content.length,\n    blockTypes: content.map(b => b?.type).filter(Boolean),\n    hasText: !!textBlock,\n    textLen: textBlock?.text?.length || 0,\n    hasToolUse: !!toolUseBlock,\n    toolUseName: toolUseBlock?.name || null,\n    claudeError: claude.error || claude.type === 'error' ? claude : null\n  }\n}];"
+      },
+      "id": "v5-21-extract",
+      "name": "21 - Extrair texto final (apos tool)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5280, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 11b - Sem tool: ja tem finalText, passa adiante\n// ───────────────────────────────────────────────\nreturn [$json];"
+      },
+      "id": "v5-11b-notool",
+      "name": "11b - Sem tool (passa direto)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ───────────────────────────────────────────────\n// 22 - Salvar resposta da Donna em eva_conversations\n// O app ja gravou a mensagem do user. So precisamos\n// inserir a do assistant (1 linha simples).\n// ───────────────────────────────────────────────\nconst { phone, finalText, supabaseUrl, clinicId, existingLead, newLeadId } = $json;\n\nif (!finalText || !clinicId || !phone) {\n  throw new Error('[22] dados ausentes: finalText/clinicId/phone');\n}\n\nreturn [{\n  ...$json,\n  saveUrl: `${supabaseUrl}/rest/v1/eva_conversations`,\n  savePayload: {\n    clinic_id: clinicId,\n    phone,\n    role: 'assistant',\n    content: finalText\n  },\n  // Decide se atualiza last_whatsapp_at em algum lead\n  leadIdToTouch: existingLead?.id || newLeadId || null\n}];"
+      },
+      "id": "v5-22-prepsave",
+      "name": "22 - Preparar save assistant",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5520, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.saveUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.savePayload) }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-23-save",
+      "name": "23 - Salvar resposta assistant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [5760, 100]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://yqrjbyaucimvmzpfipgs.supabase.co/rest/v1/leads?id=eq.{{ $json.leadIdToTouch || '00000000-0000-0000-0000-000000000000' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"last_whatsapp_at\": {{ JSON.stringify(new Date().toISOString()) }},\n  \"last_contact_at\": {{ JSON.stringify(new Date().toISOString()) }}\n}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-24-touchlead",
+      "name": "24 - Touch lead.last_whatsapp_at",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [6000, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('22 - Preparar save assistant').first().json.evoConfig?.evolution_url }}/message/sendText/{{ $('22 - Preparar save assistant').first().json.evoConfig?.instance_name }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $('22 - Preparar save assistant').first().json.evoConfig?.evolution_master_key }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": {{ JSON.stringify($('22 - Preparar save assistant').first().json.phone) }},\n  \"text\": {{ JSON.stringify($('22 - Preparar save assistant').first().json.finalText) }},\n  \"delay\": 1200\n}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "v5-25-send",
+      "name": "25 - Enviar via Evolution (multi-tenant)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [6240, 100]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "00 - Webhook Evolution": {
+      "main": [
+        [
+          { "node": "00b - Responder Evolution 200", "type": "main", "index": 0 },
+          { "node": "01 - Filtrar (paciente humano, nao grupo)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "01 - Filtrar (paciente humano, nao grupo)": {
+      "main": [
+        [{ "node": "02 - Extrair dados", "type": "main", "index": 0 }]
+      ]
+    },
+    "02 - Extrair dados": {
+      "main": [
+        [{ "node": "03 - Buffer 3s (anti-spam)", "type": "main", "index": 0 }]
+      ]
+    },
+    "03 - Buffer 3s (anti-spam)": {
+      "main": [
+        [{ "node": "03b - RPC donna_load_context", "type": "main", "index": 0 }]
+      ]
+    },
+    "03b - RPC donna_load_context": {
+      "main": [
+        [{ "node": "04 - Carregar contexto Supabase", "type": "main", "index": 0 }]
+      ]
+    },
+    "04 - Carregar contexto Supabase": {
+      "main": [
+        [{ "node": "05 - Precisa criar lead?", "type": "main", "index": 0 }]
+      ]
+    },
+    "05 - Precisa criar lead?": {
+      "main": [
+        [{ "node": "06 - Criar lead novo", "type": "main", "index": 0 }],
+        [{ "node": "07 - Merge contexto + lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "06 - Criar lead novo": {
+      "main": [
+        [{ "node": "07 - Merge contexto + lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "07 - Merge contexto + lead": {
+      "main": [
+        [{ "node": "08 - Montar contexto Claude", "type": "main", "index": 0 }]
+      ]
+    },
+    "08 - Montar contexto Claude": {
+      "main": [
+        [{ "node": "09 - Claude 1a chamada", "type": "main", "index": 0 }]
+      ]
+    },
+    "09 - Claude 1a chamada": {
+      "main": [
+        [{ "node": "10 - Analisar resposta Claude", "type": "main", "index": 0 }]
+      ]
+    },
+    "10 - Analisar resposta Claude": {
+      "main": [
+        [{ "node": "11 - Tem tool_use?", "type": "main", "index": 0 }]
+      ]
+    },
+    "11 - Tem tool_use?": {
+      "main": [
+        [{ "node": "12 - Qual tool?", "type": "main", "index": 0 }],
+        [{ "node": "11b - Sem tool (passa direto)", "type": "main", "index": 0 }]
+      ]
+    },
+    "12 - Qual tool?": {
+      "main": [
+        [{ "node": "13a - Extrair input (consultar_agenda)", "type": "main", "index": 0 }],
+        [{ "node": "13b - Extrair input (criar_agendamento)", "type": "main", "index": 0 }],
+        [{ "node": "13c - Escalar humano (prep)", "type": "main", "index": 0 }],
+        [{ "node": "13d - Registrar interesse (prep)", "type": "main", "index": 0 }],
+        [{ "node": "13e - Fallback tool desconhecida", "type": "main", "index": 0 }]
+      ]
+    },
+    "13a - Extrair input (consultar_agenda)": {
+      "main": [
+        [{ "node": "14a - RPC get_available_slots", "type": "main", "index": 0 }]
+      ]
+    },
+    "14a - RPC get_available_slots": {
+      "main": [
+        [{ "node": "15a - Formatar resposta consulta", "type": "main", "index": 0 }]
+      ]
+    },
+    "15a - Formatar resposta consulta": {
+      "main": [
+        [{ "node": "19 - Preparar Claude 2a chamada", "type": "main", "index": 0 }]
+      ]
+    },
+    "13b - Extrair input (criar_agendamento)": {
+      "main": [
+        [{ "node": "14b - Paciente ja existe?", "type": "main", "index": 0 }]
+      ]
+    },
+    "14b - Paciente ja existe?": {
+      "main": [
+        [{ "node": "16b - Resolver patient_id", "type": "main", "index": 0 }],
+        [{ "node": "15b - Criar paciente novo", "type": "main", "index": 0 }]
+      ]
+    },
+    "15b - Criar paciente novo": {
+      "main": [
+        [{ "node": "16b - Resolver patient_id", "type": "main", "index": 0 }]
+      ]
+    },
+    "16b - Resolver patient_id": {
+      "main": [
+        [{ "node": "17b - Criar appointment", "type": "main", "index": 0 }]
+      ]
+    },
+    "17b - Criar appointment": {
+      "main": [
+        [{ "node": "18b - Formatar criacao + converter lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "18b - Formatar criacao + converter lead": {
+      "main": [
+        [{ "node": "19b - Marcar lead convertido", "type": "main", "index": 0 }]
+      ]
+    },
+    "19b - Marcar lead convertido": {
+      "main": [
+        [{ "node": "19 - Preparar Claude 2a chamada", "type": "main", "index": 0 }]
+      ]
+    },
+    "13c - Escalar humano (prep)": {
+      "main": [
+        [{ "node": "14c - Marcar lead hot", "type": "main", "index": 0 }]
+      ]
+    },
+    "14c - Marcar lead hot": {
+      "main": [
+        [{ "node": "15c - Pass-through escalar", "type": "main", "index": 0 }]
+      ]
+    },
+    "15c - Pass-through escalar": {
+      "main": [
+        [{ "node": "19 - Preparar Claude 2a chamada", "type": "main", "index": 0 }]
+      ]
+    },
+    "13d - Registrar interesse (prep)": {
+      "main": [
+        [{ "node": "14d - Update lead.interest", "type": "main", "index": 0 }]
+      ]
+    },
+    "14d - Update lead.interest": {
+      "main": [
+        [{ "node": "15d - Pass-through interesse", "type": "main", "index": 0 }]
+      ]
+    },
+    "15d - Pass-through interesse": {
+      "main": [
+        [{ "node": "19 - Preparar Claude 2a chamada", "type": "main", "index": 0 }]
+      ]
+    },
+    "13e - Fallback tool desconhecida": {
+      "main": [
+        [{ "node": "19 - Preparar Claude 2a chamada", "type": "main", "index": 0 }]
+      ]
+    },
+    "19 - Preparar Claude 2a chamada": {
+      "main": [
+        [{ "node": "20 - Claude 2a chamada", "type": "main", "index": 0 }]
+      ]
+    },
+    "20 - Claude 2a chamada": {
+      "main": [
+        [{ "node": "21 - Extrair texto final (apos tool)", "type": "main", "index": 0 }]
+      ]
+    },
+    "21 - Extrair texto final (apos tool)": {
+      "main": [
+        [{ "node": "22 - Preparar save assistant", "type": "main", "index": 0 }]
+      ]
+    },
+    "11b - Sem tool (passa direto)": {
+      "main": [
+        [{ "node": "22 - Preparar save assistant", "type": "main", "index": 0 }]
+      ]
+    },
+    "22 - Preparar save assistant": {
+      "main": [
+        [{ "node": "23 - Salvar resposta assistant", "type": "main", "index": 0 }]
+      ]
+    },
+    "23 - Salvar resposta assistant": {
+      "main": [
+        [{ "node": "24 - Touch lead.last_whatsapp_at", "type": "main", "index": 0 }]
+      ]
+    },
+    "24 - Touch lead.last_whatsapp_at": {
+      "main": [
+        [{ "node": "25 - Enviar via Evolution (multi-tenant)", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "donna-v5-cliniq-2026-04-30",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
