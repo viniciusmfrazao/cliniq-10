@@ -1,14 +1,26 @@
 # 🚀 Melhorias Inovadoras — Cliniq
 
 > Criado em 28/04/2026 — depois do sistema base estar rodando estável.
+> Atualizado em 03/05/2026 — adicionadas melhorias operacionais (multi-WhatsApp + toggle Eva auto/manual).
 >
-> Foco: features com **IA embutida** que viram diferencial competitivo (demos vendem) ou ROI direto (retenção/conversão).
+> Foco: features com **IA embutida** que viram diferencial competitivo (demos vendem) ou ROI direto (retenção/conversão), + reorganizações estruturais que destravam multi-secretária.
 >
 > Cada item tem: o que é, como funciona, esforço estimado, ROI/impacto, tech stack sugerido.
 
 ---
 
 ## 📊 Resumo executivo (priorizado)
+
+### 🏗️ Operacional (pedido pela Sarah Pina, 03/05/2026)
+
+| # | Feature | Categoria | Esforço | ROI | Urgência |
+|---|---|---|---|---|---|
+| **A** | **Toggle Eva Auto/Manual por número de WhatsApp** | Operação | 1-2h | 🔥🔥 | Alta |
+| **B** | **Multi-WhatsApp / Multi-CRM por secretária** | Operação/SaaS | 13-15h (2-3 dias) | 🔥🔥🔥 | Média |
+
+> Detalhes na seção **"🏗️ MELHORIAS OPERACIONAIS"** mais abaixo.
+
+### 🤖 Features de IA
 
 | # | Feature | Categoria | Esforço | ROI | Demo? |
 |---|---|---|---|---|---|
@@ -411,6 +423,95 @@ CRM filtra "leads quentes" automaticamente pra Sarah/secretária priorizar.
 12. Risk-scoring de contraindicações (2 sessões)
 13. Reconhecimento facial pra check-in (2-3 sessões) — só quando tiver fila
 ```
+
+---
+
+## 🏗️ MELHORIAS OPERACIONAIS (não-IA, mas críticas)
+
+> Adicionado em 03/05/2026 — pedido durante o uso real da Sarah Pina.
+> Não são features de IA, são reorganizações estruturais que destravam multi-secretária.
+
+### A. Toggle Eva Auto/Manual por número de WhatsApp
+
+> Permitir que a secretária pause a Eva e responda manualmente, sem deixar a Eva interferir.
+
+**O que é:** botão no topo da `/dashboard/whatsapp` (e em `/dashboard/config/eva`) com 2 estados: 🤖 **Eva ativa** (resposta automática) ou 👤 **Manual** (Eva fica muda, secretária responde no painel).
+
+**Por quê:** em horário comercial, a secretária quer ser ela atendendo. Eva fica de apoio (fora do horário, lembretes, follow-up). Hoje a Eva responde sempre — não tem como pausar.
+
+**Como funciona:**
+1. Coluna nova `auto_reply_enabled boolean DEFAULT true` em `clinic_whatsapp`
+2. Webhook `/api/webhooks/evolution/[instance]`: se `auto_reply_enabled=false` → persiste a mensagem em `eva_conversations` mas **não chama** `eva-process`
+3. Follow-up cron pula instâncias com `auto_reply_enabled=false`
+4. UI: toggle no topo do WhatsApp + indicador no card do CRM ("⏸️ Eva pausada")
+5. Quando reativa, Eva volta do zero (não tenta "compensar" mensagens perdidas — ficaria invasivo)
+
+**Esforço:** ~1-2h. **Risco:** baixo (só adiciona um toggle, não muda fluxo existente).
+
+---
+
+### B. Multi-WhatsApp / Multi-CRM por secretária (1 número por função)
+
+> Refator estrutural — **trabalho grande, ~13-15h focadas**.
+
+**Cenário pedido (Sarah Pina):**
+
+| Secretária | Número | Função | CRM ideal |
+|---|---|---|---|
+| **Maria (Atendimento)** | nº dos pacientes existentes | Confirmações, reagendamentos, dúvidas | Lista de pacientes + agenda |
+| **Joana (Vendas)** | nº do tráfego pago | Capturar lead → marcar avaliação | Funil Kanban (Novo→Agendado→Cliente) |
+
+Cada secretária só vê o que é dela. Cada número tem sua própria Eva (personalidade + follow-up + modo auto/manual).
+
+**Por quê:** quem faz tráfego pago **separa** captação (vendas) de retenção (atendimento). Misturar leads frios com paciente VIP no mesmo CRM polui os dois fluxos.
+
+**Modelo atual (limitação):**
+
+```sql
+-- clinic_whatsapp tem PK = clinic_id → 1 número por clínica (forçado)
+CREATE TABLE clinic_whatsapp (
+  clinic_id uuid PRIMARY KEY REFERENCES clinics(id),
+  ...
+);
+```
+
+**Modelo alvo:**
+
+```sql
+-- clinic_whatsapp 1:N (vários números por clínica)
+ALTER TABLE clinic_whatsapp ADD COLUMN id uuid DEFAULT gen_random_uuid();
+ALTER TABLE clinic_whatsapp ADD COLUMN label text;        -- "Atendimento — Maria"
+ALTER TABLE clinic_whatsapp ADD COLUMN role text;         -- 'atendimento' | 'vendas'
+ALTER TABLE clinic_whatsapp ADD COLUMN assigned_user_id uuid REFERENCES users(id);
+ALTER TABLE clinic_whatsapp ADD COLUMN auto_reply_enabled boolean DEFAULT true;
+-- nova PK: (id) ; manter (clinic_id, instance_name) UNIQUE
+
+-- Conversas e leads sabem de qual número vieram
+ALTER TABLE eva_conversations ADD COLUMN whatsapp_id uuid REFERENCES clinic_whatsapp(id);
+ALTER TABLE leads             ADD COLUMN whatsapp_id uuid REFERENCES clinic_whatsapp(id);
+```
+
+**O que muda em cada camada:**
+
+| Camada | Mudança | Esforço |
+|---|---|---|
+| **Schema** | Migration acima + RLS pra cada secretária ver só o seu | ~3h |
+| **Webhook Evolution** | Resolve `whatsapp_id` pelo `instance_name` ao receber msg | ~1h |
+| **Edge Function eva-process** | Lê config (personalidade, follow-up, modo auto/manual) por `whatsapp_id` em vez de `clinic_id` | ~2h |
+| **UI `/dashboard/whatsapp`** | Selector "📱 Maria ▾" / "📱 Joana ▾" / "📱 Todos" no topo + filtra conversas | ~2h |
+| **UI `/dashboard/crm`** | Mesmo selector, filtra leads e funil | ~2h |
+| **UI `/dashboard/config/eva`** | Vira multi-aba (1 config por número) | ~2h |
+| **UI `/dashboard/config/whatsapp`** | Lista de números, conectar/desconectar QR pra cada, status realtime | ~3h |
+
+**Total estimado:** 13-15h focadas (2-3 dias bem feitos com testes).
+
+**Cuidados:**
+- Migration mexe em dados de produção → **fazer backup antes** + rodar primeiro em staging
+- Backfill: a clínica atual tem 1 whatsapp já, precisa preencher `whatsapp_id` em todas conversas/leads existentes pra apontar pra esse 1 registro antes de aplicar `NOT NULL`
+- RLS: secretária `Maria` (`role='secretary'`, `assigned_to` = whatsapp da Maria) só consulta conversas/leads onde `whatsapp_id = ela`. Admin vê tudo.
+- Edge Function deploy + downtime de webhook (~30s) — fazer fora de horário comercial
+
+**Quando atacar:** depois de validar o toggle (item A). O toggle te dá 80% do valor já no schema atual; o multi-WhatsApp resolve o caso quando a clínica realmente tem 2+ secretárias com funções distintas.
 
 ---
 
