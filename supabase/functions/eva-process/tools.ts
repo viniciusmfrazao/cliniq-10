@@ -328,13 +328,24 @@ export async function criarAgendamento(args: {
 
 // ─── escalar_humano ────────────────────────────────────────────────────────
 
+/**
+ * Marca o lead como needing human review. Tipos de motivo possiveis:
+ * - 'cancelamento' - paciente quer cancelar agendamento
+ * - 'reagendamento' - paciente quer mudar dia/horario
+ * - 'reclamacao' - paciente insatisfeita
+ * - 'duvida_complexa' - pergunta que Eva nao sabe responder
+ * - outros
+ *
+ * Side effect: ai_priority='hot', needs_human_review=true,
+ * preenche human_review_* pra aparecer com badge no CRM.
+ */
 export async function escalarHumano(
   args: { motivo: string; detalhes?: string },
   ctx: DonnaContext,
   _payload: IncomingPayload,
   env: ToolEnv,
 ): Promise<string> {
-  const motivo = args.motivo || 'duvida';
+  const motivo = args.motivo || 'duvida_complexa';
   const detalhes = args.detalhes || '';
 
   if (ctx.lead?.id) {
@@ -344,13 +355,22 @@ export async function escalarHumano(
       headers: sbHeaders(env),
       body: JSON.stringify({
         ai_priority: 'hot',
-        ai_suggested_action: `[ESCALAR HUMANO] ${motivo}: ${detalhes}`.slice(0, 500),
+        ai_suggested_action: `[ATENDIMENTO HUMANO] ${motivo}: ${detalhes}`.slice(0, 500),
         ai_last_analysis: new Date().toISOString(),
+        needs_human_review: true,
+        human_review_reason: motivo,
+        human_review_details: detalhes.slice(0, 1000) || null,
+        human_review_at: new Date().toISOString(),
+        // Pausa follow-up automatico — quem cuida agora eh o humano
+        eva_followup_count: 0,
+        eva_next_followup_at: null,
       }),
     });
   }
 
-  return `Sinalizado para atendente humano. Motivo: ${motivo}. Lead marcado como hot. Responda com elegancia: "Vou avisar a Dra. pessoalmente, e nossa secretaria entrara em contato com voce em breve."`;
+  // Resposta da Eva eh DEFINIDA NO PROMPT (regra #5) por motivo,
+  // entao aqui so sinalizamos sucesso.
+  return `Sinalizado para atendente humano (motivo: ${motivo}). Lead marcado pra revisao humana e badge "Atendimento" aparece no CRM. Sua resposta para a paciente deve seguir o template da regra #5 de acordo com o motivo. NUNCA confirme cancelamento/reagendamento como ja resolvido — humano vai concluir.`;
 }
 
 // ─── registrar_interesse ───────────────────────────────────────────────────

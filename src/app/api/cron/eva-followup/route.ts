@@ -9,11 +9,15 @@ import { getSettings } from '@/lib/app-settings'
  * não foi convertido nem perdido), chama a Edge Function eva-process com
  * isFollowup=true pra Eva gerar uma mensagem proativa de retomada.
  *
- * Tempos:
+ * Tempos (5 estágios):
  *   t0 (paciente parou de responder) → +2h cron envia #1 (count vira 1)
- *   +1d → cron envia #2 (count vira 2)
- *   +2d → cron envia #3 (count vira 3)
- *   após #3 sem resposta → marca status='lost', lost_reason='sem_resposta_72h'
+ *   +24h depois → cron envia #2 (count vira 2)
+ *   +48h depois → cron envia #3 (count vira 3)
+ *   +5d depois → cron envia #4 (count vira 4)
+ *   +10d depois → cron envia #5 (count vira 5)
+ *   após #5 sem resposta → marca status='lost', lost_reason='sem_resposta_18d'
+ *
+ * Lead com needs_human_review=true NÃO recebe follow-up (humano cuida).
  *
  * Janela de envio: 8h-21h, segunda a sábado (BRT). Domingo e madrugada
  * pulamos — a fila não anda, o lead aguarda no horário comercial seguinte.
@@ -86,13 +90,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'eva_edge_url_missing' }, { status: 500 })
   }
 
-  // 2) Busca leads prontos pra follow-up
+  // 2) Busca leads prontos pra follow-up.
+  // Exclui: convertidos, perdidos, e quem ja foi escalado pra humano.
   const { data: leads, error: errLeads } = await svc
     .from('leads')
-    .select('id, clinic_id, name, phone, status, eva_followup_count, eva_next_followup_at, whatsapp_opt_in')
+    .select('id, clinic_id, name, phone, status, eva_followup_count, eva_next_followup_at, whatsapp_opt_in, needs_human_review')
     .lte('eva_next_followup_at', new Date().toISOString())
     .not('eva_next_followup_at', 'is', null)
     .not('status', 'in', '(converted,lost)')
+    .or('needs_human_review.is.null,needs_human_review.eq.false')
     .or('whatsapp_opt_in.is.null,whatsapp_opt_in.eq.true')
     .limit(limit)
 
@@ -156,14 +162,14 @@ export async function GET(req: NextRequest) {
     }
 
     const stage = (lead.eva_followup_count ?? 0) + 1
-    if (stage > 3) {
-      // Defesa: se por algum motivo passou de 3, marca lost
+    if (stage > 5) {
+      // Defesa: se por algum motivo passou de 5 estagios, marca lost
       if (!dryRun) {
         await svc
           .from('leads')
           .update({
             status: 'lost',
-            lost_reason: 'sem_resposta_72h',
+            lost_reason: 'sem_resposta_18d',
             eva_next_followup_at: null,
           })
           .eq('id', lead.id)

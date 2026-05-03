@@ -158,10 +158,14 @@ const FOLLOWUP_DELAYS_MS: Record<number, number> = {
   // count=0 (acabou de responder) → próximo em 2h
   // count=1 (mandei #1) → próximo em 24h
   // count=2 (mandei #2) → próximo em 48h
-  // count=3 (mandei #3) → não há próximo, marca lost
+  // count=3 (mandei #3) → próximo em 5 dias
+  // count=4 (mandei #4) → próximo (último) em 10 dias
+  // count=5 (mandei #5) → não há próximo, marca lost
   0: 2 * 60 * 60 * 1000,
   1: 24 * 60 * 60 * 1000,
   2: 48 * 60 * 60 * 1000,
+  3: 5 * 24 * 60 * 60 * 1000,
+  4: 10 * 24 * 60 * 60 * 1000,
 };
 
 async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext, opts: {
@@ -189,10 +193,10 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
 
   if (opts.isFollowupRun) {
     // Estamos respondendo a um cron de follow-up — incrementa o count e
-    // agenda o próximo (ou marca lost se já chegou no 3).
+    // agenda o próximo (ou marca lost se já chegou no 5º estagio).
     const newCount = ((ctx.lead as any).eva_followup_count ?? 0) + 1;
-    if (newCount >= 4) {
-      // Esgotou tentativas
+    if (newCount >= 6) {
+      // Esgotou tentativas (mandou 5 follow-ups: 2h, 24h, 48h, 5d, 10d)
       await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
         method: 'PATCH',
         headers: {
@@ -201,10 +205,10 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          eva_followup_count: 3,
+          eva_followup_count: 5,
           eva_next_followup_at: null,
           status: 'lost',
-          lost_reason: 'sem_resposta_72h',
+          lost_reason: 'sem_resposta_18d',
         }),
       }).catch(() => {});
       return;

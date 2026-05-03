@@ -37,24 +37,46 @@ type Lead = {
   // Eva follow-up
   eva_followup_count: number | null
   eva_next_followup_at: string | null
+  // Atendimento humano
+  needs_human_review: boolean | null
+  human_review_reason: string | null
+  human_review_details: string | null
+  human_review_at: string | null
   created_at: string
   updated_at: string
 }
 
 /**
- * Devolve um badge de follow-up pendente (Eva enviou msg e ta esperando
- * resposta da paciente). null se nao tem follow-up ativo.
+ * Badge de follow-up pendente (Eva enviou msg e ta esperando resposta).
+ * null se nao tem follow-up ativo, lead ja virou cliente/perdido, OU se ja
+ * esta em atendimento humano (humano cuida, follow-up pausado).
+ *
+ * Sao 5 estagios de follow-up — alinhados com o cron eva-followup-cron:
+ *   count 0 -> aguardando 1a resposta, proxima tentativa em ~2h
+ *   count 1 -> ja mandou 1, proxima em ~24h
+ *   count 2 -> ja mandou 2, proxima em ~48h
+ *   count 3 -> ja mandou 3, proxima em ~5 dias
+ *   count 4 -> ja mandou 4, proxima (ultima) em ~10 dias
  */
-function getFollowupBadge(lead: Lead): { label: string; tone: 'amber' | 'orange' | 'red' } | null {
+function getFollowupBadge(
+  lead: Lead,
+): { label: string; tone: 'amber' | 'orange' | 'red' | 'darkred' } | null {
   if (!lead.eva_next_followup_at) return null
   if (lead.status === 'converted' || lead.status === 'lost') return null
+  if (lead.needs_human_review) return null
   const count = lead.eva_followup_count ?? 0
-  // count = 0: aguardando 1a resposta da paciente, follow-up agendado p/ daqui 2h
-  // count = 1: ja mandou 1 follow-up, proxima tentativa em 24h
-  // count = 2: ja mandou 2 follow-ups, proxima (ultima) em 48h
-  if (count >= 2) return { label: 'Última chance', tone: 'red' }
+  if (count >= 4) return { label: 'Última chance · 10d', tone: 'darkred' }
+  if (count === 3) return { label: 'Aguardando 5d', tone: 'red' }
+  if (count === 2) return { label: 'Aguardando 48h', tone: 'orange' }
   if (count === 1) return { label: 'Aguardando 24h', tone: 'orange' }
-  return { label: 'Aguardando resposta', tone: 'amber' }
+  return { label: 'Aguardando 2h', tone: 'amber' }
+}
+
+const HUMAN_REVIEW_REASONS: Record<string, { label: string; emoji: string }> = {
+  cancelamento: { label: 'Cancelamento', emoji: '🚫' },
+  reagendamento: { label: 'Reagendamento', emoji: '🔄' },
+  reclamacao: { label: 'Reclamação', emoji: '⚠️' },
+  duvida_complexa: { label: 'Dúvida', emoji: '❓' },
 }
 
 type CRMSettings = {
@@ -161,17 +183,25 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     // Eva IA stats
     hotLeads: leads.filter(l => l.ai_priority === 'hot').length,
     estimatedValue: leads.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
-    pendingContact: leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date()).length
+    pendingContact: leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date()).length,
+    // Atendimento humano (Eva escalou)
+    humanReview: leads.filter(l => l.needs_human_review === true).length
   }
 
-  // Filtrar leads
-  const filteredLeads = filter === 'all' 
-    ? leads 
-    : leads.filter(l => l.status === filter)
+  // Filtrar leads — alem dos status, tem o filtro especial 'human_review'
+  const filteredLeads =
+    filter === 'all'
+      ? leads
+      : filter === 'human_review'
+        ? leads.filter(l => l.needs_human_review === true)
+        : leads.filter(l => l.status === filter)
 
-  // Agrupar por stage para Kanban
+  // Agrupar por stage para Kanban (respeita o filtro de atendimento humano)
+  const leadsForKanban = filter === 'human_review'
+    ? leads.filter(l => l.needs_human_review === true)
+    : leads
   const leadsByStage = STAGES.reduce((acc, stage) => {
-    acc[stage.id] = leads.filter(l => l.status === stage.id)
+    acc[stage.id] = leadsForKanban.filter(l => l.status === stage.id)
     return acc
   }, {} as Record<string, Lead[]>)
 
@@ -236,6 +266,16 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           <p className="text-xs text-slate-500">Total Leads</p>
         </div>
         
+        {stats.humanReview > 0 && (
+          <button
+            onClick={() => setFilter(filter === 'human_review' ? 'all' : 'human_review')}
+            className={`card p-3 text-left bg-gradient-to-br from-rose-50 to-pink-50 transition-all ${filter === 'human_review' ? 'ring-2 ring-rose-400' : 'hover:from-rose-100 hover:to-pink-100'}`}
+          >
+            <p className="text-2xl font-bold text-rose-600">{stats.humanReview} 🚨</p>
+            <p className="text-xs text-rose-600">Atendimento Humano</p>
+          </button>
+        )}
+
         {stats.hotLeads > 0 && (
           <div className="card p-3 bg-gradient-to-br from-red-50 to-orange-50">
             <p className="text-2xl font-bold text-red-600">{stats.hotLeads} 🔥</p>
@@ -331,18 +371,37 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   const needsContact = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
                   const followup = getFollowupBadge(lead)
                   const followupClass =
-                    followup?.tone === 'red'
-                      ? 'bg-red-100 text-red-700 border-red-200'
-                      : followup?.tone === 'orange'
-                        ? 'bg-orange-100 text-orange-700 border-orange-200'
-                        : 'bg-amber-100 text-amber-700 border-amber-200'
-                  const followupEmoji = followup?.tone === 'red' ? '🔴' : followup?.tone === 'orange' ? '🟠' : '🟡'
+                    followup?.tone === 'darkred'
+                      ? 'bg-red-200 text-red-900 border-red-300'
+                      : followup?.tone === 'red'
+                        ? 'bg-red-100 text-red-700 border-red-200'
+                        : followup?.tone === 'orange'
+                          ? 'bg-orange-100 text-orange-700 border-orange-200'
+                          : 'bg-amber-100 text-amber-700 border-amber-200'
+                  const followupEmoji =
+                    followup?.tone === 'darkred' ? '⚫'
+                      : followup?.tone === 'red' ? '🔴'
+                        : followup?.tone === 'orange' ? '🟠'
+                          : '🟡'
+
+                  // Atendimento humano (Eva escalou). Se ativo, NAO mostra
+                  // followup (humano cuida agora) — o getFollowupBadge ja
+                  // retorna null nesse caso.
+                  const humanReview = lead.needs_human_review
+                    ? HUMAN_REVIEW_REASONS[lead.human_review_reason ?? ''] ?? { label: 'Atendimento', emoji: '🚨' }
+                    : null
+
+                  const cardRing = humanReview
+                    ? 'ring-2 ring-rose-400'
+                    : needsContact
+                      ? 'ring-2 ring-amber-400'
+                      : ''
 
                   return (
                     <div
                       key={lead.id}
                       onClick={() => setSelectedLead(lead)}
-                      className={`bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer ${needsContact ? 'ring-2 ring-amber-400' : ''}`}
+                      className={`bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer ${cardRing}`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -357,6 +416,22 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                       </div>
                       {lead.phone && (
                         <p className="text-xs text-slate-500 mb-1">{lead.phone}</p>
+                      )}
+                      {humanReview && (
+                        <div
+                          className="flex flex-col gap-0.5 text-xs px-2 py-1.5 rounded-md border bg-rose-50 text-rose-800 border-rose-200 mb-2"
+                          title="Eva escalou para atendimento humano"
+                        >
+                          <div className="flex items-center gap-1 font-semibold">
+                            <span>{humanReview.emoji}</span>
+                            <span>{humanReview.label}</span>
+                          </div>
+                          {lead.human_review_details && (
+                            <p className="text-[11px] text-rose-700 leading-snug line-clamp-2">
+                              {lead.human_review_details}
+                            </p>
+                          )}
+                        </div>
                       )}
                       {followup && (
                         <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md border mb-2 ${followupClass}`} title="Eva está aguardando resposta da paciente">
