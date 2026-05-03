@@ -326,6 +326,44 @@ export async function criarAgendamento(args: {
   };
 }
 
+// ─── atualizar_nome_lead ───────────────────────────────────────────────────
+
+/**
+ * Eva chama assim que descobre o nome real da paciente (geralmente apos a
+ * mensagem de boas-vindas). Atualiza leads.name pra o card do CRM mostrar
+ * o nome real (em vez de "Lead WhatsApp" ou pushName generico).
+ */
+export async function atualizarNomeLead(
+  args: { nome_completo: string },
+  ctx: DonnaContext,
+  _payload: IncomingPayload,
+  env: ToolEnv,
+): Promise<string> {
+  const novo = (args.nome_completo || '').trim();
+  if (novo.length < 2) {
+    return 'Nome muito curto pra registrar. Continue conversando normalmente, pergunte de novo se necessario.';
+  }
+  if (!ctx.lead?.id) {
+    return 'Nome anotado, mas nao ha lead vinculado. Continue conversando normalmente.';
+  }
+
+  const url = `${env.supabaseUrl}/rest/v1/leads?id=eq.${ctx.lead.id}`;
+  const r = await fetchJson(url, {
+    method: 'PATCH',
+    headers: sbHeaders(env),
+    body: JSON.stringify({
+      name: novo.slice(0, 200),
+      last_contact_at: new Date().toISOString(),
+    }),
+  });
+
+  if (!r.ok) {
+    return `Nao consegui atualizar o nome no sistema (${r.error || 'erro desconhecido'}), mas continue conversando normalmente.`;
+  }
+
+  return `Nome "${novo}" registrado no CRM. Cumprimente-a pelo nome agora e conduza a conversa naturalmente. NAO diga que registrou — a tool eh silenciosa.`;
+}
+
 // ─── escalar_humano ────────────────────────────────────────────────────────
 
 /**
@@ -464,6 +502,10 @@ export async function executeToolByName(
     }
     case 'escalar_humano': {
       const r = await escalarHumano(input as any, ctx, payload, env);
+      return { resultStr: r };
+    }
+    case 'atualizar_nome_lead': {
+      const r = await atualizarNomeLead(input as any, ctx, payload, env);
       return { resultStr: r };
     }
     case 'registrar_interesse': {

@@ -72,6 +72,24 @@ export interface BuiltPrompt {
  *   - O caller (claude.ts) marca `cache_control: { type: 'ephemeral' }` no
  *     bloco do system prompt pra ativar o cache.
  */
+/**
+ * Decide se o nome conhecido eh "real" (a paciente disse o nome dela em
+ * algum momento) ou se eh placeholder do WhatsApp/webhook.
+ *
+ * Quando NAO eh real, a Eva usa o template de boas-vindas e PERGUNTA
+ * o nome ANTES de continuar (chamando atualizar_nome_lead depois).
+ */
+function hasRealName(name: string): boolean {
+  if (!name) return false;
+  const trimmed = name.trim();
+  if (trimmed.length < 3) return false;
+  if (/^cliente$/i.test(trimmed)) return false;
+  if (/^lead\s*whatsapp$/i.test(trimmed)) return false;
+  // So digitos/separadores (ex: numero de telefone vazado pro nome)
+  if (/^[\d\s().+-]+$/.test(trimmed)) return false;
+  return true;
+}
+
 export function buildSystemPrompt(
   ctx: DonnaContext,
   payload: IncomingPayload,
@@ -80,6 +98,7 @@ export function buildSystemPrompt(
   const { professionals, procedures, clinic, patient, lead } = ctx;
   const customerName = payload.customerName || patient?.name || lead?.name || 'cliente';
   const firstName = String(customerName).split(/\s+/)[0] || '';
+  const knowsRealName = hasRealName(customerName);
 
   // Profissionais que efetivamente fazem procedimentos
   const profIdsInProcs = new Set<string>();
@@ -127,14 +146,19 @@ export function buildSystemPrompt(
   const dataAtual = now.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' });
 
   let identificacaoPart = '';
-  if (patient) {
-    identificacaoPart = `- ${firstName || 'Esta pessoa'} já é PACIENTE da clínica (id: ${patient.id}). Trate com familiaridade — vocês já se conhecem.`;
-  } else if (lead) {
-    identificacaoPart = `- ${firstName || 'Esta pessoa'} é um LEAD em acompanhamento (status: ${lead.status})${
+  if (patient && knowsRealName) {
+    identificacaoPart = `- ${firstName} já é PACIENTE da clínica (id: ${patient.id}). Trate com familiaridade — vocês já se conhecem. Use o nome dela 1x no cumprimento e siga regra #1.`;
+  } else if (lead && knowsRealName) {
+    identificacaoPart = `- ${firstName} é um LEAD em acompanhamento (status: ${lead.status})${
       lead.interest ? `, interesse anterior: ${lead.interest}` : ''
-    }. Continue o relacionamento.`;
+    }. Continue o relacionamento. Use o nome 1x no cumprimento e siga regra #1.`;
+  } else if (!knowsRealName) {
+    // Nao temos um nome real ainda — Eva usa template de boas-vindas e
+    // PERGUNTA o nome dela. Quando ela responder, Eva chama
+    // 'atualizar_nome_lead' com o nome completo informado.
+    identificacaoPart = `- ⚡ PRIMEIRA APROXIMAÇÃO E NÃO SABEMOS O NOME DELA AINDA.\n- Use EXATAMENTE o template de boas-vindas (regra #BV abaixo).\n- Quando ela responder com o nome (proxima mensagem), CHAME 'atualizar_nome_lead' com o nome completo informado, ANTES de qualquer outra resposta. Depois prossiga naturalmente cumprimentando-a com o nome.`;
   } else {
-    identificacaoPart = `- Esta é a PRIMEIRA aproximação dela. Acolha com elegância especial.`;
+    identificacaoPart = `- Esta é a PRIMEIRA aproximação dela. Acolha com elegância especial usando o nome 1x no cumprimento.`;
   }
 
   let mediaPart = '';
@@ -175,7 +199,7 @@ EVITE A TODO CUSTO:
 - Tudo na MESMA linha — proibido usar \\n, \\n\\n, ENTER ou linhas em branco.
 - Foco em UMA ideia por mensagem — uma pergunta, um gancho, ou uma confirmação.
 - WhatsApp é troca rápida, não palestra.
-- ⚠️ EXCEÇÃO AUTORIZADA: APENAS na confirmação de agendamento (regra #1B) e na confirmação D-1 (regra #6) você PODE quebrar linha, usar até 4 emojis e ultrapassar 350 caracteres. Em qualquer outra mensagem, segue o limite estrito.
+- ⚠️ EXCEÇÕES AUTORIZADAS (3 momentos): mensagem de boas-vindas (regra #BV), confirmação de agendamento (regra #1B) e confirmação D-1 (regra #6). NESSAS você PODE quebrar linha, usar até 4 emojis e ultrapassar 350 caracteres. Em qualquer outra mensagem, segue o limite estrito.
 
 💰 REGRA CRÍTICA #3 — PREÇO: SÓ EM PARCELA, NUNCA O VALOR TOTAL:
 - IMPORTANTE: só informe preço se a paciente perguntar EXPLICITAMENTE ("quanto custa", "qual o valor", "preço"). Não traga valor proativamente.
@@ -204,6 +228,20 @@ ${procedimentosText}
 
 INFO DA CLÍNICA (use exatamente o que está aqui — NUNCA invente):
 ${buildClinicInfoBlock(ctx.clinic.settings)}
+
+👋 REGRA #BV — MENSAGEM DE BOAS-VINDAS (quando você ainda não sabe o nome real):
+   - Use EXATAMENTE este texto (com quebras de linha — exceção autorizada à regra #2):
+
+     "Olá! Eu sou a Eva, da ${clinic.name} 🤍
+     Seja muito bem-vinda!
+     Posso saber como você prefere ser chamada? ✨"
+
+   - Não adapte, não improvise: use literalmente o texto acima.
+   - Quebras de linha e 2 emojis (🤍 e ✨) permitidos nessa mensagem.
+   - Após mandar isso, AGUARDE a resposta dela com o nome.
+   - Quando ela responder com o nome (ex: "Maria", "sou a Maria Silva", "pode me chamar de Mari"), CHAME a tool 'atualizar_nome_lead' com o nome completo informado ANTES de continuar.
+   - Depois cumprimente-a pelo nome e conduza naturalmente: "Que prazer te conhecer, Maria! Me conta o que você está buscando hoje?"
+   - Se ela já chegou perguntando algo específico (ex: "oi, queria saber sobre botox"), você AINDA usa o template de boas-vindas + acrescenta o nome no fim — só depois (no próximo turno) responde sobre o procedimento.
 
 🔴 REGRAS QUE VOCÊ NUNCA VIOLA:
 
@@ -344,6 +382,21 @@ export const TOOLS = [
         observacoes: { type: 'string', description: 'Observações adicionais' },
       },
       required: ['procedimento'],
+    },
+  },
+  {
+    name: 'atualizar_nome_lead',
+    description:
+      'Use quando a paciente informar o nome dela pela primeira vez (ex: depois da mensagem de boas-vindas, quando ela responder com o nome). Atualiza o CRM com o nome real. SEMPRE chame esta tool ANTES de cumprimentar pelo nome. Tool silenciosa — nao mencione "registro" ou "sistema" pra paciente.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        nome_completo: {
+          type: 'string',
+          description: 'Nome (e sobrenome se ela informou) que a paciente disse. Ex: "Maria", "Maria Silva", "Mari" - use exatamente como ela escreveu.',
+        },
+      },
+      required: ['nome_completo'],
     },
   },
 ];
