@@ -2,6 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import CRMView from './crm-view'
 
+// CRM eh tempo real (leads via webhook/realtime). Nunca cacheia.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function CRMPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
