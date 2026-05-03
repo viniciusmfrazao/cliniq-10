@@ -3,7 +3,7 @@
 // para resposta instantanea ao reabrir o app. NAO faz cache de dados/API
 // (Supabase) — todas as requisicoes dinamicas passam direto pela rede.
 
-const VERSION = 'v1'
+const VERSION = 'v2'
 const SHELL_CACHE = `clinike-shell-${VERSION}`
 const SHELL_ASSETS = ['/manifest.json', '/logo.svg', '/favicon.svg']
 
@@ -31,20 +31,11 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url)
 
-  // Nunca cacheia chamadas para Supabase ou para APIs do Next
+  // Cache-first APENAS para os 3 icones fixos (logo/favicon/manifest).
+  // /_next/static/* NAO eh cacheado pelo SW — o Next ja versiona os chunks
+  // com hash na URL, entao o cache HTTP do navegador cuida disso e evitamos
+  // o problema de chunk antigo "preso" no cache do SW apos um deploy.
   if (
-    url.hostname.endsWith('.supabase.co') ||
-    url.hostname.endsWith('.supabase.in') ||
-    url.pathname.startsWith('/api/') ||
-    url.pathname.startsWith('/_next/data/') ||
-    url.pathname.startsWith('/dashboard')
-  ) {
-    return
-  }
-
-  // Cache-first para assets estaticos do Next e icones
-  if (
-    url.pathname.startsWith('/_next/static/') ||
     url.pathname === '/manifest.json' ||
     url.pathname === '/logo.svg' ||
     url.pathname === '/favicon.svg'
