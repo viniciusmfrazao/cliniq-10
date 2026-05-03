@@ -17,6 +17,7 @@
 |---|---|---|---|---|---|
 | **A** | **Toggle Eva Auto/Manual por número de WhatsApp** | Operação | 1-2h | 🔥🔥 | Alta |
 | **B** | **Multi-WhatsApp / Multi-CRM por secretária** | Operação/SaaS | 13-15h (2-3 dias) | 🔥🔥🔥 | Média |
+| **C** | **Comportamento da Eva pós-campanha sistema** | Operação/Eva | 30min – 3h | 🔥🔥 | Média |
 
 > Detalhes na seção **"🏗️ MELHORIAS OPERACIONAIS"** mais abaixo.
 
@@ -512,6 +513,45 @@ ALTER TABLE leads             ADD COLUMN whatsapp_id uuid REFERENCES clinic_what
 - Edge Function deploy + downtime de webhook (~30s) — fazer fora de horário comercial
 
 **Quando atacar:** depois de validar o toggle (item A). O toggle te dá 80% do valor já no schema atual; o multi-WhatsApp resolve o caso quando a clínica realmente tem 2+ secretárias com funções distintas.
+
+---
+
+### C. Comportamento da Eva pós-campanha sistema (anti-eco)
+
+> Hoje, quando o cron sistema (aniversário, lembrete D-1, recall, NPS) manda mensagem e o paciente responde, a Eva responde em cima. Isso pode soar estranho ("a clínica" mandou NPS, paciente respondeu "5", e "a Eva" agradeceu).
+
+**Cenário do problema:**
+```
+[Cron NPS 11h]   "Maria, como foi com a Dra. Sarah ontem? De 1 a 5..."
+[Maria 11h02]    "5"
+[Sistema]        nps_responses.score = 5  ✅ (silencioso)
+[Eva 11h02]      ✨ "Que felicidade! Fico tão feliz em saber..."  ← eco
+```
+
+**3 opções (escolher quando dor pesar):**
+
+#### C.1 — Mensagem fixa pós-NPS (~30min) ⚡ mais simples
+- Quando webhook captura score 1-5, manda resposta automática fixa: *"Obrigada pelo retorno!"*
+- Marca a conversa com flag `eva_skip_next_response=true` por 5 minutos
+- Eva ignora qualquer mensagem desse paciente nesse intervalo
+- Vantagem: implementação trivial, resolve só o caso do NPS
+
+#### C.2 — Toggle Auto/Manual (item A acima, ~1-2h)
+- Você liga MANUAL antes de disparar campanha em massa
+- Liga AUTO de volta no fim do dia
+- Vantagem: controle granular, mas exige disciplina pra ligar/desligar
+
+#### C.3 — Eva analisa intenção antes de responder (~3h) 🧠 mais inteligente
+- Antes de chamar Claude, classificador rápido (heurística ou LLM-mini) detecta:
+  - Resposta agradecimento ("obrigada", "<3", "amei") → Eva fica quieta
+  - Score numérico 1-5 isolado → Eva fica quieta (já tem captura NPS)
+  - Pergunta/comentário sobre procedimento → Eva responde
+- Vantagem: melhor experiência sempre, sem toggle manual
+- Desvantagem: pode classificar errado eventualmente
+
+**Recomendação:** começar com C.1 (NPS) que é o caso mais comum, e migrar pra C.3 quando tiver volume suficiente pra valer a pena treinar/ajustar o classificador.
+
+**Quando atacar:** quando o eco da Eva começar a incomodar pacientes (zero hoje, mas vai aparecer com escala).
 
 ---
 
