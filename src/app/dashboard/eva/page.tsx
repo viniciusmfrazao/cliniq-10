@@ -68,7 +68,7 @@ export default async function EvaPage() {
           <p className="text-sm text-slate-500 mt-0.5">Sua assistente virtual de atendimento</p>
         </div>
         <Link 
-          href="/dashboard/config/integracoes" 
+          href="/dashboard/config/eva" 
           className="btn-secondary px-4 py-2 flex items-center gap-2"
         >
           <Icon name="settings" className="w-4 h-4" />
@@ -167,7 +167,11 @@ export default async function EvaPage() {
         ) : (
           <div className="divide-y divide-slate-50">
             {recentConversations.map((conv: any) => (
-              <div key={conv.id} className="p-4 hover:bg-slate-50 transition-colors">
+              <Link
+                key={conv.id}
+                href={`/dashboard/whatsapp?phone=${encodeURIComponent(conv.phone)}`}
+                className="block p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-violet-400 to-purple-400 rounded-full flex items-center justify-center">
@@ -184,7 +188,7 @@ export default async function EvaPage() {
                     {new Date(conv.updated_at).toLocaleDateString('pt-BR')}
                   </span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

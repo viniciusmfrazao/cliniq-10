@@ -7,29 +7,34 @@ type Props = {
 
 export default function WeeklyChart({ data, color = '#8B5CF6' }: Props) {
   const maxCount = Math.max(...data.map(d => d.count), 1)
-  
+
   return (
-    <div className="flex items-end justify-between gap-1 h-32">
+    <div className="grid grid-cols-7 gap-2">
       {data.map((item, idx) => {
-        const height = (item.count / maxCount) * 100
+        const heightPct = item.count > 0
+          ? Math.max((item.count / maxCount) * 100, 8)
+          : 4
         const isToday = idx === data.length - 1
-        
+
         return (
-          <div key={item.day} className="flex flex-col items-center flex-1 gap-1">
+          <div key={`${item.day}-${idx}`} className="flex flex-col items-center">
             <span className="text-xs font-semibold text-slate-600 mb-1">
               {item.count}
             </span>
-            <div 
-              className={`w-full rounded-t-lg transition-all duration-500 ${
-                isToday ? 'opacity-100' : 'opacity-60'
-              }`}
-              style={{ 
-                height: `${Math.max(height, 4)}%`,
-                backgroundColor: color,
-              }}
-            />
-            <span className={`text-[10px] font-medium ${
-              isToday ? 'text-slate-900' : 'text-slate-500'
+            <div className="w-full h-24 flex flex-col justify-end">
+              <div
+                className={`w-full rounded-t-lg transition-all duration-500 ${
+                  isToday ? 'opacity-100 shadow-md' : 'opacity-60'
+                }`}
+                style={{
+                  height: `${heightPct}%`,
+                  backgroundColor: color,
+                  minHeight: 4,
+                }}
+              />
+            </div>
+            <span className={`text-[10px] font-medium mt-1.5 ${
+              isToday ? 'text-slate-900 font-bold' : 'text-slate-500'
             }`}>
               {item.day}
             </span>

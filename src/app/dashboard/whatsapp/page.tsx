@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
@@ -118,6 +119,10 @@ function buildConversationFromRow(
 }
 
 export default function WhatsAppPage() {
+  const searchParams = useSearchParams()
+  const phoneFromQuery = searchParams.get('phone')
+  const autoSelectedRef = useRef<string | null>(null)
+
   const [loading, setLoading] = useState(true)
   const [configured, setConfigured] = useState(false)
   const [clinicId, setClinicId] = useState<string | null>(null)
@@ -175,6 +180,18 @@ export default function WhatsAppPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Quando vem com ?phone=... (vindo da Eva IA), abre direto a conversa
+  useEffect(() => {
+    if (!phoneFromQuery || !clinicId) return
+    if (autoSelectedRef.current === phoneFromQuery) return
+    const conv = conversations.find((c) => c.phone === phoneFromQuery)
+    if (conv) {
+      autoSelectedRef.current = phoneFromQuery
+      selectConversation(conv)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phoneFromQuery, clinicId, conversations])
 
   // Subscription Realtime — uma vez que a clinica esta resolvida
   useEffect(() => {
