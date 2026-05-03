@@ -34,10 +34,14 @@ WHERE source = 'whatsapp'
    OR notes ILIKE '%Donna%'
    OR name ILIKE '%Lead WhatsApp%';
 
--- d) Reset follow-up de TODOS os leads que sobraram
+-- d) Reset follow-up + atendimento humano de TODOS os leads que sobraram
 UPDATE leads
 SET eva_followup_count = 0,
-    eva_next_followup_at = NULL;
+    eva_next_followup_at = NULL,
+    needs_human_review = false,
+    human_review_reason = NULL,
+    human_review_details = NULL,
+    human_review_at = NULL;
 
 
 -- ====================== 3) CONFIRMACAO ======================================

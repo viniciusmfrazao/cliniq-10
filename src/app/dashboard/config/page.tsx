@@ -144,17 +144,17 @@ export default async function ConfigPage() {
               </Link>
 
               <Link
-                href="/dashboard/config/integracoes"
-                className="flex items-center gap-4 p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
+                href="/dashboard/config/eva"
+                className="flex items-center gap-4 p-4 bg-gradient-to-br from-violet-50 to-purple-50 hover:from-violet-100 hover:to-purple-100 rounded-xl transition-colors border border-violet-200"
               >
-                <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                  <Icon name="zap" className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center shadow">
+                  <Icon name="sparkles" className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-semibold text-slate-900">N8N e Webhooks</p>
-                  <p className="text-xs text-slate-500">Automações e integrações com workflows externos</p>
+                  <p className="font-semibold text-violet-900">Configurações da Eva</p>
+                  <p className="text-xs text-violet-700">Personalidade, mensagens e tempos de follow-up</p>
                 </div>
-                <Icon name="chevronRight" className="w-5 h-5 text-slate-400" />
+                <Icon name="chevronRight" className="w-5 h-5 text-violet-400" />
               </Link>
             </div>
           </div>

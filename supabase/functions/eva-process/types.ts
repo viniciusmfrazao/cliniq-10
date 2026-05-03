@@ -39,6 +39,17 @@ export interface ProcedureRow {
   category?: string | null;
 }
 
+export interface EvaConfigSettings {
+  /** Texto livre que descreve a personalidade (entra no system prompt) */
+  personalidade?: string | null;
+  /** Template da mensagem D-1 (regra #6). Pode usar {nome} e {horas} */
+  confirmation_d1?: string | null;
+  /** Textos dos 5 follow-ups (chaves "1".."5"). Pode usar {nome} */
+  followup_texts?: Partial<Record<'1' | '2' | '3' | '4' | '5', string>> | null;
+  /** Tempo em minutos antes de cada estagio (chaves "1".."5") */
+  followup_minutes?: Partial<Record<'1' | '2' | '3' | '4' | '5', number>> | null;
+}
+
 export interface ClinicSettings {
   address?: string | null;
   phone?: string | null;
@@ -46,6 +57,8 @@ export interface ClinicSettings {
   instagram?: string | null;
   parking?: string | null;
   observations?: string | null;
+  /** Configuracoes da Eva (personalidade, templates, follow-up) */
+  eva?: EvaConfigSettings | null;
   [k: string]: unknown;
 }
 

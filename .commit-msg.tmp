@@ -1,0 +1,8 @@
+feat(eva): config UI da Eva + drag-and-drop no Kanban
+
+- Nova pagina /dashboard/config/eva (substitui N8N e Webhooks)
+- Personalidade, template D-1 e textos+tempos dos 5 follow-ups
+  agora editaveis pela UI (clinics.settings.eva)
+- Edge Function (prompt.ts + index.ts) le settings, fallback nos defaults
+- Drag-and-drop nativo HTML5 no CRM Kanban: arrasta lead entre
+  colunas e atualiza status no banco

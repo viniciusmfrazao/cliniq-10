@@ -153,14 +153,48 @@ async function ensureLead(payload: IncomingPayload, ctx: DonnaContext): Promise<
 
 // ─── Follow-up: agenda próximo / cancela / marca lost ─────────────────────
 
+// Defaults caso a clinica nao customize em /dashboard/config
+// (count=N significa "ja mandou N follow-ups; em quanto tempo manda o proximo")
+const DEFAULT_FOLLOWUP_DELAYS_MS: Record<number, number> = {
+  0: 2 * 60 * 60 * 1000,        // 2h
+  1: 24 * 60 * 60 * 1000,       // 24h
+  2: 48 * 60 * 60 * 1000,       // 48h
+  3: 5 * 24 * 60 * 60 * 1000,   // 5 dias
+  4: 10 * 24 * 60 * 60 * 1000,  // 10 dias
+};
+
+/**
+ * Devolve os delays customizados pela clinica (em ms) ou os defaults.
+ * Configurado em clinics.settings.eva.followup_minutes (em MINUTOS).
+ *   followup_minutes['1'] = minutos antes do estagio 1 (apos count=0)
+ *   followup_minutes['2'] = minutos entre estagio 1 e 2
+ *   etc.
+ */
+function resolveFollowupDelays(
+  evaCfg: { followup_minutes?: Partial<Record<'1' | '2' | '3' | '4' | '5', number>> | null } | null,
+): Record<number, number> {
+  const customMinutes = evaCfg?.followup_minutes ?? {};
+  const result: Record<number, number> = { ...DEFAULT_FOLLOWUP_DELAYS_MS };
+  // count -> chave: count=0 usa key '1' (proximo eh o estagio 1)
+  const map: Array<[number, '1' | '2' | '3' | '4' | '5']> = [
+    [0, '1'],
+    [1, '2'],
+    [2, '3'],
+    [3, '4'],
+    [4, '5'],
+  ];
+  for (const [count, key] of map) {
+    const minutes = customMinutes[key];
+    if (typeof minutes === 'number' && minutes > 0) {
+      result[count] = minutes * 60 * 1000;
+    }
+  }
+  return result;
+}
+
+// Mantido por compatibilidade com codigo abaixo que usa FOLLOWUP_DELAYS_MS
+// (sera substituido por resolveFollowupDelays no scope de cada chamada)
 const FOLLOWUP_DELAYS_MS: Record<number, number> = {
-  // Após qual count, em quanto tempo deve disparar o PRÓXIMO:
-  // count=0 (acabou de responder) → próximo em 2h
-  // count=1 (mandei #1) → próximo em 24h
-  // count=2 (mandei #2) → próximo em 48h
-  // count=3 (mandei #3) → próximo em 5 dias
-  // count=4 (mandei #4) → próximo (último) em 10 dias
-  // count=5 (mandei #5) → não há próximo, marca lost
   0: 2 * 60 * 60 * 1000,
   1: 24 * 60 * 60 * 1000,
   2: 48 * 60 * 60 * 1000,
@@ -213,7 +247,8 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
       }).catch(() => {});
       return;
     }
-    const delay = FOLLOWUP_DELAYS_MS[newCount] ?? null;
+    const delays = resolveFollowupDelays((ctx.clinic.settings as any)?.eva ?? null);
+    const delay = delays[newCount] ?? null;
     const next = delay ? new Date(Date.now() + delay).toISOString() : null;
     await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
       method: 'PATCH',
@@ -231,8 +266,9 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
   }
 
   // Caso normal: paciente respondeu → reseta contagem e agenda primeiro
-  // follow-up pra daqui a 2h. Importante: SÓ agenda se não chegou via cron.
-  const delay = FOLLOWUP_DELAYS_MS[0];
+  // follow-up pra daqui a 2h (ou o que a clinica configurou).
+  const delays = resolveFollowupDelays((ctx.clinic.settings as any)?.eva ?? null);
+  const delay = delays[0];
   await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
     method: 'PATCH',
     headers: {

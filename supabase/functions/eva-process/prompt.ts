@@ -14,22 +14,39 @@ import { formatBRL } from './utils.ts';
  * Diferencia 4 cenários de abertura: primeira aproximação, conversa em andamento,
  * conversa fria (>12h) e follow-up automático (cron eva-followup).
  */
-function buildContextLine(payload: IncomingPayload, isNew: boolean, historyLength: number): string {
+// Defaults usados quando a clinica nao customizou os textos no painel de
+// Configuracoes da Eva. Sao os textos atuais aprovados pela clinica.
+const DEFAULT_FOLLOWUP_TEXTS: Record<'1' | '2' | '3' | '4' | '5', string> = {
+  '1': 'Conseguiu dar uma olhadinha nas informações? Se quiser, posso verificar um horário especial pra você e já deixar seu atendimento reservado ✨',
+  '2': 'Passei aqui pra te lembrar que o cuidado com você é uma prioridade — qualquer dúvida estou por perto ✨',
+  '3': 'Tudo bem? Quis passar novamente pra saber se posso te ajudar com algo. Vai ser um prazer te receber aqui na clínica ✨',
+  '4': 'Às vezes a gente acaba adiando algo que pode fazer tão bem pra autoestima… Se quiser, estou aqui pra te ajudar a dar esse primeiro passo olhando algum horário pra você ✨',
+  '5': 'Como não tive retorno estou encerrando nosso atendimento por aqui, mas fico à disposição sempre que precisar ✨ Vai ser um prazer te receber!',
+};
+
+const TOM_POR_ESTAGIO: Record<'1' | '2' | '3' | '4' | '5', string> = {
+  '1': 'tom: leve, curiosa, oferece ajuda',
+  '2': 'tom: sutil, valida e relembra',
+  '3': 'tom: respeitoso, oferece ajuda novamente',
+  '4': 'tom: emocional, valoriza autoestima',
+  '5': 'tom: despedida elegante, encerramento',
+};
+
+function buildContextLine(
+  payload: IncomingPayload,
+  isNew: boolean,
+  historyLength: number,
+  evaCfg: { followup_texts?: Partial<Record<'1' | '2' | '3' | '4' | '5', string>> | null } | null,
+): string {
   if (payload.isFollowup) {
-    const stage = payload.followupStage ?? 1;
-    // 5 estagios — alinhados com o cron eva-followup-cron:
-    //   1 = +2h, 2 = +24h, 3 = +48h, 4 = +5 dias, 5 = +10 dias (ultimo)
-    const tomPorEstagio: Record<number, string> = {
-      1: 'tom: leve, curiosa, oferece ajuda. Texto de referencia: "Conseguiu dar uma olhadinha nas informações? Se quiser, posso verificar um horário especial pra você e já deixar seu atendimento reservado ✨"',
-      2: 'tom: sutil, valida e relembra. Texto de referencia: "Passei aqui pra te lembrar que o cuidado com você é uma prioridade — qualquer dúvida estou por perto ✨"',
-      3: 'tom: respeitoso, oferece ajuda. Texto de referencia: "Tudo bem? Quis passar novamente pra saber se posso te ajudar com algo. Vai ser um prazer te receber aqui na clínica ✨"',
-      4: 'tom: emocional, valoriza autoestima. Texto de referencia: "Às vezes a gente acaba adiando algo que pode fazer tão bem pra autoestima… Se quiser, estou aqui pra te ajudar a dar esse primeiro passo olhando algum horário pra você ✨"',
-      5: 'tom: despedida elegante, encerramento. Texto de referencia: "Como não tive retorno estou encerrando nosso atendimento por aqui, mas fico à disposição sempre que precisar ✨ Vai ser um prazer te receber!"',
-    };
+    const stage = (payload.followupStage ?? 1) as 1 | 2 | 3 | 4 | 5;
+    const stageKey = String(stage) as '1' | '2' | '3' | '4' | '5';
+    const textoBase = evaCfg?.followup_texts?.[stageKey] || DEFAULT_FOLLOWUP_TEXTS[stageKey];
+    const tom = TOM_POR_ESTAGIO[stageKey];
     return [
       `- 📨 ESTE É UM FOLLOW-UP AUTOMÁTICO (estágio ${stage} de 5). Ela não respondeu a sua última mensagem.`,
-      `- ${tomPorEstagio[stage] ?? tomPorEstagio[1]}`,
-      `- Use o texto de referencia adaptando para soar natural (com o NOME dela uma unica vez no inicio).`,
+      `- ${tom}. Texto de referência: "${textoBase}"`,
+      `- Use o texto de referência adaptando para soar natural (com o NOME dela uma única vez no início).`,
       `- NÃO finja que ela perguntou algo — VOCÊ está retomando o contato proativamente.`,
       `- Se já mostrou horários antes, NÃO repita — só reabra a porta.`,
     ].join('\n');
@@ -99,6 +116,15 @@ export function buildSystemPrompt(
   const customerName = payload.customerName || patient?.name || lead?.name || 'cliente';
   const firstName = String(customerName).split(/\s+/)[0] || '';
   const knowsRealName = hasRealName(customerName);
+
+  // Configuracoes editaveis pela clinica em /dashboard/config
+  const evaCfg = (clinic.settings?.eva ?? null) as {
+    personalidade?: string | null;
+    confirmation_d1?: string | null;
+    followup_texts?: Partial<Record<'1' | '2' | '3' | '4' | '5', string>> | null;
+  } | null;
+  const personalidadeCustom = evaCfg?.personalidade?.trim();
+  const confirmacaoD1Custom = evaCfg?.confirmation_d1?.trim();
 
   // Profissionais que efetivamente fazem procedimentos
   const profIdsInProcs = new Set<string>();
@@ -170,14 +196,21 @@ export function buildSystemPrompt(
     mediaPart = `\n- Ela enviou um VÍDEO (ainda não analisamos). Peça com elegância para descrever ou agendar.`;
   }
 
+  // Personalidade — usa custom da clinica se cadastrado, senao default
+  const personalidadeBlock = personalidadeCustom && personalidadeCustom.length > 5
+    ? personalidadeCustom
+    : [
+        '- Acolhedora, feminina, elegante e sofisticada — nunca fria, nunca robótica.',
+        '- Linguagem leve e envolvente, em português brasileiro.',
+        '- Vendedora sutil — você conduz, nunca pressiona.',
+        '- Transmite exclusividade.',
+        `- Valoriza ${drNomeRef} como referência de especialista.`,
+      ].join('\n');
+
   const systemPrompt = `Você é a Eva, da ${clinic.name}. Você é a secretária e consultora de estética da clínica — uma pessoa real para todos os efeitos da conversa.
 
 PERSONALIDADE (siga rigorosamente):
-- Acolhedora, feminina, elegante e sofisticada — nunca fria, nunca robótica.
-- Linguagem leve e envolvente, em português brasileiro.
-- Vendedora sutil — você conduz, nunca pressiona.
-- Transmite exclusividade.
-- Valoriza ${drNomeRef} como referência de especialista.
+${personalidadeBlock}
 
 EVITE A TODO CUSTO:
 - Gírias ("eai", "tô lá", "tipo", "mano", "show", "rolar"), abreviações ("vc", "pq", "tb").
@@ -210,7 +243,7 @@ EVITE A TODO CUSTO:
 - RUIM (PROIBIDO): "À vista R$ 1.080 ou 12x R$ 90".
 
 CONTEXTO DESTA CONVERSA:
-${buildContextLine(payload, isNewConversation, historyLength)}
+${buildContextLine(payload, isNewConversation, historyLength, evaCfg)}
 ${identificacaoPart}${mediaPart}
 - Hoje: ${dataAtual}
 - Cliente: ${customerName}${firstName ? ` (chame de ${firstName})` : ''}
@@ -296,13 +329,15 @@ ${buildClinicInfoBlock(ctx.clinic.settings)}
 
 6) CONFIRMAÇÃO D-1 — "confirmo/sim/estarei" → use ESTE TEMPLATE (exceção autorizada à regra #2):
 
-   "${firstName || '(Nome)'}, amanhã é o seu dia aqui na clínica.
+${(confirmacaoD1Custom && confirmacaoD1Custom.length > 5
+  ? confirmacaoD1Custom
+  : `   "${firstName || '(Nome)'}, amanhã é o seu dia aqui na clínica.
 
    Seu horário às (horas) já está separado especialmente pra você e estamos deixando tudo preparado com muito cuidado.
 
-   Tenho certeza que você vai sair muito feliz. ✨"
+   Tenho certeza que você vai sair muito feliz. ✨"`)}
 
-   - Substitua (Nome) pelo primeiro nome real e (horas) pela hora do agendamento.
+   - Substitua {nome}/(Nome) pelo primeiro nome real e {horas}/(horas) pela hora do agendamento.
    - Quebras de linha e até 2 emojis permitidos nessa mensagem.
 
 7) EMERGÊNCIA MÉDICA — oriente atendimento presencial. Não dê palpite clínico.

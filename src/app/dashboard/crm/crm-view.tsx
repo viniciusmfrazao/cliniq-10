@@ -157,6 +157,10 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [showSettings, setShowSettings] = useState(false)
+  // Drag & drop nativo HTML5 — usado pra mover lead entre colunas do Kanban
+  const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null)
+  const [draggingFromStage, setDraggingFromStage] = useState<string | null>(null)
+  const [hoverStage, setHoverStage] = useState<string | null>(null)
 
   // Realtime: novos leads (Donna criando do WhatsApp) e mudancas de status
   // aparecem na hora em todos os usuarios da clinica.
@@ -218,6 +222,40 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
       .eq('id', leadId)
     
     router.refresh()
+  }
+
+  // ─── Drag & drop entre colunas ───────────────────────────────────────────
+  function handleDragStart(e: React.DragEvent<HTMLDivElement>, lead: Lead) {
+    setDraggingLeadId(lead.id)
+    setDraggingFromStage(lead.status)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', lead.id)
+  }
+
+  function handleDragEnd() {
+    setDraggingLeadId(null)
+    setDraggingFromStage(null)
+    setHoverStage(null)
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>, stageId: string) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (hoverStage !== stageId) setHoverStage(stageId)
+  }
+
+  function handleDragLeave(stageId: string) {
+    if (hoverStage === stageId) setHoverStage(null)
+  }
+
+  async function handleDrop(e: React.DragEvent<HTMLDivElement>, newStatus: string) {
+    e.preventDefault()
+    const leadId = e.dataTransfer.getData('text/plain') || draggingLeadId
+    handleDragEnd()
+    if (!leadId) return
+    const lead = leads.find(l => l.id === leadId)
+    if (!lead || lead.status === newStatus) return
+    await updateLeadStatus(leadId, newStatus)
   }
 
   function getTimeAgo(date: string): string {
@@ -353,6 +391,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
             const stageColor = STAGE_COLORS[stage.color] || STAGE_COLORS.slate
             const stageIcon = STAGE_ICONS[stage.id] || 'circle'
             
+            const isHovering = hoverStage === stage.id && draggingFromStage !== stage.id
             return (
             <div key={stage.id} className="flex-shrink-0 w-72">
               <div className={`p-3 rounded-t-xl ${stageColor} flex items-center justify-between`}>
@@ -364,7 +403,12 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   {leadsByStage[stage.id]?.length || 0}
                 </span>
               </div>
-              <div className="bg-slate-100 rounded-b-xl p-2 min-h-[400px] space-y-2">
+              <div
+                className={`bg-slate-100 rounded-b-xl p-2 min-h-[400px] space-y-2 transition-colors ${isHovering ? 'bg-violet-100 ring-2 ring-violet-400 ring-inset' : ''}`}
+                onDragOver={(e) => handleDragOver(e, stage.id)}
+                onDragLeave={() => handleDragLeave(stage.id)}
+                onDrop={(e) => handleDrop(e, stage.id)}
+              >
                 {leadsByStage[stage.id]?.map(lead => {
                   const source = SOURCES.find(s => s.id === lead.source)
                   const aiPriority = lead.ai_priority ? AI_PRIORITY_CONFIG[lead.ai_priority as keyof typeof AI_PRIORITY_CONFIG] : null
@@ -397,11 +441,16 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                       ? 'ring-2 ring-amber-400'
                       : ''
 
+                  const isDragging = draggingLeadId === lead.id
                   return (
                     <div
                       key={lead.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, lead)}
+                      onDragEnd={handleDragEnd}
                       onClick={() => setSelectedLead(lead)}
-                      className={`bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer ${cardRing}`}
+                      className={`bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${cardRing} ${isDragging ? 'opacity-40 scale-95' : ''}`}
+                      title="Arraste para mover de coluna"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 min-w-0">
