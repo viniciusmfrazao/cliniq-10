@@ -7,27 +7,56 @@ export type NavItem = {
   children?: NavSubItem[]
 }
 
+// Grupos de roles (usados pra montar `roles` de cada item de forma legível
+// e garantir que TODOS os papéis da clínica vejam o menu certo).
+//
+// Roles existentes (definidas em src/lib/constants.ts):
+//   admin, doctor, biomedic, nurse, esthetician, physiotherapist,
+//   nutritionist, psychologist, receptionist, financial, manager,
+//   assistant, viewer
+const ALL_PROFESSIONALS = [
+  'doctor',
+  'biomedic',
+  'nurse',
+  'esthetician',
+  'physiotherapist',
+  'nutritionist',
+  'psychologist',
+]
+const RECEPTION = ['receptionist', 'assistant']
+// Manager = gerente operacional, vê quase tudo (menos auditoria/equipe)
+const MANAGEMENT = ['admin', 'manager']
+// Financial = financeiro/contábil
+const FINANCIAL = ['admin', 'manager', 'financial']
+const ALL_STAFF = [
+  ...MANAGEMENT,
+  ...ALL_PROFESSIONALS,
+  ...RECEPTION,
+  'financial',
+  'viewer',
+]
+
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Inicio',         href: '/dashboard',              icon: 'home',      roles: ['admin','doctor','esthetician','receptionist','viewer'] },
-  { label: 'Recepção',       href: '/dashboard/recepcao',     icon: 'userCheck', roles: ['admin','receptionist'] },
-  { label: 'Agenda',         href: '/dashboard/agenda',       icon: 'calendar',  roles: ['admin','doctor','esthetician','receptionist'] },
-  { label: 'Lista de Espera',href: '/dashboard/lista-espera', icon: 'clock',     roles: ['admin','doctor','esthetician','receptionist'] },
+  { label: 'Inicio',          href: '/dashboard',              icon: 'home',      roles: ALL_STAFF },
+  { label: 'Recepção',        href: '/dashboard/recepcao',     icon: 'userCheck', roles: [...MANAGEMENT, ...RECEPTION] },
+  { label: 'Agenda',          href: '/dashboard/agenda',       icon: 'calendar',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
+  { label: 'Lista de Espera', href: '/dashboard/lista-espera', icon: 'clock',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
   // "Pacientes" agora unifica cadastro + prontuário + consultas + anamneses
   // + injetáveis em uma "Central do Paciente" com tabs (em /pacientes/[id]).
   // Por isso removemos o item separado de "Prontuario" da sidebar.
-  { label: 'Pacientes',      href: '/dashboard/pacientes',    icon: 'users',     roles: ['admin','doctor','esthetician','receptionist'] },
-  { label: 'Procedimentos',  href: '/dashboard/procedimentos',icon: 'clipboard', roles: ['admin','doctor','esthetician'] },
-  { label: 'Injetaveis',     href: '/dashboard/injetaveis',   icon: 'syringe',   roles: ['admin','doctor','esthetician'] },
-  { label: 'Estoque',        href: '/dashboard/estoque',      icon: 'box',       roles: ['admin','doctor','esthetician'] },
-  { label: 'Eva IA',         href: '/dashboard/eva',          icon: 'sparkles',  roles: ['admin','doctor','esthetician','receptionist'] },
-  { label: 'WhatsApp',       href: '/dashboard/whatsapp',     icon: 'message',   roles: ['admin','receptionist'] },
-  { label: 'CRM',            href: '/dashboard/crm',          icon: 'target',    roles: ['admin','receptionist'] },
-  { label: 'Documentos',     href: '/dashboard/documentos',   icon: 'file',      roles: ['admin','doctor','esthetician','receptionist'] },
-  { 
-    label: 'Financeiro',    
-    href: '/dashboard/financeiro',   
+  { label: 'Pacientes',       href: '/dashboard/pacientes',    icon: 'users',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
+  { label: 'Procedimentos',   href: '/dashboard/procedimentos',icon: 'clipboard', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS] },
+  { label: 'Injetaveis',      href: '/dashboard/injetaveis',   icon: 'syringe',   roles: [...MANAGEMENT, 'doctor', 'biomedic', 'nurse', 'esthetician'] },
+  { label: 'Estoque',         href: '/dashboard/estoque',      icon: 'box',       roles: [...MANAGEMENT, ...ALL_PROFESSIONALS] },
+  { label: 'Eva IA',          href: '/dashboard/eva',          icon: 'sparkles',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
+  { label: 'WhatsApp',        href: '/dashboard/whatsapp',     icon: 'message',   roles: [...MANAGEMENT, ...RECEPTION] },
+  { label: 'CRM',             href: '/dashboard/crm',          icon: 'target',    roles: [...MANAGEMENT, ...RECEPTION] },
+  { label: 'Documentos',      href: '/dashboard/documentos',   icon: 'file',      roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
+  {
+    label: 'Financeiro',
+    href: '/dashboard/financeiro',
     icon: 'dollarSign',
-    roles: ['admin'],
+    roles: FINANCIAL,
     children: [
       { label: 'Dashboard', href: '/dashboard/financeiro' },
       { label: 'Entradas', href: '/dashboard/financeiro/entradas' },
@@ -35,15 +64,15 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Relatórios', href: '/dashboard/financeiro/dre' },
     ]
   },
-  { label: 'Equipe',         href: '/dashboard/equipe',       icon: 'users',     roles: ['admin'] },
-  { label: 'Auditoria',      href: '/dashboard/auditoria',    icon: 'shield',    roles: ['admin'] },
-  { label: 'Configuracoes',  href: '/dashboard/config',       icon: 'settings',  roles: ['admin','doctor','esthetician','receptionist','viewer'] },
+  { label: 'Equipe',          href: '/dashboard/equipe',       icon: 'users',     roles: ['admin'] },
+  { label: 'Auditoria',       href: '/dashboard/auditoria',    icon: 'shield',    roles: ['admin'] },
+  { label: 'Configuracoes',   href: '/dashboard/config',       icon: 'settings',  roles: ALL_STAFF },
 ]
 
 export const BOTTOM_NAV: NavItem[] = [
-  { label: 'Início',    href: '/dashboard',           icon: 'home',     roles: ['admin','doctor','esthetician','receptionist','viewer'] },
-  { label: 'Agenda',    href: '/dashboard/agenda',    icon: 'calendar', roles: ['admin','doctor','esthetician','receptionist'] },
-  { label: 'Pacientes', href: '/dashboard/pacientes', icon: 'users',    roles: ['admin','doctor','esthetician','receptionist'] },
-  { label: 'Eva',       href: '/dashboard/eva',       icon: 'sparkles', roles: ['admin','doctor','esthetician','receptionist'] },
-  { label: 'Estoque',   href: '/dashboard/estoque',   icon: 'box',      roles: ['admin','doctor','esthetician'] },
+  { label: 'Início',    href: '/dashboard',           icon: 'home',     roles: ALL_STAFF },
+  { label: 'Agenda',    href: '/dashboard/agenda',    icon: 'calendar', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
+  { label: 'Pacientes', href: '/dashboard/pacientes', icon: 'users',    roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
+  { label: 'Eva',       href: '/dashboard/eva',       icon: 'sparkles', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
+  { label: 'Estoque',   href: '/dashboard/estoque',   icon: 'box',      roles: [...MANAGEMENT, ...ALL_PROFESSIONALS] },
 ]
