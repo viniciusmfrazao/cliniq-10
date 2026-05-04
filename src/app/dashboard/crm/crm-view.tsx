@@ -104,6 +104,8 @@ type Props = {
   clinicId: string
   settings: CRMSettings | null
   templates: MessageTemplate[]
+  /** Quando true, mostra banner indicando que a Eva está em modo manual. */
+  evaPaused?: boolean
 }
 
 const DEFAULT_STAGES = [
@@ -149,7 +151,7 @@ const AI_PRIORITY_CONFIG = {
   cold: { label: '❄️ Frio', color: 'bg-blue-100 text-blue-700' },
 }
 
-export default function CRMView({ leads, procedures, users, clinicId, settings, templates }: Props) {
+export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
@@ -284,6 +286,28 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
   return (
     <div className="max-w-7xl mx-auto">
+      {/* Banner: Eva em modo manual */}
+      {evaPaused && (
+        <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 flex items-center gap-3">
+          <span className="text-2xl leading-none">⏸️</span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-900">
+              Eva está em modo manual
+            </p>
+            <p className="text-xs text-amber-700">
+              Mensagens recebidas pelo WhatsApp continuam virando leads aqui no CRM,
+              mas a Eva não responde automaticamente — você responde pelo painel.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/whatsapp"
+            className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+          >
+            Reativar Eva →
+          </Link>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>

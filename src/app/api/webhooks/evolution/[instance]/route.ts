@@ -286,7 +286,7 @@ export async function POST(
 
   const { data: row } = await svc
     .from('clinic_whatsapp')
-    .select('clinic_id, webhook_token, instance_name')
+    .select('clinic_id, webhook_token, instance_name, auto_reply_enabled')
     .eq('instance_name', instance)
     .maybeSingle()
 
@@ -576,6 +576,23 @@ export async function POST(
         }
 
         if (!fromMe) {
+          // Flag local: motivos pra pular o disparo da Eva nessa msg.
+          //   'auto_reply_off'  -> instância em modo manual (toggle off)
+          //   'nps_anti_eco'    -> resposta NPS recém-capturada (cooldown 5min)
+          //   'pause_until'     -> lead.eva_pause_until > now() (cooldown ativo)
+          let evaShouldSkip: false | 'auto_reply_off' | 'nps_anti_eco' | 'pause_until' = false
+          // Janela do anti-eco do NPS: 5 min depois da nota, Eva fica calada
+          const NPS_COOLDOWN_MS = 5 * 60 * 1000
+          let npsCooldownUntil: string | null = null
+
+          // Toggle Eva auto/manual: se a instância está com Eva pausada, salvamos
+          // a mensagem normalmente mas não disparamos eva-process. Secretária
+          // responde manualmente pelo painel.
+          if (row.auto_reply_enabled === false) {
+            evaShouldSkip = 'auto_reply_off'
+            debugTrace.push('eva skip: auto_reply_enabled=false')
+          }
+
           const patientRes = await svc
             .from('patients')
             .select('id')
@@ -622,6 +639,11 @@ export async function POST(
                   internalErrors.push(`update nps reply: ${updErr.message}`)
                 } else {
                   debugTrace.push(`NPS captured: score=${score}`)
+                  // Anti-eco: Eva fica calada por 5 min pra essa paciente
+                  // (evita resposta "Que felicidade!" em cima do "5" puro).
+                  // O lead update mais abaixo aplica o eva_pause_until.
+                  if (evaShouldSkip === false) evaShouldSkip = 'nps_anti_eco'
+                  npsCooldownUntil = new Date(Date.now() + NPS_COOLDOWN_MS).toISOString()
                 }
               }
             }
@@ -635,7 +657,7 @@ export async function POST(
           {
             const leadRes = await svc
               .from('leads')
-              .select('id, name, status')
+              .select('id, name, status, eva_pause_until')
               .eq('clinic_id', clinicId)
               .eq('phone', phone)
               .order('created_at', { ascending: false })
@@ -643,6 +665,18 @@ export async function POST(
               .maybeSingle()
             if (leadRes.error) {
               internalErrors.push(`select leads: ${leadRes.error.message}`)
+            }
+
+            // Cooldown ainda ativo de evento anterior (NPS, manual, etc.)
+            if (
+              evaShouldSkip === false &&
+              leadRes.data?.eva_pause_until &&
+              new Date(leadRes.data.eva_pause_until).getTime() > Date.now()
+            ) {
+              evaShouldSkip = 'pause_until'
+              debugTrace.push(
+                `eva skip: lead em cooldown ate ${leadRes.data.eva_pause_until}`,
+              )
             }
 
             if (!leadRes.data) {
@@ -654,6 +688,7 @@ export async function POST(
                 status: 'new',
                 notes: `Primeira mensagem: ${content.slice(0, 240)}`,
                 last_contact_at: new Date().toISOString(),
+                eva_pause_until: npsCooldownUntil,
               })
               if (insertLead.error) {
                 internalErrors.push(`insert leads: ${insertLead.error.message}`)
@@ -678,6 +713,11 @@ export async function POST(
               if (leadRes.data.status === 'lost') {
                 patch.status = 'contacted'
               }
+              // Se NPS foi capturado agora, aplica cooldown de 5min na Eva
+              // (sobrescreve cooldown anterior pra renovar a janela).
+              if (npsCooldownUntil) {
+                patch.eva_pause_until = npsCooldownUntil
+              }
               const updLead = await svc
                 .from('leads')
                 .update(patch)
@@ -690,25 +730,33 @@ export async function POST(
             }
           }
 
-          // Donna só recebe texto/caption — pra mídia pura, sem caption,
-          // mandamos um placeholder pra que ela saiba que rolou algo.
-          try {
-            await forwardToDonna({
-              clinicId,
-              instance,
-              phone,
-              remoteJid: key?.remoteJid ?? `${phone}@s.whatsapp.net`,
-              messageId: messageId ?? null,
-              message: parsed.text || preview,
-              pushName,
-              kind: parsed.kind,
-              mediaUrl,
-            })
-            debugTrace.push('forward Donna ok')
-          } catch (err) {
-            internalErrors.push(
-              `forward Donna: ${err instanceof Error ? err.message : String(err)}`,
-            )
+          // Disparo da Eva. Pula em 3 cenários:
+          //   - toggle auto/manual desligado pra essa instância
+          //   - resposta NPS recém-capturada (5min de silêncio anti-eco)
+          //   - lead.eva_pause_until ainda no futuro (cooldown ativo)
+          if (evaShouldSkip) {
+            debugTrace.push(`forward Donna SKIPPED (${evaShouldSkip})`)
+          } else {
+            // Donna só recebe texto/caption — pra mídia pura, sem caption,
+            // mandamos um placeholder pra que ela saiba que rolou algo.
+            try {
+              await forwardToDonna({
+                clinicId,
+                instance,
+                phone,
+                remoteJid: key?.remoteJid ?? `${phone}@s.whatsapp.net`,
+                messageId: messageId ?? null,
+                message: parsed.text || preview,
+                pushName,
+                kind: parsed.kind,
+                mediaUrl,
+              })
+              debugTrace.push('forward Donna ok')
+            } catch (err) {
+              internalErrors.push(
+                `forward Donna: ${err instanceof Error ? err.message : String(err)}`,
+              )
+            }
           }
         }
         break

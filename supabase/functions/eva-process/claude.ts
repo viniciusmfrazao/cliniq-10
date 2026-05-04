@@ -1,5 +1,5 @@
 // ============================================================================
-// Wrapper da API Anthropic (Messages) com prompt caching
+// Wrapper da API Anthropic (Messages) com prompt caching + retry com backoff
 // Roda em loop até no máximo N iterações, alternando text ↔ tool_use.
 // ============================================================================
 
@@ -9,6 +9,14 @@ const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-5';
 const MAX_TOKENS = 400;
 const MAX_TOOL_ITERATIONS = 4;
+
+// Retry config — usado em erros transitórios (rate-limit, overload, network)
+// Backoff exponencial: 1s, 2s, 4s. Total max ~7s extra. Vale a pena pq
+// 429/529 da Anthropic costuma resolver em 1-2s.
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = 1000;
+const RETRY_MAX_DELAY_MS = 4000;
+const RETRYABLE_STATUS = new Set([0, 408, 429, 500, 502, 503, 504, 529]);
 
 interface CallOpts {
   apiKey: string;
@@ -24,11 +32,16 @@ interface CallResult {
   status: number;
   raw: ClaudeResponse | null;
   error?: string;
+  /** Quantas tentativas foram feitas (1 = sucesso de primeira). */
+  attempts?: number;
 }
 
-async function callClaude(opts: CallOpts): Promise<CallResult> {
-  // Prompt caching: o system entra como array de blocks com cache_control.
-  // O cache_control marca a "fronteira" do que é estável (system + tools).
+function sleep(ms: number): Promise<void> {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
+/** Faz UMA chamada (sem retry) — uso interno do retry loop. */
+async function callClaudeOnce(opts: CallOpts): Promise<CallResult> {
   const systemPayload = opts.useCache
     ? [{ type: 'text', text: opts.systemPrompt, cache_control: { type: 'ephemeral' } }]
     : opts.systemPrompt;
@@ -81,6 +94,36 @@ async function callClaude(opts: CallOpts): Promise<CallResult> {
   }
 }
 
+/**
+ * Wrapper com retry exponencial. Tenta até RETRY_MAX_ATTEMPTS vezes em erros
+ * transitórios (rate-limit, overload, network). Em erros 4xx não-retriáveis
+ * (400 invalid request, 401 auth) retorna na primeira falha. Cada falha
+ * acumula no campo `error` pra debug.
+ */
+async function callClaude(opts: CallOpts): Promise<CallResult> {
+  const errors: string[] = [];
+  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+    const res = await callClaudeOnce(opts);
+    if (res.ok) {
+      return { ...res, attempts: attempt };
+    }
+    errors.push(`#${attempt} status=${res.status}: ${res.error ?? 'sem msg'}`);
+    // Erro não-retriável → falha imediato (não adianta tentar de novo)
+    if (!RETRYABLE_STATUS.has(res.status)) {
+      return { ...res, error: errors.join(' | '), attempts: attempt };
+    }
+    // Última tentativa? não dorme, retorna erro consolidado
+    if (attempt === RETRY_MAX_ATTEMPTS) {
+      return { ...res, error: errors.join(' | '), attempts: attempt };
+    }
+    // Backoff exponencial com cap (1s, 2s, 4s)
+    const delay = Math.min(RETRY_BASE_MS * Math.pow(2, attempt - 1), RETRY_MAX_DELAY_MS);
+    await sleep(delay);
+  }
+  // Não deveria chegar aqui, mas pra garantir
+  return { ok: false, status: 0, raw: null, error: errors.join(' | '), attempts: RETRY_MAX_ATTEMPTS };
+}
+
 // ─── Conversation loop ─────────────────────────────────────────────────────
 
 export interface ConversationStepLog {
@@ -110,6 +153,17 @@ export interface RunConvResult {
     cache_creation_input_tokens: number;
   };
   errors: string[];
+  /**
+   * Quando true, a Eva NÃO conseguiu gerar uma resposta confiável
+   * (Claude falhou após retries, ou loop estourou MAX iterações).
+   * O caller deve:
+   *   - NÃO enviar `finalText` pro paciente (mensagem fallback é generica)
+   *   - Marcar o lead como `needs_human_review` com razão `instabilidade`
+   *   - Logar o motivo via `errors` pra debug
+   */
+  silentFail?: boolean;
+  /** Razão do silentFail, pra UI mostrar pra equipe humana. */
+  silentFailReason?: 'claude_error' | 'iteration_limit';
 }
 
 /**
@@ -134,13 +188,22 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
     });
 
     if (!callRes.ok || !callRes.raw) {
-      errors.push(`[claude-call#${i}] ${callRes.status}: ${callRes.error ?? 'sem resposta'}`);
+      errors.push(
+        `[claude-call#${i}] status=${callRes.status} attempts=${callRes.attempts ?? 1}: ${
+          callRes.error ?? 'sem resposta'
+        }`,
+      );
       steps.push({ iteration: i, stop_reason: 'error' });
+      // Fallback mudo: NÃO enviamos resposta pro paciente. O caller (index.ts)
+      // marca o lead pra revisão humana. Evita o eco "Tive um pequeno contratempo
+      // aqui" que confunde paciente real e mantém a Eva profissional sob falha.
       return {
-        finalText: 'Tive um pequeno contratempo aqui. Pode repetir, por favor?',
+        finalText: '',
         steps,
         totalUsage,
         errors,
+        silentFail: true,
+        silentFailReason: 'claude_error',
       };
     }
 
@@ -207,10 +270,14 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
   }
 
   errors.push(`Loop esgotou ${MAX_TOOL_ITERATIONS} iteracoes`);
+  // Loop infinito (Claude pediu tools sem parar) também conta como falha
+  // silenciosa — escala pra humano em vez de mandar fallback generico.
   return {
-    finalText: 'Acho que precisamos retomar essa conversa em instantes — vou conferir com a equipe e te retorno.',
+    finalText: '',
     steps,
     totalUsage,
     errors,
+    silentFail: true,
+    silentFailReason: 'iteration_limit',
   };
 }

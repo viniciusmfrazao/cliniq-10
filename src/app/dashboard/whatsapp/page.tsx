@@ -134,6 +134,10 @@ export default function WhatsAppPage() {
   const [config, setConfig] = useState<any>(null)
   const [patient, setPatient] = useState<any>(null)
   const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle')
+  // Toggle Eva auto/manual: true = Eva responde automaticamente,
+  // false = Eva fica calada e secretária responde pelo painel.
+  const [evaEnabled, setEvaEnabled] = useState<boolean>(true)
+  const [evaToggling, setEvaToggling] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const selectedPhoneRef = useRef<string | null>(null)
 
@@ -238,7 +242,7 @@ export default function WhatsAppPage() {
 
       const { data: instance } = await supabase
         .from('clinic_whatsapp')
-        .select('status, instance_name')
+        .select('status, instance_name, auto_reply_enabled')
         .eq('clinic_id', userData.clinic_id)
         .maybeSingle()
 
@@ -246,6 +250,8 @@ export default function WhatsAppPage() {
         setConfig({ instance_name: instance.instance_name } as never)
         setConfigured(true)
         setClinicId(userData.clinic_id)
+        // auto_reply_enabled pode vir null (instâncias antigas pré-migration) — trata como true
+        setEvaEnabled(instance.auto_reply_enabled !== false)
         loadConversations(userData.clinic_id)
       } else {
         setConfigured(false)
@@ -255,6 +261,24 @@ export default function WhatsAppPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function toggleEva() {
+    if (!clinicId || evaToggling) return
+    const next = !evaEnabled
+    setEvaToggling(true)
+    // Otimista: atualiza UI imediatamente, reverte se falhar
+    setEvaEnabled(next)
+    const { error } = await supabase
+      .from('clinic_whatsapp')
+      .update({ auto_reply_enabled: next })
+      .eq('clinic_id', clinicId)
+    if (error) {
+      console.error('Falha ao atualizar toggle Eva:', error)
+      setEvaEnabled(!next)
+      alert('Falha ao alternar Eva. Tente de novo.')
+    }
+    setEvaToggling(false)
   }
 
   async function loadConversations(clinicId: string) {
@@ -530,7 +554,7 @@ export default function WhatsAppPage() {
 
   return (
     <div className="h-[calc(100dvh-180px)] md:h-[calc(100dvh-140px)] flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">WhatsApp</h1>
@@ -538,13 +562,21 @@ export default function WhatsAppPage() {
           </div>
           <p className="text-sm text-slate-500">Conversas via Evolution API</p>
         </div>
-        <button
-          onClick={() => loadConfig()}
-          className="btn-secondary flex items-center gap-2"
-        >
-          <Icon name="refresh" className="w-4 h-4" />
-          Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <EvaToggle
+            enabled={evaEnabled}
+            disabled={evaToggling}
+            onToggle={toggleEva}
+          />
+          <button
+            onClick={() => loadConfig()}
+            className="btn-secondary flex items-center gap-2"
+            title="Recarregar conversas"
+          >
+            <Icon name="refresh" className="w-4 h-4" />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 card overflow-hidden flex">
@@ -1072,4 +1104,64 @@ function RealtimeBadge({ status }: { status: 'idle' | 'connecting' | 'live' | 'e
     )
   }
   return null
+}
+
+/**
+ * Toggle Eva auto/manual.
+ *
+ * - 🤖 Eva ativa (verde): respostas automáticas via Edge Function eva-process
+ * - 👤 Modo manual (cinza): Eva fica calada; secretária responde pelo painel
+ *
+ * O estado é persistido em `clinic_whatsapp.auto_reply_enabled`. Webhook e
+ * cron eva-followup respeitam o valor.
+ */
+function EvaToggle({
+  enabled,
+  disabled,
+  onToggle,
+}: {
+  enabled: boolean
+  disabled: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      onClick={onToggle}
+      disabled={disabled}
+      title={
+        enabled
+          ? 'Eva está respondendo automaticamente. Clique para PAUSAR (modo manual).'
+          : 'Eva está em MODO MANUAL — você responde, ela fica calada. Clique para reativar.'
+      }
+      className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
+        enabled
+          ? 'bg-gradient-to-br from-violet-50 to-emerald-50 border-violet-200 hover:from-violet-100 hover:to-emerald-100 text-violet-900 dark:from-violet-900/20 dark:to-emerald-900/20 dark:border-violet-700 dark:text-violet-100'
+          : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
+      } ${disabled ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}
+    >
+      <span className="text-base leading-none">{enabled ? '🤖' : '👤'}</span>
+      <div className="flex flex-col items-start leading-tight">
+        <span className="text-xs font-semibold">
+          {enabled ? 'Eva ativa' : 'Modo manual'}
+        </span>
+        <span className="text-[10px] text-slate-500 dark:text-slate-400 hidden sm:inline">
+          {enabled ? 'respondendo auto.' : 'você responde'}
+        </span>
+      </div>
+      <div
+        className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+          enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${
+            enabled ? 'left-[18px]' : 'left-0.5'
+          }`}
+        />
+      </div>
+    </button>
+  )
 }

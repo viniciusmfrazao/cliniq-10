@@ -52,14 +52,24 @@ export default async function CRMPage() {
     .eq('clinic_id', userData?.clinic_id)
     .eq('active', true)
 
+  // Status da Eva (toggle auto/manual) — usado pra mostrar banner "Eva pausada"
+  // no topo do CRM quando a clínica desligou as respostas automáticas.
+  const { data: waInstance } = await supabase
+    .from('clinic_whatsapp')
+    .select('auto_reply_enabled')
+    .eq('clinic_id', userData?.clinic_id)
+    .maybeSingle()
+  const evaPaused = waInstance?.auto_reply_enabled === false
+
   return (
-    <CRMView 
+    <CRMView
       leads={leads || []}
       procedures={procedures || []}
       users={users || []}
       clinicId={userData?.clinic_id || ''}
       settings={settings}
       templates={templates || []}
+      evaPaused={evaPaused}
     />
   )
 }

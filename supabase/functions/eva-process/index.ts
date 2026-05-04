@@ -284,6 +284,42 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
   }).catch(() => {});
 }
 
+// ─── Marcar lead para revisão humana quando Eva falha silenciosamente ─────
+//
+// Em caso de erro persistente do Claude (após retries) OU loop esgotado, a
+// Eva NÃO envia uma mensagem genérica de erro pro paciente. Em vez disso,
+// marca o lead como `needs_human_review` e a equipe responde manual pelo
+// painel `/dashboard/whatsapp`. Evita confundir paciente real com "Tive um
+// pequeno contratempo aqui" sem contexto.
+async function markLeadForHumanReview(
+  ctx: DonnaContext,
+  reason: 'claude_error' | 'iteration_limit',
+  details: string,
+): Promise<void> {
+  if (!ctx.lead?.id) return;
+  const friendlyReason = reason === 'claude_error' ? 'instabilidade' : 'duvida_complexa';
+  const friendlyDetails =
+    reason === 'claude_error'
+      ? `Eva ficou instável tecnicamente. Última msg precisa de resposta manual. ${details.slice(0, 200)}`
+      : `Eva ficou em loop sem chegar numa resposta. Última msg precisa de resposta manual. ${details.slice(0, 200)}`;
+  await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      needs_human_review: true,
+      human_review_reason: friendlyReason,
+      human_review_details: friendlyDetails,
+      human_review_at: new Date().toISOString(),
+      // Pausa follow-up automatico — humano cuida agora
+      eva_next_followup_at: null,
+    }),
+  }).catch(() => {});
+}
+
 // ─── Salvar turno (user + assistant) em eva_conversations ──────────────────
 async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: string, errors: string[]): Promise<void> {
   // Salva como 2 rows separadas (role/content) — modelo atual da tabela
@@ -426,6 +462,30 @@ Deno.serve(async (req) => {
   });
 
   errors.push(...conv.errors);
+
+  // ─── Falha silenciosa: Eva não conseguiu responder (Claude erro / loop) ──
+  // Em vez de mandar mensagem genérica de erro pro paciente, marca o lead
+  // pra revisão humana e devolve sem enviar nada via Evolution.
+  if (conv.silentFail) {
+    await markLeadForHumanReview(
+      ctx,
+      conv.silentFailReason ?? 'claude_error',
+      conv.errors.join(' | '),
+    ).catch((e) => errors.push(`markLeadForHumanReview: ${e?.message ?? e}`));
+
+    const elapsedMs = Date.now() - t0;
+    return jsonResponse({
+      ok: true,
+      silentFail: true,
+      reason: conv.silentFailReason,
+      sent: false,
+      elapsedMs,
+      steps: conv.steps,
+      usage: conv.totalUsage,
+      errors,
+    });
+  }
+
   const finalText = sanitizeWhatsapp(conv.finalText);
 
   // 5) Salvar resposta

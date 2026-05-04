@@ -37,7 +37,12 @@ type LeadRow = {
   whatsapp_opt_in: boolean | null
 }
 
-type ClinicWaRow = { clinic_id: string; instance_name: string; status: string }
+type ClinicWaRow = {
+  clinic_id: string
+  instance_name: string
+  status: string
+  auto_reply_enabled: boolean | null
+}
 
 function isWithinSendingWindow(now = new Date()): boolean {
   // Hora/dia em BRT
@@ -91,15 +96,20 @@ export async function GET(req: NextRequest) {
   }
 
   // 2) Busca leads prontos pra follow-up.
-  // Exclui: convertidos, perdidos, e quem ja foi escalado pra humano.
+  // Exclui:
+  //   - convertidos, perdidos
+  //   - quem ja foi escalado pra humano
+  //   - quem está em cooldown da Eva (eva_pause_until > now): NPS anti-eco etc.
+  const nowIso = new Date().toISOString()
   const { data: leads, error: errLeads } = await svc
     .from('leads')
-    .select('id, clinic_id, name, phone, status, eva_followup_count, eva_next_followup_at, whatsapp_opt_in, needs_human_review')
-    .lte('eva_next_followup_at', new Date().toISOString())
+    .select('id, clinic_id, name, phone, status, eva_followup_count, eva_next_followup_at, whatsapp_opt_in, needs_human_review, eva_pause_until')
+    .lte('eva_next_followup_at', nowIso)
     .not('eva_next_followup_at', 'is', null)
     .not('status', 'in', '(converted,lost)')
     .or('needs_human_review.is.null,needs_human_review.eq.false')
     .or('whatsapp_opt_in.is.null,whatsapp_opt_in.eq.true')
+    .or(`eva_pause_until.is.null,eva_pause_until.lte.${nowIso}`)
     .limit(limit)
 
   if (errLeads) {
@@ -114,11 +124,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, processed: 0, reason: 'queue_empty' })
   }
 
-  // 3) Pra cada clínica, valida que o WhatsApp está conectado
+  // 3) Pra cada clínica, valida que o WhatsApp está conectado E a Eva
+  // está em modo automático. Se a clinica colocou a Eva em manual pelo
+  // toggle, o cron de follow-up também respeita.
   const clinicIds = Array.from(new Set(queue.map((l) => l.clinic_id)))
   const { data: waList } = await svc
     .from('clinic_whatsapp')
-    .select('clinic_id, instance_name, status')
+    .select('clinic_id, instance_name, status, auto_reply_enabled')
     .in('clinic_id', clinicIds)
   const waByClinic = new Map<string, ClinicWaRow>()
   for (const w of (waList as ClinicWaRow[] | null) ?? []) waByClinic.set(w.clinic_id, w)
@@ -147,6 +159,17 @@ export async function GET(req: NextRequest) {
         phone: lead.phone,
         stage: (lead.eva_followup_count ?? 0) + 1,
         skipped: 'wa_not_connected',
+      })
+      continue
+    }
+    // Toggle Eva auto/manual: pula clínicas com Eva pausada
+    if (wa.auto_reply_enabled === false) {
+      results.push({
+        lead_id: lead.id,
+        clinic_id: lead.clinic_id,
+        phone: lead.phone,
+        stage: (lead.eva_followup_count ?? 0) + 1,
+        skipped: 'eva_paused_manual',
       })
       continue
     }
