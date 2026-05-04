@@ -184,26 +184,40 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     conversionRate: leads.length > 0 
       ? Math.round((leads.filter(l => l.status === 'converted').length / leads.filter(l => ['converted', 'lost'].includes(l.status)).length) * 100) || 0
       : 0,
-    // Eva IA stats
+    // Eva IA stats — temperatura do lead (priority calculada pela IA)
     hotLeads: leads.filter(l => l.ai_priority === 'hot').length,
+    warmLeads: leads.filter(l => l.ai_priority === 'warm').length,
+    coldLeads: leads.filter(l => l.ai_priority === 'cold').length,
     estimatedValue: leads.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
     pendingContact: leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date()).length,
     // Atendimento humano (Eva escalou)
     humanReview: leads.filter(l => l.needs_human_review === true).length
   }
 
-  // Filtrar leads — alem dos status, tem o filtro especial 'human_review'
+  // Filtrar leads — alem dos status, tem filtros especiais:
+  //   'human_review'        -> leads escalados pra atendimento humano
+  //   'hot' / 'warm' / 'cold' -> filtra por temperatura (ai_priority)
+  //   'pending_contact'      -> leads com next_contact_at vencido
   const filteredLeads =
     filter === 'all'
       ? leads
       : filter === 'human_review'
         ? leads.filter(l => l.needs_human_review === true)
-        : leads.filter(l => l.status === filter)
+        : filter === 'hot' || filter === 'warm' || filter === 'cold'
+          ? leads.filter(l => l.ai_priority === filter)
+          : filter === 'pending_contact'
+            ? leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
+            : leads.filter(l => l.status === filter)
 
-  // Agrupar por stage para Kanban (respeita o filtro de atendimento humano)
-  const leadsForKanban = filter === 'human_review'
-    ? leads.filter(l => l.needs_human_review === true)
-    : leads
+  // Agrupar por stage para Kanban (respeita os filtros especiais)
+  const leadsForKanban =
+    filter === 'human_review'
+      ? leads.filter(l => l.needs_human_review === true)
+      : filter === 'hot' || filter === 'warm' || filter === 'cold'
+        ? leads.filter(l => l.ai_priority === filter)
+        : filter === 'pending_contact'
+          ? leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
+          : leads
   const leadsByStage = STAGES.reduce((acc, stage) => {
     acc[stage.id] = leadsForKanban.filter(l => l.status === stage.id)
     return acc
@@ -299,15 +313,19 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-        <div className="card p-3">
+        <button
+          onClick={() => setFilter('all')}
+          className={`card p-3 text-left transition-all ${filter === 'all' ? 'ring-2 ring-slate-400' : 'hover:bg-slate-50'}`}
+        >
           <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
           <p className="text-xs text-slate-500">Total Leads</p>
-        </div>
+        </button>
         
         {stats.humanReview > 0 && (
           <button
             onClick={() => setFilter(filter === 'human_review' ? 'all' : 'human_review')}
             className={`card p-3 text-left bg-gradient-to-br from-rose-50 to-pink-50 transition-all ${filter === 'human_review' ? 'ring-2 ring-rose-400' : 'hover:from-rose-100 hover:to-pink-100'}`}
+            title="Eva escalou para humano. Clique para filtrar."
           >
             <p className="text-2xl font-bold text-rose-600">{stats.humanReview} 🚨</p>
             <p className="text-xs text-rose-600">Atendimento Humano</p>
@@ -315,22 +333,53 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
         )}
 
         {stats.hotLeads > 0 && (
-          <div className="card p-3 bg-gradient-to-br from-red-50 to-orange-50">
+          <button
+            onClick={() => setFilter(filter === 'hot' ? 'all' : 'hot')}
+            className={`card p-3 text-left bg-gradient-to-br from-red-50 to-orange-50 transition-all ${filter === 'hot' ? 'ring-2 ring-red-400' : 'hover:from-red-100 hover:to-orange-100'}`}
+            title="🔥 Lead QUENTE: alta intenção de compra (perguntou preço, agenda, formas de pagamento ou demonstrou urgência). Clique para filtrar."
+          >
             <p className="text-2xl font-bold text-red-600">{stats.hotLeads} 🔥</p>
-            <p className="text-xs text-red-600">Leads Quentes</p>
-          </div>
+            <p className="text-xs text-red-600">Quentes</p>
+          </button>
+        )}
+
+        {stats.warmLeads > 0 && (
+          <button
+            onClick={() => setFilter(filter === 'warm' ? 'all' : 'warm')}
+            className={`card p-3 text-left bg-gradient-to-br from-amber-50 to-yellow-50 transition-all ${filter === 'warm' ? 'ring-2 ring-amber-400' : 'hover:from-amber-100 hover:to-yellow-100'}`}
+            title="☀️ Lead MORNO: interesse demonstrado mas ainda explorando (pediu informações gerais, comparando opções, sem urgência clara). Clique para filtrar."
+          >
+            <p className="text-2xl font-bold text-amber-600">{stats.warmLeads} ☀️</p>
+            <p className="text-xs text-amber-600">Mornos</p>
+          </button>
+        )}
+
+        {stats.coldLeads > 0 && (
+          <button
+            onClick={() => setFilter(filter === 'cold' ? 'all' : 'cold')}
+            className={`card p-3 text-left bg-gradient-to-br from-blue-50 to-cyan-50 transition-all ${filter === 'cold' ? 'ring-2 ring-blue-400' : 'hover:from-blue-100 hover:to-cyan-100'}`}
+            title="❄️ Lead FRIO: pouca intenção no momento (curioso, sem urgência, fazendo pesquisa inicial ou só perguntas vagas). Vale nutrir com conteúdo. Clique para filtrar."
+          >
+            <p className="text-2xl font-bold text-blue-600">{stats.coldLeads} ❄️</p>
+            <p className="text-xs text-blue-600">Frios</p>
+          </button>
         )}
         
         {stats.pendingContact > 0 && (
-          <div className="card p-3 bg-gradient-to-br from-amber-50 to-yellow-50 ring-2 ring-amber-300">
+          <button
+            onClick={() => setFilter(filter === 'pending_contact' ? 'all' : 'pending_contact')}
+            className={`card p-3 text-left bg-gradient-to-br from-amber-50 to-yellow-50 transition-all ${filter === 'pending_contact' ? 'ring-2 ring-amber-400' : 'ring-2 ring-amber-300 hover:from-amber-100 hover:to-yellow-100'}`}
+            title="Leads com data de follow-up vencida. Clique para filtrar."
+          >
             <p className="text-2xl font-bold text-amber-600">{stats.pendingContact}</p>
             <p className="text-xs text-amber-600">Contato Pendente</p>
-          </div>
+          </button>
         )}
         
         <button
           onClick={() => setFilter(filter === 'new' ? 'all' : 'new')}
           className={`card p-3 text-left transition-all ${filter === 'new' ? 'ring-2 ring-violet-400' : 'hover:bg-slate-50'}`}
+          title="Leads ainda não contatados. Clique para filtrar."
         >
           <p className="text-2xl font-bold text-slate-900">{stats.new}</p>
           <p className="text-xs text-slate-500">Novos</p>
@@ -994,20 +1043,20 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
               {/* Contato Rápido */}
               <div className="flex gap-2">
                 {lead.phone && (
-                  <a
-                    href={`https://wa.me/55${lead.phone.replace(/\D/g, '')}`}
-                    target="_blank"
+                  <Link
+                    href={`/dashboard/whatsapp?phone=${encodeURIComponent(lead.phone.replace(/\D/g, ''))}`}
                     onClick={() => {
-                      // Registrar interação
-                      const entry = `💬 [WhatsApp - ${new Date().toLocaleString('pt-BR')}]\nContato iniciado via WhatsApp`
+                      // Registrar interação no histórico do lead
+                      const entry = `💬 [WhatsApp - ${new Date().toLocaleString('pt-BR')}]\nAbriu conversa pelo CRM`
                       const notes = lead.notes ? `${entry}\n\n${lead.notes}` : entry
                       supabase.from('leads').update({ notes, last_contact_at: new Date().toISOString() }).eq('id', lead.id)
                     }}
                     className="flex-1 py-2.5 px-4 bg-emerald-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors"
+                    title="Abrir conversa no WhatsApp do sistema"
                   >
                     <Icon name="message" className="w-4 h-4" />
                     WhatsApp
-                  </a>
+                  </Link>
                 )}
                 {lead.phone && (
                   <a

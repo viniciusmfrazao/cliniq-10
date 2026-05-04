@@ -13,3 +13,8 @@ node_modules
 
 # Documentacao interna (nao versionar)
 docs/
+
+# Stress test (locais)
+stress-test/env.ps1
+stress-test/results/
+

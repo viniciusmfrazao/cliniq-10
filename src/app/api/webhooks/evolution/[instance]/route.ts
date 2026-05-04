@@ -385,6 +385,16 @@ export async function POST(
           `parsed: phone=${phone ?? 'null'} kind=${parsed.kind} fromMe=${fromMe} pushName=${pushName ?? 'null'}`,
         )
 
+        // Bloqueio de tráfego sintético: qualquer mensagem com id no padrão
+        // `STRESSTEST_*` (gerada por stress-test/03-webhook.js) é processada
+        // apenas pra medir latência de auth/parsing — não cria lead, não
+        // dispara Eva, não toca em storage. Evita poluição do CRM e
+        // disparos pra números reais que possam coincidir.
+        if (messageId && /^STRESSTEST_/.test(messageId)) {
+          debugTrace.push('synthetic stress-test message — skipped persist')
+          break
+        }
+
         if (!phone) {
           internalErrors.push('mensagem ignorada: phone=null')
           break
