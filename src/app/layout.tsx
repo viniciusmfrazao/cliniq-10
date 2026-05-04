@@ -66,6 +66,22 @@ const themeScript = `
   })();
 `
 
+const authHashRedirectScript = `
+  (function() {
+    try {
+      var hash = window.location.hash || '';
+      if (!hash || hash.indexOf('access_token=') === -1) return;
+      var params = new URLSearchParams(hash.substring(1));
+      var type = params.get('type');
+      var hasToken = !!params.get('access_token');
+      if (!hasToken || type !== 'recovery') return;
+      if (window.location.pathname !== '/redefinir-senha') {
+        window.location.replace('/redefinir-senha' + hash);
+      }
+    } catch (e) {}
+  })();
+`
+
 export default function RootLayout({
   children,
 }: {
@@ -77,6 +93,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <script dangerouslySetInnerHTML={{ __html: authHashRedirectScript }} />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="antialiased">
