@@ -139,7 +139,7 @@ export async function GET() {
   const { data: row } = await svc
     .from('clinic_whatsapp')
     .select(
-      'instance_name, phone_number, status, qr_code, qr_expires_at, connected_at, last_event_at',
+      'instance_name, phone_number, status, qr_code, qr_expires_at, connected_at, last_event_at, auto_reply_enabled',
     )
     .eq('clinic_id', ctx.clinicId)
     .maybeSingle()
@@ -185,6 +185,7 @@ export async function GET() {
     qr_expires_at: status === 'qr_pending' ? row.qr_expires_at : null,
     connected_at: row.connected_at,
     last_event_at: row.last_event_at,
+    auto_reply_enabled: row.auto_reply_enabled !== false,
   })
 }
 

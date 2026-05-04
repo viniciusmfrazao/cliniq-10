@@ -229,6 +229,7 @@ export default function WhatsAppPage() {
 
   async function loadConfig() {
     try {
+      // Busca clinic_id do usuário autenticado (precisa pra realtime e queries diretas)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
@@ -240,17 +241,24 @@ export default function WhatsAppPage() {
 
       if (!userData?.clinic_id) return
 
-      const { data: instance } = await supabase
-        .from('clinic_whatsapp')
-        .select('status, instance_name, auto_reply_enabled')
-        .eq('clinic_id', userData.clinic_id)
-        .maybeSingle()
+      // Lê status da instância via API (server-side, com service role) — assim
+      // não depende de RLS no client e a UI bate com /dashboard/config/whatsapp.
+      const r = await fetch('/api/whatsapp/instance', { cache: 'no-store' })
+      if (!r.ok) {
+        setConfigured(false)
+        return
+      }
+      const instance = (await r.json()) as {
+        configured?: boolean
+        status?: string
+        instance_name?: string | null
+        auto_reply_enabled?: boolean
+      }
 
-      if (instance?.status === 'connected') {
+      if (instance.configured && instance.status === 'connected') {
         setConfig({ instance_name: instance.instance_name } as never)
         setConfigured(true)
         setClinicId(userData.clinic_id)
-        // auto_reply_enabled pode vir null (instâncias antigas pré-migration) — trata como true
         setEvaEnabled(instance.auto_reply_enabled !== false)
         loadConversations(userData.clinic_id)
       } else {
@@ -269,16 +277,23 @@ export default function WhatsAppPage() {
     setEvaToggling(true)
     // Otimista: atualiza UI imediatamente, reverte se falhar
     setEvaEnabled(next)
-    const { error } = await supabase
-      .from('clinic_whatsapp')
-      .update({ auto_reply_enabled: next })
-      .eq('clinic_id', clinicId)
-    if (error) {
+    try {
+      const r = await fetch('/api/whatsapp/instance/auto-reply', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      })
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        throw new Error(j.error || `HTTP ${r.status}`)
+      }
+    } catch (error) {
       console.error('Falha ao atualizar toggle Eva:', error)
       setEvaEnabled(!next)
       alert('Falha ao alternar Eva. Tente de novo.')
+    } finally {
+      setEvaToggling(false)
     }
-    setEvaToggling(false)
   }
 
   async function loadConversations(clinicId: string) {
