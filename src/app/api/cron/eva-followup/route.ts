@@ -124,6 +124,42 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, processed: 0, reason: 'queue_empty' })
   }
 
+  // ─── DEFESA ANTI-SPAM ────────────────────────────────────────────────────
+  // Pra cada lead, verifica se o paciente tem PELO MENOS 1 mensagem real
+  // (role='user') nas últimas 30 dias. Se não tem (lead "abandonado" ou criado
+  // por bug/teste), pula o follow-up. Isso evita disparar pra phones aleatórios
+  // de stress test ou pra leads dormentes que nunca interagiram.
+  //
+  // Adiciona zero overhead em fluxo normal: a query só roda pros leads
+  // já filtrados pela query principal, e usa o index (clinic_id, phone, role).
+  const phonesPorClinica = new Map<string, Set<string>>()
+  for (const lead of queue) {
+    if (!lead.phone) continue
+    if (!phonesPorClinica.has(lead.clinic_id)) {
+      phonesPorClinica.set(lead.clinic_id, new Set())
+    }
+    phonesPorClinica.get(lead.clinic_id)!.add(lead.phone)
+  }
+
+  // Map clinic_id → Set<phone> pra busca rápida
+  const recentInteraction = new Map<string, Set<string>>()
+  const cutoffRecent = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  for (const [clinicId, phones] of phonesPorClinica) {
+    if (phones.size === 0) continue
+    const { data: recents } = await svc
+      .from('eva_conversations')
+      .select('phone')
+      .eq('clinic_id', clinicId)
+      .eq('role', 'user')
+      .in('phone', Array.from(phones))
+      .gte('created_at', cutoffRecent)
+    const setOk = new Set<string>()
+    for (const r of (recents as { phone: string }[] | null) ?? []) {
+      if (r.phone) setOk.add(r.phone)
+    }
+    recentInteraction.set(clinicId, setOk)
+  }
+
   // 3) Pra cada clínica, valida que o WhatsApp está conectado E a Eva
   // está em modo automático. Se a clinica colocou a Eva em manual pelo
   // toggle, o cron de follow-up também respeita.
@@ -180,6 +216,31 @@ export async function GET(req: NextRequest) {
         phone: null,
         stage: (lead.eva_followup_count ?? 0) + 1,
         skipped: 'no_phone',
+      })
+      continue
+    }
+
+    // Anti-spam: lead sem nenhuma mensagem do paciente em 30d nunca recebe
+    // follow-up. Cobre stress test, leads importados, leads criados por bug.
+    const recentSet = recentInteraction.get(lead.clinic_id) ?? new Set<string>()
+    if (!recentSet.has(lead.phone)) {
+      // Marca como lost e zera follow-up pra não pegar de novo
+      if (!dryRun) {
+        await svc
+          .from('leads')
+          .update({
+            eva_next_followup_at: null,
+            status: 'lost',
+            lost_reason: 'sem_interacao_recente',
+          })
+          .eq('id', lead.id)
+      }
+      results.push({
+        lead_id: lead.id,
+        clinic_id: lead.clinic_id,
+        phone: lead.phone,
+        stage: (lead.eva_followup_count ?? 0) + 1,
+        skipped: 'no_recent_user_message_30d',
       })
       continue
     }

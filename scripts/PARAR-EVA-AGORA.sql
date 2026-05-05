@@ -1,0 +1,93 @@
+-- ============================================================================
+-- 🚨 EMERGÊNCIA: parar Eva de mandar follow-up pra leads do stress test
+-- ============================================================================
+-- Causa: o cron eva-followup roda a cada 30min e processa 50 leads por vez.
+-- O stress test gerou 627 leads com phones aleatórios (alguns reais!), e
+-- esses leads estão recebendo follow-up automático há ~20h.
+-- Resultado: a Evolution provavelmente bloqueou a instância por spam.
+--
+-- COMO USAR:
+--   1. Rode o BLOCO 1 imediatamente — para o stress sem deletar nada
+--   2. Confira o resultado do BLOCO 2 — quantos leads/conversas existem
+--   3. Rode o BLOCO 3 quando tiver certeza — limpa tudo do stress test
+-- ============================================================================
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 🛑 BLOCO 1 — PARAR FOLLOW-UP IMEDIATO (executar primeiro!)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Zera o eva_next_followup_at de todos os leads do stress test.
+-- O cron na próxima rodada (30min) vai pular todos eles.
+-- Esse bloco NÃO deleta nada, só desativa o follow-up.
+WITH stress_phones AS (
+  SELECT DISTINCT clinic_id, phone
+  FROM eva_conversations
+  WHERE metadata->>'evolution_message_id' LIKE 'STRESSTEST\_%' ESCAPE '\'
+)
+UPDATE leads l
+SET
+  eva_next_followup_at = NULL,
+  status = CASE WHEN l.status = 'new' THEN 'lost' ELSE l.status END,
+  lost_reason = COALESCE(l.lost_reason, 'stress_test_cleanup'),
+  notes = COALESCE(l.notes, '') || E'\n[BLOQUEIO] Lead criado pelo stress test em 04/05/2026 — follow-up desativado.'
+FROM stress_phones s
+WHERE l.clinic_id = s.clinic_id AND l.phone = s.phone;
+
+-- Confere quantos leads foram pausados
+SELECT COUNT(*) AS leads_pausados
+FROM leads
+WHERE notes LIKE '%[BLOQUEIO]%stress_test%'
+   OR lost_reason = 'stress_test_cleanup';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 📊 BLOCO 2 — PREVIEW (quanto vai ser deletado?)
+-- ─────────────────────────────────────────────────────────────────────────────
+WITH stress_phones AS (
+  SELECT DISTINCT clinic_id, phone
+  FROM eva_conversations
+  WHERE metadata->>'evolution_message_id' LIKE 'STRESSTEST\_%' ESCAPE '\'
+)
+SELECT
+  (SELECT COUNT(*) FROM stress_phones) AS total_telefones_afetados,
+  (SELECT COUNT(*) FROM eva_conversations c
+    WHERE EXISTS (SELECT 1 FROM stress_phones s
+      WHERE s.clinic_id = c.clinic_id AND s.phone = c.phone))
+    AS total_mensagens_a_remover,
+  (SELECT COUNT(*) FROM leads l
+    WHERE EXISTS (SELECT 1 FROM stress_phones s
+      WHERE s.clinic_id = l.clinic_id AND s.phone = l.phone))
+    AS total_leads_a_remover;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 🧹 BLOCO 3 — LIMPEZA COMPLETA (rode depois de confirmar bloco 2)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Remove conversas, leads e logs de webhook do stress test.
+-- IMPORTANTE: descomente as 3 seções abaixo (remover -- ) pra executar.
+
+-- BEGIN;
+--
+-- -- Deleta conversas (eva_conversations) dos phones do stress test
+-- WITH stress_phones AS (
+--   SELECT DISTINCT clinic_id, phone
+--   FROM eva_conversations
+--   WHERE metadata->>'evolution_message_id' LIKE 'STRESSTEST\_%' ESCAPE '\'
+-- )
+-- DELETE FROM eva_conversations c
+-- USING stress_phones s
+-- WHERE c.clinic_id = s.clinic_id AND c.phone = s.phone;
+--
+-- -- Deleta leads do stress test (incluindo os já marcados como lost no bloco 1)
+-- DELETE FROM leads
+-- WHERE lost_reason = 'stress_test_cleanup'
+--    OR notes LIKE '%[BLOQUEIO]%stress_test%';
+--
+-- -- Deleta NPS responses associados (se houver)
+-- DELETE FROM nps_responses
+-- WHERE created_at > '2026-05-04 00:00:00-03'
+--   AND created_at < '2026-05-04 00:30:00-03';
+--
+-- -- Deleta os logs de webhook do stress test (event=messages_upsert ou stresstest)
+-- DELETE FROM evolution_webhook_logs
+-- WHERE created_at > '2026-05-04 00:00:00-03'
+--   AND created_at < '2026-05-04 00:30:00-03';
+--
+-- COMMIT;
