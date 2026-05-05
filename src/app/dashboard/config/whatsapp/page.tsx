@@ -243,6 +243,39 @@ export default function WhatsappConfigPage() {
     }
   }
 
+  async function forceReset() {
+    if (
+      !confirm(
+        '🔥 RESET TOTAL DO WHATSAPP\n\n' +
+        'Use isso quando:\n' +
+        '• Mensagens não chegam nem saem\n' +
+        '• Tela diz "Conectado" mas não funciona\n' +
+        '• Restart Session não resolveu\n\n' +
+        'Vai apagar a instância antiga, criar uma nova e gerar QR.\n' +
+        'Você precisa estar com o celular da clínica em mãos pra escanear.\n\n' +
+        'Continuar?',
+      )
+    )
+      return
+    setError(null)
+    setBusy('force_reset')
+    try {
+      const r = await fetch('/api/whatsapp/instance/force-reset', { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      await refresh()
+      alert(
+        '✅ Reset feito! Uma nova instância foi criada.\n\n' +
+        'Agora escaneia o QR code que apareceu na tela com o WhatsApp do celular.\n\n' +
+        'No celular: 3 pontinhos → Aparelhos conectados → Conectar um aparelho → aponta a câmera pro QR.',
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto p-8">
@@ -539,6 +572,14 @@ export default function WhatsappConfigPage() {
               className="px-3 py-1.5 text-xs rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
             >
               {busy === 'buckets' ? 'Configurando…' : '🪣 Configurar buckets de mídia'}
+            </button>
+            <button
+              onClick={forceReset}
+              disabled={busy !== null}
+              title="Apaga a instância atual e cria uma nova com nome novo. Use quando outbound E inbound estão quebrados — instance corrompida."
+              className="px-3 py-1.5 text-xs rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
+            >
+              {busy === 'force_reset' ? 'Resetando…' : '🔥 Reset total (apaga e cria nova)'}
             </button>
           </div>
           {diag && (
