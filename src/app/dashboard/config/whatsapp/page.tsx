@@ -243,6 +243,32 @@ export default function WhatsappConfigPage() {
     }
   }
 
+  async function testWebhookReach() {
+    setError(null)
+    setBusy('test_webhook')
+    try {
+      const r = await fetch('/api/whatsapp/instance/test-webhook-reach', { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      const reached = j.reached_handler
+      const status = j.test?.status
+      alert(
+        (reached ? '✅ ROTA OK' : '❌ FALHA NA ROTA') +
+          '\n\n' +
+          (j.interpretation || '') +
+          '\n\n' +
+          `Status HTTP retornado: ${status}\n` +
+          `Tempo: ${j.test?.elapsed_ms ?? '?'}ms`,
+      )
+      setDiag(j as DiagnoseResult)
+      setDiagOpen(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function forceReset() {
     if (
       !confirm(
@@ -572,6 +598,14 @@ export default function WhatsappConfigPage() {
               className="px-3 py-1.5 text-xs rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
             >
               {busy === 'buckets' ? 'Configurando…' : '🪣 Configurar buckets de mídia'}
+            </button>
+            <button
+              onClick={testWebhookReach}
+              disabled={busy !== null}
+              title="Faz uma chamada de teste do servidor Vercel pra propria URL do webhook. Se chegar log, a rota funciona; se nao, problema esta na rota/token."
+              className="px-3 py-1.5 text-xs rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50"
+            >
+              {busy === 'test_webhook' ? 'Testando…' : '🧪 Testar rota do webhook'}
             </button>
             <button
               onClick={forceReset}
