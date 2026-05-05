@@ -272,25 +272,36 @@ export default function WhatsAppPage() {
   }
 
   async function toggleEva() {
-    if (!clinicId || evaToggling) return
+    console.log('[EvaToggle] click recebido', { clinicId, evaToggling, evaEnabled })
+    if (evaToggling) {
+      console.log('[EvaToggle] ignorado: ja em andamento')
+      return
+    }
+    if (!clinicId) {
+      console.warn('[EvaToggle] clinicId vazio — recarregando config antes')
+      await loadConfig()
+      alert('Tentando reconectar… clique de novo em 2 segundos.')
+      return
+    }
     const next = !evaEnabled
     setEvaToggling(true)
-    // Otimista: atualiza UI imediatamente, reverte se falhar
     setEvaEnabled(next)
     try {
+      console.log('[EvaToggle] enviando PATCH', { enabled: next })
       const r = await fetch('/api/whatsapp/instance/auto-reply', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: next }),
       })
+      const j = await r.json().catch(() => ({}))
+      console.log('[EvaToggle] resposta', { status: r.status, body: j })
       if (!r.ok) {
-        const j = await r.json().catch(() => ({}))
         throw new Error(j.error || `HTTP ${r.status}`)
       }
     } catch (error) {
-      console.error('Falha ao atualizar toggle Eva:', error)
+      console.error('[EvaToggle] falha:', error)
       setEvaEnabled(!next)
-      alert('Falha ao alternar Eva. Tente de novo.')
+      alert('Falha ao alternar Eva: ' + (error instanceof Error ? error.message : 'erro desconhecido'))
     } finally {
       setEvaToggling(false)
     }
