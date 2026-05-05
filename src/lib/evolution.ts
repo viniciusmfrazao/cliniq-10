@@ -115,8 +115,11 @@ export function generateInstanceName(clinicId: string): string {
  * dessa instance. Usa NEXT_PUBLIC_APP_URL com fallback pra clinike.vercel.app.
  */
 export function buildWebhookUrl(instanceName: string, webhookToken: string): string {
+  // Fallback ATUALIZADO: clinike.vercel.app foi descontinuado em 05/2026
+  // quando migramos pra app.clinike.com.br. Quem nao setar a env publica
+  // ainda funciona via fallback.
   const base =
-    (process.env.NEXT_PUBLIC_APP_URL || 'https://clinike.vercel.app').replace(
+    (process.env.NEXT_PUBLIC_APP_URL || 'https://app.clinike.com.br').replace(
       /\/$/,
       ''
     )
