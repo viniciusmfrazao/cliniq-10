@@ -184,6 +184,23 @@ export default function WhatsappConfigPage() {
     }
   }
 
+  async function restartSocket() {
+    if (!confirm('Reiniciar a sessão da Evolution?\n\nIsso reabre o socket com o WhatsApp sem desemparelhar (não precisa escanear QR de novo). Use quando outbound funciona mas mensagens recebidas pararam de chegar.')) return
+    setError(null)
+    setBusy('restart')
+    try {
+      const r = await fetch('/api/whatsapp/instance/restart', { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      alert('Sessão reiniciada. Estado: ' + JSON.stringify(j.connection ?? {}, null, 2) + '\n\nEspere ~30s e mande uma mensagem de teste.')
+      await runDiagnose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function setupBuckets() {
     setError(null)
     setBusy('buckets')
@@ -506,6 +523,14 @@ export default function WhatsappConfigPage() {
               className="px-3 py-1.5 text-xs rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
             >
               {busy === 'refix' ? 'Refixando…' : 'Refixar webhook na Evolution'}
+            </button>
+            <button
+              onClick={restartSocket}
+              disabled={busy !== null}
+              title="Reinicia o socket da Evolution sem precisar escanear QR. Use quando outbound funciona mas mensagens recebidas não chegam."
+              className="px-3 py-1.5 text-xs rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              {busy === 'restart' ? 'Reiniciando…' : '🔄 Reiniciar sessão WhatsApp'}
             </button>
             <button
               onClick={setupBuckets}

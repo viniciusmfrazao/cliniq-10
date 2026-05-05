@@ -42,8 +42,8 @@ WHERE lost_reason = 'stress_test_cleanup'
 -- 3) Deleta NPS responses gerados na janela do stress test
 -- ─────────────────────────────────────────────────────────────────────────────
 DELETE FROM nps_responses
-WHERE created_at >= '2026-05-04 00:00:00-03'
-  AND created_at <  '2026-05-04 00:30:00-03';
+WHERE sent_at >= '2026-05-04 00:00:00-03'
+  AND sent_at <  '2026-05-04 00:30:00-03';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4) Deleta webhook logs do stress test

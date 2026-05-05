@@ -255,6 +255,19 @@ export async function logoutInstance(
   })
 }
 
+/**
+ * Reinicia o socket da instance sem desconectar/desemparelhar o WhatsApp.
+ * Útil quando a sessão fica "fantasma" — open mas sem receber mensagens.
+ * Mantém o pairing, evita QR scan novo.
+ */
+export async function restartInstance(
+  instanceName: string
+): Promise<FetchResult<unknown>> {
+  return evolutionFetch(`/instance/restart/${encodeURIComponent(instanceName)}`, {
+    method: 'POST',
+  })
+}
+
 export async function deleteInstance(
   instanceName: string
 ): Promise<FetchResult<unknown>> {
