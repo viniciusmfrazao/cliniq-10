@@ -175,6 +175,33 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const STAGES = settings?.custom_stages || DEFAULT_STAGES
   const SOURCES = settings?.custom_sources || DEFAULT_SOURCES
 
+  // ─── Helpers de followup ─────────────────────────────────────────────────
+  // Um lead esta "em followup" quando a Eva ja agendou a proxima tentativa
+  // E o lead nao virou cliente/perdido E nao foi escalado pra humano.
+  // Os 5 estagios batem com o cron eva-followup:
+  //   count 0 -> aguardando 1a resposta (~2h)
+  //   count 1 -> ja mandou 1, proxima em 24h
+  //   count 2 -> ja mandou 2, proxima em 48h
+  //   count 3 -> ja mandou 3, proxima em 5d
+  //   count 4 -> ultima chance (~10d)
+  const isInFollowup = (l: Lead): boolean =>
+    !!l.eva_next_followup_at &&
+    l.status !== 'converted' &&
+    l.status !== 'lost' &&
+    !l.needs_human_review
+
+  const getFollowupCount = (l: Lead): number => l.eva_followup_count ?? 0
+
+  const followupBucket = (l: Lead): 'fu_2h' | 'fu_24h' | 'fu_48h' | 'fu_5d' | 'fu_10d' | null => {
+    if (!isInFollowup(l)) return null
+    const c = getFollowupCount(l)
+    if (c >= 4) return 'fu_10d'
+    if (c === 3) return 'fu_5d'
+    if (c === 2) return 'fu_48h'
+    if (c === 1) return 'fu_24h'
+    return 'fu_2h'
+  }
+
   // Stats
   const stats = {
     total: leads.length,
@@ -193,13 +220,25 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     estimatedValue: leads.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
     pendingContact: leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date()).length,
     // Atendimento humano (Eva escalou)
-    humanReview: leads.filter(l => l.needs_human_review === true).length
+    humanReview: leads.filter(l => l.needs_human_review === true).length,
+    // Followup buckets (Eva aguardando resposta) — 5 estagios
+    followupTotal: leads.filter(isInFollowup).length,
+    followup2h: leads.filter(l => followupBucket(l) === 'fu_2h').length,
+    followup24h: leads.filter(l => followupBucket(l) === 'fu_24h').length,
+    followup48h: leads.filter(l => followupBucket(l) === 'fu_48h').length,
+    followup5d: leads.filter(l => followupBucket(l) === 'fu_5d').length,
+    followup10d: leads.filter(l => followupBucket(l) === 'fu_10d').length,
   }
+
+  const isFollowupFilter = (f: string) =>
+    f === 'followup_all' || f === 'fu_2h' || f === 'fu_24h' || f === 'fu_48h' || f === 'fu_5d' || f === 'fu_10d'
 
   // Filtrar leads — alem dos status, tem filtros especiais:
   //   'human_review'        -> leads escalados pra atendimento humano
   //   'hot' / 'warm' / 'cold' -> filtra por temperatura (ai_priority)
   //   'pending_contact'      -> leads com next_contact_at vencido
+  //   'followup_all'         -> qualquer lead em followup ativo
+  //   'fu_2h' / 'fu_24h' / 'fu_48h' / 'fu_5d' / 'fu_10d' -> bucket especifico
   const filteredLeads =
     filter === 'all'
       ? leads
@@ -209,7 +248,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           ? leads.filter(l => l.ai_priority === filter)
           : filter === 'pending_contact'
             ? leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
-            : leads.filter(l => l.status === filter)
+            : filter === 'followup_all'
+              ? leads.filter(isInFollowup)
+              : isFollowupFilter(filter)
+                ? leads.filter(l => followupBucket(l) === filter)
+                : leads.filter(l => l.status === filter)
 
   // Agrupar por stage para Kanban (respeita os filtros especiais)
   const leadsForKanban =
@@ -219,7 +262,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
         ? leads.filter(l => l.ai_priority === filter)
         : filter === 'pending_contact'
           ? leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
-          : leads
+          : filter === 'followup_all'
+            ? leads.filter(isInFollowup)
+            : isFollowupFilter(filter)
+              ? leads.filter(l => followupBucket(l) === filter)
+              : leads
   const leadsByStage = STAGES.reduce((acc, stage) => {
     acc[stage.id] = leadsForKanban.filter(l => l.status === stage.id)
     return acc
@@ -356,6 +403,17 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           </button>
         )}
 
+        {stats.followupTotal > 0 && (
+          <button
+            onClick={() => setFilter(isFollowupFilter(filter) ? 'all' : 'followup_all')}
+            className={`card p-3 text-left bg-gradient-to-br from-orange-50 to-amber-50 transition-all ${isFollowupFilter(filter) ? 'ring-2 ring-orange-400' : 'hover:from-orange-100 hover:to-amber-100'}`}
+            title="Leads que a Eva está aguardando resposta. Clique para abrir os filtros por tempo."
+          >
+            <p className="text-2xl font-bold text-orange-600">{stats.followupTotal} ⏰</p>
+            <p className="text-xs text-orange-600">Em follow-up</p>
+          </button>
+        )}
+
         {stats.hotLeads > 0 && (
           <button
             onClick={() => setFilter(filter === 'hot' ? 'all' : 'hot')}
@@ -422,6 +480,62 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
         )}
       </div>
 
+      {/* Sub-filtros de follow-up — aparecem so quando o filtro de followup
+          esta ativo. Cada chip filtra por um bucket de tempo (2h/24h/48h/5d/10d).  */}
+      {isFollowupFilter(filter) && (
+        <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold text-orange-900">⏰ Filtrar por tempo de espera</span>
+            <span className="text-xs text-orange-700">
+              ({stats.followupTotal} {stats.followupTotal === 1 ? 'lead' : 'leads'} em follow-up)
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <FollowupChip
+              active={filter === 'followup_all'}
+              onClick={() => setFilter('followup_all')}
+              label={`Todos (${stats.followupTotal})`}
+              tone="amber"
+            />
+            <FollowupChip
+              active={filter === 'fu_2h'}
+              onClick={() => setFilter(filter === 'fu_2h' ? 'followup_all' : 'fu_2h')}
+              label={`🟡 2h (${stats.followup2h})`}
+              tone="amber"
+              disabled={stats.followup2h === 0}
+            />
+            <FollowupChip
+              active={filter === 'fu_24h'}
+              onClick={() => setFilter(filter === 'fu_24h' ? 'followup_all' : 'fu_24h')}
+              label={`🟠 24h (${stats.followup24h})`}
+              tone="orange"
+              disabled={stats.followup24h === 0}
+            />
+            <FollowupChip
+              active={filter === 'fu_48h'}
+              onClick={() => setFilter(filter === 'fu_48h' ? 'followup_all' : 'fu_48h')}
+              label={`🟠 48h (${stats.followup48h})`}
+              tone="orange"
+              disabled={stats.followup48h === 0}
+            />
+            <FollowupChip
+              active={filter === 'fu_5d'}
+              onClick={() => setFilter(filter === 'fu_5d' ? 'followup_all' : 'fu_5d')}
+              label={`🔴 5 dias (${stats.followup5d})`}
+              tone="red"
+              disabled={stats.followup5d === 0}
+            />
+            <FollowupChip
+              active={filter === 'fu_10d'}
+              onClick={() => setFilter(filter === 'fu_10d' ? 'followup_all' : 'fu_10d')}
+              label={`⚫ Última chance · 10d (${stats.followup10d})`}
+              tone="darkred"
+              disabled={stats.followup10d === 0}
+            />
+          </div>
+        </div>
+      )}
+
       {/* View Toggle */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-2">
@@ -454,6 +568,16 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           {STAGES.map(s => (
             <option key={s.id} value={s.id}>{s.label}</option>
           ))}
+          {stats.followupTotal > 0 && (
+            <optgroup label="Follow-up (Eva aguardando)">
+              <option value="followup_all">Todos em follow-up ({stats.followupTotal})</option>
+              {stats.followup2h > 0 && <option value="fu_2h">⏰ Aguardando 2h ({stats.followup2h})</option>}
+              {stats.followup24h > 0 && <option value="fu_24h">⏰ Aguardando 24h ({stats.followup24h})</option>}
+              {stats.followup48h > 0 && <option value="fu_48h">⏰ Aguardando 48h ({stats.followup48h})</option>}
+              {stats.followup5d > 0 && <option value="fu_5d">⏰ Aguardando 5 dias ({stats.followup5d})</option>}
+              {stats.followup10d > 0 && <option value="fu_10d">⏰ Última chance · 10d ({stats.followup10d})</option>}
+            </optgroup>
+          )}
         </select>
       </div>
 
@@ -1245,5 +1369,46 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * Chip de filtro usado na barra de sub-filtros de follow-up.
+ * Quando disabled fica visivel mas opaco — ajuda o usuario a ver "tem
+ * 0 leads nesse bucket" sem ter que esconder o chip e mexer no layout.
+ */
+function FollowupChip({
+  active,
+  onClick,
+  label,
+  tone,
+  disabled,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  tone: 'amber' | 'orange' | 'red' | 'darkred'
+  disabled?: boolean
+}) {
+  const palette =
+    tone === 'darkred'
+      ? { active: 'bg-red-700 text-white', idle: 'bg-red-100 text-red-900 hover:bg-red-200' }
+      : tone === 'red'
+        ? { active: 'bg-red-600 text-white', idle: 'bg-red-50 text-red-700 hover:bg-red-100' }
+        : tone === 'orange'
+          ? { active: 'bg-orange-500 text-white', idle: 'bg-orange-50 text-orange-700 hover:bg-orange-100' }
+          : { active: 'bg-amber-500 text-white', idle: 'bg-amber-50 text-amber-700 hover:bg-amber-100' }
+
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+        active ? palette.active : palette.idle
+      } ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+      {label}
+    </button>
   )
 }
