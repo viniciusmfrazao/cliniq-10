@@ -5,6 +5,7 @@ import BottomNav from '@/components/layout/BottomNav'
 import TopBar from '@/components/layout/TopBar'
 import ChatWidget from '@/components/ui/ChatWidget'
 import AppProviders from '@/components/layout/AppProviders'
+import WhatsappHealthBanner from '@/components/layout/WhatsappHealthBanner'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -46,6 +47,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
             userRole={userData?.role || 'viewer'}
             trialDaysLeft={trialDaysLeft}
             userId={user.id}
+          />
+          <WhatsappHealthBanner
+            clinicId={userData.clinic_id}
+            role={userData?.role || 'viewer'}
           />
           <main className="flex-1 overflow-y-auto overflow-x-hidden pl-safe pr-safe">
             <div className="px-4 py-4 md:px-8 md:py-6 pb-28 md:pb-6 max-w-full">{children}</div>
