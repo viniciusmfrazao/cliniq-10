@@ -15,7 +15,7 @@ export default async function LogsPage() {
     .eq('id', user.id)
     .single()
 
-  if (userData?.role !== 'admin') {
+  if (userData?.role !== 'admin' && userData?.role !== 'super_admin') {
     redirect('/dashboard')
   }
 

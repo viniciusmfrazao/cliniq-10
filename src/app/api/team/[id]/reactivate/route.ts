@@ -36,7 +36,8 @@ export async function POST(
       .eq('id', currentUser.id)
       .single()
 
-    if (!adminCheck || adminCheck.role !== 'admin' || adminCheck.clinic_id !== clinicId) {
+    const isAdmin = adminCheck?.role === 'admin' || adminCheck?.role === 'super_admin'
+    if (!adminCheck || !isAdmin || adminCheck.clinic_id !== clinicId) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
     }
 

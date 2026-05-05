@@ -11,9 +11,9 @@ export type NavItem = {
 // e garantir que TODOS os papéis da clínica vejam o menu certo).
 //
 // Roles existentes (definidas em src/lib/constants.ts):
-//   admin, doctor, biomedic, nurse, esthetician, physiotherapist,
-//   nutritionist, psychologist, receptionist, financial, manager,
-//   assistant, viewer
+//   admin, super_admin, doctor, biomedic, nurse, esthetician,
+//   physiotherapist, nutritionist, psychologist, receptionist,
+//   financial, manager, assistant, viewer
 const ALL_PROFESSIONALS = [
   'doctor',
   'biomedic',
@@ -24,10 +24,11 @@ const ALL_PROFESSIONALS = [
   'psychologist',
 ]
 const RECEPTION = ['receptionist', 'assistant']
-// Manager = gerente operacional, vê quase tudo (menos auditoria/equipe)
-const MANAGEMENT = ['admin', 'manager']
+// super_admin sempre entra junto com admin: ele eh o nivel mais alto e
+// nao faz sentido ele perder acesso a nada que admin tenha.
+const MANAGEMENT = ['admin', 'super_admin', 'manager']
 // Financial = financeiro/contábil
-const FINANCIAL = ['admin', 'manager', 'financial']
+const FINANCIAL = ['admin', 'super_admin', 'manager', 'financial']
 const ALL_STAFF = [
   ...MANAGEMENT,
   ...ALL_PROFESSIONALS,
@@ -35,6 +36,8 @@ const ALL_STAFF = [
   'financial',
   'viewer',
 ]
+// Roles tipicamente "admin only" — incluem super_admin pelo mesmo motivo
+const ADMIN_ONLY = ['admin', 'super_admin']
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Inicio',          href: '/dashboard',              icon: 'home',      roles: ALL_STAFF },
@@ -64,8 +67,8 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Relatórios', href: '/dashboard/financeiro/dre' },
     ]
   },
-  { label: 'Equipe',          href: '/dashboard/equipe',       icon: 'users',     roles: ['admin'] },
-  { label: 'Auditoria',       href: '/dashboard/auditoria',    icon: 'shield',    roles: ['admin'] },
+  { label: 'Equipe',          href: '/dashboard/equipe',       icon: 'users',     roles: ADMIN_ONLY },
+  { label: 'Auditoria',       href: '/dashboard/auditoria',    icon: 'shield',    roles: ADMIN_ONLY },
   { label: 'Configuracoes',   href: '/dashboard/config',       icon: 'settings',  roles: ALL_STAFF },
 ]
 

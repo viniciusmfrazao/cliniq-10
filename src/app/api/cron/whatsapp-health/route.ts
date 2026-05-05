@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getConnectionState } from '@/lib/evolution'
+import { ensureWebhookHealthy, getConnectionState } from '@/lib/evolution'
 
 /**
  * GET /api/cron/whatsapp-health
  *
- * Roda 1x por hora. Pra cada clinic_whatsapp:
- *  - Chama Evolution getConnectionState(instance_name)
- *  - Se Evolution retorna 'close' ou erro -> marca status='disconnected'
- *  - Se Evolution retorna 'open' MAS last_event_at > 24h -> health_warning=true
- *    (provavel sessao fantasma — Baileys parece OK mas nao recebe nada)
- *  - Se tudo OK -> health_warning=false
+ * Roda 4x por hora (a cada 15min). Pra cada clinic_whatsapp:
+ *  1. Confere o webhook salvo na Evolution vs URL esperada (NEXT_PUBLIC_APP_URL).
+ *     Se diferente, AUTO-CORRIGE chamando setInstanceWebhook (essa eh a causa
+ *     classica de "WhatsApp parou de receber mensagens" apos mudanca de dominio).
+ *  2. Chama getConnectionState pra detectar phantom session / instance sumida.
  *
- * Usa health_reason pra explicar o motivo no banner.
+ * Resultados sao gravados em clinic_whatsapp.* (health_warning, health_reason,
+ * webhook_actual_url, webhook_expected_url, webhook_last_fixed_at) pro banner
+ * exibir alerta E pra debug em historico.
  *
  * Auth: Header Authorization: Bearer ${CRON_SECRET}.
  */
@@ -21,6 +22,7 @@ type Row = {
   id: string
   clinic_id: string
   instance_name: string | null
+  webhook_token: string | null
   status: string
   last_event_at: string | null
   health_warning: boolean | null
@@ -45,7 +47,7 @@ export async function GET(req: NextRequest) {
   // So checa quem ja foi configurado (status diferente de pending e tem instance_name)
   const { data: rows, error } = await svc
     .from('clinic_whatsapp')
-    .select('id, clinic_id, instance_name, status, last_event_at, health_warning')
+    .select('id, clinic_id, instance_name, webhook_token, status, last_event_at, health_warning')
     .not('instance_name', 'is', null)
     .in('status', ['connected', 'qr_pending', 'disconnected', 'error'])
 
@@ -61,6 +63,8 @@ export async function GET(req: NextRequest) {
     phantom_session: 0,
     stale_no_events: 0,
     auto_disconnected: 0,
+    webhook_drift_fixed: 0,
+    webhook_drift_failed: 0,
     skipped: 0,
     errors: [] as Array<{ clinic_id: string; error: string }>,
   }
@@ -73,6 +77,41 @@ export async function GET(req: NextRequest) {
       continue
     }
 
+    // ---------------------------------------------------------------
+    // Etapa 1: drift check da URL do webhook
+    // (so faz sentido se a instance ainda existe — abaixo pulamos
+    //  caso o connectionState retorne 404)
+    // ---------------------------------------------------------------
+    let webhookActual: string | null = null
+    let webhookExpected: string | null = null
+    let webhookFixed = false
+    let webhookFixError: string | null = null
+
+    if (r.webhook_token) {
+      try {
+        const w = await ensureWebhookHealthy({
+          instanceName: r.instance_name,
+          webhookToken: r.webhook_token,
+        })
+        webhookActual = w.actualUrl
+        webhookExpected = w.expectedUrl
+        if (w.drift) {
+          if (w.fixed) {
+            summary.webhook_drift_fixed++
+            webhookFixed = true
+          } else {
+            summary.webhook_drift_failed++
+            webhookFixError = w.error
+          }
+        }
+      } catch (e) {
+        webhookFixError = e instanceof Error ? e.message : 'unknown'
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Etapa 2: connection state probe
+    // ---------------------------------------------------------------
     const probe = await getConnectionState(r.instance_name)
 
     let nextStatus = r.status
@@ -80,7 +119,6 @@ export async function GET(req: NextRequest) {
     let nextReason: string | null = null
 
     if (!probe.ok) {
-      // Erro de comunicacao (404 = instance sumiu, outros = config/rede)
       if (probe.status === 404) {
         nextStatus = 'disconnected'
         nextWarning = true
@@ -95,7 +133,6 @@ export async function GET(req: NextRequest) {
       const evoState = probe.data.instance?.state ?? 'unknown'
 
       if (evoState === 'close' || evoState === 'unknown') {
-        // Evolution explicitamente fechou: phantom session ou logout no celular
         if (r.status === 'connected') {
           nextStatus = 'disconnected'
           summary.auto_disconnected++
@@ -104,9 +141,7 @@ export async function GET(req: NextRequest) {
         nextReason = 'evolution_state_close'
         summary.phantom_session++
       } else if (evoState === 'open') {
-        // Evolution diz que ta open. Verifica se realmente recebe eventos.
         if (r.status !== 'connected') {
-          // Status de banco desatualizado pra pior — corrige
           nextStatus = 'connected'
         }
 
@@ -114,7 +149,6 @@ export async function GET(req: NextRequest) {
         const ageMs = nowMs - lastMs
 
         if (lastMs > 0 && ageMs > STALE_MS) {
-          // Aberto mas mudo ha > 24h — sessao fantasma provavel
           nextWarning = true
           nextReason = `no_events_${Math.floor(ageMs / (60 * 60 * 1000))}h`
           summary.stale_no_events++
@@ -122,21 +156,41 @@ export async function GET(req: NextRequest) {
           summary.healthy++
         }
       } else if (evoState === 'connecting') {
-        // QR pendente
         nextStatus = 'qr_pending'
         nextWarning = false
         nextReason = null
       }
     }
 
+    // ---------------------------------------------------------------
+    // Etapa 3: drift do webhook tem prioridade no banner se aconteceu
+    // (o admin precisa saber, mesmo que ja tenhamos auto-corrigido)
+    // ---------------------------------------------------------------
+    if (webhookFixed) {
+      nextWarning = true
+      nextReason = 'webhook_url_drift_fixed'
+    } else if (webhookFixError) {
+      nextWarning = true
+      nextReason = `webhook_drift_error:${webhookFixError.slice(0, 60)}`
+      summary.errors.push({
+        clinic_id: r.clinic_id,
+        error: `webhook drift: ${webhookFixError}`,
+      })
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      status: nextStatus,
+      health_warning: nextWarning,
+      health_reason: nextReason,
+      health_checked_at: new Date().toISOString(),
+    }
+    if (webhookActual !== null) updatePayload.webhook_actual_url = webhookActual
+    if (webhookExpected !== null) updatePayload.webhook_expected_url = webhookExpected
+    if (webhookFixed) updatePayload.webhook_last_fixed_at = new Date().toISOString()
+
     const { error: errUpd } = await svc
       .from('clinic_whatsapp')
-      .update({
-        status: nextStatus,
-        health_warning: nextWarning,
-        health_reason: nextReason,
-        health_checked_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', r.id)
 
     if (errUpd) {

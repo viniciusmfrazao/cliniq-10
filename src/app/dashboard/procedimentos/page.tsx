@@ -42,7 +42,7 @@ export default async function ProcedimentosPage() {
     (u: any) => PROFESSIONAL_ROLES.includes(u.role) && u.active !== false
   )
 
-  const isAdmin = userData.role === 'admin'
+  const isAdmin = userData.role === 'admin' || userData.role === 'super_admin'
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">

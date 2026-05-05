@@ -195,7 +195,7 @@ export const GUIDES: GuideRole[] = [
     emoji: '👑',
     tagline: 'Configure uma vez. Acompanhe sempre.',
     gradient: 'from-amber-500 via-orange-500 to-rose-500',
-    matchesRole: (r) => r === 'admin',
+    matchesRole: (r) => r === 'admin' || r === 'super_admin',
     steps: [
       {
         title: 'Configure os dados da clínica',

@@ -36,11 +36,12 @@ export async function DELETE(
       .eq('id', currentUser.id)
       .single()
 
-    if (!adminCheck || adminCheck.role !== 'admin' || adminCheck.clinic_id !== clinicId) {
+    const isAdmin = adminCheck?.role === 'admin' || adminCheck?.role === 'super_admin'
+    if (!adminCheck || !isAdmin || adminCheck.clinic_id !== clinicId) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
     }
 
-    // Verificar se o membro pertence à clínica e não é admin
+    // Verificar se o membro pertence à clínica e não é admin/super_admin
     const { data: memberToDeactivate } = await supabaseAdmin
       .from('users')
       .select('id, name, role, clinic_id')
@@ -52,7 +53,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Membro não encontrado' }, { status: 404 })
     }
 
-    if (memberToDeactivate.role === 'admin') {
+    if (memberToDeactivate.role === 'admin' || memberToDeactivate.role === 'super_admin') {
       return NextResponse.json({ error: 'Não é possível desativar administradores' }, { status: 400 })
     }
 

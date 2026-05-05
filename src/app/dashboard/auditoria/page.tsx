@@ -13,8 +13,8 @@ export default async function AuditoriaPage() {
     .eq('id', user.id)
     .single()
 
-  // Apenas admin pode ver auditoria
-  if (currentUser?.role !== 'admin') {
+  // Apenas admin/super_admin pode ver auditoria
+  if (currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin') {
     redirect('/dashboard')
   }
 

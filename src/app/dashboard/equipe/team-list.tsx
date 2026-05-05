@@ -209,7 +209,7 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                       >
                         <Icon name="settings" className="w-4 h-4" />
                       </Link>
-                      {member.role !== 'admin' && (
+                      {member.role !== 'admin' && member.role !== 'super_admin' && (
                         <button
                           onClick={() => handleDeactivate(member.id, member.name)}
                           disabled={loading === member.id}

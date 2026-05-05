@@ -339,11 +339,11 @@ export async function getCurrentUser(supabase: SupabaseClientType) {
 }
 
 /**
- * Verifica se o usuário atual é admin
+ * Verifica se o usuário atual é admin (inclui super_admin).
  */
 export async function isCurrentUserAdmin(supabase: SupabaseClientType) {
   const user = await getCurrentUser(supabase)
-  return user?.role === 'admin'
+  return user?.role === 'admin' || user?.role === 'super_admin'
 }
 
 // ============================================

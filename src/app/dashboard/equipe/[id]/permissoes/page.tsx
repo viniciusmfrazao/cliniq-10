@@ -25,7 +25,7 @@ export default async function MemberPermissionsPage({ params }: PageProps) {
     .eq('id', user.id)
     .single()
 
-  if (currentUser?.role !== 'admin') {
+  if (currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin') {
     redirect('/dashboard/equipe')
   }
 

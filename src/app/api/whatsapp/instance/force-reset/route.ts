@@ -5,6 +5,7 @@ import {
   buildWebhookUrl,
   createInstance,
   deleteInstance,
+  ensureWebhookHealthy,
   generateInstanceName,
   getQRCode,
   setInstanceWebhook,
@@ -78,15 +79,23 @@ export async function POST() {
   }
 
   // 4b) Algumas versoes da Evolution ignoram o webhook embutido em /instance/create
-  //     e exigem POST separado em /webhook/set. Garantimos chamando explicitamente.
+  //     e exigem POST separado em /webhook/set. Garantimos chamando explicitamente
+  //     E em seguida verificamos via /webhook/find que a URL realmente foi salva.
   const webhookSet = await setInstanceWebhook({
     instanceName: newInstanceName,
     webhookUrl,
   })
   if (!webhookSet.ok) {
     console.warn('[force-reset] setInstanceWebhook falhou:', webhookSet.error)
-    // Nao falhamos a operacao — instance ja foi criada. O usuario pode chamar
-    // "Refixar webhook" no painel se necessario.
+  }
+  // Espera 300ms pra Evolution propagar e VERIFICA que a URL salva bate
+  await new Promise((r) => setTimeout(r, 300))
+  const verify = await ensureWebhookHealthy({
+    instanceName: newInstanceName,
+    webhookToken: newToken,
+  })
+  if (!verify.fixed && verify.drift) {
+    console.error('[force-reset] webhook drift persistente apos set:', verify)
   }
 
   // 5) Atualiza clinic_whatsapp pra apontar pra nova instance

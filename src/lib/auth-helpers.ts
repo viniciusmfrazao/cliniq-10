@@ -1,6 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 
-export type ClinicRole = 'admin' | 'manager' | 'professional' | 'receptionist' | 'viewer'
+export type ClinicRole =
+  | 'admin'
+  | 'super_admin'
+  | 'manager'
+  | 'professional'
+  | 'receptionist'
+  | 'viewer'
 
 export type CurrentUserClinic = {
   userId: string
@@ -35,8 +41,24 @@ export async function getCurrentUserClinic(): Promise<CurrentUserClinic | null> 
 }
 
 /**
- * Checa se a role é admin ou manager (pode mexer em integrações sensíveis).
+ * Checa se a role pode mexer em integrações sensíveis (WhatsApp, Evolution, etc).
+ * super_admin tem acesso a tudo, sempre.
  */
-export function canManageIntegrations(role: ClinicRole | null | undefined): boolean {
-  return role === 'admin' || role === 'manager'
+export function canManageIntegrations(role: ClinicRole | string | null | undefined): boolean {
+  return role === 'admin' || role === 'manager' || role === 'super_admin'
+}
+
+/**
+ * Checa se a role pode gerenciar equipe e configuracoes da clinica.
+ */
+export function canManageClinic(role: ClinicRole | string | null | undefined): boolean {
+  return role === 'admin' || role === 'super_admin'
+}
+
+/**
+ * Checa se a role tem acesso amplo (admin/super_admin) — pra UI tipo
+ * banners, paineis financeiros etc.
+ */
+export function isClinicAdmin(role: ClinicRole | string | null | undefined): boolean {
+  return role === 'admin' || role === 'super_admin'
 }

@@ -37,7 +37,8 @@ export async function POST(request: Request) {
       .eq('id', currentUser.id)
       .single()
 
-    if (!adminCheck || adminCheck.role !== 'admin' || adminCheck.clinic_id !== clinicId) {
+    const isAdmin = adminCheck?.role === 'admin' || adminCheck?.role === 'super_admin'
+    if (!adminCheck || !isAdmin || adminCheck.clinic_id !== clinicId) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
     }
 
@@ -110,8 +111,9 @@ export async function POST(request: Request) {
 
     // Aplica permissoes do papel — primeiro tenta defaults customizadas
     // pela clinica em clinic_role_defaults; se nao tiver, usa factory.
+    // admin/super_admin sempre recebem 'all'.
     let inheritedPermissions: string[] | null = null
-    if (role !== 'admin') {
+    if (role !== 'admin' && role !== 'super_admin') {
       const { data: roleDefault } = await supabaseAdmin
         .from('clinic_role_defaults')
         .select('permissions')

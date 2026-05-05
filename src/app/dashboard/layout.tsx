@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/layout/Sidebar'
 import BottomNav from '@/components/layout/BottomNav'
 import TopBar from '@/components/layout/TopBar'
@@ -14,9 +14,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // Run user query first (needed for clinic_id)
   const { data: userData } = await supabase
-    .from('users').select('name, role, clinic_id').eq('id', user.id).single()
+    .from('users').select('name, role, clinic_id').eq('id', user.id).maybeSingle()
 
-  if (!userData?.clinic_id) redirect('/login')
+  // Super admin pode nao ter row em users (pode estar so em super_admins).
+  // Se for o caso, redireciona pro /admin pra ele ter o painel global.
+  if (!userData?.clinic_id) {
+    try {
+      const svc = createServiceClient()
+      const { data: sa } = await svc
+        .from('super_admins')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (sa) redirect('/admin')
+    } catch {
+      // Se a service role falhar nao quebra o login normal — segue pro /login
+    }
+    redirect('/login')
+  }
 
   // Run clinic and users queries in PARALLEL (much faster!)
   const [clinicResult, usersResult] = await Promise.all([

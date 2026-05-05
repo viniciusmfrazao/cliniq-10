@@ -34,8 +34,8 @@ export default async function ConfigPage() {
     )
   }
 
-  // Apenas admin pode acessar configurações completas
-  const isAdmin = currentUser?.role === 'admin'
+  // Apenas admin/super_admin pode acessar configurações completas
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin'
 
   // Buscar dados da clinica
   const { data: clinic } = await supabase

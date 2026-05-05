@@ -17,8 +17,10 @@ export default async function EvaConfigPage() {
     .single()
 
   if (!userData?.clinic_id) redirect('/dashboard/config')
-  // Apenas admin pode editar configuracoes da Eva
-  if (userData.role !== 'admin') redirect('/dashboard/config')
+  // Apenas admin/super_admin pode editar configuracoes da Eva
+  if (userData.role !== 'admin' && userData.role !== 'super_admin') {
+    redirect('/dashboard/config')
+  }
 
   const { data: clinic } = await supabase
     .from('clinics')

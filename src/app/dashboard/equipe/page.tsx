@@ -14,8 +14,8 @@ export default async function EquipePage() {
     .eq('id', user.id)
     .single()
 
-  // Apenas admin pode acessar
-  if (currentUser?.role !== 'admin') {
+  // Apenas admin/super_admin pode acessar
+  if (currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin') {
     redirect('/dashboard')
   }
 

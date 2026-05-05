@@ -325,3 +325,87 @@ export async function getWebhookInfo(
     { method: 'GET' },
   )
 }
+
+/**
+ * Extrai a URL do webhook do retorno da Evolution.
+ * Versoes diferentes serializam de jeito diferente: pode vir em data.url,
+ * data.webhook.url, etc. Centralizamos aqui.
+ */
+export function extractWebhookUrl(info: WebhookInfo | null | undefined): string | null {
+  if (!info) return null
+  if (typeof info.url === 'string' && info.url) return info.url
+  const nested = (info as Record<string, unknown>).webhook
+  if (nested && typeof nested === 'object') {
+    const u = (nested as Record<string, unknown>).url
+    if (typeof u === 'string' && u) return u
+  }
+  return null
+}
+
+/**
+ * Compara duas URLs ignorando trailing slash. Retorna true se sao "iguais".
+ * Trata null/undefined como diferente.
+ */
+export function urlsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false
+  return a.replace(/\/$/, '') === b.replace(/\/$/, '')
+}
+
+/**
+ * Verifica se o webhook salvo na Evolution bate com o que o app espera.
+ * Se nao bater, AUTO-CORRIGE chamando setInstanceWebhook.
+ *
+ * Retorna info detalhada pra logs/banner:
+ *   - actualUrl: o que a Evolution tinha salvo (ou null se nao deu pra ler)
+ *   - expectedUrl: o que o app esperava
+ *   - drift: true quando estavam diferentes
+ *   - fixed: true quando conseguiu corrigir
+ *   - error: se algo deu errado em uma das chamadas
+ */
+export async function ensureWebhookHealthy(args: {
+  instanceName: string
+  webhookToken: string
+}): Promise<{
+  actualUrl: string | null
+  expectedUrl: string
+  drift: boolean
+  fixed: boolean
+  error: string | null
+}> {
+  const expectedUrl = buildWebhookUrl(args.instanceName, args.webhookToken)
+  const info = await getWebhookInfo(args.instanceName)
+  if (!info.ok) {
+    // Nao conseguiu ler — pode ser instance nova/404. Tenta setar mesmo assim.
+    const set = await setInstanceWebhook({
+      instanceName: args.instanceName,
+      webhookUrl: expectedUrl,
+    })
+    return {
+      actualUrl: null,
+      expectedUrl,
+      drift: true,
+      fixed: set.ok,
+      error: info.error,
+    }
+  }
+
+  const actualUrl = extractWebhookUrl(info.data)
+  const drift = !urlsMatch(actualUrl, expectedUrl)
+
+  if (!drift) {
+    return { actualUrl, expectedUrl, drift: false, fixed: false, error: null }
+  }
+
+  const set = await setInstanceWebhook({
+    instanceName: args.instanceName,
+    webhookUrl: expectedUrl,
+  })
+
+  return {
+    actualUrl,
+    expectedUrl,
+    drift: true,
+    fixed: set.ok,
+    error: set.ok ? null : set.error,
+  }
+}
