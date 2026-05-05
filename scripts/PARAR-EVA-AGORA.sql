@@ -9,7 +9,7 @@
 -- COMO USAR:
 --   1. Rode o BLOCO 1 imediatamente — para o stress sem deletar nada
 --   2. Confira o resultado do BLOCO 2 — quantos leads/conversas existem
---   3. Rode o BLOCO 3 quando tiver certeza — limpa tudo do stress test
+--   3. Pra limpar definitivo, rode depois `scripts/LIMPAR-STRESS-TEST.sql`
 -- ============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -58,36 +58,8 @@ SELECT
     AS total_leads_a_remover;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 🧹 BLOCO 3 — LIMPEZA COMPLETA (rode depois de confirmar bloco 2)
+-- 🧹 LIMPEZA COMPLETA → veja `scripts/LIMPAR-STRESS-TEST.sql`
 -- ─────────────────────────────────────────────────────────────────────────────
--- Remove conversas, leads e logs de webhook do stress test.
--- IMPORTANTE: descomente as 3 seções abaixo (remover -- ) pra executar.
-
--- BEGIN;
---
--- -- Deleta conversas (eva_conversations) dos phones do stress test
--- WITH stress_phones AS (
---   SELECT DISTINCT clinic_id, phone
---   FROM eva_conversations
---   WHERE metadata->>'evolution_message_id' LIKE 'STRESSTEST\_%' ESCAPE '\'
--- )
--- DELETE FROM eva_conversations c
--- USING stress_phones s
--- WHERE c.clinic_id = s.clinic_id AND c.phone = s.phone;
---
--- -- Deleta leads do stress test (incluindo os já marcados como lost no bloco 1)
--- DELETE FROM leads
--- WHERE lost_reason = 'stress_test_cleanup'
---    OR notes LIKE '%[BLOQUEIO]%stress_test%';
---
--- -- Deleta NPS responses associados (se houver)
--- DELETE FROM nps_responses
--- WHERE created_at > '2026-05-04 00:00:00-03'
---   AND created_at < '2026-05-04 00:30:00-03';
---
--- -- Deleta os logs de webhook do stress test (event=messages_upsert ou stresstest)
--- DELETE FROM evolution_webhook_logs
--- WHERE created_at > '2026-05-04 00:00:00-03'
---   AND created_at < '2026-05-04 00:30:00-03';
---
--- COMMIT;
+-- Esse arquivo PARA o spam. Pra DELETAR tudo do stress test, rode depois
+-- o script `scripts/LIMPAR-STRESS-TEST.sql` (já vem pronto pra executar,
+-- não precisa descomentar nada).
