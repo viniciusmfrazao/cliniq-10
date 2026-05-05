@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { mapEvolutionStateToStatus } from '@/lib/evolution'
 import { getSettings } from '@/lib/app-settings'
-import { fetchEvolutionMediaBase64, cleanMimeType, extFromMime } from '@/lib/whatsapp'
+import {
+  fetchEvolutionMediaBase64,
+  cleanMimeType,
+  extFromMime,
+  sendWhatsappMessage,
+} from '@/lib/whatsapp'
 
 /**
  * Webhook multi-tenant da Evolution.
@@ -577,10 +582,16 @@ export async function POST(
 
         if (!fromMe) {
           // Flag local: motivos pra pular o disparo da Eva nessa msg.
-          //   'auto_reply_off'  -> instância em modo manual (toggle off)
-          //   'nps_anti_eco'    -> resposta NPS recém-capturada (cooldown 5min)
-          //   'pause_until'     -> lead.eva_pause_until > now() (cooldown ativo)
-          let evaShouldSkip: false | 'auto_reply_off' | 'nps_anti_eco' | 'pause_until' = false
+          //   'auto_reply_off'    -> instância em modo manual (toggle off)
+          //   'nps_anti_eco'      -> resposta NPS recém-capturada (cooldown 5min)
+          //   'pause_until'       -> lead.eva_pause_until > now() (cooldown ativo)
+          //   'media_escalated'   -> midia (foto/audio/video) — humano cuida agora
+          let evaShouldSkip:
+            | false
+            | 'auto_reply_off'
+            | 'nps_anti_eco'
+            | 'pause_until'
+            | 'media_escalated' = false
           // Janela do anti-eco do NPS: 5 min depois da nota, Eva fica calada
           const NPS_COOLDOWN_MS = 5 * 60 * 1000
           let npsCooldownUntil: string | null = null
@@ -730,10 +741,115 @@ export async function POST(
             }
           }
 
-          // Disparo da Eva. Pula em 3 cenários:
+          // ─── MÍDIA RECEBIDA: escalar pra humano ─────────────────────────
+          // A Eva nao consegue ouvir audio, ver imagem ou ler video/documento
+          // hoje. Antes ela recebia "🎤 Mensagem de voz" como texto e respondia
+          // no escuro, gerando confusao. Agora detectamos midia, mandamos uma
+          // resposta padrao avisando que a equipe vai assumir, e marcamos o
+          // lead como needs_human_review pra aparecer destacado no CRM.
+          //
+          // Excecao: imagem/video/documento COM caption nao-vazio. Nesse caso
+          // a Eva consegue responder a duvida do caption (ela nao precisa ver
+          // a imagem em si, so o texto que veio junto).
+          const isMediaToEscalate =
+            (parsed.kind === 'audio' ||
+              parsed.kind === 'image' ||
+              parsed.kind === 'video' ||
+              parsed.kind === 'document' ||
+              parsed.kind === 'sticker') &&
+            // pra image/video/document: so escala se NAO tem caption util
+            (parsed.kind === 'audio' ||
+              parsed.kind === 'sticker' ||
+              !(parsed.text && parsed.text.trim().length >= 3))
+
+          if (isMediaToEscalate) {
+            const mediaLabel =
+              parsed.kind === 'audio'
+                ? 'mensagem de voz'
+                : parsed.kind === 'image'
+                  ? 'foto'
+                  : parsed.kind === 'video'
+                    ? 'vídeo'
+                    : parsed.kind === 'document'
+                      ? 'documento'
+                      : 'figurinha'
+
+            const autoReply =
+              parsed.kind === 'sticker'
+                ? null // sticker nao precisa de resposta automatica
+                : `Recebi sua ${mediaLabel}! Sou a assistente virtual e ainda não consigo ` +
+                  `${parsed.kind === 'audio' ? 'escutar áudios' : 'analisar arquivos'} aqui. ` +
+                  `Já estou avisando alguém da nossa equipe pra te responder com cuidado, tá? 💜`
+
+            // Envia auto-resposta (best-effort — se falhar, segue o jogo)
+            if (autoReply) {
+              try {
+                const sendRes = await sendWhatsappMessage({
+                  clinicId,
+                  phone,
+                  message: autoReply,
+                })
+                if (sendRes.ok) {
+                  debugTrace.push(`media auto-reply sent (kind=${parsed.kind})`)
+                  // Registra a resposta no historico da conversa
+                  await svc.from('eva_conversations').insert({
+                    clinic_id: clinicId,
+                    phone,
+                    role: 'assistant',
+                    content: autoReply,
+                    metadata: {
+                      kind: 'text',
+                      auto_reply_for_media: parsed.kind,
+                      generated_by: 'media_escalation',
+                    },
+                  })
+                } else {
+                  internalErrors.push(
+                    `media auto-reply failed: ${sendRes.error}`,
+                  )
+                }
+              } catch (e) {
+                internalErrors.push(
+                  `media auto-reply threw: ${e instanceof Error ? e.message : String(e)}`,
+                )
+              }
+            }
+
+            // Marca o lead pra atendimento humano com motivo claro.
+            // (Sticker tambem escala — eh sinal de que o lead precisa de atencao)
+            const reviewReason = 'media_recebida'
+            const reviewDetails =
+              `Lead enviou ${mediaLabel}` +
+              (parsed.text ? ` com legenda: "${parsed.text.slice(0, 200)}"` : '') +
+              (mediaUrl ? ` — Mídia: ${mediaUrl}` : '')
+
+            const { error: escErr } = await svc
+              .from('leads')
+              .update({
+                needs_human_review: true,
+                human_review_reason: reviewReason,
+                human_review_details: reviewDetails,
+                human_review_at: new Date().toISOString(),
+                last_contact_at: new Date().toISOString(),
+              })
+              .eq('clinic_id', clinicId)
+              .eq('phone', phone)
+            if (escErr) {
+              internalErrors.push(`escalate lead (media): ${escErr.message}`)
+            } else {
+              debugTrace.push(`lead escalated to human (media: ${parsed.kind})`)
+            }
+
+            // Pula completamente o forward pra Eva — humano cuida agora
+            evaShouldSkip = 'media_escalated'
+            debugTrace.push('eva skip: media_escalated_to_human')
+          }
+
+          // Disparo da Eva. Pula em 4 cenários:
           //   - toggle auto/manual desligado pra essa instância
           //   - resposta NPS recém-capturada (5min de silêncio anti-eco)
           //   - lead.eva_pause_until ainda no futuro (cooldown ativo)
+          //   - midia recebida (audio/foto sem caption) — escalado pra humano
           if (evaShouldSkip) {
             debugTrace.push(`forward Donna SKIPPED (${evaShouldSkip})`)
           } else {

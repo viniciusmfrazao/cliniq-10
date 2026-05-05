@@ -77,6 +77,7 @@ const HUMAN_REVIEW_REASONS: Record<string, { label: string; emoji: string }> = {
   reagendamento: { label: 'Reagendamento', emoji: '🔄' },
   reclamacao: { label: 'Reclamação', emoji: '⚠️' },
   duvida_complexa: { label: 'Dúvida', emoji: '❓' },
+  media_recebida: { label: 'Foto/Áudio', emoji: '📷' },
 }
 
 type CRMSettings = {
@@ -159,6 +160,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [showSettings, setShowSettings] = useState(false)
+  const [showLegend, setShowLegend] = useState(false)
   // Drag & drop nativo HTML5 — usado pra mover lead entre colunas do Kanban
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null)
   const [draggingFromStage, setDraggingFromStage] = useState<string | null>(null)
@@ -210,9 +212,14 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     scheduled: leads.filter(l => l.status === 'scheduled').length,
     converted: leads.filter(l => l.status === 'converted').length,
     lost: leads.filter(l => l.status === 'lost').length,
-    conversionRate: leads.length > 0 
-      ? Math.round((leads.filter(l => l.status === 'converted').length / leads.filter(l => ['converted', 'lost'].includes(l.status)).length) * 100) || 0
-      : 0,
+    // Conversao: % do total de leads que viraram cliente.
+    // (Antes era convertidos/(convertidos+perdidos), o que dava 100% enganoso
+    //  quando os outros leads ainda estavam em conversa. Agora reflete a
+    //  performance real do funil considerando todo mundo.)
+    conversionRate:
+      leads.length > 0
+        ? Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)
+        : 0,
     // Eva IA stats — temperatura do lead (priority calculada pela IA)
     hotLeads: leads.filter(l => l.ai_priority === 'hot').length,
     warmLeads: leads.filter(l => l.ai_priority === 'warm').length,
@@ -366,6 +373,14 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowLegend(true)}
+            className="px-3 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors flex items-center gap-1.5"
+            title="O que significa cada cor, badge e estágio"
+          >
+            <span>📖</span>
+            <span className="hidden sm:inline">Como ler</span>
+          </button>
+          <button
             onClick={() => setShowSettings(true)}
             className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
             title="Configurações do CRM"
@@ -381,6 +396,8 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           </button>
         </div>
       </div>
+
+      {showLegend && <LegendModal onClose={() => setShowLegend(false)} />}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
@@ -467,9 +484,14 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           <p className="text-xs text-slate-500">Novos</p>
         </button>
         
-        <div className="card p-3 bg-gradient-to-br from-emerald-50 to-teal-50">
+        <div
+          className="card p-3 bg-gradient-to-br from-emerald-50 to-teal-50"
+          title={`${stats.converted} de ${stats.total} leads viraram clientes (${stats.conversionRate}%).`}
+        >
           <p className="text-2xl font-bold text-emerald-600">{stats.conversionRate}%</p>
-          <p className="text-xs text-emerald-600">Conversão</p>
+          <p className="text-xs text-emerald-600">
+            Conversão <span className="text-emerald-500">({stats.converted}/{stats.total})</span>
+          </p>
         </div>
         
         {stats.estimatedValue > 0 && (
@@ -1368,6 +1390,166 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Modal "Como ler o CRM" — referência visual de cores, badges e estágios.
+ * Aparece quando o admin/secretaria clica no botao 📖 do header. Vale tanto
+ * como onboarding pra membros novos quanto como cola pra quem esquece o
+ * que cada termo significa.
+ */
+function LegendModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full md:max-w-2xl md:rounded-2xl rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              📖 Como ler o CRM
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Entenda o que cada cor, badge e estágio significa</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <Icon name="x" className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-6">
+          {/* Temperatura */}
+          <section>
+            <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              🌡️ Temperatura do lead
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              A Eva analisa cada conversa e classifica o lead em 1 dos 3 níveis de intenção de compra.
+              Use esse sinal pra <strong>priorizar quem ligar/atender primeiro</strong>.
+            </p>
+            <div className="space-y-2">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-br from-red-50 to-orange-50 border border-red-100">
+                <span className="text-2xl flex-shrink-0">🔥</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-red-700">Quente — pronto pra fechar</p>
+                  <p className="text-xs text-red-600 mt-0.5">
+                    Pediu preço, perguntou sobre agendamento, formas de pagamento ou demonstrou urgência.
+                    <strong> Ataque já</strong> — toda hora perdida aumenta a chance de o lead ir pra concorrência.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-100">
+                <span className="text-2xl flex-shrink-0">☀️</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-700">Morno — está pesquisando</p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    Demonstrou interesse mas ainda explora opções (pediu informações gerais, está
+                    comparando, sem urgência clara). <strong>Nutra com mais info</strong> e mostre
+                    diferenciais — tende a virar quente em alguns dias.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-100">
+                <span className="text-2xl flex-shrink-0">❄️</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-blue-700">Frio — só curiosidade</p>
+                  <p className="text-xs text-blue-600 mt-0.5">
+                    Curioso, sem urgência, fazendo pesquisa inicial ou perguntas vagas. Vale
+                    <strong> nutrir com conteúdo</strong> ao longo do tempo — pode esquentar quando o
+                    momento certo chegar.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Follow-up */}
+          <section>
+            <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              ⏰ Follow-up automático da Eva
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Quando o lead para de responder, a Eva manda lembretes em sequência crescente.
+              Cada badge no card mostra <strong>quanto tempo falta pro próximo lembrete</strong>.
+            </p>
+            <div className="space-y-1.5 text-xs">
+              <LegendRow color="bg-amber-100 text-amber-700 border border-amber-200" label="🟡 Aguardando 2h" desc="1ª tentativa — Eva acabou de mandar a primeira mensagem" />
+              <LegendRow color="bg-orange-100 text-orange-700 border border-orange-200" label="🟠 Aguardando 24h" desc="2ª tentativa — lead viu mas não respondeu" />
+              <LegendRow color="bg-orange-100 text-orange-700 border border-orange-200" label="🟠 Aguardando 48h" desc="3ª tentativa — silêncio prolongado" />
+              <LegendRow color="bg-red-100 text-red-700 border border-red-200" label="🔴 Aguardando 5 dias" desc="4ª tentativa — Eva está dando uma última chance" />
+              <LegendRow color="bg-red-200 text-red-900 border border-red-300" label="⚫ Última chance · 10d" desc="5ª e última tentativa — depois disso o lead vai pra perdido se não responder" />
+            </div>
+          </section>
+
+          {/* Atendimento humano */}
+          <section>
+            <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              🚨 Atendimento humano
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Quando a Eva detecta que o lead precisa de uma pessoa real, ela <strong>pausa as
+              respostas automáticas</strong> e marca o card com borda rosa pra você assumir.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <LegendRow color="bg-rose-50 text-rose-700 border border-rose-200" label="🚫 Cancelamento" desc="Lead quer cancelar consulta/procedimento" />
+              <LegendRow color="bg-rose-50 text-rose-700 border border-rose-200" label="🔄 Reagendamento" desc="Quer trocar data/horário" />
+              <LegendRow color="bg-rose-50 text-rose-700 border border-rose-200" label="⚠️ Reclamação" desc="Manifestou insatisfação" />
+              <LegendRow color="bg-rose-50 text-rose-700 border border-rose-200" label="❓ Dúvida complexa" desc="Pergunta clínica/técnica que precisa de profissional" />
+              <LegendRow color="bg-rose-50 text-rose-700 border border-rose-200" label="📷 Mídia recebida" desc="Lead mandou foto/áudio/vídeo — Eva não consegue analisar conteúdo" />
+            </div>
+          </section>
+
+          {/* Estágios do funil */}
+          <section>
+            <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              🎯 Estágios do funil (colunas do Kanban)
+            </h3>
+            <div className="space-y-1.5 text-xs">
+              <LegendRow color="bg-slate-100 text-slate-700 border border-slate-200" label="📥 Novo Lead" desc="Acabou de chegar — ainda não foi contatado" />
+              <LegendRow color="bg-blue-100 text-blue-700 border border-blue-200" label="💬 Em Conversa" desc="Eva ou recepção estão trocando mensagens com o lead" />
+              <LegendRow color="bg-amber-100 text-amber-700 border border-amber-200" label="📅 Agendado" desc="Já marcou consulta — só falta comparecer" />
+              <LegendRow color="bg-emerald-100 text-emerald-700 border border-emerald-200" label="✅ Cliente" desc="Atendeu — virou paciente da clínica" />
+              <LegendRow color="bg-red-100 text-red-700 border border-red-200" label="❌ Perdido" desc="Não respondeu mais ou desistiu — fica fora do funil ativo" />
+            </div>
+          </section>
+
+          {/* Dica */}
+          <div className="p-3 rounded-lg bg-violet-50 border border-violet-100">
+            <p className="text-xs text-violet-900">
+              💡 <strong>Dica:</strong> arraste o card entre as colunas pra mudar de estágio.
+              Clique em qualquer card pra ver o histórico completo, responder e converter em paciente.
+            </p>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-slate-100 px-5 py-3">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-medium text-sm"
+          >
+            Entendi
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LegendRow({ color, label, desc }: { color: string; label: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50">
+      <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${color}`}>
+        {label}
+      </span>
+      <span className="text-slate-600 flex-1">{desc}</span>
     </div>
   )
 }
