@@ -740,7 +740,7 @@ export async function POST(
             // Donna só recebe texto/caption — pra mídia pura, sem caption,
             // mandamos um placeholder pra que ela saiba que rolou algo.
             try {
-              await forwardToDonna({
+              const fwd = await forwardToDonna({
                 clinicId,
                 instance,
                 phone,
@@ -751,10 +751,18 @@ export async function POST(
                 kind: parsed.kind,
                 mediaUrl,
               })
-              debugTrace.push('forward Donna ok')
+              if (fwd.ok) {
+                debugTrace.push(
+                  `forward Donna ok (engine=${fwd.engine}, status=${fwd.status}${fwd.silentFail ? ', silentFail=' + fwd.silentFail : ''}${fwd.sent === false ? ', NOT_SENT' : ''})`,
+                )
+              } else {
+                internalErrors.push(
+                  `forward Donna FAIL (engine=${fwd.engine}, status=${fwd.status}): ${fwd.error?.slice(0, 400) ?? 'sem detalhes'}`,
+                )
+              }
             } catch (err) {
               internalErrors.push(
-                `forward Donna: ${err instanceof Error ? err.message : String(err)}`,
+                `forward Donna threw: ${err instanceof Error ? err.message : String(err)}`,
               )
             }
           }
@@ -799,6 +807,17 @@ export async function POST(
   return NextResponse.json({ ok: true })
 }
 
+type ForwardResult = {
+  ok: boolean
+  engine: 'edge' | 'n8n' | 'none'
+  status: number
+  error?: string
+  /** Se a edge fez silentFail (lead em human review), aparece aqui */
+  silentFail?: string
+  /** Se a edge confirmou envio pela Evolution (false = falhou) */
+  sent?: boolean
+}
+
 async function forwardToDonna(payload: {
   clinicId: string
   instance: string
@@ -809,7 +828,7 @@ async function forwardToDonna(payload: {
   pushName?: string
   kind?: ParsedKind
   mediaUrl?: string | null
-}) {
+}): Promise<ForwardResult> {
   // Roteador: lê app_settings.eva_engine pra decidir entre n8n (legado) ou
   // Edge Function eva-process (novo). Default: n8n (sem mudança).
   const settings = await getSettings([
@@ -822,16 +841,17 @@ async function forwardToDonna(payload: {
   const engine = (settings.eva_engine || 'n8n').toLowerCase()
 
   if (engine === 'edge') {
-    await forwardToEdgeFunction(payload, {
+    return forwardToEdgeFunction(payload, {
       url: settings.eva_edge_url || '',
       secret: settings.eva_internal_secret || '',
     })
-    return
   }
 
   // ─── Legado: n8n ────────────────────────────────────────────────────────
   const { n8n_donna_url, n8n_donna_secret } = settings
-  if (!n8n_donna_url) return
+  if (!n8n_donna_url) {
+    return { ok: false, engine: 'none', status: 0, error: 'n8n_donna_url ausente' }
+  }
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (n8n_donna_secret) headers['x-cliniq-secret'] = n8n_donna_secret
@@ -849,30 +869,44 @@ async function forwardToDonna(payload: {
               ? { documentMessage: { caption: payload.message, url: payload.mediaUrl ?? undefined } }
               : { conversation: payload.message }
 
-  await fetch(n8n_donna_url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      event: 'messages.upsert',
-      instance: payload.instance,
-      clinic_id: payload.clinicId,
-      data: {
-        key: {
-          remoteJid: payload.remoteJid,
-          fromMe: false,
-          id: payload.messageId ?? `cliniq-${Date.now()}`,
+  try {
+    const r = await fetch(n8n_donna_url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        event: 'messages.upsert',
+        instance: payload.instance,
+        clinic_id: payload.clinicId,
+        data: {
+          key: {
+            remoteJid: payload.remoteJid,
+            fromMe: false,
+            id: payload.messageId ?? `cliniq-${Date.now()}`,
+          },
+          message: evolutionLikeMessage,
+          pushName: payload.pushName ?? null,
+          messageType: payload.kind ?? 'text',
         },
-        message: evolutionLikeMessage,
-        pushName: payload.pushName ?? null,
-        messageType: payload.kind ?? 'text',
-      },
-      _cliniq: {
-        kind: payload.kind ?? 'text',
-        media_url: payload.mediaUrl ?? null,
-        forwarded_from: 'cliniq-app',
-      },
-    }),
-  })
+        _cliniq: {
+          kind: payload.kind ?? 'text',
+          media_url: payload.mediaUrl ?? null,
+          forwarded_from: 'cliniq-app',
+        },
+      }),
+    })
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '')
+      return { ok: false, engine: 'n8n', status: r.status, error: txt.slice(0, 400) }
+    }
+    return { ok: true, engine: 'n8n', status: r.status }
+  } catch (err) {
+    return {
+      ok: false,
+      engine: 'n8n',
+      status: 0,
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
 }
 
 /**
@@ -894,47 +928,84 @@ async function forwardToEdgeFunction(
     messageId: string | null
   },
   cfg: { url: string; secret: string },
-) {
+): Promise<ForwardResult> {
   if (!cfg.url) {
-    console.error('[eva-edge] eva_edge_url nao configurado em app_settings')
-    return
+    return { ok: false, engine: 'edge', status: 0, error: 'eva_edge_url ausente em app_settings' }
   }
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceRoleKey) {
-    console.error('[eva-edge] SUPABASE_SERVICE_ROLE_KEY ausente no env')
-    return
+    return { ok: false, engine: 'edge', status: 0, error: 'SUPABASE_SERVICE_ROLE_KEY ausente no env do Vercel' }
   }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    // O gateway do Supabase exige tanto `apikey` quanto `Authorization` em
-    // alguns projetos novos. Mandar os dois evita falhas silenciosas de auth.
     apikey: serviceRoleKey,
     Authorization: `Bearer ${serviceRoleKey}`,
   }
   if (cfg.secret) headers['x-eva-secret'] = cfg.secret
 
-  // Payload limpo (Edge Function valida)
-  const r = await fetch(cfg.url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      clinicId: payload.clinicId,
-      instance: payload.instance,
-      phone: payload.phone,
-      userText: payload.message,
-      customerName: payload.pushName ?? null,
-      kind: payload.kind ?? 'text',
-      mediaUrl: payload.mediaUrl ?? null,
-      messageId: payload.messageId ?? null,
-    }),
-  })
+  try {
+    const r = await fetch(cfg.url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        clinicId: payload.clinicId,
+        instance: payload.instance,
+        phone: payload.phone,
+        userText: payload.message,
+        customerName: payload.pushName ?? null,
+        kind: payload.kind ?? 'text',
+        mediaUrl: payload.mediaUrl ?? null,
+        messageId: payload.messageId ?? null,
+      }),
+    })
 
-  // Não esperamos resposta crítica — a Edge Function envia direto pra Evolution.
-  // Loga apenas falhas explícitas pro debug.
-  if (!r.ok) {
     const txt = await r.text().catch(() => '')
-    console.error(`[eva-edge] resposta ${r.status}: ${txt.slice(0, 400)}`)
+
+    if (!r.ok) {
+      console.error(`[eva-edge] resposta ${r.status}: ${txt.slice(0, 400)}`)
+      return { ok: false, engine: 'edge', status: r.status, error: txt.slice(0, 400) }
+    }
+
+    // Body pode trazer { silentFail, sent, errors } — captura pra log
+    let silentFail: string | undefined
+    let sent: boolean | undefined
+    let bodyErrors: string | undefined
+    try {
+      const parsed = JSON.parse(txt) as {
+        silentFail?: boolean
+        reason?: string
+        sent?: boolean
+        errors?: string[]
+      }
+      if (parsed.silentFail) silentFail = parsed.reason ?? 'silent_fail'
+      if (typeof parsed.sent === 'boolean') sent = parsed.sent
+      if (Array.isArray(parsed.errors) && parsed.errors.length) {
+        bodyErrors = parsed.errors.slice(0, 3).join(' | ').slice(0, 300)
+      }
+    } catch {
+      // body não é JSON — sem problemas
+    }
+
+    if (sent === false || bodyErrors) {
+      return {
+        ok: false,
+        engine: 'edge',
+        status: r.status,
+        silentFail,
+        sent,
+        error: `body errors: ${bodyErrors ?? 'sent=false'}`,
+      }
+    }
+
+    return { ok: true, engine: 'edge', status: r.status, silentFail, sent }
+  } catch (err) {
+    return {
+      ok: false,
+      engine: 'edge',
+      status: 0,
+      error: err instanceof Error ? err.message : String(err),
+    }
   }
 }
 
