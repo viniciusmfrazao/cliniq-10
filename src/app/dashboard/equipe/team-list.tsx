@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import PermissionsModal from './permissions-modal'
 import SchedulesModal from './schedules-modal'
 import UnavailabilityModal from './unavailability-modal'
 import Icon from '@/components/ui/Icon'
@@ -66,7 +66,6 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState<string | null>(null)
-  const [editingPermissions, setEditingPermissions] = useState<Member | null>(null)
   const [editingSchedules, setEditingSchedules] = useState<Member | null>(null)
   const [editingUnavail, setEditingUnavail] = useState<Member | null>(null)
 
@@ -203,13 +202,13 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                           </button>
                         </>
                       )}
-                      <button
-                        onClick={() => setEditingPermissions(member)}
+                      <Link
+                        href={`/dashboard/equipe/${member.id}/permissoes`}
                         className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
                         title="Permissões"
                       >
                         <Icon name="settings" className="w-4 h-4" />
-                      </button>
+                      </Link>
                       {member.role !== 'admin' && (
                         <button
                           onClick={() => handleDeactivate(member.id, member.name)}
@@ -227,17 +226,6 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
           </div>
         ))}
       </div>
-
-      {editingPermissions && (
-        <PermissionsModal
-          member={editingPermissions}
-          onClose={() => setEditingPermissions(null)}
-          onSave={() => {
-            setEditingPermissions(null)
-            router.refresh()
-          }}
-        />
-      )}
 
       {editingSchedules && (
         <SchedulesModal

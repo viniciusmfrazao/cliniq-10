@@ -8,7 +8,17 @@ import Icon from '@/components/ui/Icon'
 type Initial = {
   enabled: boolean
   template: string
+  imediato: boolean
+  delayMinutes: number
 }
+
+const DELAY_OPTIONS = [
+  { value: 15, label: '15 minutos' },
+  { value: 30, label: '30 minutos' },
+  { value: 60, label: '1 hora' },
+  { value: 120, label: '2 horas' },
+  { value: 240, label: '4 horas' },
+]
 
 type Props = {
   clinicId: string
@@ -113,6 +123,8 @@ export default function NpsForm({ clinicId, clinicName, initial }: Props) {
   const supabase = createClient()
   const [enabled, setEnabled] = useState(initial.enabled)
   const [template, setTemplate] = useState(initial.template)
+  const [imediato, setImediato] = useState(initial.imediato)
+  const [delayMinutes, setDelayMinutes] = useState(initial.delayMinutes)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [testPhone, setTestPhone] = useState('')
@@ -147,6 +159,8 @@ export default function NpsForm({ clinicId, clinicName, initial }: Props) {
             clinic_id: clinicId,
             nps_pos_atendimento: enabled,
             template_nps: template,
+            nps_imediato: imediato,
+            nps_delay_minutes: delayMinutes,
           },
           { onConflict: 'clinic_id' },
         )
@@ -214,28 +228,95 @@ export default function NpsForm({ clinicId, clinicName, initial }: Props) {
         <div className="flex-1">
           <p className="font-semibold text-slate-900">Ativar pesquisa NPS automática</p>
           <p className="text-sm text-slate-500">
-            Quando ligado, todo dia às 11h o sistema pergunta de 1 a 5 pra cada paciente que
-            teve atendimento concluído ontem. A nota é capturada automaticamente quando o
-            paciente responde só um número.
+            Quando ligado, o sistema pergunta de 1 a 5 pra cada paciente que teve atendimento
+            concluído. A nota é capturada automaticamente quando o paciente responde só um número.
+            Você escolhe se o envio é logo após o atendimento ou no dia seguinte às 11h.
           </p>
         </div>
       </label>
 
       <div className={enabled ? '' : 'opacity-50 pointer-events-none'}>
-        {/* Horário fixo */}
-        <div className="space-y-2 mb-6">
-          <label className="block text-sm font-medium text-slate-900">
-            Horário do envio
-            <span className="ml-2 text-xs text-slate-500">(fuso de Brasília)</span>
-          </label>
-          <div className="flex items-center gap-3">
-            <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium">
-              11:00
-            </div>
-            <p className="text-xs text-slate-500">
-              Envio diário às 11h da manhã, pra atendimentos concluídos no dia anterior.
-            </p>
+        {/* Modo de envio: imediato ou cron diário */}
+        <div className="space-y-3 mb-6">
+          <label className="block text-sm font-medium text-slate-900">Quando enviar?</label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setImediato(false)}
+              className={`text-left p-4 rounded-xl border-2 transition-colors ${
+                !imediato
+                  ? 'border-emerald-500 bg-emerald-50'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <div
+                  className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
+                    !imediato ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'
+                  }`}
+                >
+                  {!imediato && <div className="w-1.5 h-1.5 bg-white rounded-full m-auto mt-0.5" />}
+                </div>
+                <p className="font-semibold text-sm text-slate-900">No dia seguinte às 11h</p>
+              </div>
+              <p className="text-xs text-slate-500 ml-6">
+                Cron diário às 11h da manhã. Bom pra deixar o paciente "esfriar" e responder com calma.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setImediato(true)}
+              className={`text-left p-4 rounded-xl border-2 transition-colors ${
+                imediato
+                  ? 'border-emerald-500 bg-emerald-50'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <div
+                  className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
+                    imediato ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'
+                  }`}
+                >
+                  {imediato && <div className="w-1.5 h-1.5 bg-white rounded-full m-auto mt-0.5" />}
+                </div>
+                <p className="font-semibold text-sm text-slate-900">Logo após o atendimento</p>
+              </div>
+              <p className="text-xs text-slate-500 ml-6">
+                Dispara minutos depois do atendimento ser marcado como "Realizado". Avaliação mais quente.
+              </p>
+            </button>
           </div>
+
+          {imediato && (
+            <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+              <label className="block text-xs font-medium text-blue-900 mb-2">
+                Esperar quanto tempo após finalizar?
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {DELAY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setDelayMinutes(opt.value)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      delayMinutes === opt.value
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-blue-700 hover:bg-blue-100 border border-blue-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-blue-700 mt-2">
+                Recomendado: <strong>30 minutos</strong> — dá tempo do paciente sair da clínica
+                e ainda assim recebe enquanto a experiência está fresca.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Sugestões */}

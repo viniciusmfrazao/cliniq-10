@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { FACTORY_DEFAULTS } from '@/lib/permissions'
 
 export async function POST(request: Request) {
   try {
@@ -107,6 +108,26 @@ export async function POST(request: Request) {
 
     const userId = newUser.user.id
 
+    // Aplica permissoes do papel — primeiro tenta defaults customizadas
+    // pela clinica em clinic_role_defaults; se nao tiver, usa factory.
+    let inheritedPermissions: string[] | null = null
+    if (role !== 'admin') {
+      const { data: roleDefault } = await supabaseAdmin
+        .from('clinic_role_defaults')
+        .select('permissions')
+        .eq('clinic_id', clinicId)
+        .eq('role', role)
+        .maybeSingle()
+
+      if (roleDefault?.permissions && Array.isArray(roleDefault.permissions)) {
+        inheritedPermissions = roleDefault.permissions as string[]
+      } else {
+        inheritedPermissions = (FACTORY_DEFAULTS as Record<string, string[]>)[role] ?? []
+      }
+    } else {
+      inheritedPermissions = ['all']
+    }
+
     // Inserir na tabela users
     const { error: dbError } = await supabaseAdmin.from('users').insert({
       id: userId,
@@ -115,6 +136,7 @@ export async function POST(request: Request) {
       email,
       role,
       active: true,
+      permissions: inheritedPermissions,
     })
 
     if (dbError) {

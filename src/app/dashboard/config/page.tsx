@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import ClinicSettings from './clinic-settings'
-import PermissionsSettings from './permissions-settings'
 import ThemeSelector from './theme-selector'
 
 export default async function ConfigPage() {
@@ -45,12 +44,6 @@ export default async function ConfigPage() {
     .eq('id', currentUser.clinic_id)
     .single()
 
-  // Buscar permissoes (se existir tabela roles_permissions)
-  const { data: permissions } = await supabase
-    .from('roles_permissions')
-    .select('*')
-    .eq('clinic_id', currentUser.clinic_id)
-
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
@@ -74,8 +67,22 @@ export default async function ConfigPage() {
             </div>
 
             <div className="card p-6">
-              <h2 className="text-sm font-semibold text-slate-900 mb-4">🔐 Permissoes por funcao</h2>
-              <PermissionsSettings clinicId={currentUser.clinic_id} permissions={permissions || []} />
+              <h2 className="text-sm font-semibold text-slate-900 mb-4">🔐 Permissões e Acessos</h2>
+              <Link
+                href="/dashboard/config/permissoes"
+                className="flex items-center gap-4 p-4 bg-gradient-to-br from-violet-50 to-indigo-50 hover:from-violet-100 hover:to-indigo-100 rounded-xl transition-colors border border-violet-200"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center shadow">
+                  <Icon name="shield" className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-violet-900">Permissões por papel</p>
+                  <p className="text-xs text-violet-700">
+                    Define o que cada cargo (médico, recepcionista, etc) acessa por padrão
+                  </p>
+                </div>
+                <Icon name="chevronRight" className="w-5 h-5 text-violet-400" />
+              </Link>
             </div>
           </>
         )}

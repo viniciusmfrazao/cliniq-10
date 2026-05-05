@@ -59,6 +59,8 @@ export default async function AutomacoesPage() {
     template_recall?: string | null
     nps_pos_atendimento?: boolean | null
     template_nps?: string | null
+    nps_imediato?: boolean | null
+    nps_delay_minutes?: number | null
   }
   const auto = (automation || null) as AutomationRow | null
 
@@ -201,7 +203,7 @@ export default async function AutomacoesPage() {
           <div className="flex-1">
             <h2 className="font-semibold text-slate-900">NPS pós-atendimento</h2>
             <p className="text-sm text-slate-500">
-              Pesquisa de satisfação automática 1 dia depois do atendimento (11h)
+              Pesquisa de satisfação automática — escolha enviar imediatamente ou no dia seguinte
             </p>
           </div>
         </div>
@@ -212,6 +214,8 @@ export default async function AutomacoesPage() {
           initial={{
             enabled: auto?.nps_pos_atendimento ?? false,
             template: auto?.template_nps || '',
+            imediato: auto?.nps_imediato ?? false,
+            delayMinutes: auto?.nps_delay_minutes ?? 30,
           }}
         />
       </div>

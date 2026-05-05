@@ -17,6 +17,10 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/cron/nps-imediato",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/eva-followup",
       "schedule": "*/30 * * * *"
     }
