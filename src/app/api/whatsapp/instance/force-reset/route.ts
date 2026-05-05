@@ -7,6 +7,7 @@ import {
   deleteInstance,
   generateInstanceName,
   getQRCode,
+  setInstanceWebhook,
 } from '@/lib/evolution'
 
 /**
@@ -74,6 +75,18 @@ export async function POST() {
       },
       { status: 502 },
     )
+  }
+
+  // 4b) Algumas versoes da Evolution ignoram o webhook embutido em /instance/create
+  //     e exigem POST separado em /webhook/set. Garantimos chamando explicitamente.
+  const webhookSet = await setInstanceWebhook({
+    instanceName: newInstanceName,
+    webhookUrl,
+  })
+  if (!webhookSet.ok) {
+    console.warn('[force-reset] setInstanceWebhook falhou:', webhookSet.error)
+    // Nao falhamos a operacao — instance ja foi criada. O usuario pode chamar
+    // "Refixar webhook" no painel se necessario.
   }
 
   // 5) Atualiza clinic_whatsapp pra apontar pra nova instance
