@@ -105,10 +105,14 @@ ALTER TABLE admin_plans
 COMMENT ON COLUMN admin_plans.max_whatsapp_numbers IS
   'Quantos numeros WhatsApp uma clinica deste plano pode conectar.';
 
--- Defaults sugeridos por plano (so atualiza se ainda for 1, nao sobrescreve customizacao)
+-- Defaults sugeridos por plano (matching pelo NAME, tolerante a variacoes
+-- pt/en — so atualiza se ainda for 1, nao sobrescreve customizacao manual).
 UPDATE admin_plans SET max_whatsapp_numbers = 1
-  WHERE LOWER(slug) = 'starter' AND max_whatsapp_numbers <= 1;
+  WHERE LOWER(name) IN ('starter','iniciante','basico','basic','free')
+    AND max_whatsapp_numbers <= 1;
 UPDATE admin_plans SET max_whatsapp_numbers = 2
-  WHERE LOWER(slug) = 'professional' AND max_whatsapp_numbers <= 1;
+  WHERE LOWER(name) IN ('professional','profissional','pro','plus','padrao','padrão')
+    AND max_whatsapp_numbers <= 1;
 UPDATE admin_plans SET max_whatsapp_numbers = 10
-  WHERE LOWER(slug) = 'enterprise' AND max_whatsapp_numbers <= 1;
+  WHERE LOWER(name) IN ('enterprise','empresarial','premium','master')
+    AND max_whatsapp_numbers <= 1;
