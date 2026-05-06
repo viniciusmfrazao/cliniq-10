@@ -37,12 +37,13 @@ export async function PATCH(request: Request) {
     query = query.eq('role_inbound', true)
   }
 
-  const { error: updErr, count } = await query.select('id', { count: 'exact' })
+  const { data: affectedRows, error: updErr } = await query.select('id')
 
   if (updErr) {
     return NextResponse.json({ error: updErr.message }, { status: 500 })
   }
-  if ((count ?? 0) === 0) {
+  const affected = affectedRows?.length ?? 0
+  if (affected === 0) {
     return NextResponse.json(
       { error: 'WhatsApp ainda não configurado' },
       { status: 404 },
@@ -52,6 +53,6 @@ export async function PATCH(request: Request) {
   return NextResponse.json({
     ok: true,
     auto_reply_enabled: body.enabled,
-    affected: count,
+    affected,
   })
 }
