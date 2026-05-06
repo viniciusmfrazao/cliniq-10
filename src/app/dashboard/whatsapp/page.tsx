@@ -133,6 +133,14 @@ export default function WhatsAppPage() {
   const [sending, setSending] = useState(false)
   const [config, setConfig] = useState<any>(null)
   const [patient, setPatient] = useState<any>(null)
+  // Status da Eva pra essa conversa especifica (lead). Quando humano assume
+  // (envia msg manual ou foi escalado), Eva fica calada ate clicar "Devolver".
+  const [leadEvaStatus, setLeadEvaStatus] = useState<{
+    paused: boolean
+    needsReview: boolean
+    reviewReason: string | null
+  }>({ paused: false, needsReview: false, reviewReason: null })
+  const [resumingEva, setResumingEva] = useState(false)
   const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle')
   // Toggle Eva auto/manual: true = Eva responde automaticamente,
   // false = Eva fica calada e secretária responde pelo painel.
@@ -351,6 +359,9 @@ export default function WhatsAppPage() {
   async function loadMessages(phone: string) {
     if (!clinicId) return
 
+    // Reset status da Eva pra essa nova conversa (evita flash do status anterior)
+    setLeadEvaStatus({ paused: false, needsReview: false, reviewReason: null })
+
     const { data: msgs } = await supabase
       .from('eva_conversations')
       .select('*')
@@ -405,6 +416,46 @@ export default function WhatsAppPage() {
       .maybeSingle()
 
     setPatient(patientData)
+
+    // Status do lead — Eva pausada / em revisão humana?
+    const { data: leadData } = await supabase
+      .from('leads')
+      .select('eva_pause_until, needs_human_review, human_review_reason')
+      .eq('clinic_id', clinicId)
+      .eq('phone', phone)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const pauseUntil = leadData?.eva_pause_until
+    const isPaused = !!(pauseUntil && new Date(pauseUntil).getTime() > Date.now())
+    setLeadEvaStatus({
+      paused: isPaused,
+      needsReview: leadData?.needs_human_review === true,
+      reviewReason: leadData?.human_review_reason ?? null,
+    })
+  }
+
+  async function resumeEva() {
+    if (!selectedConversation || resumingEva) return
+    setResumingEva(true)
+    try {
+      const res = await fetch('/api/whatsapp/resume-eva', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: selectedConversation.phone }),
+      })
+      if (res.ok) {
+        setLeadEvaStatus({ paused: false, needsReview: false, reviewReason: null })
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(`Não foi possível devolver pra Eva: ${err.error || 'erro desconhecido'}`)
+      }
+    } catch (e) {
+      alert(`Erro: ${e instanceof Error ? e.message : 'desconhecido'}`)
+    } finally {
+      setResumingEva(false)
+    }
   }
 
   /**
@@ -455,6 +506,8 @@ export default function WhatsAppPage() {
         alert(`Falha ao enviar: ${data.error || response.status}`)
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
+        // Envio manual pausa Eva nessa conversa (UI imediata; backend ja salvou)
+        setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
       }
     } catch (error) {
       console.error('Error sending:', error)
@@ -501,6 +554,7 @@ export default function WhatsAppPage() {
         alert(`Falha ao enviar imagem: ${data.error || response.status}`)
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
+        setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
       }
     } catch (error) {
       console.error('Error sending image:', error)
@@ -545,6 +599,7 @@ export default function WhatsAppPage() {
         alert(`Falha ao enviar áudio: ${data.error || response.status}`)
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
+        setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
       }
     } catch (error) {
       console.error('Error sending audio:', error)
@@ -705,6 +760,41 @@ export default function WhatsAppPage() {
                   </Link>
                 )}
               </div>
+
+              {/* Banner: Eva pausada (intervencao humana) */}
+              {(leadEvaStatus.paused || leadEvaStatus.needsReview) && (
+                <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/50 flex items-center gap-3">
+                  <span className="text-lg">🤝</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                      {leadEvaStatus.needsReview
+                        ? `Atendimento humano${leadEvaStatus.reviewReason ? ` (${leadEvaStatus.reviewReason})` : ''}`
+                        : 'Você assumiu essa conversa'}
+                    </p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300/80 truncate">
+                      Eva está calada nessa conversa. Quando terminar, devolva pra ela voltar a responder automaticamente.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resumeEva}
+                    disabled={resumingEva}
+                    className="shrink-0 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    {resumingEva ? (
+                      <>
+                        <Icon name="loader" className="w-3 h-3 animate-spin" />
+                        Devolvendo…
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm">✨</span>
+                        Devolver pra Eva
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
 
               {/* Mensagens */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">

@@ -40,7 +40,24 @@ type EvaCfg = {
   confirmation_d1?: string | null
   followup_texts?: Partial<Record<'1' | '2' | '3' | '4' | '5', string>> | null
   followup_minutes?: Partial<Record<'1' | '2' | '3' | '4' | '5', number>> | null
+  discount_policy?: string | null
+  qualifying_questions?: string | null
 }
+
+const DISCOUNT_PLACEHOLDER = `Exemplo (ajuste para a sua realidade):
+- À vista (Pix/dinheiro): 10% de desconto sobre o valor cheio
+- Pacote de 5 sessões do mesmo procedimento: 15% off
+- Indicação de amiga que fechar: R$ 100 de bônus pra ambas
+
+Deixe vazio se NÃO quiser que a Eva ofereça nenhum desconto.`
+
+const QUALIFYING_PLACEHOLDER = `Uma pergunta por linha. A Eva vai escolher UMA delas pra fazer antes de informar o preço.
+
+Exemplos:
+Você já fez algum procedimento estético antes?
+É a primeira vez que vai cuidar dessa região?
+Como você ficou sabendo da gente?
+O que te motivou a buscar isso agora?`
 
 type Props = {
   clinicId: string
@@ -83,6 +100,8 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
     '4': initial.followup_minutes?.['4'] ?? FOLLOWUP_DEFAULTS.minutes['4'],
     '5': initial.followup_minutes?.['5'] ?? FOLLOWUP_DEFAULTS.minutes['5'],
   })
+  const [discountPolicy, setDiscountPolicy] = useState<string>(initial.discount_policy ?? '')
+  const [qualifyingQuestions, setQualifyingQuestions] = useState<string>(initial.qualifying_questions ?? '')
 
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
@@ -109,6 +128,8 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
           '4': Math.max(1, Number(followupMinutes['4']) || FOLLOWUP_DEFAULTS.minutes['4']),
           '5': Math.max(1, Number(followupMinutes['5']) || FOLLOWUP_DEFAULTS.minutes['5']),
         },
+        discount_policy: discountPolicy.trim() || null,
+        qualifying_questions: qualifyingQuestions.trim() || null,
       }
 
       const newSettings = { ...settings, eva: evaCfg }
@@ -132,6 +153,8 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
     setConfirmacaoD1(D1_DEFAULT)
     setFollowupTexts({ ...FOLLOWUP_DEFAULTS.texts })
     setFollowupMinutes({ ...FOLLOWUP_DEFAULTS.minutes })
+    setDiscountPolicy('')
+    setQualifyingQuestions('')
   }
 
   return (
@@ -170,6 +193,48 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
         >
           Restaurar padrão
         </button>
+      </div>
+
+      {/* Política de desconto */}
+      <div className="card p-5 mb-4">
+        <h2 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
+          <span className="text-base">💰</span> Política de desconto
+        </h2>
+        <p className="text-xs text-slate-500 mb-3">
+          O que a Eva pode oferecer quando a paciente <strong>perguntar explicitamente</strong> sobre desconto/condição especial.
+          Escreva em linguagem natural — a Eva interpreta. <strong>Vazio = Eva continua dizendo &quot;vou confirmar com a Dra.&quot;</strong>
+        </p>
+        <textarea
+          value={discountPolicy}
+          onChange={(e) => setDiscountPolicy(e.target.value)}
+          placeholder={DISCOUNT_PLACEHOLDER}
+          rows={6}
+          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+        />
+        <p className="text-[11px] text-amber-700 mt-2 leading-relaxed">
+          ⚠️ A Eva só menciona desconto se a paciente perguntar primeiro. Ela nunca oferece de proativamente.
+        </p>
+      </div>
+
+      {/* Perguntas antes do preço */}
+      <div className="card p-5 mb-4">
+        <h2 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
+          <span className="text-base">💬</span> Perguntas antes de informar preço
+        </h2>
+        <p className="text-xs text-slate-500 mb-3">
+          Quando a paciente perguntar preço pela <strong>primeira vez</strong>, a Eva escolhe <strong>UMA</strong> dessas perguntas pra fazer antes — pra criar conexão e qualificar o lead.
+          Uma pergunta por linha. <strong>Vazio = Eva passa a parcela direto.</strong>
+        </p>
+        <textarea
+          value={qualifyingQuestions}
+          onChange={(e) => setQualifyingQuestions(e.target.value)}
+          placeholder={QUALIFYING_PLACEHOLDER}
+          rows={6}
+          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+        />
+        <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+          💡 Eva só faz a pergunta na 1ª vez que a paciente perguntar preço naquela conversa. Se ela voltar e perguntar de novo, vai direto pra parcela.
+        </p>
       </div>
 
       {/* Confirmação D-1 */}

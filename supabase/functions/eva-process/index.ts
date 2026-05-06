@@ -41,6 +41,19 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 
+// Debounce: tempo em ms que a Eva espera antes de processar uma msg.
+// Se chegar msg nova do paciente nesse intervalo, esta invocacao aborta
+// e a proxima (disparada pela msg nova) cuida de responder com tudo no
+// contexto. Resolve o problema de paciente que manda em rajada
+// ("bom dia" / "tudo bem?" / "queria saber...") e Eva responder cada
+// uma separada perdendo o contexto.
+//
+// 0 = desativado (volta ao comportamento antigo).
+// Recomendado: 6000-10000ms (8s default) — nao incomoda na percepcao
+// de WhatsApp (paciente nao espera resposta instantanea) e captura
+// 95% das rajadas.
+const EVA_DEBOUNCE_MS = Number(Deno.env.get('EVA_DEBOUNCE_MS') ?? '8000');
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -79,6 +92,76 @@ function validatePayload(input: unknown): { ok: true; payload: IncomingPayload }
 
 // Auth: o Supabase já valida o Bearer JWT antes de chegar aqui (verify_jwt=true)
 // Qualquer chamada autenticada com anon ou service_role do projeto passa.
+
+// ─── Debounce de mensagens em rajada ───────────────────────────────────────
+/**
+ * Pacientes mandam "bom dia" → "tudo bem?" → "queria saber sobre botox" em
+ * mensagens separadas. Cada uma dispara o webhook que dispara essa função.
+ * Sem debounce, Eva responde cada msg isoladamente perdendo contexto.
+ *
+ * Estratégia:
+ *   1. Captura o ID da mensagem que disparou esta invocação.
+ *   2. Espera EVA_DEBOUNCE_MS (default 8s).
+ *   3. Consulta a última msg do paciente (role='user') no banco.
+ *   4. Se a última msg for DIFERENTE da que disparou esta invocação,
+ *      significa que chegou msg nova durante a espera. Aborta — a próxima
+ *      invocação (disparada pela msg nova) vai responder com tudo.
+ *   5. Se for igual, processa normalmente. O history (carregado depois)
+ *      já vai ter todas as msgs da rajada porque o webhook insere antes
+ *      de chamar a Eva.
+ *
+ * Não roda debounce em followup (cron-driven, sem msg de paciente).
+ *
+ * @returns true se DEVE prosseguir, false se DEVE abortar (msg mais nova chegou).
+ */
+async function debounceWaitAndCheck(payload: IncomingPayload): Promise<{
+  proceed: boolean;
+  reason?: string;
+}> {
+  if (EVA_DEBOUNCE_MS <= 0) return { proceed: true, reason: 'disabled' };
+  if (payload.isFollowup) return { proceed: true, reason: 'followup_skip' };
+  if (!payload.messageId) return { proceed: true, reason: 'no_message_id' };
+
+  await new Promise((r) => setTimeout(r, EVA_DEBOUNCE_MS));
+
+  // Busca a última mensagem do paciente após a espera.
+  // Filtramos por role=user e ordenamos por created_at desc (com fallback no
+  // próprio metadata->>evolution_message_id que o webhook salva).
+  const url = new URL(`${SUPABASE_URL}/rest/v1/eva_conversations`);
+  url.searchParams.set('clinic_id', `eq.${payload.clinicId}`);
+  url.searchParams.set('phone', `eq.${payload.phone}`);
+  url.searchParams.set('role', 'eq.user');
+  url.searchParams.set('order', 'created_at.desc');
+  url.searchParams.set('limit', '1');
+  url.searchParams.set('select', 'id,metadata,created_at');
+
+  try {
+    const r = await fetch(url.toString(), {
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+    });
+    if (!r.ok) {
+      // Se a verificação falhar, prossegue (modo seguro: pelo menos responde).
+      return { proceed: true, reason: `check_failed_status_${r.status}` };
+    }
+    const rows = (await r.json()) as Array<{
+      id: string;
+      metadata?: { evolution_message_id?: string } | null;
+      created_at: string;
+    }>;
+    const latest = rows?.[0];
+    const latestMessageId = latest?.metadata?.evolution_message_id ?? null;
+
+    if (latestMessageId && latestMessageId !== payload.messageId) {
+      return { proceed: false, reason: `newer_message_${latestMessageId}` };
+    }
+    return { proceed: true, reason: 'is_latest' };
+  } catch (e) {
+    return { proceed: true, reason: `check_error_${(e as Error).message}` };
+  }
+}
 
 // ─── Carregar contexto via RPC donna_load_context ──────────────────────────
 async function loadContext(payload: IncomingPayload): Promise<{ ok: boolean; ctx?: DonnaContext; error?: string }> {
@@ -398,6 +481,19 @@ Deno.serve(async (req) => {
   const v = validatePayload(body);
   if (!v.ok) return bad(v.reason, 400);
   const payload = v.payload;
+
+  // 0) Debounce — espera N segundos pra ver se paciente manda mais msgs em rajada.
+  //    Se chegar msg nova durante a espera, aborta e deixa a proxima invocacao
+  //    (disparada pela msg nova) responder com o contexto completo.
+  const debounce = await debounceWaitAndCheck(payload);
+  if (!debounce.proceed) {
+    return jsonResponse({
+      ok: true,
+      debounced: true,
+      reason: debounce.reason,
+      elapsed_ms: Date.now() - t0,
+    });
+  }
 
   // 1) Contexto
   const ctxResp = await loadContext(payload);

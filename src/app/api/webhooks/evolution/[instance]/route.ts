@@ -591,12 +591,14 @@ export async function POST(
           //   'auto_reply_off'    -> instância em modo manual (toggle off)
           //   'nps_anti_eco'      -> resposta NPS recém-capturada (cooldown 5min)
           //   'pause_until'       -> lead.eva_pause_until > now() (cooldown ativo)
+          //   'human_review'      -> lead.needs_human_review=true (humano assumiu)
           //   'media_escalated'   -> midia (foto/audio/video) — humano cuida agora
           let evaShouldSkip:
             | false
             | 'auto_reply_off'
             | 'nps_anti_eco'
             | 'pause_until'
+            | 'human_review'
             | 'media_escalated' = false
           // Janela do anti-eco do NPS: 5 min depois da nota, Eva fica calada
           const NPS_COOLDOWN_MS = 5 * 60 * 1000
@@ -674,7 +676,7 @@ export async function POST(
           {
             const leadRes = await svc
               .from('leads')
-              .select('id, name, status, eva_pause_until')
+              .select('id, name, status, eva_pause_until, needs_human_review')
               .eq('clinic_id', clinicId)
               .eq('phone', phone)
               .order('created_at', { ascending: false })
@@ -682,6 +684,13 @@ export async function POST(
               .maybeSingle()
             if (leadRes.error) {
               internalErrors.push(`select leads: ${leadRes.error.message}`)
+            }
+
+            // Lead foi escalado pra humano (cancelamento/reclamacao/foto/etc).
+            // Eva fica calada ate alguem clicar "Devolver pra Eva" no painel.
+            if (evaShouldSkip === false && leadRes.data?.needs_human_review === true) {
+              evaShouldSkip = 'human_review'
+              debugTrace.push('eva skip: needs_human_review=true (humano assumiu)')
             }
 
             // Cooldown ainda ativo de evento anterior (NPS, manual, etc.)

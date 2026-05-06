@@ -175,6 +175,7 @@ export async function POST(req: NextRequest) {
     mimetype,
     fileName,
     evolutionResult: result.result,
+    purpose,
   })
 
   return NextResponse.json({
@@ -192,6 +193,13 @@ type PersistResult = {
   warnings: string[]
 }
 
+/**
+ * Pausa indefinida da Eva quando humano assume conversa via painel.
+ * Usar uma data muito distante porque o webhook compara com new Date().getTime().
+ * Botão "Devolver pra Eva" zera de volta pra null.
+ */
+const PAUSE_INDEFINITE_ISO = '2099-12-31T23:59:59.999Z'
+
 async function persistOutboundMessage(args: {
   clinicId: string
   phone: string
@@ -202,6 +210,7 @@ async function persistOutboundMessage(args: {
   mimetype?: string
   fileName?: string
   evolutionResult: unknown
+  purpose: 'manual' | 'automation'
 }): Promise<PersistResult> {
   const warnings: string[] = []
   const svc = createServiceClient()
@@ -329,6 +338,23 @@ async function persistOutboundMessage(args: {
     .from('clinic_whatsapp')
     .update({ last_event_at: new Date().toISOString() })
     .eq('clinic_id', args.clinicId)
+
+  // INTERVENCAO HUMANA — quando a secretaria responde manualmente pelo painel,
+  // pausamos a Eva indefinidamente naquele lead. So volta ao automatico quando
+  // alguem clicar "Devolver pra Eva" no painel (limpa eva_pause_until + needs_human_review).
+  if (args.purpose === 'manual') {
+    const upd = await svc
+      .from('leads')
+      .update({
+        eva_pause_until: PAUSE_INDEFINITE_ISO,
+        last_contact_at: new Date().toISOString(),
+      })
+      .eq('clinic_id', args.clinicId)
+      .eq('phone', normalizedPhone)
+    if (upd.error) {
+      warnings.push(`pause eva on manual: ${upd.error.message}`)
+    }
+  }
 
   return {
     ok: true,

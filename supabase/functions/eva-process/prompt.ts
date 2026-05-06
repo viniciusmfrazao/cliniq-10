@@ -122,9 +122,21 @@ export function buildSystemPrompt(
     personalidade?: string | null;
     confirmation_d1?: string | null;
     followup_texts?: Partial<Record<'1' | '2' | '3' | '4' | '5', string>> | null;
+    discount_policy?: string | null;
+    qualifying_questions?: string | null;
   } | null;
   const personalidadeCustom = evaCfg?.personalidade?.trim();
   const confirmacaoD1Custom = evaCfg?.confirmation_d1?.trim();
+  const discountPolicy = evaCfg?.discount_policy?.trim();
+  const qualifyingQuestionsRaw = evaCfg?.qualifying_questions?.trim();
+  // Lista de perguntas (1 por linha). Ignora linhas vazias, separadores ("Exemplos:")
+  // e remove bullets iniciais ("- ", "• ").
+  const qualifyingQuestions: string[] = qualifyingQuestionsRaw
+    ? qualifyingQuestionsRaw
+        .split(/\r?\n/)
+        .map((l) => l.trim().replace(/^[-•]\s*/, ''))
+        .filter((l) => l.length >= 5 && !l.endsWith(':'))
+    : [];
 
   // Profissionais que efetivamente fazem procedimentos
   const profIdsInProcs = new Set<string>();
@@ -236,11 +248,28 @@ EVITE A TODO CUSTO:
 
 💰 REGRA CRÍTICA #3 — PREÇO: SÓ EM PARCELA, NUNCA O VALOR TOTAL:
 - IMPORTANTE: só informe preço se a paciente perguntar EXPLICITAMENTE ("quanto custa", "qual o valor", "preço"). Não traga valor proativamente.
-- NUNCA passe o valor total/à vista. Diga SOMENTE "12x R$ Y sem juros" (ou o número de parcelas que o procedimento tem).
-- Se ela perguntar "quanto à vista?", "valor cheio?", responda: "À vista a Dra. consegue uma condição especial — vou te confirmar pessoalmente. Mas no cartão sai 12x R$ Y sem juros."
+- NUNCA passe o valor total/à vista. Diga SOMENTE "12x R$ Y sem juros" (ou o número de parcelas que o procedimento tem).${
+  discountPolicy
+    ? `
+- Sobre desconto/condição à vista: SÓ mencione se a paciente perguntar explicitamente ("tem desconto?", "à vista tem condição?", "valor cheio?"). Quando ela perguntar, use APENAS o que está autorizado em [POLÍTICA DE DESCONTO] no fim do prompt. NUNCA invente percentual nem condição.`
+    : `
+- Se ela perguntar "quanto à vista?", "valor cheio?", "tem desconto?": responda "À vista a Dra. consegue uma condição especial — vou te confirmar pessoalmente. Mas no cartão sai 12x R$ Y sem juros." NUNCA invente desconto.`
+}
 - Se ela perguntar se tem juros: "Sem juros nenhum, é o valor cheio dividido em 12x."
 - BOM: "O preenchimento sai 12x R$ 90 sem juros. Posso verificar um horário pra avaliação?"
-- RUIM (PROIBIDO): "À vista R$ 1.080 ou 12x R$ 90".
+- RUIM (PROIBIDO): "À vista R$ 1.080 ou 12x R$ 90".${
+  qualifyingQuestions.length > 0
+    ? `
+
+💬 REGRA CRÍTICA #3.5 — QUALIFIQUE ANTES DE PRECIFICAR (1ª PERGUNTA DE PREÇO):
+- Quando ela perguntar PREÇO PELA PRIMEIRA VEZ na conversa, NÃO mande a parcela ainda.
+- Faça UMA pergunta da lista [PERGUNTAS DE QUALIFICAÇÃO] (escolha a que combinar mais com o contexto). Apenas UMA, nunca várias.
+- Pode encadear assim: "Posso te perguntar uma coisinha rapidinho antes? <pergunta>" ou direto "<pergunta>"
+- SÓ depois que ela responder a sua pergunta, no PRÓXIMO turno, passe a parcela "12x R$ Y sem juros" e proponha a avaliação.
+- Se ela ignorar a pergunta e perguntar preço de novo, passe a parcela direto (não insiste).
+- Se ela já está em conversa avançada e o preço já foi mencionado/passado antes, NÃO faça a pergunta de qualificação de novo.`
+    : ''
+}
 
 CONTEXTO DESTA CONVERSA:
 ${buildContextLine(payload, isNewConversation, historyLength, evaCfg)}
@@ -343,7 +372,29 @@ ${(confirmacaoD1Custom && confirmacaoD1Custom.length > 5
 7) EMERGÊNCIA MÉDICA — oriente atendimento presencial. Não dê palpite clínico.
 
 8) NÃO SEI / DÚVIDA COMPLEXA — chame 'escalar_humano' com motivo='duvida_complexa' e detalhes. Resposta: "Deixa eu confirmar isso com ${drNomeRef} pra te passar a informação certinha — em instantes te retorno, pode ser?"
+${
+  discountPolicy
+    ? `
+[POLÍTICA DE DESCONTO] — autorizada pela clínica. SÓ mencione quando a paciente perguntar explicitamente:
+${discountPolicy}
 
+Regras de uso da política acima:
+- NUNCA ofereça desconto proativamente. Espera ela perguntar.
+- Use o desconto/condição EXATAMENTE como descrito acima — não invente percentual, valor nem regra.
+- Mantenha o tom elegante: "À vista a Dra. consegue 10% — fica 12x R$ Y no cartão ou no Pix com a condição especial".
+- Se a paciente pedir desconto que NÃO está nessa lista, diga "essa condição específica eu prefiro confirmar com a Dra. pra te dar a resposta certinha" e chame 'escalar_humano' com motivo='duvida_complexa'.
+`
+    : ''
+}${
+  qualifyingQuestions.length > 0
+    ? `
+[PERGUNTAS DE QUALIFICAÇÃO] — escolha UMA destas pra fazer ANTES de informar preço pela 1ª vez:
+${qualifyingQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+Regra de uso: faça apenas 1 das perguntas, escolha a mais natural pro contexto, e só passe o preço DEPOIS que ela responder.
+`
+    : ''
+}
 OBJETIVO: cada paciente deve se sentir especial e acolhida. Você não está vendendo — está cuidando.`;
 
   return { systemPrompt, drNomeRef, isNewConversation };
