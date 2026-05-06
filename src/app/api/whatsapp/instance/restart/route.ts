@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentUserClinic, canManageIntegrations } from '@/lib/auth-helpers'
 import { restartInstance, getConnectionState } from '@/lib/evolution'
+import { resolveClinicInstanceForApi } from '@/lib/whatsapp-route-helpers'
 
 /**
  * POST /api/whatsapp/instance/restart
@@ -11,9 +12,9 @@ import { restartInstance, getConnectionState } from '@/lib/evolution'
  * mensagens via /message/sendText) mas inbound parou (webhook deixou de
  * receber). O restart força a Evolution a recriar o socket com o WhatsApp.
  *
- * Mantém o pairing — não precisa escanear QR. Só admin/gerente pode chamar.
+ * Multi-numero: aceita ?instance_name= ou body.instance_name; senao opera na default.
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
   const ctx = await getCurrentUserClinic()
   if (!ctx) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   if (!canManageIntegrations(ctx.role)) {
@@ -25,12 +26,13 @@ export async function POST() {
 
   const svc = createServiceClient()
 
-  const { data: row } = await svc
-    .from('clinic_whatsapp')
-    .select('instance_name')
-    .eq('clinic_id', ctx.clinicId)
-    .maybeSingle()
+  let bodyInstance: string | null = null
+  try {
+    const body = (await req.json()) as Record<string, unknown>
+    if (typeof body.instance_name === 'string') bodyInstance = body.instance_name
+  } catch {}
 
+  const row = await resolveClinicInstanceForApi(svc, req, ctx.clinicId, bodyInstance)
   if (!row) {
     return NextResponse.json(
       { error: 'Nenhuma instance configurada' },
@@ -46,13 +48,12 @@ export async function POST() {
     )
   }
 
-  // Após restart, a Evolution leva ~2-3s pra reabrir socket. Confere o estado
-  // pra dar feedback claro pro user.
   await new Promise((resolve) => setTimeout(resolve, 2500))
   const state = await getConnectionState(row.instance_name)
 
   return NextResponse.json({
     ok: true,
+    instance_name: row.instance_name,
     restart: r.data,
     connection: state.ok ? state.data : { error: state.error },
   })

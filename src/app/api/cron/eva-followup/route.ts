@@ -42,6 +42,8 @@ type ClinicWaRow = {
   instance_name: string
   status: string
   auto_reply_enabled: boolean | null
+  is_default: boolean | null
+  role_inbound: boolean | null
 }
 
 function isWithinSendingWindow(now = new Date()): boolean {
@@ -166,10 +168,27 @@ export async function GET(req: NextRequest) {
   const clinicIds = Array.from(new Set(queue.map((l) => l.clinic_id)))
   const { data: waList } = await svc
     .from('clinic_whatsapp')
-    .select('clinic_id, instance_name, status, auto_reply_enabled')
+    .select(
+      'clinic_id, instance_name, status, auto_reply_enabled, is_default, role_inbound',
+    )
     .in('clinic_id', clinicIds)
+
+  // Multi-numero: pra cada clinic_id, escolhe a melhor instance pra Eva mandar
+  // follow-up. Preferencia: connected + role_inbound + is_default > connected
+  // + role_inbound > connected + is_default > qualquer connected > primeira.
   const waByClinic = new Map<string, ClinicWaRow>()
-  for (const w of (waList as ClinicWaRow[] | null) ?? []) waByClinic.set(w.clinic_id, w)
+  const allWa = (waList as ClinicWaRow[] | null) ?? []
+  for (const w of allWa) {
+    const existing = waByClinic.get(w.clinic_id)
+    const score = (row: ClinicWaRow) =>
+      (row.status === 'connected' ? 8 : 0) +
+      (row.role_inbound !== false ? 4 : 0) +
+      (row.is_default ? 2 : 0) +
+      (row.auto_reply_enabled !== false ? 1 : 0)
+    if (!existing || score(w) > score(existing)) {
+      waByClinic.set(w.clinic_id, w)
+    }
+  }
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
   if (!serviceRoleKey) {

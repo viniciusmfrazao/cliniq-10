@@ -19,14 +19,19 @@ export default async function WhatsappHealthBanner({
   if (!['admin', 'manager', 'super_admin'].includes(role)) return null
 
   const supabase = await createClient()
-  const { data } = await supabase
+  // Multi-numero: prioriza a row com health_warning ativo (qualquer instance);
+  // se nenhuma esta com warning, nao mostra o banner.
+  const { data: warningRows } = await supabase
     .from('clinic_whatsapp')
     .select(
-      'health_warning, health_reason, last_event_at, status, webhook_actual_url, webhook_expected_url, webhook_last_fixed_at',
+      'instance_name, label, health_warning, health_reason, last_event_at, status, webhook_actual_url, webhook_expected_url, webhook_last_fixed_at, is_default',
     )
     .eq('clinic_id', clinicId)
-    .maybeSingle()
+    .eq('health_warning', true)
+    .order('is_default', { ascending: false })
+    .limit(1)
 
+  const data = warningRows?.[0]
   if (!data?.health_warning) return null
 
   const reason = (data.health_reason as string | null) || ''

@@ -139,12 +139,24 @@ export async function GET(req: NextRequest) {
   const clinicIds = matchingClinics.map((c) => c.clinic_id)
 
   const [{ data: whatsapps }, { data: clinicNames }] = await Promise.all([
-    svc.from('clinic_whatsapp').select('clinic_id, status').in('clinic_id', clinicIds),
+    svc
+      .from('clinic_whatsapp')
+      .select('clinic_id, status, is_default, role_outbound_automation')
+      .in('clinic_id', clinicIds),
     svc.from('clinics').select('id, name').in('id', clinicIds),
   ])
 
+  // Multi-numero: prioriza connected + role_outbound_automation pra cada clinica
   const waByClinic = new Map<string, WhatsappRow>()
-  for (const w of (whatsapps as WhatsappRow[] | null) ?? []) waByClinic.set(w.clinic_id, w)
+  type WaScored = WhatsappRow & { is_default?: boolean | null; role_outbound_automation?: boolean | null }
+  const score = (w: WaScored) =>
+    (w.status === 'connected' ? 10 : 0) +
+    (w.role_outbound_automation !== false ? 4 : 0) +
+    (w.is_default ? 1 : 0)
+  for (const w of (whatsapps as WaScored[] | null) ?? []) {
+    const cur = waByClinic.get(w.clinic_id) as WaScored | undefined
+    if (!cur || score(w) > score(cur)) waByClinic.set(w.clinic_id, w)
+  }
 
   const nameByClinic = new Map<string, string>()
   for (const c of (clinicNames as ClinicNameRow[] | null) ?? []) nameByClinic.set(c.id, c.name)
@@ -250,6 +262,7 @@ export async function GET(req: NextRequest) {
         clinicId: automation.clinic_id,
         phone: b.phone,
         message: text,
+        purpose: 'automation',
       })
 
       if (result.ok) {

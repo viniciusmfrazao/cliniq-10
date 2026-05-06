@@ -53,8 +53,56 @@ type ResolvedInstance = {
   apiKey: string
 }
 
+/**
+ * Proposito do envio — define qual numero da clinica usar quando ela tem
+ * mais de um WhatsApp configurado.
+ *
+ *  - 'automation': cron jobs (NPS, aniversario, lembrete, recall, confirmacao)
+ *  - 'manual':     secretaria mandando pelo painel (`/dashboard/whatsapp`)
+ *  - 'inbound':    Eva respondendo lead (deveria usar a mesma instance que
+ *                  recebeu — caller passa instanceName direto)
+ *  - 'any':        nao se importa qual numero (usa o default)
+ *
+ * Hint: callers que querem escolher um numero especifico podem passar
+ * `instanceName` direto pra resolveInstanceByName().
+ */
+export type SendPurpose = 'automation' | 'manual' | 'inbound' | 'any'
+
+type ResolveOpts = {
+  /** Quando informado, escolhe o numero certo conforme as flags da tabela. */
+  purpose?: SendPurpose
+  /** Quando informado, ignora purpose e usa esse instance especifico. */
+  instanceName?: string
+  /** Quando informado em manual, prioriza numero atribuido a esse user. */
+  assignedTo?: string | null
+}
+
+type WaRow = {
+  id: string
+  instance_name: string
+  status: string
+  is_default: boolean | null
+  role_inbound: boolean | null
+  role_outbound_automation: boolean | null
+  role_outbound_manual: boolean | null
+  assigned_to: string | null
+  label: string | null
+}
+
+/**
+ * Escolhe a melhor instance da clinica conforme purpose.
+ *
+ * Algoritmo:
+ *  1. Carrega todas as instances connected da clinica
+ *  2. Filtra por papel adequado ao purpose
+ *  3. Preferencia: assignedTo (manual) -> is_default -> primeira encontrada
+ *  4. Se nao tem ninguem com o papel, fallback pro is_default
+ *  5. Se nao tem default, fallback pra primeira connected
+ *  6. Se nao tem nenhuma connected, retorna 'not_connected'
+ */
 async function resolveInstance(
   clinicId: string,
+  opts: ResolveOpts = {},
 ): Promise<{ ok: true; data: ResolvedInstance } | { ok: false; error: SendResult }> {
   const settings = await getSettings(['evolution_url', 'evolution_master_key'])
   if (!settings.evolution_url || !settings.evolution_master_key) {
@@ -70,33 +118,103 @@ async function resolveInstance(
   }
 
   const supabase = createServiceClient()
-  const { data: wa } = await supabase
-    .from('clinic_whatsapp')
-    .select('instance_name, status')
-    .eq('clinic_id', clinicId)
-    .maybeSingle()
 
-  if (!wa?.instance_name) {
+  // Caminho rapido: caller pediu um instance especifico
+  if (opts.instanceName) {
+    const { data } = await supabase
+      .from('clinic_whatsapp')
+      .select('instance_name, status')
+      .eq('clinic_id', clinicId)
+      .eq('instance_name', opts.instanceName)
+      .maybeSingle()
+    if (!data?.instance_name) {
+      return {
+        ok: false,
+        error: {
+          ok: false,
+          code: 'not_configured',
+          error: `Numero ${opts.instanceName} nao pertence a esta clinica`,
+        },
+      }
+    }
+    if (data.status !== 'connected') {
+      return {
+        ok: false,
+        error: {
+          ok: false,
+          code: 'not_connected',
+          error: `Numero ${opts.instanceName} nao esta conectado (status: ${data.status})`,
+        },
+      }
+    }
     return {
-      ok: false,
-      error: { ok: false, code: 'not_configured', error: 'Clínica não tem WhatsApp configurado' },
+      ok: true,
+      data: {
+        instanceName: data.instance_name,
+        baseUrl: settings.evolution_url.replace(/\/$/, ''),
+        apiKey: settings.evolution_master_key,
+      },
     }
   }
-  if (wa.status !== 'connected') {
+
+  const { data: rows } = await supabase
+    .from('clinic_whatsapp')
+    .select(
+      'id, instance_name, status, is_default, role_inbound, role_outbound_automation, role_outbound_manual, assigned_to, label',
+    )
+    .eq('clinic_id', clinicId)
+
+  const list = ((rows ?? []) as WaRow[]).filter(r => r.instance_name)
+  if (list.length === 0) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        code: 'not_configured',
+        error: 'Clínica não tem WhatsApp configurado',
+      },
+    }
+  }
+
+  const connected = list.filter(r => r.status === 'connected')
+  if (connected.length === 0) {
     return {
       ok: false,
       error: {
         ok: false,
         code: 'not_connected',
-        error: `WhatsApp da clínica não está conectado (status: ${wa.status})`,
+        error: `Nenhum WhatsApp da clínica está conectado (status: ${list[0]?.status})`,
       },
     }
   }
 
+  const purpose = opts.purpose ?? 'any'
+
+  // Filtragem por papel
+  const matchingRole =
+    purpose === 'automation'
+      ? connected.filter(r => r.role_outbound_automation !== false)
+      : purpose === 'manual'
+        ? connected.filter(r => r.role_outbound_manual !== false)
+        : purpose === 'inbound'
+          ? connected.filter(r => r.role_inbound !== false)
+          : connected
+
+  // Pool a usar: se ninguem tem o papel certo, cai pro is_default
+  const pool = matchingRole.length > 0 ? matchingRole : connected
+
+  // Em 'manual', priorizar numero atribuido ao user logado
+  let chosen: WaRow | undefined
+  if (purpose === 'manual' && opts.assignedTo) {
+    chosen = pool.find(r => r.assigned_to === opts.assignedTo)
+  }
+  if (!chosen) chosen = pool.find(r => r.is_default === true)
+  if (!chosen) chosen = pool[0]
+
   return {
     ok: true,
     data: {
-      instanceName: wa.instance_name,
+      instanceName: chosen.instance_name,
       baseUrl: settings.evolution_url.replace(/\/$/, ''),
       apiKey: settings.evolution_master_key,
     },
@@ -136,15 +254,22 @@ async function postEvolution(
 
 /**
  * Envia mensagem de texto via Evolution API usando a instance da clínica.
- * Multi-tenant: cada clínica tem seu próprio instance_name na tabela clinic_whatsapp.
+ * Multi-tenant + multi-numero: aceita opcionalmente `purpose` ou `instanceName`
+ * pra escolher qual numero usar quando a clinica tem mais de um.
  */
 export async function sendWhatsappMessage(args: {
   clinicId: string
   phone: string
   message: string
+  /** Define qual numero usar quando a clinica tem multiplos. Default: 'any'. */
+  purpose?: SendPurpose
+  /** Forca um numero especifico (instance_name). Tem precedencia sobre purpose. */
+  instanceName?: string
+  /** Em manual, prioriza numero atribuido ao user (multi-secretaria). */
+  assignedTo?: string | null
 }): Promise<SendResult> {
-  const { clinicId, phone, message } = args
-  const r = await resolveInstance(clinicId)
+  const { clinicId, phone, message, purpose, instanceName, assignedTo } = args
+  const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
   return postEvolution(
@@ -165,9 +290,15 @@ export async function sendWhatsappImage(args: {
   mimetype: string
   caption?: string
   fileName?: string
+  purpose?: SendPurpose
+  instanceName?: string
+  assignedTo?: string | null
 }): Promise<SendResult> {
-  const { clinicId, phone, media, mimetype, caption, fileName } = args
-  const r = await resolveInstance(clinicId)
+  const {
+    clinicId, phone, media, mimetype, caption, fileName,
+    purpose, instanceName, assignedTo,
+  } = args
+  const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
   return postEvolution(
@@ -192,9 +323,12 @@ export async function sendWhatsappAudio(args: {
   clinicId: string
   phone: string
   audio: string // base64 ou url
+  purpose?: SendPurpose
+  instanceName?: string
+  assignedTo?: string | null
 }): Promise<SendResult> {
-  const { clinicId, phone, audio } = args
-  const r = await resolveInstance(clinicId)
+  const { clinicId, phone, audio, purpose, instanceName, assignedTo } = args
+  const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
   return postEvolution(

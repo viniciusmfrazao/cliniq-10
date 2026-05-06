@@ -54,11 +54,16 @@ export default async function CRMPage() {
 
   // Status da Eva (toggle auto/manual) — usado pra mostrar banner "Eva pausada"
   // no topo do CRM quando a clínica desligou as respostas automáticas.
-  const { data: waInstance } = await supabase
+  // Multi-numero: pega a instance default (ou a primeira inbound).
+  const { data: waList } = await supabase
     .from('clinic_whatsapp')
-    .select('auto_reply_enabled')
+    .select('auto_reply_enabled, is_default, role_inbound')
     .eq('clinic_id', userData?.clinic_id)
-    .maybeSingle()
+  const waInstance = waList?.length
+    ? (waList.find(w => w.is_default && w.role_inbound !== false) ??
+       waList.find(w => w.role_inbound !== false) ??
+       waList[0])
+    : null
   const evaPaused = waInstance?.auto_reply_enabled === false
 
   return (

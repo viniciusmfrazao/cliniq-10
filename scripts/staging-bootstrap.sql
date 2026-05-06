@@ -328,9 +328,10 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 
 
--- 4.4 clinic_whatsapp (1 instância Evolution por clínica)
+-- 4.4 clinic_whatsapp (N instancias Evolution por clinica — multi-numero)
 CREATE TABLE IF NOT EXISTS clinic_whatsapp (
-  clinic_id uuid PRIMARY KEY REFERENCES clinics(id) ON DELETE CASCADE,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  clinic_id uuid NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
   instance_name text NOT NULL UNIQUE,
   phone_number text,
   status text NOT NULL DEFAULT 'disconnected',
@@ -341,12 +342,31 @@ CREATE TABLE IF NOT EXISTS clinic_whatsapp (
   webhook_token text NOT NULL DEFAULT gen_random_uuid()::text,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   auto_reply_enabled boolean NOT NULL DEFAULT true,
+  is_default boolean NOT NULL DEFAULT false,
+  role_inbound boolean NOT NULL DEFAULT true,
+  role_outbound_automation boolean NOT NULL DEFAULT true,
+  role_outbound_manual boolean NOT NULL DEFAULT true,
+  label text,
+  assigned_to uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clinic_whatsapp_default
+  ON clinic_whatsapp(clinic_id) WHERE is_default = true;
+CREATE INDEX IF NOT EXISTS idx_clinic_whatsapp_clinic_id
+  ON clinic_whatsapp(clinic_id);
+
 COMMENT ON COLUMN clinic_whatsapp.auto_reply_enabled IS
   'Quando false, a Eva NÃO responde automaticamente nessa instância.';
+COMMENT ON COLUMN clinic_whatsapp.is_default IS
+  'Numero padrao da clinica. So 1 por clinica.';
+COMMENT ON COLUMN clinic_whatsapp.role_inbound IS
+  'Eva atende mensagens recebidas neste numero.';
+COMMENT ON COLUMN clinic_whatsapp.role_outbound_automation IS
+  'Crons (NPS, aniversario, lembrete, recall) saem por aqui.';
+COMMENT ON COLUMN clinic_whatsapp.role_outbound_manual IS
+  'Secretaria pode usar pra responder/iniciar conversas pelo painel.';
 
 
 -- 4.5 clinic_automations (toggle de cada automação)
@@ -778,9 +798,9 @@ AS $$
     'evolution', jsonb_build_object(
       'url',         (SELECT value FROM app_settings WHERE key = 'evolution_url'),
       'master_key',  (SELECT value FROM app_settings WHERE key = 'evolution_master_key'),
-      'instance',    (SELECT instance_name FROM clinic_whatsapp WHERE clinic_id = p_clinic_id),
-      'phone',       (SELECT phone_number  FROM clinic_whatsapp WHERE clinic_id = p_clinic_id),
-      'status',      (SELECT status        FROM clinic_whatsapp WHERE clinic_id = p_clinic_id)
+      'instance',    (SELECT instance_name FROM clinic_whatsapp WHERE clinic_id = p_clinic_id ORDER BY is_default DESC, created_at ASC LIMIT 1),
+      'phone',       (SELECT phone_number  FROM clinic_whatsapp WHERE clinic_id = p_clinic_id ORDER BY is_default DESC, created_at ASC LIMIT 1),
+      'status',      (SELECT status        FROM clinic_whatsapp WHERE clinic_id = p_clinic_id ORDER BY is_default DESC, created_at ASC LIMIT 1)
     )
   );
 $$;

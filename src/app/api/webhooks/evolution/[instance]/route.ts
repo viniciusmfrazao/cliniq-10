@@ -342,6 +342,7 @@ export async function POST(
       case 'qrcode_updated': {
         const qrcode = (data as { qrcode?: { base64?: string } }).qrcode
         const base64 = qrcode?.base64 ?? null
+        // Multi-numero: atualiza so a instance que recebeu o evento
         await svc
           .from('clinic_whatsapp')
           .update({
@@ -351,6 +352,7 @@ export async function POST(
             last_event_at: new Date().toISOString(),
           })
           .eq('clinic_id', clinicId)
+          .eq('instance_name', instance)
         break
       }
 
@@ -371,10 +373,12 @@ export async function POST(
             jidToPhone((data as { ownerJid?: string }).ownerJid)
           if (phoneFromJid) updates.phone_number = phoneFromJid
         }
+        // Multi-numero: atualiza so a instance que recebeu o evento
         await svc
           .from('clinic_whatsapp')
           .update(updates)
           .eq('clinic_id', clinicId)
+          .eq('instance_name', instance)
         break
       }
 
@@ -570,10 +574,12 @@ export async function POST(
           }
         }
 
+        // Multi-numero: atualiza last_event_at so na instance que recebeu
         const updateLast = await svc
           .from('clinic_whatsapp')
           .update({ last_event_at: new Date().toISOString() })
           .eq('clinic_id', clinicId)
+          .eq('instance_name', instance)
         if (updateLast.error) {
           internalErrors.push(
             `update clinic_whatsapp.last_event_at: ${updateLast.error.message}`,
@@ -788,6 +794,7 @@ export async function POST(
                   clinicId,
                   phone,
                   message: autoReply,
+                  instanceName: instance,
                 })
                 if (sendRes.ok) {
                   debugTrace.push(`media auto-reply sent (kind=${parsed.kind})`)

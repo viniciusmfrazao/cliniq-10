@@ -153,7 +153,10 @@ export async function GET(req: NextRequest) {
       .from('clinic_automations')
       .select('clinic_id, nps_pos_atendimento, template_nps')
       .in('clinic_id', clinicIds),
-    svc.from('clinic_whatsapp').select('clinic_id, status').in('clinic_id', clinicIds),
+    svc
+      .from('clinic_whatsapp')
+      .select('clinic_id, status, is_default, role_outbound_automation')
+      .in('clinic_id', clinicIds),
     svc.from('clinics').select('id, name').in('id', clinicIds),
     svc.from('patients').select('id, name, phone').in('id', patientIds),
     profIds.length > 0
@@ -168,8 +171,17 @@ export async function GET(req: NextRequest) {
   for (const a of (automations as AutomationRow[] | null) ?? [])
     automationByClinic.set(a.clinic_id, a)
 
+  // Multi-numero: prioriza connected + role_outbound_automation
   const waByClinic = new Map<string, WaRow>()
-  for (const w of (waList as WaRow[] | null) ?? []) waByClinic.set(w.clinic_id, w)
+  type WaScored = WaRow & { is_default?: boolean | null; role_outbound_automation?: boolean | null }
+  const waScore = (w: WaScored) =>
+    (w.status === 'connected' ? 10 : 0) +
+    (w.role_outbound_automation !== false ? 4 : 0) +
+    (w.is_default ? 1 : 0)
+  for (const w of (waList as WaScored[] | null) ?? []) {
+    const cur = waByClinic.get(w.clinic_id) as WaScored | undefined
+    if (!cur || waScore(w) > waScore(cur)) waByClinic.set(w.clinic_id, w)
+  }
 
   const clinicNameById = new Map<string, string>()
   for (const c of (clinicList as ClinicRow[] | null) ?? []) clinicNameById.set(c.id, c.name)
@@ -292,6 +304,7 @@ export async function GET(req: NextRequest) {
       clinicId: app.clinic_id,
       phone: patient.phone,
       message: text,
+      purpose: 'automation',
     })
 
     if (result.ok) {

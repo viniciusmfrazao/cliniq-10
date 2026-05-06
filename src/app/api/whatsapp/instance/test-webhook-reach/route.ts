@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentUserClinic, canManageIntegrations } from '@/lib/auth-helpers'
 import { buildWebhookUrl } from '@/lib/evolution'
+import { resolveClinicInstanceForApi } from '@/lib/whatsapp-route-helpers'
 
 /**
  * POST /api/whatsapp/instance/test-webhook-reach
@@ -15,7 +16,7 @@ import { buildWebhookUrl } from '@/lib/evolution'
  *   - "Evolution server nao chama webhook" (chega quando testamos do
  *     proprio Vercel, mas nao quando deveria vir da Evolution)
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
   const ctx = await getCurrentUserClinic()
   if (!ctx) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   if (!canManageIntegrations(ctx.role)) {
@@ -23,11 +24,7 @@ export async function POST() {
   }
 
   const svc = createServiceClient()
-  const { data: row } = await svc
-    .from('clinic_whatsapp')
-    .select('instance_name, webhook_token')
-    .eq('clinic_id', ctx.clinicId)
-    .maybeSingle()
+  const row = await resolveClinicInstanceForApi(svc, req, ctx.clinicId)
 
   if (!row?.instance_name || !row?.webhook_token) {
     return NextResponse.json(

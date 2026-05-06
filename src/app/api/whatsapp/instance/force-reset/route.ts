@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentUserClinic, canManageIntegrations } from '@/lib/auth-helpers'
 import {
@@ -10,6 +10,7 @@ import {
   getQRCode,
   setInstanceWebhook,
 } from '@/lib/evolution'
+import { resolveClinicInstanceForApi } from '@/lib/whatsapp-route-helpers'
 
 /**
  * POST /api/whatsapp/instance/force-reset
@@ -27,7 +28,7 @@ import {
  *
  * Idempotente: pode ser chamado quantas vezes precisar.
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
   const ctx = await getCurrentUserClinic()
   if (!ctx) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   if (!canManageIntegrations(ctx.role)) {
@@ -39,20 +40,18 @@ export async function POST() {
 
   const svc = createServiceClient()
 
-  // 1) Pega o estado atual
-  const { data: existing } = await svc
-    .from('clinic_whatsapp')
-    .select('clinic_id, instance_name, webhook_token')
-    .eq('clinic_id', ctx.clinicId)
-    .maybeSingle()
+  // 1) Acha a instance alvo (multi-numero: aceita ?instance_name=...)
+  const existing = await resolveClinicInstanceForApi(svc, req, ctx.clinicId)
+  const wasDefault = existing?.is_default === true
 
   // 2) Apaga instance antiga na Evolution (best-effort)
   if (existing?.instance_name) {
     await deleteInstance(existing.instance_name).catch((e) => {
       console.warn('[force-reset] deleteInstance falhou:', e)
     })
-    // Pequena espera pra Evolution liberar o slot
     await new Promise((r) => setTimeout(r, 500))
+    // Remove a row antiga local pra evitar conflito de instance_name
+    await svc.from('clinic_whatsapp').delete().eq('id', existing.id)
   }
 
   // 3) Gera nome NOVO com timestamp pra evitar conflito de estado
@@ -98,8 +97,8 @@ export async function POST() {
     console.error('[force-reset] webhook drift persistente apos set:', verify)
   }
 
-  // 5) Atualiza clinic_whatsapp pra apontar pra nova instance
-  const upsertPayload = {
+  // 5) Insere row nova pra apontar pra nova instance (preserva default)
+  const insertPayload = {
     clinic_id: ctx.clinicId,
     instance_name: newInstanceName,
     webhook_token: newToken,
@@ -111,15 +110,18 @@ export async function POST() {
     last_event_at: null,
     health_warning: false,
     health_reason: null,
+    is_default: wasDefault,
   }
 
-  const { error: upsertError } = await svc
+  const { data: newRow, error: insertError } = await svc
     .from('clinic_whatsapp')
-    .upsert(upsertPayload, { onConflict: 'clinic_id' })
+    .insert(insertPayload)
+    .select('id')
+    .maybeSingle()
 
-  if (upsertError) {
+  if (insertError || !newRow) {
     return NextResponse.json(
-      { error: `db: ${upsertError.message}` },
+      { error: `db: ${insertError?.message ?? 'insert sem retorno'}` },
       { status: 500 },
     )
   }
@@ -133,7 +135,7 @@ export async function POST() {
         qr_code: qr.data.base64,
         qr_expires_at: new Date(Date.now() + 50_000).toISOString(),
       })
-      .eq('clinic_id', ctx.clinicId)
+      .eq('id', newRow.id)
   }
 
   return NextResponse.json({

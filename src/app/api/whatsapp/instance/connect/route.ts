@@ -1,28 +1,60 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentUserClinic, canManageIntegrations } from '@/lib/auth-helpers'
 import { getConnectionState, getQRCode } from '@/lib/evolution'
 
 /**
  * Pede um QR fresco pra Evolution e persiste no banco.
- * UI deve chamar isso ao abrir a tela e a cada N segundos enquanto status === 'qr_pending'.
- *
- * Defensivo: se a instance JÁ está conectada na Evolution, não pede QR
- * (pra não sobrescrever o status com qr_pending). Apenas sincroniza.
+ * Multi-numero: aceita ?instance_name= ou body.instance_name pra escolher
+ * qual numero da clinica conectar. Sem param, opera na is_default.
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
   const ctx = await getCurrentUserClinic()
   if (!ctx) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   if (!canManageIntegrations(ctx.role)) {
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
 
+  // Aceita instance_name por query OU body
+  const url = new URL(req.url)
+  let instanceFilter = url.searchParams.get('instance_name')
+  if (!instanceFilter) {
+    try {
+      const body = (await req.json()) as Record<string, unknown>
+      if (typeof body.instance_name === 'string') instanceFilter = body.instance_name
+    } catch {}
+  }
+
   const svc = createServiceClient()
-  const { data: row } = await svc
-    .from('clinic_whatsapp')
-    .select('instance_name, status')
-    .eq('clinic_id', ctx.clinicId)
-    .maybeSingle()
+
+  let row: { id: string; instance_name: string; status: string } | null = null
+  if (instanceFilter) {
+    const { data } = await svc
+      .from('clinic_whatsapp')
+      .select('id, instance_name, status')
+      .eq('clinic_id', ctx.clinicId)
+      .eq('instance_name', instanceFilter)
+      .maybeSingle()
+    row = data
+  } else {
+    const { data: def } = await svc
+      .from('clinic_whatsapp')
+      .select('id, instance_name, status')
+      .eq('clinic_id', ctx.clinicId)
+      .eq('is_default', true)
+      .maybeSingle()
+    if (def) row = def
+    else {
+      const { data: any } = await svc
+        .from('clinic_whatsapp')
+        .select('id, instance_name, status')
+        .eq('clinic_id', ctx.clinicId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      row = any ?? null
+    }
+  }
 
   if (!row?.instance_name) {
     return NextResponse.json(
@@ -31,8 +63,6 @@ export async function POST() {
     )
   }
 
-  // Antes de pedir QR, checa estado atual: se já está conectado, não pede
-  // (Evolution pode até retornar QR forçado, mas isso só desconectaria a sessão).
   const liveState = await getConnectionState(row.instance_name)
   if (liveState.ok && liveState.data.instance?.state === 'open') {
     await svc
@@ -44,11 +74,12 @@ export async function POST() {
         connected_at: new Date().toISOString(),
         last_event_at: new Date().toISOString(),
       })
-      .eq('clinic_id', ctx.clinicId)
+      .eq('id', row.id)
     return NextResponse.json({
       ok: true,
       already_connected: true,
       status: 'connected',
+      instance_name: row.instance_name,
     })
   }
 
@@ -57,7 +88,7 @@ export async function POST() {
     await svc
       .from('clinic_whatsapp')
       .update({ status: 'error', last_event_at: new Date().toISOString() })
-      .eq('clinic_id', ctx.clinicId)
+      .eq('id', row.id)
     let msg = `Evolution: ${r.error}`
     if (r.status === 401 || r.status === 403) {
       msg = `Evolution rejeitou a master key (${r.status}). Verifique URL e Master API Key em /admin/evolution.`
@@ -68,7 +99,6 @@ export async function POST() {
   }
 
   const base64 = r.data.base64 ?? null
-  // QR da Evolution geralmente expira em ~60s. Damos 50 pra UI considerar stale.
   const expiresAt = new Date(Date.now() + 50_000).toISOString()
 
   await svc
@@ -79,10 +109,11 @@ export async function POST() {
       qr_expires_at: expiresAt,
       last_event_at: new Date().toISOString(),
     })
-    .eq('clinic_id', ctx.clinicId)
+    .eq('id', row.id)
 
   return NextResponse.json({
     ok: true,
+    instance_name: row.instance_name,
     qr_code: base64,
     qr_expires_at: expiresAt,
     pairing_code: r.data.pairingCode ?? null,

@@ -253,13 +253,33 @@ export default function WhatsAppPage() {
         status?: string
         instance_name?: string | null
         auto_reply_enabled?: boolean
+        instances?: Array<{
+          status: string
+          instance_name: string
+          auto_reply_enabled: boolean
+          is_default: boolean
+          role_inbound: boolean
+        }>
       }
 
-      if (instance.configured && instance.status === 'connected') {
-        setConfig({ instance_name: instance.instance_name } as never)
+      // Multi-numero: considera "configurado" se QUALQUER instance esta connected.
+      // Pra o toggle Eva, usamos a default (ou primeira inbound conectada).
+      const list = instance.instances ?? []
+      const anyConnected = list.some(i => i.status === 'connected')
+      const mainForEva =
+        list.find(i => i.is_default && i.status === 'connected') ??
+        list.find(i => i.role_inbound && i.status === 'connected') ??
+        list.find(i => i.status === 'connected')
+
+      if (anyConnected || (instance.configured && instance.status === 'connected')) {
+        setConfig({
+          instance_name: mainForEva?.instance_name ?? instance.instance_name ?? null,
+        } as never)
         setConfigured(true)
         setClinicId(userData.clinic_id)
-        setEvaEnabled(instance.auto_reply_enabled !== false)
+        const evaState =
+          mainForEva?.auto_reply_enabled ?? instance.auto_reply_enabled
+        setEvaEnabled(evaState !== false)
         loadConversations(userData.clinic_id)
       } else {
         setConfigured(false)

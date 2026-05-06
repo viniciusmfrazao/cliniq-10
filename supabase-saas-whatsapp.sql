@@ -38,10 +38,15 @@ INSERT INTO app_settings (key, value, is_secret, description) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 -- ------------------------------------------------------------
--- 2) clinic_whatsapp (1 número por clínica)
+-- 2) clinic_whatsapp (N numeros por clinica — multi-numero)
+--
+-- Cada clinica pode ter varios numeros. Cada um tem combinacoes diferentes
+-- de papeis: inbound (Eva responde), outbound_automation (cron sai),
+-- outbound_manual (secretaria usa pelo painel). So 1 e is_default por clinica.
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS clinic_whatsapp (
-  clinic_id uuid PRIMARY KEY REFERENCES clinics(id) ON DELETE CASCADE,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  clinic_id uuid NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
   instance_name text NOT NULL UNIQUE,
   phone_number text,
   status text NOT NULL DEFAULT 'pending'
@@ -52,9 +57,18 @@ CREATE TABLE IF NOT EXISTS clinic_whatsapp (
   last_event_at timestamptz,
   webhook_token text NOT NULL DEFAULT gen_random_uuid()::text,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_default boolean NOT NULL DEFAULT false,
+  role_inbound boolean NOT NULL DEFAULT true,
+  role_outbound_automation boolean NOT NULL DEFAULT true,
+  role_outbound_manual boolean NOT NULL DEFAULT true,
+  label text,
+  assigned_to uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clinic_whatsapp_default
+  ON clinic_whatsapp(clinic_id) WHERE is_default = true;
 
 CREATE INDEX IF NOT EXISTS idx_clinic_whatsapp_instance ON clinic_whatsapp(instance_name);
 CREATE INDEX IF NOT EXISTS idx_clinic_whatsapp_status   ON clinic_whatsapp(status);

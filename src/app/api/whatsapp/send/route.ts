@@ -22,6 +22,9 @@ type SendBody = {
   mimetype?: string
   fileName?: string
   caption?: string
+  /** Multi-numero: instance_name especifico (opcional). Default: numero
+   *  atribuido ao user logado, ou is_default da clinica. */
+  instance_name?: string
 }
 
 /**
@@ -72,6 +75,9 @@ export async function POST(req: NextRequest) {
   }
 
   let clinicId: string | undefined
+  let userId: string | null = null
+  /** 'manual' = secretaria pelo painel; 'automation' = cron/n8n. */
+  let purpose: 'manual' | 'automation' = 'manual'
 
   const cronSecret = req.headers.get('x-cron-secret')
   const cliniqSecret = req.headers.get('x-cliniq-secret')
@@ -96,6 +102,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Clínica não encontrada' }, { status: 404 })
     }
     clinicId = body.clinic_id
+    purpose = 'automation'
   } else {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -111,6 +118,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Usuário sem clínica' }, { status: 403 })
     }
     clinicId = userRow.clinic_id
+    userId = user.id
+    purpose = 'manual'
+  }
+
+  const sharedOpts = {
+    purpose,
+    instanceName: body.instance_name,
+    assignedTo: userId,
   }
 
   // Roteamento por tipo
@@ -123,14 +138,21 @@ export async function POST(req: NextRequest) {
           mimetype: mimetype || 'image/jpeg',
           caption,
           fileName,
+          ...sharedOpts,
         })
       : type === 'audio'
         ? await sendWhatsappAudio({
             clinicId: clinicId!,
             phone,
             audio: media!,
+            ...sharedOpts,
           })
-        : await sendWhatsappMessage({ clinicId: clinicId!, phone, message: message! })
+        : await sendWhatsappMessage({
+            clinicId: clinicId!,
+            phone,
+            message: message!,
+            ...sharedOpts,
+          })
 
   if (!result.ok) {
     const status =

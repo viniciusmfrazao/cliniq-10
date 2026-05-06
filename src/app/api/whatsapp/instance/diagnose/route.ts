@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentUserClinic, canManageIntegrations } from '@/lib/auth-helpers'
 import {
@@ -7,17 +7,18 @@ import {
   getWebhookInfo,
   setInstanceWebhook,
 } from '@/lib/evolution'
+import { resolveClinicInstanceForApi } from '@/lib/whatsapp-route-helpers'
 
 /**
  * Endpoint de diagnóstico do WhatsApp da clínica.
  * Lista lado a lado: o que esperamos x o que a Evolution tem configurado.
  *
+ * Multi-numero: aceita ?instance_name= pra escolher; senao opera na default.
+ *
  * GET  -> só lê e devolve o snapshot.
  * POST -> tenta refixar o webhook (replay do setInstanceWebhook).
- *
- * Apenas admin/gerente da clínica.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const ctx = await getCurrentUserClinic()
   if (!ctx) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   if (!canManageIntegrations(ctx.role)) {
@@ -28,13 +29,25 @@ export async function GET() {
   }
 
   const svc = createServiceClient()
+  const baseRow = await resolveClinicInstanceForApi(svc, req, ctx.clinicId)
+  if (!baseRow) {
+    return NextResponse.json(
+      {
+        ok: true,
+        message: 'Nenhuma instance configurada ainda para esta clínica',
+        local: null,
+      },
+      { status: 200 },
+    )
+  }
 
+  // Carrega campos extras pra montar o relatorio
   const { data: row } = await svc
     .from('clinic_whatsapp')
     .select(
       'instance_name, webhook_token, status, phone_number, last_event_at, connected_at',
     )
-    .eq('clinic_id', ctx.clinicId)
+    .eq('id', baseRow.id)
     .maybeSingle()
 
   if (!row) {
@@ -115,7 +128,7 @@ function summarizeBody(body: unknown): Record<string, unknown> {
   }
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const ctx = await getCurrentUserClinic()
   if (!ctx) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   if (!canManageIntegrations(ctx.role)) {
@@ -126,14 +139,9 @@ export async function POST() {
   }
 
   const svc = createServiceClient()
+  const row = await resolveClinicInstanceForApi(svc, req, ctx.clinicId)
 
-  const { data: row } = await svc
-    .from('clinic_whatsapp')
-    .select('instance_name, webhook_token')
-    .eq('clinic_id', ctx.clinicId)
-    .maybeSingle()
-
-  if (!row) {
+  if (!row || !row.webhook_token) {
     return NextResponse.json(
       { error: 'Nenhuma instance para refixar' },
       { status: 404 },
