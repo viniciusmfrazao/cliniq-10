@@ -30,13 +30,21 @@ export async function PATCH(
     const body = (await request.json()) as PatchBody
     const svc = createServiceClient()
 
+    // Usa * para não falhar se plan_id ainda não existir no banco (SELECT explícito com coluna inexistente = erro 42703).
     const { data: clinic, error: clinicFetchError } = await svc
       .from('clinics')
-      .select('id, name, slug, cnpj, plan_id, trial_ends_at, settings')
+      .select('*')
       .eq('id', clinicId)
       .maybeSingle()
 
-    if (clinicFetchError || !clinic) {
+    if (clinicFetchError) {
+      console.error('[admin/clinics PATCH] fetch clinic:', clinicFetchError.message)
+      return NextResponse.json(
+        { error: `Erro ao carregar clínica: ${clinicFetchError.message}` },
+        { status: 500 },
+      )
+    }
+    if (!clinic) {
       return NextResponse.json({ error: 'Clínica não encontrada' }, { status: 404 })
     }
 
@@ -75,7 +83,15 @@ export async function PATCH(
     if (typeof body.name === 'string') clinicUpdate.name = body.name.trim()
     if (typeof body.slug === 'string') clinicUpdate.slug = body.slug.trim()
     if (Object.prototype.hasOwnProperty.call(body, 'cnpj')) clinicUpdate.cnpj = body.cnpj?.trim() || null
-    if (Object.prototype.hasOwnProperty.call(body, 'plan_id')) clinicUpdate.plan_id = body.plan_id || null
+    if (Object.prototype.hasOwnProperty.call(body, 'plan_id')) {
+      if ('plan_id' in (clinic as Record<string, unknown>)) {
+        clinicUpdate.plan_id = body.plan_id || null
+      } else {
+        console.warn(
+          '[admin/clinics PATCH] ignorando plan_id: coluna ausente em clinics (rode scripts/clinics-plan-id-migration.sql)',
+        )
+      }
+    }
     if (Object.prototype.hasOwnProperty.call(body, 'trial_ends_at')) {
       clinicUpdate.trial_ends_at = body.trial_ends_at || null
     }
@@ -144,7 +160,7 @@ export async function PATCH(
 
     const { data: updatedClinic } = await svc
       .from('clinics')
-      .select('id, name, slug, cnpj, plan_id, trial_ends_at, settings, updated_at')
+      .select('*')
       .eq('id', clinicId)
       .maybeSingle()
 
