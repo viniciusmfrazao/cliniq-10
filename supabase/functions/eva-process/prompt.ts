@@ -211,7 +211,13 @@ export function buildSystemPrompt(
   if (payload.kind === 'image') {
     mediaPart = `\n- Ela enviou uma IMAGEM (ainda não analisamos fotos). Peça com elegância para descrever o que está na imagem ou agendar avaliação presencial.`;
   } else if (payload.kind === 'audio') {
-    mediaPart = `\n- Ela enviou um ÁUDIO (ainda não transcrevemos). Peça com elegância para escrever a mensagem.`;
+    // Se userText não é o preview padrão, significa que foi transcrito com sucesso
+    const wasTranscribed = payload.userText && !payload.userText.startsWith('[') && payload.kind === 'audio';
+    if (wasTranscribed) {
+      mediaPart = `\n- Ela enviou um ÁUDIO que foi transcrito automaticamente. O texto acima é o que ela disse — responda normalmente ao conteúdo, sem mencionar que era um áudio.`;
+    } else {
+      mediaPart = `\n- Ela enviou um ÁUDIO mas não conseguimos transcrever. Peça com elegância para escrever a mensagem.`;
+    }
   } else if (payload.kind === 'video') {
     mediaPart = `\n- Ela enviou um VÍDEO (ainda não analisamos). Peça com elegância para descrever ou agendar.`;
   }
