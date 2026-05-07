@@ -40,6 +40,7 @@ type Message = {
   mimetype?: string | null
   fileName?: string | null
   caption?: string | null
+  transcription?: string | null
 }
 
 type EvaRow = {
@@ -59,6 +60,7 @@ type EvaRow = {
     media_path?: string | null
     media_url?: string | null
     caption?: string | null
+    transcription?: string | null
   } | null
 }
 
@@ -88,6 +90,7 @@ function rowToMessage(r: EvaRow): Message | null {
     mimetype: r.metadata?.mimetype ?? null,
     fileName: r.metadata?.file_name ?? null,
     caption: r.metadata?.caption ?? null,
+    transcription: r.metadata?.transcription ?? null,
   }
 }
 
@@ -1081,9 +1084,16 @@ function MessageBubble({ msg }: { msg: Message }) {
         )}
 
         {msg.kind === 'audio' && msg.mediaUrl && (
-          <audio controls src={msg.mediaUrl} className="max-w-[240px] mt-0.5">
-            Seu navegador não suporta áudio.
-          </audio>
+          <div>
+            <audio controls src={msg.mediaUrl} className="max-w-[240px] mt-0.5">
+              Seu navegador não suporta áudio.
+            </audio>
+            {msg.transcription && (
+              <p className={`text-xs mt-1 italic opacity-80 max-w-[240px] ${isMine ? 'text-emerald-100' : 'text-slate-500'}`}>
+                🎙️ &ldquo;{msg.transcription}&rdquo;
+              </p>
+            )}
+          </div>
         )}
 
         {msg.kind === 'audio' && !msg.mediaUrl && msg.mediaPath && (

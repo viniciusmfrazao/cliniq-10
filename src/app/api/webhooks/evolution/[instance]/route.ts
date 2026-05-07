@@ -502,7 +502,60 @@ export async function POST(
 
         // Conteúdo textual + preview pra lista
         const preview = previewFor(parsed.kind, parsed.text)
-        const content = parsed.text || preview // sempre não-vazio
+        let content = parsed.text || preview // sempre não-vazio
+
+        // ─── TRANSCRIÇÃO DE ÁUDIO (Whisper) ──────────────────────────────
+        // Se for áudio do paciente (fromMe=false) e temos o base64,
+        // transcreve antes de passar pra Eva — ela vai responder ao conteúdo real.
+        let transcription: string | null = null
+        if (parsed.kind === 'audio' && !fromMe) {
+          const audioBase64 = parsed.inlineBase64
+          if (audioBase64) {
+            try {
+              const openAiKey = process.env.OPENAI_API_KEY
+              if (openAiKey) {
+                // Monta o FormData com o arquivo de áudio
+                const audioBuffer = Buffer.from(
+                  audioBase64.replace(/^data:[^;]+;base64,/, ''),
+                  'base64',
+                )
+                const blob = new Blob([audioBuffer], {
+                  type: cleanMimeType(mimetype) || 'audio/ogg',
+                })
+                const form = new FormData()
+                form.append('file', blob, 'audio.ogg')
+                form.append('model', 'whisper-1')
+                form.append('language', 'pt')
+
+                const whisperRes = await fetch(
+                  'https://api.openai.com/v1/audio/transcriptions',
+                  {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${openAiKey}` },
+                    body: form,
+                  },
+                )
+                if (whisperRes.ok) {
+                  const whisperData = (await whisperRes.json()) as { text?: string }
+                  transcription = whisperData.text?.trim() || null
+                  if (transcription) {
+                    // Substitui o content pelo texto transcrito — Eva responde ao conteúdo real
+                    content = transcription
+                    debugTrace.push(`whisper: "${transcription.slice(0, 80)}"`)
+                  }
+                } else {
+                  const err = await whisperRes.text()
+                  internalErrors.push(`whisper: ${whisperRes.status} ${err.slice(0, 100)}`)
+                }
+              } else {
+                debugTrace.push('whisper: OPENAI_API_KEY não configurada')
+              }
+            } catch (err) {
+              internalErrors.push(`whisper error: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────
 
         const finalMime = cleanMimeType(mimetype) ?? cleanMimeType(parsed.mimetype)
         const baseMetadata = {
@@ -515,6 +568,7 @@ export async function POST(
           media_path: mediaPath,
           media_url: mediaUrl,
           caption: parsed.text || null,
+          transcription: transcription || undefined,
         }
 
         // Dedupe: se ja temos uma row pra esse messageId (porque o
