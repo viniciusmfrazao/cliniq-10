@@ -612,14 +612,22 @@ export async function POST(
             debugTrace.push('eva skip: auto_reply_enabled=false')
           }
 
-          const patientRes = await svc
+          // .limit(1) + array pra ser resiliente a duplicatas (algum import
+          // ou stress test antigo pode ter criado 2+ pacientes com mesmo
+          // phone+clinic_id, o que quebra .maybeSingle()).
+          const patientResRaw = await svc
             .from('patients')
             .select('id')
             .eq('clinic_id', clinicId)
             .eq('phone', phone)
-            .maybeSingle()
-          if (patientRes.error) {
-            internalErrors.push(`select patients: ${patientRes.error.message}`)
+            .order('created_at', { ascending: true })
+            .limit(1)
+          if (patientResRaw.error) {
+            internalErrors.push(`select patients: ${patientResRaw.error.message}`)
+          }
+          const patientRes = {
+            data: patientResRaw.data?.[0] ?? null,
+            error: patientResRaw.error,
           }
 
           // Captura automática de resposta NPS — só pra texto de pacientes

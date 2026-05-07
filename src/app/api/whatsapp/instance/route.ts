@@ -477,18 +477,26 @@ async function checkPlanLimit(
 
   const { data: clinic } = await svc
     .from('clinics')
-    .select('plan_id')
+    .select('plan_id, settings')
     .eq('id', clinicId)
     .maybeSingle()
 
   let maxNumbers = 1
+  const settings =
+    clinic?.settings && typeof clinic.settings === 'object'
+      ? (clinic.settings as Record<string, unknown>)
+      : null
+  const clinicOverride = Number(settings?.max_whatsapp_numbers_override)
+  if (Number.isFinite(clinicOverride) && clinicOverride > 0) {
+    maxNumbers = Math.floor(clinicOverride)
+  }
   if (clinic?.plan_id) {
     const { data: plan } = await svc
       .from('admin_plans')
       .select('max_whatsapp_numbers')
       .eq('id', clinic.plan_id)
       .maybeSingle()
-    if (plan?.max_whatsapp_numbers && plan.max_whatsapp_numbers > 0) {
+    if (maxNumbers <= 1 && plan?.max_whatsapp_numbers && plan.max_whatsapp_numbers > 0) {
       maxNumbers = plan.max_whatsapp_numbers
     }
   }

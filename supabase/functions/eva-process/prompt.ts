@@ -107,6 +107,13 @@ function hasRealName(name: string): boolean {
   return true;
 }
 
+function askedPriceExplicitly(text: string | null | undefined): boolean {
+  const t = (text || '').toLowerCase();
+  if (!t.trim()) return false;
+  // Detecta intenção explícita de preço/valor em linguagem natural PT-BR.
+  return /\b(preço|preco|valor|quanto custa|quanto fica|qual o valor|me passa o valor|orçamento|orcamento)\b/i.test(t);
+}
+
 export function buildSystemPrompt(
   ctx: DonnaContext,
   payload: IncomingPayload,
@@ -116,6 +123,7 @@ export function buildSystemPrompt(
   const customerName = payload.customerName || patient?.name || lead?.name || 'cliente';
   const firstName = String(customerName).split(/\s+/)[0] || '';
   const knowsRealName = hasRealName(customerName);
+  const userAskedPriceNow = askedPriceExplicitly(payload.userText);
 
   // Configuracoes editaveis pela clinica em /dashboard/config
   const evaCfg = (clinic.settings?.eva ?? null) as {
@@ -248,6 +256,7 @@ EVITE A TODO CUSTO:
 
 💰 REGRA CRÍTICA #3 — PREÇO: SÓ EM PARCELA, NUNCA O VALOR TOTAL:
 - IMPORTANTE: só informe preço se a paciente perguntar EXPLICITAMENTE ("quanto custa", "qual o valor", "preço"). Não traga valor proativamente.
+- TRAVA DURA: se a mensagem ATUAL da paciente NÃO pedir preço explicitamente, sua resposta NÃO pode conter "R$", números de parcela ("12x", "10x") nem qualquer valor.
 - NUNCA passe o valor total/à vista. Diga SOMENTE "12x R$ Y sem juros" (ou o número de parcelas que o procedimento tem).${
   discountPolicy
     ? `
@@ -274,6 +283,7 @@ EVITE A TODO CUSTO:
 CONTEXTO DESTA CONVERSA:
 ${buildContextLine(payload, isNewConversation, historyLength, evaCfg)}
 ${identificacaoPart}${mediaPart}
+- Sinal de preço na mensagem atual: ${userAskedPriceNow ? 'SIM (ela pediu preço/valor explicitamente)' : 'NÃO (proibido citar qualquer valor agora)'}.
 - Hoje: ${dataAtual}
 - Cliente: ${customerName}${firstName ? ` (chame de ${firstName})` : ''}
 
@@ -338,6 +348,7 @@ ${buildClinicInfoBlock(ctx.clinic.settings)}
 
 2) PREÇOS — use SOMENTE a lista PROCEDIMENTOS DISPONÍVEIS acima:
    - IMPORTANTE: só informe preço se a paciente perguntar EXPLICITAMENTE.
+   - Se "Sinal de preço na mensagem atual" = NÃO, É PROIBIDO citar qualquer valor/parcela.
    - Se ela só perguntar genericamente ("o que é botox?"), explique sem trazer valor.
    - SE ela perguntar preço EXPLICITAMENTE, responda APENAS com a parcela "12x R$ Y sem juros" e conduza pra avaliação.
    - JAMAIS mostre o valor total/à vista de cara.

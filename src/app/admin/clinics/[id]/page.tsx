@@ -1,10 +1,18 @@
 import { getClinicDetails } from '@/lib/super-admin'
+import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ClinicModulesEditor from './modules-editor'
+import ClinicSettingsEditor from './clinic-settings-editor'
 
 export default async function ClinicDetailsPage({ params }: { params: { id: string } }) {
+  const service = createServiceClient()
   const data = await getClinicDetails(params.id)
+  const { data: plans } = await service
+    .from('admin_plans')
+    .select('id, name')
+    .eq('active', true)
+    .order('price_monthly', { ascending: true })
   
   if (!data?.clinic) {
     notFound()
@@ -32,14 +40,13 @@ export default async function ClinicDetailsPage({ params }: { params: { id: stri
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition border border-slate-200 dark:border-slate-700">
-            Editar
-          </button>
           <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
             Acessar como Admin
           </button>
         </div>
       </div>
+
+      <ClinicSettingsEditor clinic={clinic} users={users || []} plans={plans || []} />
 
       {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

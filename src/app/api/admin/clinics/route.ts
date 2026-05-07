@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, cnpj, slug, planName, adminName, adminEmail, adminPassword, activeModules } = body
+    const { name, cnpj, slug, planId, planName, adminName, adminEmail, adminPassword, activeModules } = body
 
     if (!name || !slug || !adminName || !adminEmail || !adminPassword) {
       return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 })
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
         cnpj: cnpj || null,
         slug,
         plan: planValue,
+        plan_id: planId || null,
         trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
         settings: { active_modules: activeModules || [] }
       })

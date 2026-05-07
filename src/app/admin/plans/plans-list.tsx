@@ -11,6 +11,7 @@ type Plan = {
   price_yearly: number | null
   modules: string[]
   max_professionals: number | null
+  max_whatsapp_numbers?: number | null
   active: boolean
 }
 
@@ -82,6 +83,9 @@ export default function PlansList({ plans }: { plans: Plan[] }) {
                 👥 Até {plan.max_professionals} profissionais
               </p>
             )}
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+              📱 Até {plan.max_whatsapp_numbers || 1} número{(plan.max_whatsapp_numbers || 1) > 1 ? 's' : ''} de WhatsApp
+            </p>
 
             <div className="mb-4">
               <p className="text-xs font-medium text-slate-500 uppercase mb-2">

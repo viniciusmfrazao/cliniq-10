@@ -18,6 +18,7 @@ export default function NewPlanPage() {
     price_monthly: '',
     price_yearly: '',
     max_professionals: '',
+    max_whatsapp_numbers: '1',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,6 +35,7 @@ export default function NewPlanPage() {
           price_monthly: parseFloat(form.price_monthly) || 0,
           price_yearly: form.price_yearly ? parseFloat(form.price_yearly) : null,
           max_professionals: form.max_professionals ? parseInt(form.max_professionals) : null,
+          max_whatsapp_numbers: Math.max(1, parseInt(form.max_whatsapp_numbers) || 1),
           modules
         })
       })
@@ -153,6 +155,21 @@ export default function NewPlanPage() {
                 onChange={e => setForm(prev => ({ ...prev, max_professionals: e.target.value }))}
                 className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Deixe em branco para ilimitado"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Máximo de números WhatsApp *
+              </label>
+              <input
+                type="number"
+                required
+                min="1"
+                value={form.max_whatsapp_numbers}
+                onChange={e => setForm(prev => ({ ...prev, max_whatsapp_numbers: e.target.value }))}
+                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="1"
               />
             </div>
           </div>

@@ -44,7 +44,16 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { name, description, price_monthly, price_yearly, max_professionals, modules, active } = body
+    const {
+      name,
+      description,
+      price_monthly,
+      price_yearly,
+      max_professionals,
+      max_whatsapp_numbers,
+      modules,
+      active,
+    } = body
 
     const supabase = await createClient()
 
@@ -56,6 +65,10 @@ export async function PATCH(
         price_monthly,
         price_yearly,
         max_professionals,
+        max_whatsapp_numbers:
+          Number.isFinite(Number(max_whatsapp_numbers)) && Number(max_whatsapp_numbers) > 0
+            ? Math.floor(Number(max_whatsapp_numbers))
+            : 1,
         modules,
         active,
         updated_at: new Date().toISOString()

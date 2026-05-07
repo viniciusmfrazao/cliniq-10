@@ -10,7 +10,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, description, price_monthly, price_yearly, max_professionals, modules } = body
+    const {
+      name,
+      description,
+      price_monthly,
+      price_yearly,
+      max_professionals,
+      max_whatsapp_numbers,
+      modules,
+    } = body
 
     if (!name || price_monthly === undefined || !modules || modules.length === 0) {
       return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 })
@@ -26,6 +34,10 @@ export async function POST(request: NextRequest) {
         price_monthly,
         price_yearly: price_yearly || null,
         max_professionals: max_professionals || null,
+        max_whatsapp_numbers:
+          Number.isFinite(Number(max_whatsapp_numbers)) && Number(max_whatsapp_numbers) > 0
+            ? Math.floor(Number(max_whatsapp_numbers))
+            : 1,
         modules,
         active: true
       })
