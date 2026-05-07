@@ -417,6 +417,7 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
     customer_name: payload.customerName ?? null,
     lead_id: ctx.lead?.id ?? null,
     patient_id: ctx.patient?.id ?? null,
+    whatsapp_instance: payload.instance?.trim() || null,
     errors: errors.length ? errors : undefined,
   };
   // assistant first (user já foi inserido pelo webhook)
@@ -440,10 +441,12 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
 // ─── Enviar resposta via Evolution API ─────────────────────────────────────
 async function sendViaEvolution(payload: IncomingPayload, ctx: DonnaContext, text: string): Promise<{ ok: boolean; error?: string }> {
   const ev = ctx.evolution;
-  if (!ev?.url || !ev?.master_key || !ev?.instance) {
+  const instanceName =
+    (typeof payload.instance === 'string' && payload.instance.trim()) || ev?.instance || '';
+  if (!ev?.url || !ev?.master_key || !instanceName) {
     return { ok: false, error: 'Evolution config ausente em donna_load_context' };
   }
-  const url = `${ev.url}/message/sendText/${encodeURIComponent(ev.instance)}`;
+  const url = `${ev.url}/message/sendText/${encodeURIComponent(instanceName)}`;
   const r = await fetchJson(url, {
     method: 'POST',
     headers: {
@@ -498,7 +501,26 @@ Deno.serve(async (req) => {
   // 1) Contexto
   const ctxResp = await loadContext(payload);
   if (!ctxResp.ok || !ctxResp.ctx) return bad(`falha contexto: ${ctxResp.error}`, 500);
-  const ctx = ctxResp.ctx;
+  let ctx = ctxResp.ctx;
+  // Multi-número: donna_load_context devolve instance da linha default — a resposta
+  // DEVE sair pelo mesmo instance que recebeu a msg (payload.instance).
+  const inboundInstance = typeof payload.instance === 'string' ? payload.instance.trim() : '';
+  if (inboundInstance) {
+    if (!ctx.evolution) {
+      ctx = {
+        ...ctx,
+        evolution: {
+          url: '',
+          master_key: '',
+          instance: inboundInstance,
+          phone: null,
+          status: null,
+        },
+      };
+    } else {
+      ctx = { ...ctx, evolution: { ...ctx.evolution, instance: inboundInstance } };
+    }
+  }
 
   // 2) Cria lead se necessario (paralelo ao restante seria ideal, mas precisamos dele em saveTurn)
   await ensureLead(payload, ctx).catch((e) => errors.push(`ensureLead: ${e?.message ?? e}`));

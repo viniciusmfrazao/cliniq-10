@@ -15,8 +15,11 @@ type MessageKind =
   | 'sticker'
 
 type Conversation = {
+  /** Chave única: telefone + linha WhatsApp (multi-número) */
   id: string
   phone: string
+  /** Instance Evolution que recebeu/enviou a thread (null = histórico antes do multi-número) */
+  instanceName: string | null
   name: string
   lastMessage: string
   lastMessageTime: string
@@ -46,6 +49,7 @@ type EvaRow = {
   content: string | null
   created_at: string
   metadata?: {
+    instance_name?: string
     push_name?: string
     evolution_message_id?: string
     kind?: MessageKind
@@ -55,6 +59,18 @@ type EvaRow = {
     media_url?: string | null
     caption?: string | null
   } | null
+}
+
+function threadKey(phone: string, instanceName: string | null | undefined): string {
+  return `${phone}::${instanceName ?? ''}`
+}
+
+function rowInstanceName(r: EvaRow): string | null {
+  const m = r.metadata
+  if (m && typeof m === 'object' && 'instance_name' in m && m.instance_name != null) {
+    return String(m.instance_name)
+  }
+  return null
 }
 
 function rowToMessage(r: EvaRow): Message | null {
@@ -104,12 +120,14 @@ function buildConversationFromRow(
   r: EvaRow,
 ): Conversation | null {
   if (!r.content) return prev ?? null
+  const instanceName = rowInstanceName(r)
   const name = r.metadata?.push_name || prev?.name || r.phone
   // unread aumenta se for do paciente (role='user') E nao e a aberta no momento
   const isFromPatient = r.role === 'user'
   return {
-    id: r.phone,
+    id: threadKey(r.phone, instanceName),
     phone: r.phone,
+    instanceName,
     name,
     lastMessage: r.content.length > 50 ? r.content.slice(0, 50) + '…' : r.content,
     lastMessageTime: r.created_at,
@@ -147,11 +165,28 @@ export default function WhatsAppPage() {
   const [evaEnabled, setEvaEnabled] = useState<boolean>(true)
   const [evaToggling, setEvaToggling] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
-  const selectedPhoneRef = useRef<string | null>(null)
+  const selectedThreadIdRef = useRef<string | null>(null)
+  /** Apelidos das linhas (instance_name → label amigável) vindos da API */
+  const [lineLabels, setLineLabels] = useState<Record<string, string>>({})
+  /** Linhas conectadas onde a Eva pode atender (role_inbound) — para o seletor do toggle */
+  const [waInboundLines, setWaInboundLines] = useState<
+    Array<{
+      instance_name: string
+      auto_reply_enabled: boolean
+      label: string | null
+      phone_number: string | null
+    }>
+  >([])
+  /** Qual linha o toggle "Eva ativa" controla quando há várias com inbound */
+  const [evaControlInstance, setEvaControlInstance] = useState<string>('')
+  /** Filtro de linha na lista de conversas: '' = todos, ou instance_name específica */
+  const [lineFilter, setLineFilter] = useState<string>('')
+  /** Todas as linhas distintas encontradas nas conversas (para montar as abas) */
+  const [allLines, setAllLines] = useState<string[]>([])
 
   // Mantem ref atualizada pra o handler de realtime saber qual conversa esta aberta
   useEffect(() => {
-    selectedPhoneRef.current = selectedConversation?.phone ?? null
+    selectedThreadIdRef.current = selectedConversation?.id ?? null
   }, [selectedConversation])
 
   const supabase = createBrowserClient(
@@ -160,20 +195,21 @@ export default function WhatsAppPage() {
   )
 
   const handleNewRow = useCallback((row: EvaRow) => {
+    const tid = threadKey(row.phone, rowInstanceName(row))
     // Atualiza lista de conversas
     setConversations((prev) => {
-      const idx = prev.findIndex((c) => c.phone === row.phone)
+      const idx = prev.findIndex((c) => c.id === tid)
       const updated = buildConversationFromRow(idx >= 0 ? prev[idx] : undefined, row)
       if (!updated) return prev
-      const isOpen = selectedPhoneRef.current === row.phone
+      const isOpen = selectedThreadIdRef.current === tid
       // se a conversa esta aberta, nao incrementa unread
       const finalConv = isOpen ? { ...updated, unread: 0 } : updated
-      const filtered = prev.filter((c) => c.phone !== row.phone)
+      const filtered = prev.filter((c) => c.id !== tid)
       return [finalConv, ...filtered]
     })
 
     // Se a conversa esta aberta, append na thread
-    if (selectedPhoneRef.current === row.phone) {
+    if (selectedThreadIdRef.current === tid) {
       const m = rowToMessage(row)
       if (m) {
         setMessages((prev) => {
@@ -267,17 +303,32 @@ export default function WhatsAppPage() {
           auto_reply_enabled: boolean
           is_default: boolean
           role_inbound: boolean
+          label?: string | null
+          phone_number?: string | null
         }>
       }
 
       // Multi-numero: considera "configurado" se QUALQUER instance esta connected.
-      // Pra o toggle Eva, usamos a default (ou primeira inbound conectada).
       const list = instance.instances ?? []
       const anyConnected = list.some(i => i.status === 'connected')
+      const inboundConnected = list.filter(
+        (i) => i.status === 'connected' && i.role_inbound !== false,
+      )
       const mainForEva =
-        list.find(i => i.is_default && i.status === 'connected') ??
-        list.find(i => i.role_inbound && i.status === 'connected') ??
-        list.find(i => i.status === 'connected')
+        inboundConnected.find((i) => i.is_default) ??
+        inboundConnected[0] ??
+        list.find((i) => i.is_default && i.status === 'connected') ??
+        list.find((i) => i.status === 'connected')
+
+      const labelMap: Record<string, string> = {}
+      for (const i of list) {
+        const friendly =
+          (i.label && i.label.trim()) ||
+          (i.phone_number && i.phone_number.replace(/\D/g, '').slice(-8)) ||
+          i.instance_name.slice(0, 12)
+        labelMap[i.instance_name] = friendly
+      }
+      setLineLabels(labelMap)
 
       if (anyConnected || (instance.configured && instance.status === 'connected')) {
         setConfig({
@@ -285,9 +336,27 @@ export default function WhatsAppPage() {
         } as never)
         setConfigured(true)
         setClinicId(userData.clinic_id)
-        const evaState =
-          mainForEva?.auto_reply_enabled ?? instance.auto_reply_enabled
-        setEvaEnabled(evaState !== false)
+
+        setWaInboundLines(
+          inboundConnected.map((i) => ({
+            instance_name: i.instance_name,
+            auto_reply_enabled: i.auto_reply_enabled !== false,
+            label: i.label ?? null,
+            phone_number: i.phone_number ?? null,
+          })),
+        )
+
+        const nextCtrl =
+          (evaControlInstance &&
+            inboundConnected.some((i) => i.instance_name === evaControlInstance) &&
+            evaControlInstance) ||
+          mainForEva?.instance_name ||
+          inboundConnected[0]?.instance_name ||
+          ''
+        setEvaControlInstance(nextCtrl)
+        const ctrlRow = inboundConnected.find((i) => i.instance_name === nextCtrl) ?? mainForEva
+        setEvaEnabled(ctrlRow?.auto_reply_enabled !== false)
+
         loadConversations(userData.clinic_id)
       } else {
         setConfigured(false)
@@ -315,11 +384,14 @@ export default function WhatsAppPage() {
     setEvaToggling(true)
     setEvaEnabled(next)
     try {
-      console.log('[EvaToggle] enviando PATCH', { enabled: next })
+      console.log('[EvaToggle] enviando PATCH', { enabled: next, instance_name: evaControlInstance })
       const r = await fetch('/api/whatsapp/instance/auto-reply', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: next }),
+        body: JSON.stringify({
+          enabled: next,
+          ...(evaControlInstance ? { instance_name: evaControlInstance } : {}),
+        }),
       })
       const j = await r.json().catch(() => ({}))
       console.log('[EvaToggle] resposta', { status: r.status, body: j })
@@ -344,19 +416,25 @@ export default function WhatsAppPage() {
 
     if (!data) return
 
-    // Agrupa por phone preservando a ordem (mais recente primeiro)
+    // Agrupa por telefone + linha (instance), ordem mais recente primeiro
     const seen = new Set<string>()
     const convs: Conversation[] = []
+    const linesFound = new Set<string>()
     for (const r of data as EvaRow[]) {
-      if (!r.content || seen.has(r.phone)) continue
-      seen.add(r.phone)
+      if (!r.content) continue
+      const inst = rowInstanceName(r)
+      if (inst) linesFound.add(inst)
+      const tid = threadKey(r.phone, inst)
+      if (seen.has(tid)) continue
+      seen.add(tid)
       const conv = buildConversationFromRow(undefined, r)
       if (conv) convs.push({ ...conv, unread: 0 })
     }
     setConversations(convs)
+    setAllLines(Array.from(linesFound))
   }
 
-  async function loadMessages(phone: string) {
+  async function loadMessages(phone: string, instanceName: string | null) {
     if (!clinicId) return
 
     // Reset status da Eva pra essa nova conversa (evita flash do status anterior)
@@ -369,43 +447,45 @@ export default function WhatsAppPage() {
       .eq('phone', phone)
       .order('created_at', { ascending: true })
 
-    if (msgs) {
-      const mapped = (msgs as EvaRow[])
-        .map(rowToMessage)
-        .filter((m): m is Message => m !== null)
+    const instNorm = instanceName ?? ''
+    const rows = ((msgs ?? []) as EvaRow[]).filter((row) => {
+      const ri = rowInstanceName(row) ?? ''
+      return ri === instNorm
+    })
 
-      // Regenera signed URLs frescos pras mídias persistidas.
-      // O webhook gera signed_url com TTL de 7 dias mas, pra UI confiável,
-      // regeramos toda vez que abrimos a conversa.
-      const paths = Array.from(
-        new Set(
-          mapped
-            .map((m) => m.mediaPath)
-            .filter((p): p is string => !!p),
-        ),
-      )
-      if (paths.length > 0) {
-        const { data, error } = await supabase.storage
-          .from('whatsapp-media')
-          .createSignedUrls(paths, 60 * 60 * 24) // 24h
-        if (!error && data) {
-          const map = new Map<string, string>()
-          data.forEach((d) => {
-            if (d.path && d.signedUrl) map.set(d.path, d.signedUrl)
-          })
-          for (const m of mapped) {
-            if (m.mediaPath && map.has(m.mediaPath)) {
-              m.mediaUrl = map.get(m.mediaPath)!
-            }
+    const mapped = rows
+      .map(rowToMessage)
+      .filter((m): m is Message => m !== null)
+
+    // Regenera signed URLs frescos pras mídias persistidas.
+    const paths = Array.from(
+      new Set(
+        mapped
+          .map((m) => m.mediaPath)
+          .filter((p): p is string => !!p),
+      ),
+    )
+    if (paths.length > 0) {
+      const { data, error } = await supabase.storage
+        .from('whatsapp-media')
+        .createSignedUrls(paths, 60 * 60 * 24) // 24h
+      if (!error && data) {
+        const map = new Map<string, string>()
+        data.forEach((d) => {
+          if (d.path && d.signedUrl) map.set(d.path, d.signedUrl)
+        })
+        for (const m of mapped) {
+          if (m.mediaPath && map.has(m.mediaPath)) {
+            m.mediaUrl = map.get(m.mediaPath)!
           }
         }
       }
-      setMessages(mapped)
     }
+    setMessages(mapped)
 
-    // Zera unread da conversa aberta
+    const tid = threadKey(phone, instanceName)
     setConversations((prev) =>
-      prev.map((c) => (c.phone === phone ? { ...c, unread: 0 } : c)),
+      prev.map((c) => (c.id === tid ? { ...c, unread: 0 } : c)),
     )
 
     const { data: patientData } = await supabase
@@ -498,6 +578,9 @@ export default function WhatsAppPage() {
         body: JSON.stringify({
           phone: selectedConversation.phone,
           message: text,
+          ...(selectedConversation.instanceName
+            ? { instance_name: selectedConversation.instanceName }
+            : {}),
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -546,6 +629,9 @@ export default function WhatsAppPage() {
           mimetype: file.type || 'image/jpeg',
           caption,
           fileName: file.name,
+          ...(selectedConversation.instanceName
+            ? { instance_name: selectedConversation.instanceName }
+            : {}),
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -591,6 +677,9 @@ export default function WhatsAppPage() {
           type: 'audio',
           media: base64,
           mimetype: blob.type || 'audio/ogg',
+          ...(selectedConversation.instanceName
+            ? { instance_name: selectedConversation.instanceName }
+            : {}),
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -612,7 +701,15 @@ export default function WhatsAppPage() {
 
   function selectConversation(conv: Conversation) {
     setSelectedConversation(conv)
-    loadMessages(conv.phone)
+    loadMessages(conv.phone, conv.instanceName)
+    // Sincroniza o toggle da Eva com a linha dessa conversa
+    if (conv.instanceName) {
+      const lineRow = waInboundLines.find((i) => i.instance_name === conv.instanceName)
+      if (lineRow) {
+        setEvaControlInstance(conv.instanceName)
+        setEvaEnabled(lineRow.auto_reply_enabled !== false)
+      }
+    }
   }
 
   if (loading) {
@@ -663,11 +760,16 @@ export default function WhatsAppPage() {
           </div>
           <p className="text-sm text-slate-500">Conversas via Evolution API</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <EvaToggle
             enabled={evaEnabled}
             disabled={evaToggling}
             onToggle={toggleEva}
+            label={
+              evaControlInstance && lineLabels[evaControlInstance]
+                ? lineLabels[evaControlInstance]
+                : undefined
+            }
           />
           <button
             onClick={() => loadConfig()}
@@ -693,45 +795,107 @@ export default function WhatsAppPage() {
               />
             </div>
           </div>
+
+          {/* Abas de filtro por linha — só aparece quando há mais de 1 linha */}
+          {allLines.length > 1 && (
+            <div className="flex border-b border-slate-100 dark:border-slate-700 overflow-x-auto">
+              <button
+                onClick={() => setLineFilter('')}
+                className={`flex-shrink-0 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                  lineFilter === ''
+                    ? 'border-emerald-500 text-emerald-700 dark:text-emerald-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                Todos
+              </button>
+              {allLines.map((inst) => {
+                const label = lineLabels[inst] ?? inst.slice(0, 10)
+                const isInbound = waInboundLines.some((l) => l.instance_name === inst)
+                return (
+                  <button
+                    key={inst}
+                    onClick={() => setLineFilter(inst)}
+                    className={`flex-shrink-0 flex items-center gap-1 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                      lineFilter === inst
+                        ? 'border-violet-500 text-violet-700 dark:text-violet-400'
+                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        isInbound ? 'bg-emerald-500' : 'bg-slate-400'
+                      }`}
+                    />
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           
           <div className="flex-1 overflow-y-auto">
-            {conversations.length === 0 ? (
+            {conversations.filter(c =>
+              lineFilter === '' || c.instanceName === lineFilter
+            ).length === 0 ? (
               <div className="p-8 text-center text-slate-500">
                 <Icon name="message" className="w-12 h-12 mx-auto mb-3 text-slate-300" />
                 <p>Nenhuma conversa ainda</p>
               </div>
             ) : (
-              conversations.map(conv => (
-                <button
-                  key={conv.id}
-                  onClick={() => selectConversation(conv)}
-                  className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${
-                    selectedConversation?.id === conv.id ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center flex-shrink-0">
-                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                      {conv.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 dark:text-white truncate">{conv.name}</p>
-                    <p className={`text-xs truncate ${conv.unread > 0 ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-500'}`}>
-                      {conv.lastRole === 'assistant' ? '✓ ' : ''}{conv.lastMessage}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span className="text-xs text-slate-400">
-                      {new Date(conv.lastMessageTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    {conv.unread > 0 && (
-                      <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
-                        {conv.unread > 9 ? '9+' : conv.unread}
+              conversations
+                .filter(c => lineFilter === '' || c.instanceName === lineFilter)
+                .map(conv => {
+                const isInbound = conv.instanceName
+                  ? waInboundLines.some((l) => l.instance_name === conv.instanceName)
+                  : false
+                return (
+                  <button
+                    key={conv.id}
+                    onClick={() => selectConversation(conv)}
+                    className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${
+                      selectedConversation?.id === conv.id ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center flex-shrink-0">
+                      <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                        {conv.name.charAt(0).toUpperCase()}
                       </span>
-                    )}
-                  </div>
-                </button>
-              ))
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-white truncate">{conv.name}</p>
+                      </div>
+                      {conv.instanceName ? (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span
+                            className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                              isInbound ? 'bg-emerald-500' : 'bg-slate-400'
+                            }`}
+                          />
+                          <p className="text-[10px] text-violet-600 dark:text-violet-400 truncate font-medium">
+                            {lineLabels[conv.instanceName] ?? conv.instanceName.slice(0, 12)}
+                            {!isInbound && <span className="ml-1 text-slate-400">(manual)</span>}
+                          </p>
+                        </div>
+                      ) : null}
+                      <p className={`text-xs truncate ${conv.unread > 0 ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-500'}`}>
+                        {conv.lastRole === 'assistant' ? '✓ ' : ''}{conv.lastMessage}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className="text-xs text-slate-400">
+                        {new Date(conv.lastMessageTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {conv.unread > 0 && (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {conv.unread > 9 ? '9+' : conv.unread}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })
             )}
           </div>
         </div>
@@ -750,6 +914,31 @@ export default function WhatsAppPage() {
                 <div className="flex-1">
                   <p className="font-semibold text-slate-900 dark:text-white">{selectedConversation.name}</p>
                   <p className="text-xs text-slate-500">{selectedConversation.phone}</p>
+                  {selectedConversation.instanceName ? (() => {
+                    const isInbound = waInboundLines.some(
+                      (l) => l.instance_name === selectedConversation.instanceName,
+                    )
+                    const lineLabel =
+                      lineLabels[selectedConversation.instanceName] ??
+                      selectedConversation.instanceName
+                    return (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span
+                          className={`inline-block w-1.5 h-1.5 rounded-full ${
+                            isInbound ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
+                        />
+                        <p className="text-[10px] text-violet-600 dark:text-violet-400 font-medium">
+                          {lineLabel}
+                          {isInbound
+                            ? evaEnabled
+                              ? ' · Eva ativa'
+                              : ' · Eva pausada'
+                            : ' · só manual'}
+                        </p>
+                      </div>
+                    )
+                  })() : null}
                 </div>
                 {patient && (
                   <Link
@@ -1255,10 +1444,12 @@ function EvaToggle({
   enabled,
   disabled,
   onToggle,
+  label,
 }: {
   enabled: boolean
   disabled: boolean
   onToggle: () => void
+  label?: string
 }) {
   return (
     <button
@@ -1284,7 +1475,7 @@ function EvaToggle({
           {enabled ? 'Eva ativa' : 'Modo manual'}
         </span>
         <span className="text-[10px] text-slate-500 dark:text-slate-400 hidden sm:inline">
-          {enabled ? 'respondendo auto.' : 'você responde'}
+          {label ? label : (enabled ? 'respondendo auto.' : 'você responde')}
         </span>
       </div>
       <div

@@ -291,7 +291,7 @@ export async function POST(
 
   const { data: row } = await svc
     .from('clinic_whatsapp')
-    .select('clinic_id, webhook_token, instance_name, auto_reply_enabled')
+    .select('clinic_id, webhook_token, instance_name, auto_reply_enabled, role_inbound')
     .eq('instance_name', instance)
     .maybeSingle()
 
@@ -507,6 +507,7 @@ export async function POST(
         const finalMime = cleanMimeType(mimetype) ?? cleanMimeType(parsed.mimetype)
         const baseMetadata = {
           evolution_message_id: messageId,
+          instance_name: instance,
           push_name: pushName,
           kind: parsed.kind,
           mimetype: finalMime,
@@ -610,6 +611,12 @@ export async function POST(
           if (row.auto_reply_enabled === false) {
             evaShouldSkip = 'auto_reply_off'
             debugTrace.push('eva skip: auto_reply_enabled=false')
+          }
+
+          // Multi-número: só a linha com "Eva atende mensagens recebidas" dispara a Eva.
+          if (evaShouldSkip === false && row.role_inbound === false) {
+            evaShouldSkip = 'inbound_disabled'
+            debugTrace.push('eva skip: role_inbound=false (use este número só manual/automações)')
           }
 
           // .limit(1) + array pra ser resiliente a duplicatas (algum import
