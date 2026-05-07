@@ -597,6 +597,7 @@ export async function POST(
           let evaShouldSkip:
             | false
             | 'auto_reply_off'
+            | 'inbound_disabled'
             | 'nps_anti_eco'
             | 'pause_until'
             | 'human_review'
