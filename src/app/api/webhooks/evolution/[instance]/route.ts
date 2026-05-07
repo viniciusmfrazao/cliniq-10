@@ -505,18 +505,37 @@ export async function POST(
         let content = parsed.text || preview // sempre não-vazio
 
         // ─── TRANSCRIÇÃO DE ÁUDIO (Whisper) ──────────────────────────────
-        // Se for áudio do paciente (fromMe=false) e temos o base64,
-        // transcreve antes de passar pra Eva — ela vai responder ao conteúdo real.
+        // Se for áudio do paciente (fromMe=false), transcreve via Whisper.
+        // O base64 pode vir inline ou ser buscado via fetchEvolutionMediaBase64.
         let transcription: string | null = null
         if (parsed.kind === 'audio' && !fromMe) {
-          const audioBase64 = parsed.inlineBase64
-          if (audioBase64) {
+          // base64 já resolvido acima no bloco de isMedia (pode ser inline ou fetched)
+          const audioBase64 = parsed.inlineBase64 ?? (mediaPath ? null : null)
+          
+          // Busca o base64 se ainda não temos (o bloco isMedia só roda pra salvar no storage,
+          // mas o base64 original pode ter sido consumido lá — re-fetch se necessário)
+          let base64ForWhisper = parsed.inlineBase64
+          if (!base64ForWhisper && messageId) {
+            const fetched = await fetchEvolutionMediaBase64({
+              instanceName: instance,
+              messageKey: {
+                remoteJid: key?.remoteJid,
+                fromMe: key?.fromMe,
+                id: messageId,
+              },
+            })
+            if (fetched.ok) {
+              base64ForWhisper = fetched.base64
+              debugTrace.push('whisper: base64 re-fetched for transcription')
+            }
+          }
+
+          if (base64ForWhisper) {
             try {
               const openAiKey = process.env.OPENAI_API_KEY
               if (openAiKey) {
-                // Monta o FormData com o arquivo de áudio
                 const audioBuffer = Buffer.from(
-                  audioBase64.replace(/^data:[^;]+;base64,/, ''),
+                  base64ForWhisper.replace(/^data:[^;]+;base64,/, ''),
                   'base64',
                 )
                 const blob = new Blob([audioBuffer], {
@@ -539,7 +558,6 @@ export async function POST(
                   const whisperData = (await whisperRes.json()) as { text?: string }
                   transcription = whisperData.text?.trim() || null
                   if (transcription) {
-                    // Substitui o content pelo texto transcrito — Eva responde ao conteúdo real
                     content = transcription
                     debugTrace.push(`whisper: "${transcription.slice(0, 80)}"`)
                   }
@@ -553,6 +571,8 @@ export async function POST(
             } catch (err) {
               internalErrors.push(`whisper error: ${err instanceof Error ? err.message : String(err)}`)
             }
+          } else {
+            debugTrace.push('whisper: sem base64 disponível para transcrição')
           }
         }
         // ─────────────────────────────────────────────────────────────────
