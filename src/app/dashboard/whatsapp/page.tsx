@@ -450,10 +450,13 @@ export default function WhatsAppPage() {
       .eq('phone', phone)
       .order('created_at', { ascending: true })
 
-    const instNorm = instanceName ?? ''
+    const instNorm = (instanceName ?? '').trim()
     const rows = ((msgs ?? []) as EvaRow[]).filter((row) => {
-      const ri = rowInstanceName(row) ?? ''
-      return ri === instNorm
+      // Se não há instanceName definido, mostra tudo
+      if (!instNorm) return true
+      const ri = (rowInstanceName(row) ?? '').trim()
+      // Aceita: mesma instância OU sem instância gravada (mensagens antigas)
+      return ri === instNorm || ri === ''
     })
 
     const mapped = rows
@@ -786,8 +789,8 @@ export default function WhatsAppPage() {
       </div>
 
       <div className="flex-1 card overflow-hidden flex">
-        {/* Lista de conversas */}
-        <div className="w-80 border-r border-slate-200 dark:border-slate-700 flex flex-col">
+        {/* Lista de conversas — esconde no mobile quando tem chat aberto */}
+        <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-slate-200 dark:border-slate-700 flex-col flex-shrink-0`}>
           <div className="p-4 border-b border-slate-100 dark:border-slate-700">
             <div className="relative">
               <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -908,11 +911,19 @@ export default function WhatsAppPage() {
         </div>
 
         {/* Chat */}
-        <div className="flex-1 flex flex-col">
+        {/* Painel do chat — ocupa tela toda no mobile */}
+        <div className="flex-1 flex flex-col min-w-0">
           {selectedConversation ? (
             <>
               {/* Header do chat */}
               <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+                {/* Botão voltar — só no mobile */}
+                <button
+                  onClick={() => setSelectedConversation(null)}
+                  className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex-shrink-0"
+                >
+                  <Icon name="chevron-left" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                </button>
                 <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
                   <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
                     {selectedConversation.name.charAt(0).toUpperCase()}
