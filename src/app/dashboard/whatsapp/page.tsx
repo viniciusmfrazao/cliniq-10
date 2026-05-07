@@ -5,6 +5,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { useWaLine } from '@/contexts/WaLineContext'
 
 type MessageKind =
   | 'text'
@@ -183,6 +184,8 @@ export default function WhatsAppPage() {
   const [lineFilter, setLineFilter] = useState<string>('')
   /** Todas as linhas distintas encontradas nas conversas (para montar as abas) */
   const [allLines, setAllLines] = useState<string[]>([])
+
+  const { selectedLine } = useWaLine()
 
   // Mantem ref atualizada pra o handler de realtime saber qual conversa esta aberta
   useEffect(() => {
@@ -835,16 +838,20 @@ export default function WhatsAppPage() {
           )}
           
           <div className="flex-1 overflow-y-auto">
-            {conversations.filter(c =>
-              lineFilter === '' || c.instanceName === lineFilter
-            ).length === 0 ? (
+            {conversations.filter(c => {
+              const active = selectedLine || lineFilter
+              return !active || c.instanceName === active
+            }).length === 0 ? (
               <div className="p-8 text-center text-slate-500">
                 <Icon name="message" className="w-12 h-12 mx-auto mb-3 text-slate-300" />
                 <p>Nenhuma conversa ainda</p>
               </div>
             ) : (
               conversations
-                .filter(c => lineFilter === '' || c.instanceName === lineFilter)
+                .filter(c => {
+                  const active = selectedLine || lineFilter
+                  return !active || c.instanceName === active
+                })
                 .map(conv => {
                 const isInbound = conv.instanceName
                   ? waInboundLines.some((l) => l.instance_name === conv.instanceName)

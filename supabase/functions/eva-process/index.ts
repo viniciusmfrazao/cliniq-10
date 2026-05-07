@@ -218,6 +218,7 @@ async function ensureLead(payload: IncomingPayload, ctx: DonnaContext): Promise<
       source: 'whatsapp',
       status: 'new',
       whatsapp_chat_id: payload.phone,
+      whatsapp_instance: payload.instance?.trim() || null,
       last_whatsapp_at: new Date().toISOString(),
       last_contact_at: new Date().toISOString(),
       whatsapp_opt_in: true,

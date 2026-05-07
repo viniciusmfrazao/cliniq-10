@@ -728,6 +728,7 @@ export async function POST(
                 phone,
                 source: 'whatsapp',
                 status: 'new',
+                whatsapp_instance: instance,
                 notes: `Primeira mensagem: ${content.slice(0, 240)}`,
                 last_contact_at: new Date().toISOString(),
                 eva_pause_until: npsCooldownUntil,

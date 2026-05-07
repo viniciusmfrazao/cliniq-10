@@ -9,6 +9,7 @@ import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
+import { useWaLine, type WaLine } from '@/contexts/WaLineContext'
 
 type Props = { 
   clinicName: string
@@ -24,9 +25,28 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
   const router = useRouter()
   const supabase = createClient()
   const cmd = useCommandPalette()
+  const { lines, selectedLine, setSelectedLine, setLines, hasMultipleLines } = useWaLine()
   const [isMac, setIsMac] = useState(false)
   useEffect(() => {
     setIsMac(typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform))
+  }, [])
+
+  // Carrega linhas WhatsApp conectadas para o seletor
+  useEffect(() => {
+    async function loadLines() {
+      const { data } = await supabase
+        .from('clinic_whatsapp')
+        .select('instance_name, label, phone_number, role_inbound, auto_reply_enabled, status')
+        .eq('status', 'connected')
+        .order('is_default', { ascending: false })
+      if (data && data.length > 0) {
+        setLines(data as WaLine[])
+        // Se só tem 1 linha, seleciona ela automaticamente (sem mostrar seletor)
+        if (data.length === 1) setSelectedLine(data[0].instance_name)
+      }
+    }
+    loadLines()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
   // Filtra por role E por módulos ativos (se houver módulos configurados)
@@ -85,6 +105,46 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
             <p className="text-white/50 text-xs font-medium">Clinike</p>
           </div>
         </div>
+
+        {/* Seletor de linha WhatsApp — só aparece com 2+ linhas */}
+        {hasMultipleLines && (
+          <div className="mt-3">
+            <p className="text-white/40 text-[10px] font-semibold uppercase tracking-wider mb-1.5">
+              Linha WhatsApp
+            </p>
+            <div className="flex flex-col gap-1">
+              {lines.map((line) => {
+                const label =
+                  line.label?.trim() ||
+                  (line.phone_number
+                    ? line.phone_number.replace(/\D/g, '').slice(-9)
+                    : line.instance_name.slice(0, 14))
+                const isSelected = selectedLine === line.instance_name
+                return (
+                  <button
+                    key={line.instance_name}
+                    onClick={() => setSelectedLine(line.instance_name)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-medium transition-all ${
+                      isSelected
+                        ? 'bg-white/20 text-white'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      line.role_inbound ? 'bg-emerald-400' : 'bg-violet-400'
+                    }`} />
+                    <span className="truncate">{label}</span>
+                    {isSelected && (
+                      <span className="ml-auto">
+                        <Icon name="check" className="w-3 h-3 text-emerald-400" />
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Busca rapida (Ctrl/Cmd + K) */}

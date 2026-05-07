@@ -7,6 +7,7 @@ import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import CRMSettingsModal from './crm-settings-modal'
+import { useWaLine } from '@/contexts/WaLineContext'
 
 type Lead = {
   id: string
@@ -155,6 +156,7 @@ const AI_PRIORITY_CONFIG = {
 export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
+  const { selectedLine } = useWaLine()
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const [showNewLead, setShowNewLead] = useState(false)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
@@ -246,34 +248,40 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   //   'pending_contact'      -> leads com next_contact_at vencido
   //   'followup_all'         -> qualquer lead em followup ativo
   //   'fu_2h' / 'fu_24h' / 'fu_48h' / 'fu_5d' / 'fu_10d' -> bucket especifico
+
+  // Filtro global de linha WhatsApp (vem da sidebar)
+  const leadsForLine = selectedLine
+    ? leads.filter(l => (l as any).whatsapp_instance === selectedLine || !(l as any).whatsapp_instance)
+    : leads
+
   const filteredLeads =
     filter === 'all'
-      ? leads
+      ? leadsForLine
       : filter === 'human_review'
-        ? leads.filter(l => l.needs_human_review === true)
+        ? leadsForLine.filter(l => l.needs_human_review === true)
         : filter === 'hot' || filter === 'warm' || filter === 'cold'
-          ? leads.filter(l => l.ai_priority === filter)
+          ? leadsForLine.filter(l => l.ai_priority === filter)
           : filter === 'pending_contact'
-            ? leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
+            ? leadsForLine.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
             : filter === 'followup_all'
-              ? leads.filter(isInFollowup)
+              ? leadsForLine.filter(isInFollowup)
               : isFollowupFilter(filter)
-                ? leads.filter(l => followupBucket(l) === filter)
-                : leads.filter(l => l.status === filter)
+                ? leadsForLine.filter(l => followupBucket(l) === filter)
+                : leadsForLine.filter(l => l.status === filter)
 
   // Agrupar por stage para Kanban (respeita os filtros especiais)
   const leadsForKanban =
     filter === 'human_review'
-      ? leads.filter(l => l.needs_human_review === true)
+      ? leadsForLine.filter(l => l.needs_human_review === true)
       : filter === 'hot' || filter === 'warm' || filter === 'cold'
-        ? leads.filter(l => l.ai_priority === filter)
+        ? leadsForLine.filter(l => l.ai_priority === filter)
         : filter === 'pending_contact'
-          ? leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
+          ? leadsForLine.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
           : filter === 'followup_all'
-            ? leads.filter(isInFollowup)
+            ? leadsForLine.filter(isInFollowup)
             : isFollowupFilter(filter)
-              ? leads.filter(l => followupBucket(l) === filter)
-              : leads
+              ? leadsForLine.filter(l => followupBucket(l) === filter)
+              : leadsForLine
   const leadsByStage = STAGES.reduce((acc, stage) => {
     acc[stage.id] = leadsForKanban.filter(l => l.status === stage.id)
     return acc
