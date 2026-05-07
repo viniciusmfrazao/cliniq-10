@@ -162,16 +162,21 @@ export async function criarAgendamento(args: {
   if (!validProfIds.has(professionalId)) {
     let matched: ProfessionalRow | null = null;
 
-    // Fallback: nome do profissional nas últimas msgs
-    const lastTexts = history.slice(-6).map((m) => norm(m.content));
-    for (const p of professionals) {
-      const pNorm = norm(p.name).replace(/^dra?\.?\s+/, '');
-      const firstName = pNorm.split(/\s+/)[0];
-      if (!firstName) continue;
-      if (lastTexts.some((t) => t.includes(firstName))) {
-        matched = p;
-        profSource = 'historico';
-        break;
+    // Fallback: nome do profissional — busca do mais recente pro mais antigo
+    // para pegar quem foi CONFIRMADO por último (evita pegar Amanda quando Sarah foi confirmada)
+    const lastMsgs = history.slice(-8).reverse();
+    outerLoop:
+    for (const msg of lastMsgs) {
+      const t = norm(msg.content);
+      for (const p of professionals) {
+        const pNorm = norm(p.name).replace(/^dra?\.?\s+/, '');
+        const firstName = pNorm.split(/\s+/)[0];
+        if (!firstName) continue;
+        if (t.includes(firstName)) {
+          matched = p;
+          profSource = 'historico';
+          break outerLoop;
+        }
       }
     }
 
