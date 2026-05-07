@@ -424,12 +424,12 @@ export async function escalarHumano(
  */
 function detectarPrioridade(observacoes: string | undefined, procedimento: string): 'cold' | 'warm' | 'hot' {
   const txt = norm(`${observacoes ?? ''} ${procedimento}`);
-  // Hot: querendo agendar agora, perguntando preco, urgencia
-  if (/agendar|marcar|preco|valor|quanto|hoje|amanha|essa semana|urgente/.test(txt)) {
+  // Hot: querendo agendar agora, perguntando preco, urgencia, cliente recorrente com interesse claro
+  if (/agendar|marcar|preco|valor|quanto|hoje|amanha|essa semana|urgente|ja fez|experiente|recorrente|quero fazer|quero agendar|tem hoje|tem amanha|disponibilidade|horario/.test(txt)) {
     return 'hot';
   }
   // Warm: interesse claro, mas sem urgencia
-  if (/quero|gostaria|tenho interesse|me interesso|gostei|fazer/.test(txt)) {
+  if (/quero|gostaria|tenho interesse|me interesso|gostei|fazer|saber mais|informacao|pergunta|perguntou/.test(txt)) {
     return 'warm';
   }
   return 'cold';
