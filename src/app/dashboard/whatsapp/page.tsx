@@ -422,17 +422,24 @@ export default function WhatsAppPage() {
 
     if (!data) return
 
-    // Agrupa por telefone + linha (instance), ordem mais recente primeiro
+    // Agrupa por telefone APENAS (não por linha) — evita duplicatas
+    // Filtra grupos de WhatsApp (IDs de grupo começam com números longos sem 55)
     const seen = new Set<string>()
     const convs: Conversation[] = []
     const linesFound = new Set<string>()
     for (const r of data as EvaRow[]) {
       if (!r.content) continue
+      // Filtrar grupos: telefones de grupos têm formato diferente (ex: 120363..., muito longo)
+      const phone = r.phone ?? ''
+      if (phone.length > 15) continue // grupos têm IDs muito longos
+      if (phone.includes('@g.us')) continue // formato grupo
+      
       const inst = rowInstanceName(r)
       if (inst) linesFound.add(inst)
-      const tid = threadKey(r.phone, inst)
-      if (seen.has(tid)) continue
-      seen.add(tid)
+      
+      // Agrupa por telefone apenas — sem duplicar por linha
+      if (seen.has(phone)) continue
+      seen.add(phone)
       const conv = buildConversationFromRow(undefined, r)
       if (conv) convs.push({ ...conv, unread: 0 })
     }
