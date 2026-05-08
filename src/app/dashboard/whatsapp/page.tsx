@@ -65,7 +65,7 @@ type EvaRow = {
 }
 
 function threadKey(phone: string, instanceName: string | null | undefined): string {
-  return `${phone}::${instanceName ?? ''}`
+  return phone // agrupa só por telefone — evita duplicatas por linha
 }
 
 function rowInstanceName(r: EvaRow): string | null {

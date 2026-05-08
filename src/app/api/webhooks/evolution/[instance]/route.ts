@@ -417,6 +417,13 @@ export async function POST(
           break
         }
 
+        // Se instância não tem role_inbound, ignora mensagens de entrada
+        // (só processa automações de saída nessa instância)
+        if (!fromMe && row.role_inbound === false) {
+          debugTrace.push('skip: instancia sem role_inbound, mensagem de entrada ignorada')
+          break
+        }
+
         if (parsed.kind === 'unknown') {
           internalErrors.push('mensagem ignorada: tipo nao reconhecido')
           break
