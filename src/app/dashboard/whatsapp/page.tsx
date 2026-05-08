@@ -805,7 +805,7 @@ export default function WhatsAppPage() {
             </div>
           </div>
 
-          {/* Abas de filtro por linha — só aparece quando há mais de 1 linha */}
+          {/* Abas de filtro por linha — aparece quando há mais de 1 linha */}
           {allLines.length > 1 && (
             <div className="flex border-b border-slate-100 dark:border-slate-700 overflow-x-auto">
               <button
@@ -833,7 +833,7 @@ export default function WhatsAppPage() {
                   >
                     <span
                       className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        isInbound ? 'bg-emerald-500' : 'bg-slate-400'
+                        isInbound ? 'bg-emerald-500' : 'bg-violet-400'
                       }`}
                     />
                     {label}
@@ -845,8 +845,7 @@ export default function WhatsAppPage() {
           
           <div className="flex-1 overflow-y-auto">
             {conversations.filter(c => {
-              const active = selectedLine || lineFilter
-              return !active || c.instanceName === active
+              return !lineFilter || c.instanceName === lineFilter
             }).length === 0 ? (
               <div className="p-8 text-center text-slate-500">
                 <Icon name="message" className="w-12 h-12 mx-auto mb-3 text-slate-300" />
@@ -855,8 +854,7 @@ export default function WhatsAppPage() {
             ) : (
               conversations
                 .filter(c => {
-                  const active = selectedLine || lineFilter
-                  return !active || c.instanceName === active
+                  return !lineFilter || c.instanceName === lineFilter
                 })
                 .map(conv => {
                 const isInbound = conv.instanceName

@@ -336,9 +336,19 @@ export default function WhatsappConfigPage() {
               onSetDefault={() =>
                 patchInstance(inst, { is_default: true }, `default-${inst.instance_name}`)
               }
-              onUpdateRole={(role, value) =>
+              onUpdateRole={async (role, value) => {
+                // Exclusividade: Eva só pode atender em 1 número por vez
+                if (role === 'role_inbound' && value === true) {
+                  // Desativa role_inbound em todos os outros números
+                  const others = instances.filter(
+                    (i) => i.instance_name !== inst.instance_name && i.role_inbound
+                  )
+                  for (const other of others) {
+                    await patchInstance(other, { role_inbound: false }, `role-${other.instance_name}-role_inbound`)
+                  }
+                }
                 patchInstance(inst, { [role]: value }, `role-${inst.instance_name}-${role}`)
-              }
+              }}
               onSaveLabel={label =>
                 patchInstance(inst, { label }, `label-${inst.instance_name}`)
               }
