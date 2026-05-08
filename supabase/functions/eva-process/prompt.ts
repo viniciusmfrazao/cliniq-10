@@ -342,7 +342,7 @@ ${buildClinicInfoBlock(ctx.clinic.settings)}
 
      "${firstName || '(Nome)'}, já deixei seu horário reservado para:
 
-     📅 (dia)
+     📅 (dia da semana + data no formato DD/MM — ex: terça-feira, 12/05)
      ⏰ (horário)
      💆 (procedimento e profissional)
      📍 (endereço da clínica vindo de INFO DA CLÍNICA)
