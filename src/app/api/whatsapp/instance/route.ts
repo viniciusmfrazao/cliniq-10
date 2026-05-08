@@ -165,6 +165,11 @@ export async function POST(req: NextRequest) {
       is_default: isFirst,
       label,
       assigned_to: assignedTo,
+      // 1º número: assume tudo (Eva + automação + manual)
+      // 2º+ número: entra sem nenhum papel — clínica configura manualmente
+      role_inbound: isFirst,
+      role_outbound_automation: isFirst,
+      role_outbound_manual: isFirst,
     })
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -272,9 +277,9 @@ export async function GET(req: NextRequest) {
     last_event_at: row.last_event_at,
     auto_reply_enabled: row.auto_reply_enabled !== false,
     is_default: row.is_default === true,
-    role_inbound: row.role_inbound !== false,
-    role_outbound_automation: row.role_outbound_automation !== false,
-    role_outbound_manual: row.role_outbound_manual !== false,
+    role_inbound: row.role_inbound === true,
+    role_outbound_automation: row.role_outbound_automation === true,
+    role_outbound_manual: row.role_outbound_manual === true,
     label: row.label,
     assigned_to: row.assigned_to,
   }))
