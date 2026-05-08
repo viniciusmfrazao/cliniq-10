@@ -970,7 +970,7 @@ export async function POST(
                 phone,
                 remoteJid: key?.remoteJid ?? `${phone}@s.whatsapp.net`,
                 messageId: messageId ?? null,
-                message: parsed.text || preview,
+                message: content, // usa content — já tem transcrição se áudio foi transcrito
                 pushName,
                 kind: parsed.kind,
                 mediaUrl,
