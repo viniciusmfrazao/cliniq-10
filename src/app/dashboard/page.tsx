@@ -115,6 +115,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
   const startOfMonth = startOfMonthBR()
   const startOfMonthDate = startOfMonth.slice(0, 10) // YYYY-MM-DD pra colunas tipo `date`
+
+  // Alertas de cobrança: promessas vencidas ou para hoje
+  const { count: alertasCobranca } = await supabase
+    .from('debitos')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+    .eq('status', 'pendente')
+    .lte('data_promessa', today)
+    .not('data_promessa', 'is', null)
+
   const { count: newPatientsMonth } = await supabase
     .from('patients')
     .select('*', { count: 'exact', head: true })
@@ -466,8 +476,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                       href={action.href}
                       className="flex flex-col items-center gap-1.5 md:gap-2 p-2.5 md:p-4 rounded-lg md:rounded-xl bg-slate-50 active:bg-slate-100 transition-colors"
                     >
-                      <div className={`w-9 h-9 md:w-10 md:h-10 bg-gradient-to-br ${action.color} rounded-lg md:rounded-xl flex items-center justify-center shadow-md`}>
-                        <Icon name={action.icon} className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                      <div className="relative">
+                        <div className={`w-9 h-9 md:w-10 md:h-10 bg-gradient-to-br ${action.color} rounded-lg md:rounded-xl flex items-center justify-center shadow-md`}>
+                          <Icon name={action.icon} className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                        </div>
+                        {action.label === 'Financeiro' && (alertasCobranca ?? 0) > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
+                            {(alertasCobranca ?? 0) > 9 ? '9+' : alertasCobranca}
+                          </span>
+                        )}
                       </div>
                       <span className="text-[10px] md:text-sm font-medium text-slate-700 text-center">{action.label}</span>
                     </Link>
