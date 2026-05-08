@@ -408,6 +408,13 @@ export async function POST(
           internalErrors.push('mensagem ignorada: phone=null')
           break
         }
+
+        // Ignorar grupos de WhatsApp e números inválidos
+        if (key?.remoteJid?.endsWith('@g.us') || phone.length > 15) {
+          debugTrace.push(`skip: grupo ou numero invalido (${phone})`)
+          break
+        }
+
         if (parsed.kind === 'unknown') {
           internalErrors.push('mensagem ignorada: tipo nao reconhecido')
           break
