@@ -881,10 +881,9 @@ export async function POST(
                       : 'figurinha'
 
             const autoReply =
-              parsed.kind === 'sticker'
-                ? null // sticker nao precisa de resposta automatica
-                : `Recebi sua ${mediaLabel}! Sou a assistente virtual e ainda não consigo ` +
-                  `${parsed.kind === 'audio' ? 'escutar áudios' : 'analisar arquivos'} aqui. ` +
+              parsed.kind === 'sticker' || parsed.kind === 'audio'
+                ? null // audio: Eva transcreve e responde. sticker: não precisa de resposta
+                : `Recebi sua ${mediaLabel}! Ainda não consigo analisar este tipo de arquivo aqui. ` +
                   `Já estou avisando alguém da nossa equipe pra te responder com cuidado, tá? 💜`
 
             // Envia auto-resposta (best-effort — se falhar, segue o jogo)
