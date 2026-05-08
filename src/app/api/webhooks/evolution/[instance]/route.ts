@@ -863,6 +863,8 @@ export async function POST(
               parsed.kind === 'video' ||
               parsed.kind === 'document' ||
               parsed.kind === 'sticker') &&
+            // audio com transcrição bem-sucedida: Eva responde normalmente, não escala
+            !(parsed.kind === 'audio' && transcription) &&
             // pra image/video/document: so escala se NAO tem caption util
             (parsed.kind === 'audio' ||
               parsed.kind === 'sticker' ||
