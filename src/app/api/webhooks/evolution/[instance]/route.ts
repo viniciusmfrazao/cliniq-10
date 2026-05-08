@@ -410,7 +410,9 @@ export async function POST(
         }
 
         // Ignorar grupos de WhatsApp e números inválidos
-        if (key?.remoteJid?.endsWith('@g.us') || phone.length > 15) {
+        // Números BR válidos: até 13 dígitos (55 + DDD + 9 dígitos)
+        // Grupos têm IDs com 20+ dígitos
+        if (key?.remoteJid?.endsWith('@g.us') || phone.length > 20) {
           debugTrace.push(`skip: grupo ou numero invalido (${phone})`)
           break
         }
