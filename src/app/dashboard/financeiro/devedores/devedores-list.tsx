@@ -28,6 +28,7 @@ type Props = {
   debitos: Debito[]
   pacientes: Paciente[]
   clinicId: string
+  clinicName: string
 }
 
 function fmt(v: number) {
@@ -50,7 +51,7 @@ function isAtrasada(iso: string | null) {
   return iso < todayBR()
 }
 
-export default function DevedoresList({ debitos, pacientes, clinicId }: Props) {
+export default function DevedoresList({ debitos, pacientes, clinicId, clinicName }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [showForm, setShowForm] = useState(false)
@@ -565,16 +566,16 @@ export default function DevedoresList({ debitos, pacientes, clinicId }: Props) {
                   <div>
                     <h3 className="font-bold text-slate-900">{data.paciente}</h3>
                     {data.phone && (
-                      <a 
-                        href={`https://wa.me/55${data.phone.replace(/\D/g, '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-emerald-600 hover:underline flex items-center gap-1"
-                      >
-                        <Icon name="phone" className="w-3 h-3" />
-                        {data.phone}
-                      </a>
-                    )}
+                    <a
+                      href={`https://wa.me/55${data.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${data.paciente.split(' ')[0]}! Tudo bem? 😊\n\nPassando aqui da ${clinicName} para confirmar se está tudo certo com o pagamento pendente de ${fmt(data.total)}.\n\nQualquer dúvida estou à disposição! 🙏`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition-colors"
+                    >
+                      <Icon name="phone" className="w-3.5 h-3.5" />
+                      Cobrar via WhatsApp
+                    </a>
+                  )}
                   </div>
                 </div>
                 <div className="text-right">

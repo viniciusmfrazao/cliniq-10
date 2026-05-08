@@ -9,6 +9,8 @@ export default async function DevedoresPage() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id
+  const { data: clinic } = await supabase.from('clinics').select('name').eq('id', clinicId).single()
+  const clinicName = clinic?.name || 'a clínica'
 
   // Buscar débitos pendentes (entradas com status pendente)
   const { data: debitos } = await supabase
@@ -85,6 +87,7 @@ export default async function DevedoresPage() {
         debitos={debitos || []} 
         pacientes={pacientes || []}
         clinicId={clinicId || ''}
+        clinicName={clinicName}
       />
     </div>
   )
