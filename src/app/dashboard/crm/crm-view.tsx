@@ -810,7 +810,43 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
               </button>
             </div>
           ) : (
-            <table className="w-full">
+            <>
+              {/* Mobile: cards */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {filteredLeads.map(lead => {
+                  const stage = STAGES.find(s => s.id === lead.status)
+                  const source = SOURCES.find(s => s.id === lead.source)
+                  return (
+                    <div
+                      key={lead.id}
+                      className="p-4 hover:bg-slate-50 cursor-pointer active:bg-slate-100"
+                      onClick={() => setSelectedLead(lead)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-slate-900">{lead.name}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stage?.color}`}>
+                              {stage?.label}
+                            </span>
+                          </div>
+                          {lead.phone && <p className="text-sm text-slate-500 mt-0.5">{lead.phone}</p>}
+                          {lead.interest && <p className="text-sm text-violet-600 mt-1 truncate">{lead.interest}</p>}
+                          <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400">
+                            <span>{source?.icon} {source?.label}</span>
+                            <span>·</span>
+                            <span>{getTimeAgo(lead.created_at)}</span>
+                          </div>
+                        </div>
+                        <Icon name="chevronRight" className="w-4 h-4 text-slate-300 flex-shrink-0 mt-1" />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Desktop: tabela */}
+              <table className="w-full hidden md:table">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
                   <th className="text-left p-3 text-xs font-semibold text-slate-500 uppercase">Lead</th>
@@ -863,6 +899,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                 })}
               </tbody>
             </table>
+            </>
           )}
         </div>
       )}

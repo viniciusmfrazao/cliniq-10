@@ -151,7 +151,35 @@ export default function SaidasList({ saidas, clinicId }: Props) {
       )}
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: cards */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filteredList.length === 0 ? (
+            <div className="px-4 py-12 text-center text-slate-500">Nenhuma saída encontrada</div>
+          ) : filteredList.map(s => (
+            <div key={s.id} className="p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-900">{s.descricao}</p>
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <span className="text-xs text-slate-400">{new Date(s.data).toLocaleDateString('pt-BR')}</span>
+                    <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">{s.categoria_dre || 'Outros'}</span>
+                    {s.fornecedor && <span className="text-xs text-slate-500">{s.fornecedor}</span>}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 ml-3">
+                  <p className="font-bold text-rose-600">-{fmt(s.valor)}</p>
+                  <button onClick={() => handleDelete(s.id)} disabled={deleting === s.id}
+                    className="mt-1 p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition">
+                    <Icon name={deleting === s.id ? 'loader' : 'trash'} className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: tabela */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
@@ -208,6 +236,7 @@ export default function SaidasList({ saidas, clinicId }: Props) {
               )}
             </tbody>
           </table>
+        </div>
         </div>
       </div>
     </div>
