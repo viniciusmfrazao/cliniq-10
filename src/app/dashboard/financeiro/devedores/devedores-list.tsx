@@ -164,8 +164,8 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
                   {isHoje(d.data_promessa) && (
                     <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Hoje</span>
                   )}
-                  {d.phone && (
-                    <a href={`https://wa.me/55${d.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                  {d.patients?.phone && (
+                    <a href={`https://wa.me/55${d.patients.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                       className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600">
                       <Icon name="phone" className="w-4 h-4" />
                     </a>
