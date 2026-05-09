@@ -587,7 +587,7 @@ export default function DevedoresList({ debitos, pacientes, clinicId }: Props) {
               {/* Lista de débitos do paciente */}
               <div className="divide-y divide-slate-50">
                 {data.debitos.map(debito => {
-                  const isVencido = new Date(debito.data_vencimento) < new Date()
+                  const isVencido = debito.data_vencimento < todayBR()
                   const isLoading = loadingId === debito.id
                   
                   return (
@@ -597,7 +597,7 @@ export default function DevedoresList({ debitos, pacientes, clinicId }: Props) {
                         <div>
                           <p className="font-medium text-slate-900">{debito.descricao}</p>
                           <p className="text-sm text-slate-500">
-                            Vence em: {new Date(debito.data_vencimento).toLocaleDateString('pt-BR')}
+                            Vence em: {fmtDate(debito.data_vencimento)}
                             {isVencido && <span className="text-red-500 ml-2">• Vencido</span>}
                           </p>
                         </div>
