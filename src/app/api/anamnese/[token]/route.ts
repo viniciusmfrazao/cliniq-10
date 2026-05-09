@@ -27,6 +27,13 @@ export async function GET(
       return NextResponse.json({ error: 'Link expirado' }, { status: 410 })
     }
 
+    // Buscar configuração personalizada da clínica
+    const { data: anamneseConfig } = await supabaseAdmin
+      .from('anamnese_config')
+      .select('*')
+      .eq('clinic_id', anamnese.clinic_id)
+      .maybeSingle()
+
     // Mark as viewed if pending
     if (anamnese.status === 'pending') {
       await supabaseAdmin
@@ -35,7 +42,7 @@ export async function GET(
         .eq('id', anamnese.id)
     }
 
-    return NextResponse.json(anamnese)
+    return NextResponse.json({ ...anamnese, anamnese_config: anamneseConfig })
   } catch (error) {
     console.error('Error fetching anamnese:', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
