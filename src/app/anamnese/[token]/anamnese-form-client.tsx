@@ -7,12 +7,7 @@ type AnamneseConfig = {
   subtitulo?: string
   cor_primaria?: string
   secoes_ativas?: string[]
-  perguntas_extras?: Array<{
-    secao: string
-    pergunta: string
-    tipo: 'sim_nao' | 'texto' | 'multipla'
-    opcoes?: string
-  }>
+  perguntas_extras?: Array<{ secao: string; pergunta: string; tipo: 'sim_nao'|'texto'|'multipla'; opcoes?: string }>
 }
 
 type AnamneseData = {
@@ -382,8 +377,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           </header>
 
           {/* PROCEDIMENTOS ANTERIORES */}
-          {secoesAtivas.includes('procedimentos') && (
-          <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+          {secoesAtivas.includes('procedimentos') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Procedimentos Anteriores
             </h2>
@@ -455,12 +449,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 onChange={e => setTextValue('experiencia_desc', e.target.value)}
               />
             </div>
-          </section>
-          )}
+          </section>)}
 
           {/* HÁBITOS DE VIDA */}
-          {secoesAtivas.includes('habitos') && (
-          <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+          {secoesAtivas.includes('habitos') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Hábitos de Vida
             </h2>
@@ -496,12 +488,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 </span>
               </div>
             </div>
-          </section>
-          )}
+          </section>)}
 
           {/* ALERGIAS */}
-          {secoesAtivas.includes('alergias') && (
-          <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+          {secoesAtivas.includes('alergias') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Alergias
             </h2>
@@ -526,12 +516,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <Choice group="herpes" value="Sim" selected={responses.herpes === 'Sim'} onClick={() => selectSingle('herpes', 'Sim')} />
               </div>
             </div>
-          </section>
-          )}
+          </section>)}
 
           {/* MEDICAMENTOS */}
-          {secoesAtivas.includes('medicamentos') && (
-          <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+          {secoesAtivas.includes('medicamentos') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Medicamentos em Uso
             </h2>
@@ -553,12 +541,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 </div>
               </div>
             ))}
-          </section>
-          )}
+          </section>)}
 
           {/* SAÚDE */}
-          {secoesAtivas.includes('saude') && (
-          <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+          {secoesAtivas.includes('saude') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Saúde Geral
             </h2>
@@ -593,12 +579,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               </div>
               <textarea className="anamnese-input" placeholder="Se sim, descreva aqui qual..." rows={3} value={responses.inforelevante_desc || ''} onChange={e => setTextValue('inforelevante_desc', e.target.value)} />
             </div>
-          </section>
-          )}
+          </section>)}
 
           {/* OUTRAS INFORMAÇÕES */}
-          {secoesAtivas.includes('outras') && (
-          <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+          {secoesAtivas.includes('outras') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Outras Informações
             </h2>
@@ -630,12 +614,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               </div>
               <input type="text" className="anamnese-input" placeholder="Se outro, especifique" value={responses.conheceu_outro || ''} onChange={e => setTextValue('conheceu_outro', e.target.value)} />
             </div>
-          </section>
-          )}
+          </section>)}
 
           {/* EXCLUSIVO MULHERES */}
-          {secoesAtivas.includes('mulheres') && (
-          <div className="text-center text-xs tracking-widest uppercase py-2 rounded-t" style={{ background: 'var(--gold)', color: 'var(--warm-white)' }}>
+          {secoesAtivas.includes('mulheres') && (<><div className="text-center text-xs tracking-widest uppercase py-2 rounded-t" style={{ background: 'var(--gold)', color: 'var(--warm-white)' }}>
             Exclusivo para Mulheres
           </div>
           <section className="rounded-b p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)', borderTop: 'none' }}>
@@ -654,12 +636,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <Choice group="lactante" value="Sim" selected={responses.lactante === 'Sim'} onClick={() => selectSingle('lactante', 'Sim')} />
               </div>
             </div>
-          </section>
-          )}
+          </section></>)}
 
           {/* PRINCIPAL QUEIXA */}
-          {secoesAtivas.includes('queixa') && (
-          <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+          {secoesAtivas.includes('queixa') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Principal Queixa
             </h2>
@@ -699,8 +679,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Observação</p>
               <textarea className="anamnese-input" placeholder="Descreva aqui todas as suas queixas facial ou corporal..." rows={4} value={responses.queixa_obs || ''} onChange={e => setTextValue('queixa_obs', e.target.value)} />
             </div>
-          </section>
-          )}
+          </section>)}
 
           {/* Submit */}
           <div className="text-center mt-10">
