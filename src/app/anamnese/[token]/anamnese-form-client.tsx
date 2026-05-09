@@ -281,7 +281,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   const titulo = cfg?.titulo || 'Ficha de Anamnese Facial'
   const subtitulo = cfg?.subtitulo || ''
   const secoesAtivas = cfg?.secoes_ativas || ['procedimentos','habitos','alergias','medicamentos','saude','outras','mulheres','queixa']
-  const perguntasExtras = cfg?.perguntas_extras || []
 
   const Choice = ({ group, value, selected, onClick, type = 'single' }: any) => (
     <button
@@ -359,7 +358,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               {anamnese?.clinics.name || 'Clínica Estética'}
             </div>
             <h1 className="text-4xl font-light leading-tight" style={{ color: 'var(--dark)' }}>
-              {titulo}{subtitulo ? <><br /><span className="text-2xl">{subtitulo}</span></> : null}
+              Ficha de Anamnese<br />Facial
             </h1>
             <div className="flex items-center justify-center gap-4 mt-5">
               <div className="w-16 h-px" style={{ background: cor, opacity: 0.5 }} />
@@ -459,8 +458,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           </section>
           )}
 
-          {secoesAtivas.includes('habitos') && (
           {/* HÁBITOS DE VIDA */}
+          {secoesAtivas.includes('habitos') && (
           <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Hábitos de Vida
@@ -500,8 +499,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           </section>
           )}
 
-          {secoesAtivas.includes('alergias') && (
           {/* ALERGIAS */}
+          {secoesAtivas.includes('alergias') && (
           <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Alergias
@@ -530,8 +529,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           </section>
           )}
 
-          {secoesAtivas.includes('medicamentos') && (
           {/* MEDICAMENTOS */}
+          {secoesAtivas.includes('medicamentos') && (
           <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Medicamentos em Uso
@@ -557,8 +556,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           </section>
           )}
 
-          {secoesAtivas.includes('saude') && (
           {/* SAÚDE */}
+          {secoesAtivas.includes('saude') && (
           <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Saúde Geral
@@ -597,8 +596,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           </section>
           )}
 
-          {secoesAtivas.includes('outras') && (
           {/* OUTRAS INFORMAÇÕES */}
+          {secoesAtivas.includes('outras') && (
           <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Outras Informações
@@ -634,8 +633,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           </section>
           )}
 
-          {secoesAtivas.includes('mulheres') && (
           {/* EXCLUSIVO MULHERES */}
+          {secoesAtivas.includes('mulheres') && (
           <div className="text-center text-xs tracking-widest uppercase py-2 rounded-t" style={{ background: 'var(--gold)', color: 'var(--warm-white)' }}>
             Exclusivo para Mulheres
           </div>
@@ -658,8 +657,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           </section>
           )}
 
-          {secoesAtivas.includes('queixa') && (
           {/* PRINCIPAL QUEIXA */}
+          {secoesAtivas.includes('queixa') && (
           <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Principal Queixa
