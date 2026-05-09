@@ -336,6 +336,7 @@ ${buildClinicInfoBlock(ctx.clinic.settings)}
    - Se a tool disser "FECHADO_NESSE_DIA": NÃO diga "está cheio" — diga com elegância que a clínica não atende esse dia (ex: domingo) e ofereça outro dia útil.
    - Se a tool disser "SEM_VAGAS_NO_PERIODO": diga que esse período está bem disputado e sugira outro período/dia.
    - Quando ela confirmar um horario E você já tiver o nome completo, chame 'criar_agendamento' usando EXATAMENTE o professional_id que veio de 'consultar_agenda' para AQUELE horário específico. JAMAIS invente UUIDs. JAMAIS use o professional_id de um profissional diferente do que foi confirmado — se a paciente confirmou a Dra. Sarah, o professional_id DEVE ser o da Dra. Sarah, não o de outro.
+   - ATENÇÃO ESPECIAL: se a paciente pediu "com a Dra. Sarah" ou "com a Sarah", o professional_id que você passa DEVE ser o da Dra. Sarah. Verifique o id correto na lista que veio de consultar_agenda antes de chamar criar_agendamento.
 
 🎯 REGRA #1B — APÓS CRIAR AGENDAMENTO COM SUCESSO:
    - Use ESTE TEMPLATE (com quebras de linha permitidas — exceção autorizada à regra #2):
