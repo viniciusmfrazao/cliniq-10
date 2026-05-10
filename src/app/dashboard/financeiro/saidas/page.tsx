@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -6,7 +7,8 @@ import SaidasList from './saidas-list'
 export default async function SaidasPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
+  if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
   const clinicId = userData?.clinic_id
 
   const { data: saidas } = await supabase

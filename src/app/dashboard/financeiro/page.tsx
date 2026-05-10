@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -14,8 +15,9 @@ function fmtCompact(v: number) {
 export default async function FinanceiroPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id
+  if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
 
   // Tudo no fuso de Brasilia (servidor roda em UTC)
   const todayStr = todayBR()
