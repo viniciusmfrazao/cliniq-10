@@ -15,137 +15,77 @@ export const FaceMap = forwardRef<SVGSVGElement, FaceMapProps>(
   ({ onClick, children, showRegions = true, showMuscles = false, view = 'front', gender = 'female' }, ref) => {
     const isMale = gender === 'male'
 
-    const skin = isMale
-      ? { s0: '#F0D5BC', s1: '#E0C0A0', s2: '#C8A882', s3: '#B09070', hi: '#F8E8D8' }
-      : { s0: '#F8E0CC', s1: '#F0CEBC', s2: '#DEB898', s3: '#C8A07A', hi: '#FFF0E8' }
-    const hair   = isMale ? '#3A2818' : '#C8A060'
-    const hairDk = isMale ? '#1E1208' : '#8B6830'
-    const hairHi = isMale ? '#5A4030' : '#E8C880'
-    const lip    = isMale ? { t: '#C08878', b: '#A87060' } : { t: '#D4807A', b: '#B86860' }
-    const eyeCol = '#7AACCF'   // olhos claros azul-acinzentado (como na referência)
-
-    // ── Vista lateral ────────────────────────────────────────────────────────
     if (view === 'side-left' || view === 'side-right') {
       const flip = view === 'side-left'
       return (
-        <svg
-          ref={ref}
-          viewBox="0 0 300 420"
-          className="w-full max-w-[300px] mx-auto cursor-crosshair select-none"
-          onClick={onClick}
-          style={{ transform: flip ? 'scaleX(-1)' : 'none' }}
-        >
+        <svg ref={ref} viewBox="0 0 300 430" className="w-full max-w-[300px] mx-auto cursor-crosshair select-none" onClick={onClick} style={{ transform: flip ? 'scaleX(-1)' : 'none' }}>
           <defs>
-            <radialGradient id="skinS" cx="38%" cy="30%" r="70%">
-              <stop offset="0%" stopColor={skin.hi} />
-              <stop offset="45%" stopColor={skin.s0} />
-              <stop offset="100%" stopColor={skin.s2} />
+            <radialGradient id="sSide" cx="38%" cy="30%" r="70%">
+              <stop offset="0%" stopColor={isMale ? '#F8E8D8' : '#FFF0E8'} />
+              <stop offset="45%" stopColor={isMale ? '#EDD0B0' : '#F5D8C0'} />
+              <stop offset="100%" stopColor={isMale ? '#D0A878' : '#DEB898'} />
             </radialGradient>
-            <linearGradient id="hairSide" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={hairHi} />
-              <stop offset="50%" stopColor={hair} />
-              <stop offset="100%" stopColor={hairDk} />
+            <linearGradient id="hSide" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={isMale ? '#6A5040' : '#E8C870'} />
+              <stop offset="50%" stopColor={isMale ? '#3A2818' : '#C8A040'} />
+              <stop offset="100%" stopColor={isMale ? '#1E1208' : '#8B6820'} />
             </linearGradient>
           </defs>
-
-          {/* Pescoço */}
-          <path d={isMale ? 'M115 348 Q125 385 135 410 L175 410 Q183 385 188 348' : 'M118 342 Q127 378 136 405 L170 405 Q178 378 185 342'}
-            fill="url(#skinS)" stroke={skin.s2} strokeWidth="0.5" />
-
-          {/* Rosto */}
+          <path d={isMale ? 'M118 352 Q128 386 136 408 L172 408 Q180 386 188 352' : 'M120 348 Q129 380 136 405 L168 405 Q176 380 183 348'} fill="url(#sSide)" stroke="#DEB898" strokeWidth="0.5" />
           <path d={isMale
-            ? `M72 115 C70 78 84 48 116 32 C148 18 186 20 218 40 C246 58 258 90 258 125
-               L256 205 C252 248 244 282 228 302 Q210 322 188 330 L165 334
-               Q145 338 130 332 Q114 326 102 316 Q82 300 74 272 Q68 248 70 210 Z`
-            : `M78 118 C76 84 90 52 120 36 C150 22 182 24 210 42 C236 58 246 88 246 120
-               L244 198 C240 238 234 268 220 288 Q205 308 186 318 L165 322
-               Q146 326 132 320 Q118 314 108 306 Q90 292 82 268 Q76 246 76 208 Z`}
-            fill="url(#skinS)" stroke={skin.s2} strokeWidth="0.7" />
-
-          {/* Sombra lateral */}
-          <path d={isMale
-            ? 'M238 130 Q252 175 248 228 Q244 262 228 302 Q244 265 246 228 Q250 178 242 132'
-            : 'M228 128 Q240 168 236 218 Q232 252 220 288 Q234 255 236 220 Q240 174 232 130'}
-            fill={skin.s2} opacity="0.3" />
-
-          {/* Bochecha rosada */}
-          <ellipse cx={isMale ? '168' : '162'} cy={isMale ? '192' : '188'} rx="38" ry="28" fill="#E89888" opacity={isMale ? '0.08' : '0.14'} />
-
-          {/* Cabelo lateral */}
+            ? `M72 115 C70 78 85 46 118 30 C150 16 188 18 220 38 C248 56 260 88 260 124 L258 204 C254 248 246 284 228 305 Q210 325 188 334 L164 338 Q144 342 128 336 Q112 330 100 318 Q80 302 72 272 Q66 246 68 208 Z`
+            : `M78 118 C76 82 90 50 122 34 C152 20 186 22 214 42 C240 58 250 90 250 124 L248 202 C244 244 238 278 222 298 Q206 318 186 326 L163 330 Q144 334 130 328 Q116 322 106 312 Q88 296 80 268 Q74 244 76 206 Z`}
+            fill="url(#sSide)" stroke="#DEB898" strokeWidth="0.7" />
+          <path d={isMale ? 'M240 132 Q254 175 250 228 Q244 265 228 305 Q246 268 248 228 Q252 178 244 135' : 'M232 130 Q244 170 240 220 Q236 255 222 298 Q238 258 240 220 Q244 175 236 132'} fill="#D0A878" opacity="0.28" />
+          <ellipse cx={isMale ? '168' : '162'} cy={isMale ? '194' : '190'} rx="36" ry="26" fill="#E89888" opacity={isMale ? '0.08' : '0.16'} />
           {isMale ? (
             <g>
-              <path d={`M72 118 C71 72 96 38 142 26 C185 16 222 28 250 56 C260 70 262 92 260 118
-                        L252 116 C250 94 244 74 230 58 C205 32 170 24 138 30 C102 38 84 65 84 118 Z`}
-                fill="url(#hairSide)" />
+              <path d={`M72 118 C71 72 96 38 142 25 C185 14 224 26 252 55 C262 70 264 92 262 118 L254 116 C252 94 245 74 230 57 C204 30 168 22 136 28 C100 36 84 65 84 118 Z`} fill="url(#hSide)" />
             </g>
           ) : (
             <g>
-              {/* Cabelo base lateral */}
-              <path d={`M78 118 C76 74 100 40 146 28 C185 18 220 30 246 56 C256 70 254 90 252 116
-                        L244 114 C242 92 234 72 218 58 C194 34 158 26 130 32 C96 40 88 68 88 118 Z`}
-                fill="url(#hairSide)" />
-              {/* Coque */}
-              <ellipse cx="190" cy="45" rx="35" ry="28" fill="url(#hairSide)" />
-              <ellipse cx="190" cy="48" rx="28" ry="22" fill={hairHi} opacity="0.3" />
-              <path d="M160 35 Q175 28 190 26 Q205 28 218 38" stroke={hairDk} strokeWidth="1.5" fill="none" opacity="0.5" />
-              {/* Cabelo longo caindo */}
-              <path d="M78 118 Q70 168 72 222 Q74 272 82 322 Q78 285 78 245 Q77 198 80 158"
-                fill="url(#hairSide)" />
+              <path d={`M78 118 C76 74 100 40 146 28 C185 18 220 30 246 56 C256 70 254 90 252 116 L244 114 C242 92 234 72 218 57 C194 33 158 25 130 30 C96 38 88 67 88 118 Z`} fill="url(#hSide)" />
+              <path d="M78 116 Q70 168 72 224 Q74 274 84 324 Q78 286 78 248 Q77 200 80 160" fill="url(#hSide)" />
+              <ellipse cx="194" cy="48" rx="34" ry="26" fill="url(#hSide)" />
+              <ellipse cx="192" cy="46" rx="25" ry="18" fill="#F0D888" opacity="0.25" />
+              <path d="M165 38 Q178 28 194 26 Q208 28 220 40" stroke="#8B6820" strokeWidth="1.8" fill="none" opacity="0.4" strokeLinecap="round" />
+              <path d="M160 40 Q175 32 194 30 Q210 32 222 42" stroke="#F0D888" strokeWidth="1" fill="none" opacity="0.28" strokeLinecap="round" />
             </g>
           )}
-
-          {/* Orelha */}
-          <path d={isMale
-            ? 'M70 168 Q52 178 50 196 Q52 216 70 226 Q80 230 84 222 Q76 212 74 196 Q76 180 84 170 Z'
-            : '74 164 Q56 174 54 192 Q56 212 74 222 Q83 226 87 218 Q80 208 78 192 Q80 176 87 166 Z'}
-            fill="url(#skinS)" stroke={skin.s2} strokeWidth="0.6" />
-          <path d={isMale ? 'M61 180 Q55 196 61 213' : 'M63 176 Q57 192 63 210'}
-            stroke={skin.s3} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.5" />
-
-          {/* Sobrancelha */}
-          <path d={isMale ? 'M132 116 Q158 106 196 110' : 'M130 120 Q154 110 188 114'}
-            stroke={hairDk} strokeWidth={isMale ? 5 : 3.5} strokeLinecap="round" fill="none" />
-
-          {/* Olho */}
+          <path d={isMale ? 'M70 170 Q52 180 50 198 Q52 218 70 228 Q80 232 84 224 Q76 214 74 198 Q76 182 84 172 Z' : '74 165 Q56 175 54 193 Q56 213 74 223 Q83 227 87 219 Q80 209 78 193 Q80 177 87 167 Z'} fill="url(#sSide)" stroke="#DEB898" strokeWidth="0.6" />
+          <path d={isMale ? 'M60 182 Q55 198 60 215' : 'M63 177 Q57 193 63 210'} stroke="#C8A07A" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.5" />
+          <path d={isMale ? 'M133 116 Q158 105 198 110' : 'M131 120 Q154 110 190 114'} stroke={isMale ? '#3A2818' : '#8B6820'} strokeWidth={isMale ? 5 : 3.5} strokeLinecap="round" fill="none" />
           <g>
-            <path d="M148 155 Q170 141 194 153 Q170 167 148 155" fill="white" />
-            <path d="M148 155 Q170 141 194 153" stroke={hairDk} strokeWidth="1.5" fill="none" />
-            <path d="M148 155 Q170 167 194 155" stroke={skin.s2} strokeWidth="0.8" fill="none" />
-            <clipPath id="eyeS"><path d="M148 155 Q170 141 194 153 Q170 167 148 155" /></clipPath>
-            <g clipPath="url(#eyeS)">
-              <circle cx="170" cy="154" r="11" fill={eyeCol} opacity="0.9" />
-              <circle cx="170" cy="154" r="7" fill="#2a4860" />
-              <circle cx="173" cy="151" r="2.5" fill="white" opacity="0.9" />
+            <path d="M150 157 Q172 143 196 155 Q172 169 150 157" fill="white" />
+            <path d="M150 157 Q172 143 196 155" stroke={isMale ? '#5A4020' : '#5A3010'} strokeWidth="1.6" fill="none" />
+            <path d="M150 157 Q172 169 196 157" stroke="#C8A07A" strokeWidth="0.8" fill="none" />
+            <clipPath id="eyeSide"><path d="M150 157 Q172 143 196 155 Q172 169 150 157" /></clipPath>
+            <g clipPath="url(#eyeSide)">
+              <circle cx="172" cy="156" r="12" fill="#7AACCF" />
+              <circle cx="172" cy="156" r="12" fill="none" stroke="#2A5878" strokeWidth="1.5" />
+              <circle cx="172" cy="156" r="7" fill="#0A1820" />
+              <circle cx="175" cy="152" r="2.8" fill="white" opacity="0.92" />
             </g>
             {!isMale && (
-              <path d="M148 152 Q170 139 192 151" stroke={hairDk} strokeWidth="1" fill="none" opacity="0.7" />
+              <g stroke="#5A3010" strokeWidth="1.1" fill="none" strokeLinecap="round">
+                <path d="M154 153 Q152 146 150 142" />
+                <path d="M163 147 Q163 140 162 136" />
+                <path d="M172 144 Q172 137 172 133" />
+                <path d="M181 147 Q182 140 183 136" />
+                <path d="M190 153 Q192 146 194 142" />
+              </g>
             )}
           </g>
-
-          {/* Nariz */}
-          <path d={isMale
-            ? 'M190 130 Q212 155 207 186 Q202 206 184 218 L172 214 Q182 203 186 186 Q190 166 183 148'
-            : 'M180 134 Q200 156 196 183 Q192 200 176 212 L165 208 Q174 198 177 182 Q180 164 174 148'}
-            fill="url(#skinS)" stroke={skin.s2} strokeWidth="0.6" />
-          <path d={isMale
-            ? 'M184 214 Q180 224 172 226 Q164 225 160 220'
-            : '176 209 Q172 218 165 220 Q158 219 154 215'}
-            stroke={skin.s3} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-
-          {/* Lábios */}
-          <path d={isMale
-            ? 'M148 262 Q158 252 168 255 Q177 252 184 262 Q177 268 168 267 Q158 268 148 262'
-            : 'M144 255 Q154 244 164 248 Q173 244 180 255 Q173 261 164 260 Q154 261 144 255'}
-            fill={lip.t} />
-          <path d={isMale
-            ? 'M148 262 Q168 272 184 262'
-            : 'M144 255 Q164 265 180 255'}
-            stroke={lip.b} strokeWidth="0.8" fill="none" />
-
+          <path d={isMale ? 'M188 132 Q209 156 204 186 Q200 206 183 218 L171 214 Q181 203 184 186 Q188 165 181 148' : 'M180 135 Q200 157 196 184 Q192 202 177 213 L165 209 Q174 199 177 183 Q180 163 174 148'} fill="url(#sSide)" stroke="#DEB898" strokeWidth="0.6" />
+          <path d={isMale ? 'M183 215 Q180 224 172 227 Q165 226 161 221' : '177 210 Q174 219 167 221 Q160 220 156 216'} stroke="#C8A07A" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+          <path d={isMale ? 'M148 264 Q158 253 168 256 Q177 253 184 264' : 'M144 256 Q154 245 164 249 Q173 245 180 256'} fill={isMale ? '#CC9080' : '#E89090'} />
+          <path d={isMale ? 'M148 264 Q168 275 184 264' : 'M144 256 Q164 268 180 256'} fill={isMale ? '#B07060' : '#C87070'} />
+          <path d={isMale ? 'M148 264 Q168 267 184 264' : 'M144 256 Q164 259 180 256'} stroke={isMale ? '#B07060' : '#C87070'} strokeWidth="0.9" fill="none" />
           {showRegions && (
             <g opacity="0.12" pointerEvents="none">
-              <ellipse cx={isMale ? '172' : '165'} cy="152" rx="28" ry="18" fill="#7B5CF5" />
-              <ellipse cx={isMale ? '170' : '163'} cy="212" rx="20" ry="14" fill="#7B5CF5" />
+              <ellipse cx={isMale ? '173' : '165'} cy="155" rx="28" ry="18" fill="#7B5CF5" />
+              <ellipse cx={isMale ? '171' : '163'} cy="212" rx="20" ry="13" fill="#7B5CF5" />
+              <ellipse cx={isMale ? '165' : '158'} cy="255" rx="22" ry="11" fill="#7B5CF5" />
             </g>
           )}
           {children}
@@ -153,355 +93,261 @@ export const FaceMap = forwardRef<SVGSVGElement, FaceMapProps>(
       )
     }
 
-    // ── Vista frontal ────────────────────────────────────────────────────────
     return (
-      <svg
-        ref={ref}
-        viewBox="0 0 340 480"
-        className="w-full max-w-[380px] mx-auto cursor-crosshair select-none"
-        onClick={onClick}
-      >
+      <svg ref={ref} viewBox="0 0 680 540" className="w-full max-w-[380px] mx-auto cursor-crosshair select-none" onClick={onClick}>
         <defs>
-          <radialGradient id="skinF" cx="50%" cy="32%" r="62%">
-            <stop offset="0%" stopColor={skin.hi} />
-            <stop offset="40%" stopColor={skin.s0} />
-            <stop offset="100%" stopColor={skin.s2} />
+          <radialGradient id="skinFront" cx="50%" cy="30%" r="65%">
+            <stop offset="0%" stopColor={isMale ? '#F8E8D8' : '#FFF0E8'} />
+            <stop offset="45%" stopColor={isMale ? '#EDD0B0' : '#F5D8C0'} />
+            <stop offset="100%" stopColor={isMale ? '#D0A878' : '#DEB898'} />
           </radialGradient>
-          <radialGradient id="skinNeck" cx="50%" cy="25%" r="70%">
-            <stop offset="0%" stopColor={skin.s0} />
-            <stop offset="100%" stopColor={skin.s2} />
+          <radialGradient id="skinNeck" cx="50%" cy="20%" r="70%">
+            <stop offset="0%" stopColor={isMale ? '#EDD0B0' : '#F5D8C0'} />
+            <stop offset="100%" stopColor={isMale ? '#D0A878' : '#DEB898'} />
           </radialGradient>
-          <radialGradient id="sdwL" cx="0%" cy="50%" r="100%">
-            <stop offset="0%" stopColor={skin.s3} stopOpacity="0.38" />
-            <stop offset="100%" stopColor={skin.s3} stopOpacity="0" />
+          <radialGradient id="sdwLeft" cx="0%" cy="50%" r="100%">
+            <stop offset="0%" stopColor={isMale ? '#C09060' : '#C8A07A'} stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#C8A07A" stopOpacity="0" />
           </radialGradient>
-          <radialGradient id="sdwR" cx="100%" cy="50%" r="100%">
-            <stop offset="0%" stopColor={skin.s3} stopOpacity="0.38" />
-            <stop offset="100%" stopColor={skin.s3} stopOpacity="0" />
+          <radialGradient id="sdwRight" cx="100%" cy="50%" r="100%">
+            <stop offset="0%" stopColor={isMale ? '#C09060' : '#C8A07A'} stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#C8A07A" stopOpacity="0" />
           </radialGradient>
           <radialGradient id="sdwJaw" cx="50%" cy="100%" r="55%">
-            <stop offset="0%" stopColor={skin.s3} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={skin.s3} stopOpacity="0" />
+            <stop offset="0%" stopColor={isMale ? '#C09060' : '#C8A07A'} stopOpacity="0.32" />
+            <stop offset="100%" stopColor="#C8A07A" stopOpacity="0" />
           </radialGradient>
-          <radialGradient id="blushL" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#E89888" stopOpacity={isMale ? '0.09' : '0.22'} />
+          <radialGradient id="blushLeft" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#E89888" stopOpacity={isMale ? '0.09' : '0.26'} />
             <stop offset="100%" stopColor="#E89888" stopOpacity="0" />
           </radialGradient>
-          <radialGradient id="blushR" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#E89888" stopOpacity={isMale ? '0.09' : '0.22'} />
+          <radialGradient id="blushRight" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#E89888" stopOpacity={isMale ? '0.09' : '0.26'} />
             <stop offset="100%" stopColor="#E89888" stopOpacity="0" />
           </radialGradient>
-          {/* Cabelo */}
-          <linearGradient id="hairG" x1="15%" y1="0%" x2="85%" y2="100%">
-            <stop offset="0%" stopColor={hairHi} />
-            <stop offset="35%" stopColor={hair} />
-            <stop offset="100%" stopColor={hairDk} />
+          <linearGradient id="hairFront" x1="15%" y1="0%" x2="85%" y2="100%">
+            <stop offset="0%" stopColor={isMale ? '#6A5040' : '#E8C870'} />
+            <stop offset="40%" stopColor={isMale ? '#3A2818' : '#C8A040'} />
+            <stop offset="100%" stopColor={isMale ? '#1E1208' : '#8B6820'} />
           </linearGradient>
-          <radialGradient id="hairBun" cx="45%" cy="35%" r="60%">
-            <stop offset="0%" stopColor={hairHi} />
-            <stop offset="60%" stopColor={hair} />
-            <stop offset="100%" stopColor={hairDk} />
+          <radialGradient id="hairBun" cx="42%" cy="32%" r="62%">
+            <stop offset="0%" stopColor="#F0D888" />
+            <stop offset="55%" stopColor="#C8A040" />
+            <stop offset="100%" stopColor="#7A5818" />
           </radialGradient>
-          {/* Iris azul */}
-          <radialGradient id="irisL" cx="38%" cy="32%" r="65%">
-            <stop offset="0%" stopColor="#C8E4F4" />
-            <stop offset="35%" stopColor={eyeCol} />
-            <stop offset="100%" stopColor="#3A6888" />
+          <radialGradient id="irisLeft" cx="38%" cy="32%" r="65%">
+            <stop offset="0%" stopColor="#D8EEF8" />
+            <stop offset="35%" stopColor="#7AACCF" />
+            <stop offset="100%" stopColor="#2A5878" />
           </radialGradient>
-          <radialGradient id="irisR" cx="62%" cy="32%" r="65%">
-            <stop offset="0%" stopColor="#C8E4F4" />
-            <stop offset="35%" stopColor={eyeCol} />
-            <stop offset="100%" stopColor="#3A6888" />
+          <radialGradient id="irisRight" cx="62%" cy="32%" r="65%">
+            <stop offset="0%" stopColor="#D8EEF8" />
+            <stop offset="35%" stopColor="#7AACCF" />
+            <stop offset="100%" stopColor="#2A5878" />
           </radialGradient>
-          {/* Lábios */}
-          <linearGradient id="lipT" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={isMale ? '#CC9080' : '#DC8880'} />
-            <stop offset="100%" stopColor={lip.t} />
+          <linearGradient id="lipTop" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={isMale ? '#CC9080' : '#E89090'} />
+            <stop offset="100%" stopColor={isMale ? '#B07060' : '#C87070'} />
           </linearGradient>
-          <linearGradient id="lipB" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={lip.b} />
-            <stop offset="100%" stopColor={isMale ? '#906050' : '#985858'} />
+          <linearGradient id="lipBot" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={isMale ? '#B07060' : '#C87070'} />
+            <stop offset="100%" stopColor={isMale ? '#8A5040' : '#A05050'} />
           </linearGradient>
-          <linearGradient id="brow" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor={hairDk} stopOpacity="0.4" />
-            <stop offset="25%" stopColor={hairDk} />
-            <stop offset="100%" stopColor={hairDk} stopOpacity="0.5" />
+          <linearGradient id="browGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={isMale ? '#3A2818' : '#8B6820'} stopOpacity="0.5" />
+            <stop offset="25%" stopColor={isMale ? '#2A1808' : '#7A5818'} />
+            <stop offset="100%" stopColor={isMale ? '#3A2818' : '#8B6820'} stopOpacity="0.5" />
           </linearGradient>
-          <filter id="glow" x="-15%" y="-15%" width="130%" height="130%">
-            <feGaussianBlur stdDeviation="1.2" />
-          </filter>
-          <filter id="sofBlur" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="0.7" />
-          </filter>
         </defs>
 
-        {/* ── Pescoço e ombros ── */}
-        <path
-          d={isMale
-            ? 'M130 390 Q128 425 132 455 L208 455 Q212 425 210 390 Q190 404 170 404 Q150 404 130 390'
-            : 'M136 382 Q134 415 138 448 L202 448 Q206 415 204 382 Q186 396 170 396 Q154 396 136 382'}
+        {/* Neck */}
+        <path d={isMale
+          ? 'M298 392 Q294 425 296 455 L364 455 Q366 425 362 392 Q346 404 330 404 Q314 404 298 392'
+          : 'M310 385 Q306 418 308 448 L352 448 Q354 418 350 385 Q340 396 330 396 Q320 396 310 385'}
           fill="url(#skinNeck)" />
-        {/* clavícula */}
-        <path
-          d={isMale
-            ? 'M80 455 Q130 435 170 432 Q210 435 260 455'
-            : 'M88 448 Q135 430 170 428 Q205 430 252 448'}
-          stroke={skin.s2} strokeWidth="1.5" fill="none" opacity="0.5" />
+        <path d={isMale
+          ? 'M260 455 Q298 440 330 437 Q362 440 400 455'
+          : 'M278 448 Q310 436 330 434 Q350 436 382 448'}
+          stroke={isMale ? '#D0A878' : '#DEB898'} strokeWidth="1.2" fill="none" opacity="0.55" />
 
-        {/* ── Rosto base ── */}
-        <path
-          d={isMale
-            ? `M170 36 C248 36 298 88 298 165 L296 242
-               C294 288 284 322 265 346 Q246 370 222 382
-               Q196 394 170 394 Q144 394 118 382
-               Q94 370 75 346 C56 322 46 288 44 242 L42 165
-               C42 88 92 36 170 36 Z`
-            : `M170 42 C242 42 286 90 286 162 L284 236
-               C282 278 274 310 257 332 Q240 354 218 366
-               Q194 378 170 378 Q146 378 122 366
-               Q100 354 83 332 C66 310 58 278 56 236 L54 162
-               C54 90 98 42 170 42 Z`}
-          fill="url(#skinF)" stroke={skin.s2} strokeWidth="0.5" />
+        {/* Face */}
+        <path d={isMale
+          ? `M330 44
+             C400 44 448 96 448 168 L446 248
+             C444 294 435 330 416 354
+             Q396 378 368 390
+             Q350 398 330 398
+             Q310 398 292 390
+             Q264 378 244 354
+             C225 330 216 294 214 248 L212 168
+             C212 96 260 44 330 44 Z`
+          : `M330 44
+             C394 44 436 90 436 156 L434 228
+             C432 268 426 298 413 318
+             Q399 338 380 349
+             Q357 359 330 359
+             Q303 359 280 349
+             Q261 338 247 318
+             C234 298 228 268 226 228 L224 156
+             C224 90 266 44 330 44 Z`}
+          fill="url(#skinFront)" stroke={isMale ? '#D0A878' : '#DEB898'} strokeWidth="0.8" />
 
-        {/* Sombras */}
-        <path d={isMale ? 'M42 165 C42 88 92 36 170 36 L42 165' : 'M54 162 C54 90 98 42 170 42 L54 162'} fill="url(#sdwL)" />
-        <path d={isMale ? 'M298 165 C298 88 248 36 170 36 L298 165' : 'M286 162 C286 90 242 42 170 42 L286 162'} fill="url(#sdwR)" />
-        <ellipse cx="170" cy={isMale ? '388' : '372'} rx={isMale ? '85' : '75'} ry="20" fill="url(#sdwJaw)" />
+        {/* Shadows */}
+        <path d={isMale ? 'M212 168 C212 96 260 44 330 44 L212 168' : 'M224 156 C224 90 266 44 330 44 L224 156'} fill="url(#sdwLeft)" />
+        <path d={isMale ? 'M448 168 C448 96 400 44 330 44 L448 168' : 'M436 156 C436 90 394 44 330 44 L436 156'} fill="url(#sdwRight)" />
+        <ellipse cx="330" cy={isMale ? '394' : '353'} rx={isMale ? '88' : '65'} ry={isMale ? '18' : '14'} fill="url(#sdwJaw)" />
 
-        {/* Bochechas */}
-        <ellipse cx={isMale ? '96' : '100'} cy={isMale ? '238' : '230'} rx="52" ry="36" fill="url(#blushL)" />
-        <ellipse cx={isMale ? '244' : '240'} cy={isMale ? '238' : '230'} rx="52" ry="36" fill="url(#blushR)" />
+        {/* Blush */}
+        <ellipse cx={isMale ? '244' : '252'} cy={isMale ? '248' : '234'} rx={isMale ? '46' : '42'} ry={isMale ? '32' : '28'} fill="url(#blushLeft)" />
+        <ellipse cx={isMale ? '416' : '408'} cy={isMale ? '248' : '234'} rx={isMale ? '46' : '42'} ry={isMale ? '32' : '28'} fill="url(#blushRight)" />
 
-        {/* Sombra barba masculina */}
-        {isMale && <g opacity="0.09"><ellipse cx="170" cy="362" rx="72" ry="42" fill="#7A6A5A" /><ellipse cx="170" cy="338" rx="58" ry="30" fill="#7A6A5A" /></g>}
-
-        {/* ── Orelhas ── */}
-        {[
-          { side: 'l', ex: isMale ? 42 : 54, ey: isMale ? 185 : 180 },
-          { side: 'r', ex: isMale ? 298 : 286, ey: isMale ? 185 : 180 },
-        ].map(({ side, ex, ey }) => {
-          const isL = side === 'l'
-          const r = isL ? { rx: isMale ? 16 : 14, ry: isMale ? 30 : 28 } : { rx: isMale ? 16 : 14, ry: isMale ? 30 : 28 }
-          return (
-            <g key={side}>
-              <ellipse cx={ex} cy={ey} rx={r.rx} ry={r.ry} fill="url(#skinF)" stroke={skin.s2} strokeWidth="0.5" />
-              <path
-                d={isL
-                  ? `M${ex - 6} ${ey - 14} Q${ex - 12} ${ey} ${ex - 6} ${ey + 14}`
-                  : `M${ex + 6} ${ey - 14} Q${ex + 12} ${ey} ${ex + 6} ${ey + 14}`}
-                stroke={skin.s3} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.5" />
-            </g>
-          )
-        })}
-
-        {/* ── Cabelo ── */}
-        {isMale ? (
-          <g>
-            <path d={`M170 30 C255 30 308 84 310 165
-                       Q308 126 285 90 C260 50 218 30 170 30
-                       C122 30 80 50 55 90 Q32 126 30 165
-                       C32 84 85 30 170 30 Z`}
-              fill="url(#hairG)" />
-            <path d="M170 30 Q128 35 96 55" stroke={hairHi} strokeWidth="1" fill="none" opacity="0.25" />
-            <path d="M170 30 Q212 35 244 55" stroke={hairHi} strokeWidth="1" fill="none" opacity="0.25" />
-          </g>
-        ) : (
-          <g>
-            {/* Coque principal */}
-            <ellipse cx="170" cy="22" rx="42" ry="32" fill="url(#hairBun)" />
-            <ellipse cx="168" cy="20" rx="32" ry="24" fill={hairHi} opacity="0.25" />
-            <path d="M135 28 Q152 18 170 16 Q188 18 205 28" stroke={hairDk} strokeWidth="2" fill="none" opacity="0.4" strokeLinecap="round" />
-            <path d="M130 32 Q148 22 170 20 Q192 22 210 32" stroke={hairHi} strokeWidth="1" fill="none" opacity="0.35" strokeLinecap="round" />
-            {/* Base cabelo envolvendo rosto */}
-            <path d={`M170 42 C240 42 278 86 278 156
-                       Q274 118 255 88 C234 54 204 42 170 42
-                       C136 42 106 54 85 88 Q66 118 62 156
-                       C62 86 100 42 170 42 Z`}
-              fill="url(#hairG)" />
-            {/* Mechão direito descendo */}
-            <path d="M280 158 Q288 200 288 250 Q286 298 278 340 Q282 300 282 258 Q282 208 278 165"
-              fill="url(#hairG)" />
-            {/* Mechão esquerdo descendo */}
-            <path d="M60 158 Q52 200 52 250 Q54 298 62 340 Q58 300 58 258 Q58 208 62 165"
-              fill="url(#hairG)" />
-            {/* Franja sutil */}
-            <path d="M96 68 Q118 52 148 48 Q170 46 192 48 Q222 52 244 68
-                     Q222 60 192 57 Q170 55 148 57 Q118 60 96 68"
-              fill="url(#hairG)" opacity="0.85" />
-            {/* Detalhe mechas */}
-            <path d="M170 42 Q148 46 122 60" stroke={hairHi} strokeWidth="0.8" fill="none" opacity="0.3" />
-            <path d="M170 42 Q192 46 218 60" stroke={hairHi} strokeWidth="0.8" fill="none" opacity="0.3" />
-            {/* Haste do coque */}
-            <path d="M158 38 Q163 28 170 24 Q177 28 182 38" stroke={hairDk} strokeWidth="2" fill="none" strokeLinecap="round" />
+        {/* Male beard shadow */}
+        {isMale && (
+          <g opacity="0.09">
+            <ellipse cx="330" cy="370" rx="76" ry="44" fill="#7A6A5A" />
+            <ellipse cx="330" cy="345" rx="62" ry="30" fill="#7A6A5A" />
           </g>
         )}
 
-        {/* ── Sobrancelhas ── */}
+        {/* Ears */}
+        <path d={isMale
+          ? 'M212 186 Q194 196 192 215 Q194 235 212 246 Q222 250 227 242 Q218 231 216 215 Q218 198 227 188 Z'
+          : 'M224 182 Q208 191 206 208 Q208 226 224 236 Q233 240 238 232 Q230 222 228 208 Q230 192 238 183 Z'}
+          fill="url(#skinFront)" stroke={isMale ? '#D0A878' : '#DEB898'} strokeWidth="0.6" />
+        <path d={isMale ? 'M202 198 Q196 215 202 233' : 'M215 194 Q209 208 215 224'} stroke={isMale ? '#C09060' : '#C8A07A'} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.5" />
+
+        <path d={isMale
+          ? 'M448 186 Q466 196 468 215 Q466 235 448 246 Q438 250 433 242 Q442 231 444 215 Q442 198 433 188 Z'
+          : 'M436 182 Q452 191 454 208 Q452 226 436 236 Q427 240 422 232 Q430 222 432 208 Q430 192 422 183 Z'}
+          fill="url(#skinFront)" stroke={isMale ? '#D0A878' : '#DEB898'} strokeWidth="0.6" />
+        <path d={isMale ? 'M458 198 Q464 215 458 233' : 'M445 194 Q451 208 445 224'} stroke={isMale ? '#C09060' : '#C8A07A'} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.5" />
+
+        {/* Hair */}
         {isMale ? (
           <g>
-            {/* Sobrancelha esquerda - mais espessa e reta */}
-            <path d="M88 128 Q106 116 138 115 Q158 116 166 122" stroke="url(#brow)" strokeWidth="7.5" strokeLinecap="round" fill="none" />
-            <path d="M88 128 Q106 116 138 115 Q158 116 166 122" stroke={hairDk} strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.3" />
-            {/* Sobrancelha direita */}
-            <path d="M174 122 Q182 116 202 115 Q234 116 252 128" stroke="url(#brow)" strokeWidth="7.5" strokeLinecap="round" fill="none" />
-            <path d="M174 122 Q182 116 202 115 Q234 116 252 128" stroke={hairDk} strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.3" />
+            <path d="M330 38 C412 38 462 94 464 172 Q460 132 438 96 C412 56 374 38 330 38 C286 38 248 56 222 96 Q200 132 196 172 C198 94 248 38 330 38 Z" fill="url(#hairFront)" />
+            <path d="M330 38 Q290 44 260 64" stroke="#6A5040" strokeWidth="1" fill="none" opacity="0.25" />
+            <path d="M330 38 Q370 44 400 64" stroke="#6A5040" strokeWidth="1" fill="none" opacity="0.25" />
           </g>
         ) : (
           <g>
-            {/* Sobrancelha esquerda - arqueada fina */}
-            <path d="M95 130 Q115 116 142 114 Q158 115 168 120" stroke="url(#brow)" strokeWidth="4.5" strokeLinecap="round" fill="none" />
-            <path d="M95 130 Q115 116 142 114 Q158 115 168 120" stroke={hairDk} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.25" />
-            {/* Sobrancelha direita */}
-            <path d="M172 120 Q182 115 198 114 Q225 116 245 130" stroke="url(#brow)" strokeWidth="4.5" strokeLinecap="round" fill="none" />
-            <path d="M172 120 Q182 115 198 114 Q225 116 245 130" stroke={hairDk} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.25" />
+            <path d="M330 44 C396 44 434 88 434 152 Q428 114 410 84 C388 50 360 40 330 40 C300 40 272 50 250 84 Q232 114 226 152 C226 88 264 44 330 44 Z" fill="url(#hairFront)" />
+            <path d="M226 150 Q220 193 220 244 Q222 292 230 336 Q224 294 224 254 Q222 207 226 166" fill="url(#hairFront)" />
+            <path d="M434 150 Q440 193 440 244 Q438 292 430 336 Q436 294 436 254 Q438 207 434 166" fill="url(#hairFront)" />
+            <path d="M264 70 Q286 54 312 50 Q330 48 348 50 Q374 54 396 70 Q374 62 348 59 Q330 57 312 59 Q286 62 264 70" fill="url(#hairFront)" opacity="0.85" />
+            <ellipse cx="330" cy="24" rx="38" ry="28" fill="url(#hairBun)" />
+            <ellipse cx="328" cy="22" rx="28" ry="20" fill="#F0D888" opacity="0.22" />
+            <path d="M302 28 Q316 18 330 16 Q344 18 358 28" stroke="#7A5818" strokeWidth="1.8" fill="none" opacity="0.4" strokeLinecap="round" />
+            <path d="M320 42 Q325 32 330 28 Q335 32 340 42" stroke="#7A5818" strokeWidth="2.2" fill="none" strokeLinecap="round" />
           </g>
         )}
 
-        {/* ── Olhos ── */}
+        {/* Eyebrows */}
+        {isMale ? (
+          <g>
+            <path d="M238 140 Q258 127 286 125 Q308 125 320 132" stroke="url(#browGrad)" strokeWidth="7.5" strokeLinecap="round" fill="none" />
+            <path d="M340 132 Q352 125 374 125 Q402 127 422 140" stroke="url(#browGrad)" strokeWidth="7.5" strokeLinecap="round" fill="none" />
+          </g>
+        ) : (
+          <g>
+            <path d="M248 132 Q267 120 292 118 Q310 118 322 124" stroke="url(#browGrad)" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+            <path d="M338 124 Q350 118 368 118 Q393 120 412 132" stroke="url(#browGrad)" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+          </g>
+        )}
+
+        {/* Eyes */}
         {[
-          { cx: 128, clipId: 'eyeL', irisId: 'irisL' },
-          { cx: 212, clipId: 'eyeR', irisId: 'irisR' },
-        ].map(({ cx, clipId, irisId }) => (
+          { cx: isMale ? 284 : 286, clipId: 'eyeFL', irisId: 'irisLeft', cy: isMale ? 170 : 166 },
+          { cx: isMale ? 376 : 374, clipId: 'eyeFR', irisId: 'irisRight', cy: isMale ? 170 : 166 },
+        ].map(({ cx, clipId, irisId, cy }) => (
           <g key={clipId}>
-            {/* Sombra orbital */}
-            <ellipse cx={cx} cy={isMale ? '165' : '162'} rx="30" ry="14" fill={skin.s2} filter="url(#sofBlur)" opacity="0.4" />
-            {/* Branco */}
-            <path d={`M${cx - 30} ${isMale ? 165 : 162} Q${cx} ${(isMale ? 165 : 162) - 20} ${cx + 30} ${isMale ? 165 : 162} Q${cx} ${(isMale ? 165 : 162) + 16} ${cx - 30} ${isMale ? 165 : 162}`} fill="white" />
-            {/* Pálpebra superior */}
-            <path d={`M${cx - 30} ${isMale ? 165 : 162} Q${cx} ${(isMale ? 165 : 162) - 20} ${cx + 30} ${isMale ? 165 : 162}`}
-              stroke={isMale ? '#5A4030' : hairDk} strokeWidth={isMale ? '2' : '1.8'} fill="none" />
-            {/* Pálpebra inferior */}
-            <path d={`M${cx - 30} ${isMale ? 165 : 162} Q${cx} ${(isMale ? 165 : 162) + 16} ${cx + 30} ${isMale ? 165 : 162}`}
-              stroke={skin.s3} strokeWidth="0.8" fill="none" />
-            {/* Íris */}
+            <ellipse cx={cx} cy={cy} rx={isMale ? 30 : 27} ry={isMale ? 14 : 13} fill={isMale ? '#D0A878' : '#C8A07A'} opacity="0.28" />
+            <path d={`M${cx-30} ${cy} Q${cx} ${cy-(isMale?22:20)} ${cx+30} ${cy} Q${cx} ${cy+(isMale?18:16)} ${cx-30} ${cy}`} fill="white" />
+            <path d={`M${cx-30} ${cy} Q${cx} ${cy-(isMale?22:20)} ${cx+30} ${cy}`} stroke={isMale ? '#5A4020' : '#5A3010'} strokeWidth={isMale ? '2.2' : '1.8'} fill="none" />
+            <path d={`M${cx-30} ${cy} Q${cx} ${cy+(isMale?18:16)} ${cx+30} ${cy}`} stroke={isMale ? '#D0A878' : '#C8A07A'} strokeWidth="0.9" fill="none" />
             <clipPath id={clipId}>
-              <path d={`M${cx - 30} ${isMale ? 165 : 162} Q${cx} ${(isMale ? 165 : 162) - 20} ${cx + 30} ${isMale ? 165 : 162} Q${cx} ${(isMale ? 165 : 162) + 16} ${cx - 30} ${isMale ? 165 : 162}`} />
+              <path d={`M${cx-30} ${cy} Q${cx} ${cy-(isMale?22:20)} ${cx+30} ${cy} Q${cx} ${cy+(isMale?18:16)} ${cx-30} ${cy}`} />
             </clipPath>
             <g clipPath={`url(#${clipId})`}>
-              <circle cx={cx} cy={isMale ? '165' : '162'} r="13" fill={`url(#${irisId})`} />
-              {/* Anel limbo */}
-              <circle cx={cx} cy={isMale ? '165' : '162'} r="13" fill="none" stroke="#2A4860" strokeWidth="1.5" />
-              {/* Pupila */}
-              <circle cx={cx} cy={isMale ? '165' : '162'} r="7.5" fill="#0A1820" />
-              {/* Reflexo principal */}
-              <circle cx={cx + 3} cy={(isMale ? 165 : 162) - 4} r="3.2" fill="white" opacity="0.9" />
-              {/* Reflexo secundário */}
-              <circle cx={cx - 3} cy={(isMale ? 165 : 162) + 4} r="1.5" fill="white" opacity="0.4" />
+              <circle cx={cx} cy={cy-1} r="14" fill={`url(#${irisId})`} />
+              <circle cx={cx} cy={cy-1} r="14" fill="none" stroke="#2A5878" strokeWidth="1.5" />
+              <circle cx={cx} cy={cy-1} r="8" fill="#0A1820" />
+              <circle cx={cx+4} cy={cy-5} r="3.5" fill="white" opacity="0.92" />
+              <circle cx={cx-3} cy={cy+3} r="1.5" fill="white" opacity="0.4" />
             </g>
-            {/* Cílios femininos */}
             {!isMale && (
-              <g stroke={hairDk} strokeWidth="1.1" fill="none" strokeLinecap="round">
-                {[cx - 22, cx - 12, cx, cx + 12, cx + 22].map((x, i) => (
-                  <path key={i} d={`M${x} ${162 - 18} Q${x + (i < 2 ? -2 : i > 2 ? 2 : 0)} ${162 - 26} ${x + (i < 2 ? -3 : i > 2 ? 3 : 0)} ${162 - 30}`} />
+              <g stroke="#5A3010" strokeWidth="1.1" fill="none" strokeLinecap="round">
+                {[cx-22, cx-11, cx, cx+11, cx+22].map((x, i) => (
+                  <path key={i} d={`M${x} ${cy-17} Q${x+(i<2?-2:i>2?2:0)} ${cy-25} ${x+(i<2?-3:i>2?3:0)} ${cy-29}`} />
                 ))}
               </g>
             )}
           </g>
         ))}
 
-        {/* ── Nariz ── */}
-        <g>
-          {/* Ponte */}
-          <path
-            d={isMale
-              ? 'M162 128 Q158 165 158 198 Q160 218 170 228 Q180 218 182 198 Q182 165 178 128'
-              : 'M164 125 Q161 160 162 190 Q165 208 170 218 Q175 208 178 190 Q179 160 176 125'}
-            stroke={skin.s2} strokeWidth={isMale ? '1.3' : '0.9'} fill="none" opacity="0.65" />
-          {/* Sombras laterais nariz */}
-          <path d={isMale ? 'M158 195 Q150 208 146 224' : 'M162 188 Q156 200 154 215'}
-            stroke={skin.s3} strokeWidth="1.2" fill="none" opacity="0.55" strokeLinecap="round" />
-          <path d={isMale ? 'M182 195 Q190 208 194 224' : 'M178 188 Q184 200 186 215'}
-            stroke={skin.s3} strokeWidth="1.2" fill="none" opacity="0.55" strokeLinecap="round" />
-          {/* Narinas */}
-          <ellipse cx={isMale ? '155' : '158'} cy={isMale ? '228' : '220'} rx={isMale ? '10' : '8'} ry={isMale ? '6' : '5'} fill={skin.s3} opacity="0.5" />
-          <ellipse cx={isMale ? '185' : '182'} cy={isMale ? '228' : '220'} rx={isMale ? '10' : '8'} ry={isMale ? '6' : '5'} fill={skin.s3} opacity="0.5" />
-          {/* Ponta */}
-          <ellipse cx="170" cy={isMale ? '225' : '218'} rx={isMale ? '16' : '12'} ry={isMale ? '7' : '6'} fill={skin.s2} opacity="0.35" />
-          {/* Philtrum */}
-          <path d={isMale ? 'M162 233 Q170 244 178 233' : 'M163 226 Q170 236 177 226'}
-            stroke={skin.s3} strokeWidth="1" fill="none" opacity="0.4" strokeLinecap="round" />
-        </g>
+        {/* Nose */}
+        <path d={isMale
+          ? 'M322 148 Q317 178 318 208 Q321 226 330 236 Q339 226 342 208 Q343 178 338 148'
+          : 'M324 130 Q321 158 322 184 Q325 200 330 209 Q335 200 338 184 Q339 158 336 130'}
+          stroke={isMale ? '#D0A878' : '#DEB898'} strokeWidth={isMale ? '1.3' : '1.1'} fill="none" opacity="0.6" />
+        <ellipse cx="330" cy={isMale ? '234' : '208'} rx={isMale ? '14' : '12'} ry={isMale ? '7' : '6'} fill={isMale ? '#D0A878' : '#DEB898'} opacity="0.35" />
+        <ellipse cx={isMale ? '316' : '318'} cy={isMale ? '238' : '212'} rx={isMale ? '10' : '8'} ry={isMale ? '6' : '5'} fill={isMale ? '#C09060' : '#C8A07A'} opacity="0.5" />
+        <ellipse cx={isMale ? '344' : '342'} cy={isMale ? '238' : '212'} rx={isMale ? '10' : '8'} ry={isMale ? '6' : '5'} fill={isMale ? '#C09060' : '#C8A07A'} opacity="0.5" />
+        <path d={isMale ? 'M318 206 Q310 218 308 232' : 'M322 192 Q315 204 313 216'} stroke={isMale ? '#C09060' : '#C8A07A'} strokeWidth="1.1" fill="none" opacity="0.5" strokeLinecap="round" />
+        <path d={isMale ? 'M342 206 Q350 218 352 232' : 'M338 192 Q345 204 347 216'} stroke={isMale ? '#C09060' : '#C8A07A'} strokeWidth="1.1" fill="none" opacity="0.5" strokeLinecap="round" />
 
-        {/* ── Sulcos nasolabiais ── */}
-        <path
-          d={isMale
-            ? 'M144 230 Q133 252 128 274 M196 230 Q207 252 212 274'
-            : 'M148 222 Q138 242 134 264 M192 222 Q202 242 206 264'}
-          stroke={skin.s3} strokeWidth="0.9" fill="none" opacity="0.38" strokeLinecap="round" />
+        {/* Nasolabial */}
+        <path d={isMale ? 'M308 240 Q295 260 290 282' : 'M313 218 Q303 236 299 256'} stroke={isMale ? '#C09060' : '#C8A07A'} strokeWidth="0.9" fill="none" opacity="0.4" strokeLinecap="round" />
+        <path d={isMale ? 'M352 240 Q365 260 370 282' : 'M347 218 Q357 236 361 256'} stroke={isMale ? '#C09060' : '#C8A07A'} strokeWidth="0.9" fill="none" opacity="0.4" strokeLinecap="round" />
 
-        {/* ── Lábios ── */}
-        <g>
-          {/* Lábio superior + cupido */}
-          <path d={isMale
-            ? `M126 272 Q144 260 156 264 Q170 258 184 264 Q196 260 214 272
-               Q196 268 170 268 Q144 268 126 272`
-            : `M124 264 Q140 250 154 255 Q170 249 186 255 Q200 250 216 264
-               Q198 260 170 260 Q142 260 124 264`}
-            fill="url(#lipT)" />
-          {/* Linha de Cupido */}
-          <path d={isMale
-            ? 'M142 263 Q156 256 170 260 Q184 256 198 263'
-            : 'M140 256 Q155 249 170 253 Q185 249 200 256'}
-            stroke={lip.b} strokeWidth="0.6" fill="none" />
-          {/* Lábio inferior */}
-          <path d={isMale
-            ? 'M126 272 Q170 296 214 272 Q196 292 170 296 Q144 292 126 272'
-            : 'M124 264 Q170 288 216 264 Q198 282 170 286 Q142 282 124 264'}
-            fill="url(#lipB)" />
-          {/* Linha da boca */}
-          <path d={isMale ? 'M126 272 Q170 276 214 272' : 'M124 264 Q170 268 216 264'}
-            stroke={lip.b} strokeWidth="0.9" fill="none" />
-          {/* Highlight */}
-          <path d={isMale ? 'M148 284 Q170 291 192 284' : 'M148 276 Q170 283 192 276'}
-            stroke="rgba(255,255,255,0.3)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-        </g>
+        {/* Lips */}
+        <path d={isMale
+          ? 'M292 284 Q310 270 322 275 Q330 270 338 275 Q350 270 368 284 Q350 278 330 278 Q310 278 292 284'
+          : 'M298 260 Q315 247 323 251 Q330 246 337 251 Q345 247 362 260 Q345 255 330 255 Q315 255 298 260'}
+          fill="url(#lipTop)" />
+        <path d={isMale
+          ? 'M300 275 Q315 268 330 272 Q345 268 360 275'
+          : 'M307 249 Q320 243 330 247 Q340 243 353 249'}
+          stroke={isMale ? '#B07060' : '#C87070'} strokeWidth="0.7" fill="none" />
+        <path d={isMale
+          ? 'M292 284 Q330 308 368 284 Q354 302 330 306 Q306 302 292 284'
+          : 'M298 260 Q330 282 362 260 Q348 276 330 280 Q312 276 298 260'}
+          fill="url(#lipBot)" />
+        <path d={isMale ? 'M292 284 Q330 288 368 284' : 'M298 260 Q330 264 362 260'} stroke={isMale ? '#B07060' : '#C87070'} strokeWidth="1.0" fill="none" />
+        <path d={isMale ? 'M314 296 Q330 303 346 296' : 'M315 269 Q330 276 345 269'} stroke="rgba(255,255,255,0.3)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
 
-        {/* ── Queixo ── */}
-        <path
-          d={isMale
-            ? 'M136 362 Q170 378 204 362 Q192 374 170 378 Q148 374 136 362'
-            : 'M138 352 Q170 368 202 352 Q190 364 170 368 Q150 364 138 352'}
-          fill={skin.s2} opacity="0.3" />
+        {/* Chin */}
+        <path d={isMale
+          ? 'M304 370 Q330 386 356 370 Q345 380 330 384 Q315 380 304 370'
+          : 'M310 338 Q330 352 350 338 Q341 348 330 350 Q319 348 310 338'}
+          fill={isMale ? '#D0A878' : '#DEB898'} opacity="0.28" />
 
-        {/* ── Regiões interativas ── */}
+        {/* Regions */}
         {showRegions && (
           <g opacity="0" pointerEvents="none">
-            {/* Fronte */}
-            <ellipse cx="170" cy="88" rx="72" ry="42" fill="#7B5CF5" />
-            {/* Glabela */}
-            <ellipse cx="170" cy="125" rx="24" ry="14" fill="#7B5CF5" />
-            {/* Periorbital esq */}
-            <ellipse cx="110" cy="165" rx="38" ry="24" fill="#7B5CF5" />
-            {/* Periorbital dir */}
-            <ellipse cx="230" cy="165" rx="38" ry="24" fill="#7B5CF5" />
-            {/* Nariz */}
-            <ellipse cx="170" cy="192" rx="24" ry="36" fill="#7B5CF5" />
-            {/* Zigomático esq */}
-            <ellipse cx="95" cy="218" rx="38" ry="28" fill="#7B5CF5" />
-            {/* Zigomático dir */}
-            <ellipse cx="245" cy="218" rx="38" ry="28" fill="#7B5CF5" />
-            {/* Lábio sup */}
-            <ellipse cx="170" cy="262" rx="48" ry="18" fill="#7B5CF5" />
-            {/* Lábio inf */}
-            <ellipse cx="170" cy="282" rx="46" ry="18" fill="#7B5CF5" />
-            {/* Mento */}
-            <ellipse cx="170" cy="334" rx="44" ry="30" fill="#7B5CF5" />
-            {/* Mandíbula esq */}
-            <ellipse cx="90" cy="310" rx="35" ry="44" fill="#7B5CF5" />
-            {/* Mandíbula dir */}
-            <ellipse cx="250" cy="310" rx="35" ry="44" fill="#7B5CF5" />
+            <ellipse cx="330" cy={isMale ? '98' : '90'} rx={isMale ? '78' : '72'} ry={isMale ? '46' : '40'} fill="#7B5CF5" />
+            <ellipse cx="330" cy={isMale ? '138' : '126'} rx="26" ry="15" fill="#7B5CF5" />
+            <ellipse cx={isMale ? '278' : '280'} cy={isMale ? '172' : '167'} rx="38" ry="24" fill="#7B5CF5" />
+            <ellipse cx={isMale ? '382' : '380'} cy={isMale ? '172' : '167'} rx="38" ry="24" fill="#7B5CF5" />
+            <ellipse cx="330" cy={isMale ? '200' : '178'} rx="26" ry="38" fill="#7B5CF5" />
+            <ellipse cx={isMale ? '246' : '252'} cy={isMale ? '238' : '222'} rx="38" ry="28" fill="#7B5CF5" />
+            <ellipse cx={isMale ? '414' : '408'} cy={isMale ? '238' : '222'} rx="38" ry="28" fill="#7B5CF5" />
+            <ellipse cx="330" cy={isMale ? '278' : '253'} rx="50" ry="18" fill="#7B5CF5" />
+            <ellipse cx="330" cy={isMale ? '300' : '272'} rx="48" ry="18" fill="#7B5CF5" />
+            <ellipse cx="330" cy={isMale ? '348' : '320'} rx="46" ry="30" fill="#7B5CF5" />
+            <ellipse cx={isMale ? '246' : '254'} cy={isMale ? '322' : '305'} rx="38" ry="44" fill="#7B5CF5" />
+            <ellipse cx={isMale ? '414' : '406'} cy={isMale ? '322' : '305'} rx="38" ry="44" fill="#7B5CF5" />
           </g>
         )}
 
-        {/* Músculos */}
         {showMuscles && (
-          <g opacity="0.13" pointerEvents="none">
-            <path d="M115 55 Q170 46 225 55 Q226 88 170 84 Q114 88 115 55" fill="#C0392B" />
-            <ellipse cx="128" cy="165" rx="32" ry="22" fill="#2980B9" />
-            <ellipse cx="212" cy="165" rx="32" ry="22" fill="#2980B9" />
-            <path d="M74 220 Q125 238 152 268" stroke="#27AE60" strokeWidth="14" fill="none" strokeLinecap="round" />
-            <path d="M266 220 Q215 238 188 268" stroke="#27AE60" strokeWidth="14" fill="none" strokeLinecap="round" />
-            <ellipse cx="170" cy="272" rx="50" ry="24" fill="#E67E22" />
+          <g opacity="0.12" pointerEvents="none">
+            <path d={isMale ? 'M260 65 Q330 54 400 65 Q400 100 330 96 Q260 100 260 65' : 'M264 62 Q330 52 396 62 Q396 95 330 91 Q264 95 264 62'} fill="#C0392B" />
+            <ellipse cx={isMale ? '284' : '286'} cy={isMale ? '172' : '167'} rx="32" ry="22" fill="#2980B9" />
+            <ellipse cx={isMale ? '376' : '374'} cy={isMale ? '172' : '167'} rx="32" ry="22" fill="#2980B9" />
+            <path d={isMale ? 'M218 245 Q270 264 300 296' : 'M224 232 Q272 250 298 278'} stroke="#27AE60" strokeWidth="14" fill="none" strokeLinecap="round" />
+            <path d={isMale ? 'M442 245 Q390 264 360 296' : 'M436 232 Q388 250 362 278'} stroke="#27AE60" strokeWidth="14" fill="none" strokeLinecap="round" />
+            <ellipse cx="330" cy={isMale ? '294' : '270'} rx="52" ry="24" fill="#E67E22" />
           </g>
         )}
 
