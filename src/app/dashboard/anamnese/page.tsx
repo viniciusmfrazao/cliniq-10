@@ -17,12 +17,18 @@ export default async function AnamnesesPage() {
   
   if (!userData?.clinic_id) redirect('/login')
   
-  const { data: anamneses } = await supabase
-    .from('anamneses')
-    .select('*, patients(name, phone)')
-    .eq('clinic_id', userData.clinic_id)
-    .order('created_at', { ascending: false })
-    .limit(50)
+  let anamneses: any[] = []
+  try {
+    const { data } = await supabase
+      .from('anamneses')
+      .select('*, patients(name, phone)')
+      .eq('clinic_id', userData.clinic_id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    anamneses = data || []
+  } catch {
+    anamneses = []
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
