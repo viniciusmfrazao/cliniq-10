@@ -77,7 +77,7 @@ export default function FaceMapEditor({
     if (!svgRef.current) return
     
     const rect = svgRef.current.getBoundingClientRect()
-    const viewBox = view === 'front' ? { w: 320, h: 420 } : { w: 280, h: 400 }
+    const viewBox = view === 'front' ? { w: 680, h: 540 } : { w: 300, h: 430 }
     const x = ((e.clientX - rect.left) / rect.width) * viewBox.w
     const y = ((e.clientY - rect.top) / rect.height) * viewBox.h
 
@@ -110,7 +110,7 @@ export default function FaceMapEditor({
   }
 
   function duplicatePointMirror(point: Point) {
-    const viewBox = view === 'front' ? { w: 320, h: 420 } : { w: 280, h: 400 }
+    const viewBox = view === 'front' ? { w: 680, h: 540 } : { w: 300, h: 430 }
     const centerX = viewBox.w / 2
     const mirroredX = centerX + (centerX - point.x)
     
