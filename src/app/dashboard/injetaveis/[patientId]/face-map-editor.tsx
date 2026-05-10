@@ -55,13 +55,11 @@ const TECHNIQUES = [
 export default function FaceMapEditor({ 
   points, 
   setPoints, 
-  type,
-  gender = 'female'
+  type 
 }: { 
   points: Point[]
   setPoints: (points: Point[]) => void
   type: string
-  gender?: 'female' | 'male'
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [editingPoint, setEditingPoint] = useState<Point | null>(null)
@@ -77,7 +75,7 @@ export default function FaceMapEditor({
     if (!svgRef.current) return
     
     const rect = svgRef.current.getBoundingClientRect()
-    const viewBox = view === 'front' ? { w: 680, h: 540 } : { w: 300, h: 430 }
+    const viewBox = view === 'front' ? { w: 320, h: 420 } : { w: 280, h: 400 }
     const x = ((e.clientX - rect.left) / rect.width) * viewBox.w
     const y = ((e.clientY - rect.top) / rect.height) * viewBox.h
 
@@ -110,7 +108,7 @@ export default function FaceMapEditor({
   }
 
   function duplicatePointMirror(point: Point) {
-    const viewBox = view === 'front' ? { w: 680, h: 540 } : { w: 300, h: 430 }
+    const viewBox = view === 'front' ? { w: 320, h: 420 } : { w: 280, h: 400 }
     const centerX = viewBox.w / 2
     const mirroredX = centerX + (centerX - point.x)
     
@@ -184,7 +182,6 @@ export default function FaceMapEditor({
               view={view}
               showRegions={true}
               showMuscles={showMuscles}
-              gender={gender}
             >
               {/* Renderizar pontos */}
               {points.map((point) => {
@@ -392,12 +389,13 @@ export default function FaceMapEditor({
                       onClick={() => updatePoint(editingPoint.id, { depth: d.value })}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                         editingPoint.depth === d.value
-                          ? 'ring-2 ring-offset-1 ring-current'
+                          ? 'ring-2 ring-offset-1'
                           : 'bg-slate-50 hover:bg-slate-100'
                       }`}
                       style={editingPoint.depth === d.value ? { 
-                        backgroundColor: `${d.color}20`, 
-                        color: d.color
+                        backgroundColor: `${d.color}15`, 
+                        color: d.color,
+                        ringColor: d.color 
                       } : {}}
                     >
                       <span 
