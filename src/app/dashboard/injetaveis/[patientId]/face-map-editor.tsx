@@ -55,11 +55,13 @@ const TECHNIQUES = [
 export default function FaceMapEditor({ 
   points, 
   setPoints, 
-  type 
+  type,
+  gender = 'female'
 }: { 
   points: Point[]
   setPoints: (points: Point[]) => void
   type: string
+  gender?: 'female' | 'male'
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [editingPoint, setEditingPoint] = useState<Point | null>(null)
@@ -180,6 +182,7 @@ export default function FaceMapEditor({
               ref={svgRef}
               onClick={handleSvgClick}
               view={view}
+              gender={gender}
               showRegions={true}
               showMuscles={showMuscles}
             >
