@@ -237,7 +237,6 @@ export default function SaidasList({ saidas, clinicId }: Props) {
             </tbody>
           </table>
         </div>
-        </div>
       </div>
     </div>
   )

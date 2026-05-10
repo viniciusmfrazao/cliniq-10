@@ -248,7 +248,6 @@ export default function EntradasList({ entradas, clinicId }: Props) {
             </tbody>
           </table>
         </div>
-        </div>
       </div>
     </div>
   )
