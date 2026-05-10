@@ -7,11 +7,17 @@ export default async function AnamneseConfigPage() {
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
   const clinicId = userData?.clinic_id
 
-  const { data: config } = await supabase
-    .from('anamnese_config')
-    .select('*')
-    .eq('clinic_id', clinicId)
-    .maybeSingle()
+  let config = null
+  try {
+    const { data } = await supabase
+      .from('anamnese_config')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .maybeSingle()
+    config = data
+  } catch {
+    config = null
+  }
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4">

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import CopyLinkButton from './copy-button'
 
 export default async function AnamnesesPage() {
   const supabase = await createClient()
@@ -108,16 +109,7 @@ export default async function AnamnesesPage() {
                         Ver respostas
                       </Link>
                     ) : (
-                      <button
-                        onClick={() => {
-                          const url = `${window.location.origin}/anamnese/${a.token}`
-                          navigator.clipboard.writeText(url)
-                          alert('Link copiado!')
-                        }}
-                        className="text-slate-600 hover:text-slate-900 text-sm"
-                      >
-                        Copiar link
-                      </button>
+                      <CopyLinkButton token={a.token} />
                     )}
                   </td>
                 </tr>
