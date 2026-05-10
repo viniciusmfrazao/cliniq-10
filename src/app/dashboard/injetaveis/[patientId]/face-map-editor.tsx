@@ -395,7 +395,7 @@ export default function FaceMapEditor({
                       style={editingPoint.depth === d.value ? { 
                         backgroundColor: `${d.color}15`, 
                         color: d.color,
-                        ringColor: d.color 
+                        outline: `2px solid ${d.color}`
                       } : {}}
                     >
                       <span 
