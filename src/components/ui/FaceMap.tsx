@@ -18,7 +18,7 @@ export const FaceMap = forwardRef<SVGSVGElement, FaceMapProps>(
     if (view === 'side-left' || view === 'side-right') {
       const flip = view === 'side-left'
       return (
-        <svg ref={ref} viewBox="0 0 300 430" className="w-full max-w-[300px] mx-auto cursor-crosshair select-none" onClick={onClick} style={{ transform: flip ? 'scaleX(-1)' : 'none' }}>
+        <svg ref={ref} viewBox="0 0 300 430" className="w-full cursor-crosshair select-none" onClick={onClick} style={{ transform: flip ? 'scaleX(-1)' : 'none' }}>
           <defs>
             <radialGradient id="sSide" cx="38%" cy="30%" r="70%">
               <stop offset="0%" stopColor={isMale ? '#F8E8D8' : '#FFF0E8'} />
@@ -94,7 +94,7 @@ export const FaceMap = forwardRef<SVGSVGElement, FaceMapProps>(
     }
 
     return (
-      <svg ref={ref} viewBox="0 0 680 540" className="w-full max-w-[380px] mx-auto cursor-crosshair select-none" onClick={onClick}>
+      <svg ref={ref} viewBox="0 0 680 540" className="w-full cursor-crosshair select-none" onClick={onClick}>
         <defs>
           <radialGradient id="skinFront" cx="50%" cy="30%" r="65%">
             <stop offset="0%" stopColor={isMale ? '#F8E8D8' : '#FFF0E8'} />
