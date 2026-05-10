@@ -315,6 +315,12 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           --selected-bg: #f5ede0;
         }
         
+        html, body {
+          overflow-y: auto !important;
+          overscroll-behavior-y: auto !important;
+          height: auto !important;
+        }
+        
         .anamnese-page * {
           font-family: 'Jost', sans-serif;
         }
