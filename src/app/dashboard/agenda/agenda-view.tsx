@@ -478,67 +478,7 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
           </div>
         </div>
         
-        {/* Vista mobile: lista de agendamentos do dia */}
-        <div className="md:hidden">
-          {appointments.length === 0 ? (
-            <div className="text-center py-16 text-slate-400">
-              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <Icon name="calendar" className="w-8 h-8 text-slate-300" />
-              </div>
-              <p className="font-medium text-slate-500">Nenhum agendamento</p>
-              <p className="text-sm mt-1">Toque em + para adicionar</p>
-            </div>
-          ) : (
-            <div className="space-y-3 p-3">
-              {appointments
-                .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-                .map((apt) => {
-                  const prof = displayProfessionals.find(p => p.id === apt.professional_id)
-                  const profIdx = displayProfessionals.findIndex(p => p.id === apt.professional_id)
-                  const startTime = new Date(apt.start_time)
-                  const hour = startTime.getHours().toString().padStart(2,'0')
-                  const min = startTime.getMinutes().toString().padStart(2,'0')
-                  const statusColors: Record<string, string> = {
-                    scheduled: 'bg-violet-100 text-violet-700',
-                    confirmed: 'bg-emerald-100 text-emerald-700',
-                    completed: 'bg-slate-100 text-slate-600',
-                    cancelled: 'bg-red-100 text-red-600',
-                    waiting: 'bg-amber-100 text-amber-700',
-                  }
-                  const statusLabel: Record<string, string> = {
-                    scheduled: 'Agendado', confirmed: 'Confirmado',
-                    completed: 'Realizado', cancelled: 'Cancelado', waiting: 'Aguardando',
-                  }
-                  return (
-                    <Link key={apt.id} href={`/dashboard/agenda/${apt.id}`}
-                      className="block bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 shadow-sm active:scale-[0.98] transition-transform">
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 text-center">
-                          <span className="text-2xl font-black text-violet-600">{hour}</span>
-                          <span className="text-sm text-slate-400">:{min}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-900 dark:text-white truncate">{apt.patients?.name || 'Paciente'}</p>
-                          {apt.procedures?.name && <p className="text-sm text-slate-500 truncate mt-0.5">{apt.procedures.name}</p>}
-                          {prof && (
-                            <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r ${PROFESSIONAL_COLORS[profIdx % PROFESSIONAL_COLORS.length]} text-white`}>
-                              <Icon name="user" className="w-3 h-3" />{prof.name.split(' ')[0]}
-                            </div>
-                          )}
-                        </div>
-                        <span className={`flex-shrink-0 px-2 py-1 rounded-lg text-xs font-semibold ${statusColors[apt.status] || statusColors.scheduled}`}>
-                          {statusLabel[apt.status] || apt.status}
-                        </span>
-                      </div>
-                    </Link>
-                  )
-                })}
-            </div>
-          )}
-        </div>
-
-        {/* Vista desktop: grid por profissional */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="overflow-x-auto">
           <div style={{ minWidth: displayProfessionals.length > 1 ? `${displayProfessionals.length * 200 + 80}px` : '100%' }}>
             {/* Header com profissionais */}
             <div className="flex border-b border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
