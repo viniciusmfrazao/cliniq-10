@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
   type WaScored = WhatsappRow & { is_default?: boolean | null; role_outbound_automation?: boolean | null }
   const score = (w: WaScored) =>
     (w.status === 'connected' ? 10 : 0) +
-    (w.role_outbound_automation !== false ? 4 : 0) +
+    (w.role_outbound_automation === true ? 4 : 0) +
     (w.is_default ? 1 : 0)
   for (const w of (whatsapps as WaScored[] | null) ?? []) {
     const cur = waByClinic.get(w.clinic_id) as WaScored | undefined
