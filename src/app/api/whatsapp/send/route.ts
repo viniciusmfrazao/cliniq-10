@@ -120,6 +120,7 @@ export async function POST(req: NextRequest) {
     clinicId = userRow.clinic_id
     userId = user.id
     purpose = 'manual'
+    if (body.purpose === 'automation') purpose = 'automation'
   }
 
   const sharedOpts = {

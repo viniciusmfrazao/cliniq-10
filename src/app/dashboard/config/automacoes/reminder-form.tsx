@@ -171,7 +171,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
       const r = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: testPhone, message: text }),
+        body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
       })
       const data = await r.json()
       if (r.ok && data.ok) {
