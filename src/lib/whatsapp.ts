@@ -193,11 +193,11 @@ async function resolveInstance(
   // Filtragem por papel
   const matchingRole =
     purpose === 'automation'
-      ? connected.filter(r => r.role_outbound_automation !== false)
+      ? connected.filter(r => r.role_outbound_automation === true)
       : purpose === 'manual'
-        ? connected.filter(r => r.role_outbound_manual !== false)
+        ? connected.filter(r => r.role_outbound_manual === true)
         : purpose === 'inbound'
-          ? connected.filter(r => r.role_inbound !== false)
+          ? connected.filter(r => r.role_inbound === true)
           : connected
 
   // Pool a usar: se ninguem tem o papel certo, cai pro is_default
