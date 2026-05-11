@@ -164,12 +164,19 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
                   {isHoje(d.data_promessa) && (
                     <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Hoje</span>
                   )}
-                  {d.patients?.phone && (
-                    <a href={`https://wa.me/55${d.patients.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-                      className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600">
-                      <Icon name="phone" className="w-4 h-4" />
-                    </a>
-                  )}
+                  {d.patients?.phone && (() => {
+                    const phone = d.patients!.phone!.replace(/\D/g, '')
+                    const msg = encodeURIComponent(
+                      `Olá ${d.patients!.name}! Passando para lembrar que sua conta na ${clinicName} de ${fmt(d.valor)} está em aberto (vencimento: ${fmtDate(d.data_vencimento)}). Quando puder, entre em contato para regularizar. Obrigada! 🙏`
+                    )
+                    return (
+                      <a href={`https://wa.me/55${phone}?text=${msg}`} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition-colors">
+                        <Icon name="phone" className="w-3.5 h-3.5" />
+                        Cobrar via WhatsApp
+                      </a>
+                    )
+                  })()}
                 </div>
               </div>
             ))}

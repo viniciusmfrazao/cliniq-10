@@ -177,6 +177,20 @@ export default async function ConfigPage() {
                 </div>
                 <Icon name="chevronRight" className="w-5 h-5 text-emerald-400" />
               </Link>
+
+              <Link
+                href="/dashboard/config/lgpd"
+                className="flex items-center gap-4 p-4 bg-gradient-to-br from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200 rounded-xl transition-colors border border-slate-200"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center shadow">
+                  <Icon name="shield" className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-900">Privacidade e LGPD</p>
+                  <p className="text-xs text-slate-600">Exporte os dados da clínica em conformidade com a lei</p>
+                </div>
+                <Icon name="chevronRight" className="w-5 h-5 text-slate-400" />
+              </Link>
             </div>
           </div>
         )}
