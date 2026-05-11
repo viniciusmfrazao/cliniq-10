@@ -155,7 +155,7 @@ export async function GET(req: NextRequest) {
       .in('clinic_id', clinicIds),
     svc
       .from('clinic_whatsapp')
-      .select('clinic_id, status, is_default, role_outbound_automation')
+      .select('clinic_id, instance_name, status, is_default, role_outbound_automation')
       .in('clinic_id', clinicIds),
     svc.from('clinics').select('id, name').in('id', clinicIds),
     svc.from('patients').select('id, name, phone').in('id', patientIds),

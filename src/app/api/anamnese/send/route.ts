@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
     `${link}\n\n` +
     `Leva uns 3 minutos. O link expira em ${ANAMNESE_TTL_DAYS} dias.`
 
-  const result = await sendWhatsappMessage({ clinicId, phone, message })
+  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
 
   if (!result.ok) {
     return NextResponse.json({
