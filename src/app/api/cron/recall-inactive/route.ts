@@ -318,6 +318,7 @@ export async function GET(req: NextRequest) {
         phone: patient.phone!,
         message: text,
         purpose: 'automation',
+        instanceName: (waByClinic.get(auto.clinic_id) as any)?.instance_name,
       })
 
       if (result.ok) {

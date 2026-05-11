@@ -400,6 +400,7 @@ export async function GET(req: NextRequest) {
         phone: patient.phone,
         message: text,
         purpose: 'automation',
+        instanceName: (waByClinic.get(clinicId) as any)?.instance_name,
       })
 
       if (result.ok) {
