@@ -6,6 +6,7 @@ import InjectableMapSection from './injectable-map-section'
 import ProductsUsedSection from './products-used-section'
 import ReturnScheduler from './return-scheduler'
 import AnamneseSummaryCard from '@/components/anamnese/AnamneseSummaryCard'
+import OrcamentosTab from '@/app/dashboard/pacientes/[id]/orcamentos-tab'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
@@ -184,6 +185,19 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               usedProducts={usedProducts || []}
             />
 
+            {/* Orçamentos do paciente */}
+            {userData?.clinic_id && (
+              <Suspense fallback={<div className="card p-4 animate-pulse h-24" />}>
+                <OrcamentosAtendimento
+                  patientId={patient.id}
+                  clinicId={userData.clinic_id}
+                  patientName={patient.name}
+                  patientPhone={patient.phone}
+                  clinicId2={userData.clinic_id}
+                />
+              </Suspense>
+            )}
+
             {/* Agendamento de Retorno */}
             <ReturnScheduler
               patientId={patient.id}
@@ -197,3 +211,36 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
   )
 }
 
+async function OrcamentosAtendimentoServer({
+  patientId,
+  clinicId,
+  patient,
+}: {
+  patientId: string
+  clinicId: string
+  patient: any
+}) {
+  const supabase = await createClient()
+  const { data: orcamentos } = await supabase
+    .from('orcamentos')
+    .select('*, orcamento_itens(*)')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+
+  const { data: clinic } = await supabase
+    .from('clinics')
+    .select('name')
+    .eq('id', clinicId)
+    .single()
+
+  return (
+    <OrcamentosTab
+      patientId={patientId}
+      clinicId={clinicId}
+      patientName={patient.name}
+      patientPhone={patient.phone}
+      clinicName={clinic?.name || 'Clínica'}
+      initialOrcamentos={orcamentos || []}
+    />
+  )
+}
