@@ -32,14 +32,14 @@ export default async function ProcedimentosPage() {
       .order('name', { ascending: true }),
     supabase
       .from('users')
-      .select('id, name, role, active')
+      .select('id, name, role, professional_role, active')
       .eq('clinic_id', userData.clinic_id)
       .order('name'),
   ])
 
   const procedures = proceduresResult.data || []
   const professionals = (professionalsResult.data || []).filter(
-    (u: any) => PROFESSIONAL_ROLES.includes(u.role) && u.active !== false
+    (u: any) => (PROFESSIONAL_ROLES.includes(u.role) || PROFESSIONAL_ROLES.includes(u.professional_role)) && u.active !== false
   )
 
   const isAdmin = userData.role === 'admin' || userData.role === 'super_admin'
