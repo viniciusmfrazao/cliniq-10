@@ -17,6 +17,7 @@ type SendBody = {
   message?: string
   /** 'text' (default) | 'image' | 'audio' */
   type?: 'text' | 'image' | 'audio'
+  purpose?: 'manual' | 'automation'
   /** base64 (puro ou data URL) ou URL pública pra mídia */
   media?: string
   mimetype?: string
