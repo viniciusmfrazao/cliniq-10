@@ -139,6 +139,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
                 anamnese={latestAnamnese}
                 variant="full"
                 highlightRecent
+                returnUrl={`/dashboard/atendimento/${params.appointmentId}`}
               />
             ) : (
               <div className="card p-5 border-dashed">

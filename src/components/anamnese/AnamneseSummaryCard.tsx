@@ -123,7 +123,8 @@ export default function AnamneseSummaryCard({
   anamnese,
   variant = 'full',
   highlightRecent = false,
-}: Props) {
+  returnUrl,
+}: Props & { returnUrl?: string }) {
   const chips = buildChips(anamnese.responses)
   const statusBadge =
     STATUS_BADGE[anamnese.status] ?? { label: anamnese.status, cls: 'bg-slate-100 text-slate-700' }
@@ -246,7 +247,7 @@ export default function AnamneseSummaryCard({
       )}
 
       <Link
-        href={`/dashboard/anamnese/${anamnese.id}`}
+        href={`/dashboard/anamnese/${anamnese.id}${returnUrl ? `?return=${encodeURIComponent(returnUrl)}` : ''}`}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:text-violet-800"
       >
         Abrir ficha completa

@@ -4,8 +4,9 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import CopyAnamneseLink from './copy-link-button'
 
-export default async function AnamneseDetailPage({ params }: { params: { id: string } }) {
+export default async function AnamneseDetailPage({ params, searchParams }: { params: { id: string }, searchParams: { return?: string } }) {
   const { id } = params
+  const returnUrl = searchParams.return || '/dashboard/anamnese'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -46,7 +47,7 @@ export default async function AnamneseDetailPage({ params }: { params: { id: str
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/anamnese" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+        <Link href={returnUrl} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
           <Icon name="chevronLeft" className="w-5 h-5" />
         </Link>
         <div className="flex-1">
