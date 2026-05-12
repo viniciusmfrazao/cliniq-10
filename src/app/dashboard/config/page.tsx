@@ -191,6 +191,20 @@ export default async function ConfigPage() {
                 </div>
                 <Icon name="chevronRight" className="w-5 h-5 text-slate-400" />
               </Link>
+
+              <Link
+                href="/dashboard/config/taxas"
+                className="flex items-center gap-4 p-4 bg-gradient-to-br from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 rounded-xl transition-colors border border-amber-200"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center shadow">
+                  <Icon name="dollarSign" className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-900">Taxas de Pagamento</p>
+                  <p className="text-xs text-amber-700">Configure taxas de cartão, Pix e formas de pagamento</p>
+                </div>
+                <Icon name="chevronRight" className="w-5 h-5 text-amber-400" />
+              </Link>
             </div>
           </div>
         )}

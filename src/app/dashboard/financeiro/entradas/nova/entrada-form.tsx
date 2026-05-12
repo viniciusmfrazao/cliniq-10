@@ -1,8 +1,50 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+
+function PacienteBusca({ pacientes, onSelect }: { pacientes: { id: string; name: string }[], onSelect: (id: string) => void }) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  const filtered = query.length > 0
+    ? pacientes.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    : []
+
+  function pick(p: { id: string; name: string }) {
+    setSelected(p.name)
+    setQuery(p.name)
+    setOpen(false)
+    onSelect(p.id)
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        type="text"
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onSelect('') }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Digite o nome do paciente..."
+        className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+          {filtered.map(p => (
+            <button key={p.id} type="button" onMouseDown={() => pick(p)}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-100 last:border-0">
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
 
@@ -52,6 +94,7 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, c
   const [dataVenda, setDataVenda] = useState(todayBR())
   const [pacienteId, setPacienteId] = useState('')
   const [pacienteNome, setPacienteNome] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [procedimentoId, setProcedimentoId] = useState('')
   const [procedimentoNome, setProcedimentoNome] = useState('')
   const [profissionalId, setProfissionalId] = useState('')
@@ -149,22 +192,13 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, c
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Paciente</label>
-            <select
-              value={pacienteId}
-              onChange={e => handlePacienteChange(e.target.value)}
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-            >
-              <option value="">Selecione ou digite</option>
-              {pacientes.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <PacienteBusca pacientes={pacientes} onSelect={handlePacienteChange} />
           </div>
         </div>
 
         {!pacienteId && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Ou digite o nome</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Ou digite o nome manualmente</label>
             <input
               type="text"
               value={pacienteNome}

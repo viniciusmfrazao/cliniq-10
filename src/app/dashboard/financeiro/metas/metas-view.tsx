@@ -64,7 +64,8 @@ export default function MetasView({ metas, receitaMesAtual, atendimentosMesAtual
 
     setLoading(true)
 
-    const existente = metas.find(m => m.mes === mes)
+    const mesDate = mes.length === 7 ? mes + '-01' : mes
+    const existente = metas.find(m => m.mes?.startsWith(mes))
 
     if (existente) {
       const { error } = await supabase
@@ -85,7 +86,7 @@ export default function MetasView({ metas, receitaMesAtual, atendimentosMesAtual
         .from('metas_financeiras')
         .insert({
           clinic_id: clinicId,
-          mes,
+          mes: mesDate,
           meta_receita: valorReceita,
           meta_atendimentos: valorAtendimentos
         })
