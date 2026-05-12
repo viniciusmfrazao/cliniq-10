@@ -42,11 +42,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Convert plan name to enum value (lowercase)
-    // Valid values: 'starter', 'professional', 'enterprise'
+    // Valid values matching DB enum: 'starter', 'pro', 'clinic_plus', 'professional', 'enterprise'
     let planValue = (planName || 'starter').toLowerCase().replace(/\s+/g, '_')
     
     // If custom or invalid, default to starter
-    const validPlans = ['starter', 'professional', 'enterprise']
+    const validPlans = ['starter', 'pro', 'clinic_plus', 'professional', 'enterprise']
     if (!validPlans.includes(planValue)) {
       planValue = 'starter'
     }
