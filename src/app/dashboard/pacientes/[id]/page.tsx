@@ -200,7 +200,14 @@ export default async function PatientCentralPage({
 
       {/* Conteúdo da tab ativa */}
       {currentTab === 'overview' && (
-        <OverviewTab patient={patient} medicalRecord={medicalRecord} patientId={id} />
+        <>
+          <OverviewTab patient={patient} medicalRecord={medicalRecord} patientId={id} />
+          <div className="mt-6">
+            <Suspense fallback={<TabSkeleton />}>
+              <OrcamentosTabServer patientId={id} clinicId={userData!.clinic_id} patient={patient} />
+            </Suspense>
+          </div>
+        </>
       )}
       {currentTab === 'evolucoes' && (
         <Suspense fallback={<TabSkeleton />}>
@@ -225,11 +232,6 @@ export default async function PatientCentralPage({
       {currentTab === 'injetaveis' && (
         <Suspense fallback={<TabSkeleton />}>
           <InjetaveisTab patientId={id} />
-        </Suspense>
-      )}
-      {currentTab === 'orcamentos' && (
-        <Suspense fallback={<TabSkeleton />}>
-          <OrcamentosTabServer patientId={id} clinicId={userData!.clinic_id} patient={patient} />
         </Suspense>
       )}
     </div>
