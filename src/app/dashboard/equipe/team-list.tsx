@@ -68,6 +68,32 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
   const [loading, setLoading] = useState<string | null>(null)
   const [editingSchedules, setEditingSchedules] = useState<Member | null>(null)
   const [editingUnavail, setEditingUnavail] = useState<Member | null>(null)
+  const [editingProfRole, setEditingProfRole] = useState<string | null>(null)
+
+  const PROF_OPTIONS = [
+    { value: '', label: 'Não atende pacientes' },
+    { value: 'doctor', label: 'Médico(a)' },
+    { value: 'biomedic', label: 'Biomédico(a)' },
+    { value: 'nurse', label: 'Enfermeiro(a)' },
+    { value: 'esthetician', label: 'Esteticista' },
+    { value: 'physiotherapist', label: 'Fisioterapeuta' },
+    { value: 'nutritionist', label: 'Nutricionista' },
+    { value: 'psychologist', label: 'Psicólogo(a)' },
+  ]
+
+  async function handleSaveProfRole(memberId: string, professional_role: string) {
+    setLoading(memberId)
+    try {
+      await fetch(`/api/team/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicId, professional_role: professional_role || null })
+      })
+    } catch {}
+    setLoading(null)
+    setEditingProfRole(null)
+    router.refresh()
+  }
 
   async function handleDeactivate(memberId: string, memberName: string) {
     if (!confirm(`Desativar ${memberName}?\n\nO membro não poderá mais acessar o sistema, mas o histórico será mantido.`)) return
@@ -173,6 +199,27 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                 <span className="text-xs px-2 py-1 rounded-full font-medium bg-teal-100 text-teal-700">
                   {ROLE_LABELS[(member as any).professional_role] || (member as any).professional_role}
                 </span>
+              )}
+              {editingProfRole === member.id ? (
+                <div className="flex items-center gap-1">
+                  <select
+                    defaultValue={(member as any).professional_role || ''}
+                    onChange={e => handleSaveProfRole(member.id, e.target.value)}
+                    className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                    autoFocus
+                    onBlur={() => setEditingProfRole(null)}
+                  >
+                    {PROF_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setEditingProfRole(member.id)}
+                  className="text-xs text-slate-400 hover:text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-50 transition-colors"
+                  title="Definir papel clínico"
+                >
+                  {(member as any).professional_role ? '✏️' : '+ Clínico'}
+                </button>
               )}
               
               {member.id !== currentUserId && (

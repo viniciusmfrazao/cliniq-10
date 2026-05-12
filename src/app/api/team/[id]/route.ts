@@ -86,3 +86,32 @@ export async function DELETE(
     return NextResponse.json({ error: error.message || 'Erro interno' }, { status: 500 })
   }
 }
+
+// PATCH - Atualizar professional_role do membro
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+
+    const { data: currentUser } = await supabase.from('users').select('role, clinic_id').eq('id', user.id).single()
+    if (!['admin', 'super_admin', 'manager'].includes(currentUser?.role || ''))
+      return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+
+    const { professional_role } = await request.json()
+
+    const { error } = await supabase
+      .from('users')
+      .update({ professional_role: professional_role || null })
+      .eq('id', params.id)
+      .eq('clinic_id', currentUser!.clinic_id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
