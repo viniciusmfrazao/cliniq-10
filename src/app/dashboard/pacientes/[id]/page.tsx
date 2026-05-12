@@ -204,7 +204,9 @@ export default async function PatientCentralPage({
           <OverviewTab patient={patient} medicalRecord={medicalRecord} patientId={id} />
           <div className="mt-6">
             <Suspense fallback={<TabSkeleton />}>
-              <OrcamentosTabServer patientId={id} clinicId={userData!.clinic_id} patient={patient} />
+              {userData?.clinic_id && (
+                <OrcamentosTabServer patientId={id} clinicId={userData.clinic_id} patient={patient} />
+              )}
             </Suspense>
           </div>
         </>
