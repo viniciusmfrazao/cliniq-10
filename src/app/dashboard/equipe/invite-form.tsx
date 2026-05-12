@@ -63,7 +63,7 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
       }
 
       setSuccess(data.message || `Membro cadastrado com sucesso!`)
-      setForm({ name: '', email: '', password: '', role: 'receptionist', customRole: '' })
+      setForm({ name: '', email: '', password: '', role: 'receptionist', customRole: '', professional_role: '' })
       router.refresh()
     } catch (err: any) {
       setError(err.message || 'Erro ao enviar convite')
