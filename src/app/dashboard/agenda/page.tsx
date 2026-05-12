@@ -72,7 +72,7 @@ export default async function AgendaPage({
     // Query 1: TODOS os usuários da clínica (filtraremos no código)
     supabase
       .from('users')
-      .select('id, name, role, active')
+      .select('id, name, role, professional_role, active')
       .eq('clinic_id', clinicId)
       .order('name'),
     
@@ -103,7 +103,7 @@ export default async function AgendaPage({
   // Filtrar profissionais no código (evita problemas com enum)
   const allUsers = allUsersResult.data || []
   const professionals = allUsers.filter(u => 
-    PROFESSIONAL_ROLES.includes(u.role) && u.active !== false
+    (PROFESSIONAL_ROLES.includes(u.role) || PROFESSIONAL_ROLES.includes(u.professional_role || '')) && u.active !== false
   )
   const appointments = appointmentsResult.data || []
   const todayAppointments = todayAppointmentsResult.data || []

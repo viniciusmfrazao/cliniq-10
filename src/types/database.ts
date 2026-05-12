@@ -37,6 +37,17 @@ export const PROFESSIONAL_ROLES: UserRole[] = [
   'psychologist'
 ]
 
+export function isProfessional(user: { role: string; professional_role?: string | null }): boolean {
+  return PROFESSIONAL_ROLES.includes(user.role as any) || 
+         PROFESSIONAL_ROLES.includes(user.professional_role as any)
+}
+
+export function getEffectiveProfessionalRole(user: { role: string; professional_role?: string | null }): string {
+  if (PROFESSIONAL_ROLES.includes(user.role as any)) return user.role
+  if (user.professional_role && PROFESSIONAL_ROLES.includes(user.professional_role as any)) return user.professional_role
+  return user.role
+}
+
 export const APPOINTMENT_STATUS = [
   'scheduled',
   'confirmed',

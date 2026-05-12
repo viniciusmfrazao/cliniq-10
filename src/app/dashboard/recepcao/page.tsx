@@ -39,12 +39,12 @@ export default async function RecepcaoPage() {
   const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist']
   const { data: allUsers } = await supabase
     .from('users')
-    .select('id, name, role, active')
+    .select('id, name, role, professional_role, active')
     .eq('clinic_id', userData?.clinic_id)
     .order('name')
   
   const professionals = (allUsers || []).filter(u => 
-    PROFESSIONAL_ROLES.includes(u.role) && u.active !== false
+    (PROFESSIONAL_ROLES.includes(u.role) || PROFESSIONAL_ROLES.includes(u.professional_role || '')) && u.active !== false
   )
 
   return (

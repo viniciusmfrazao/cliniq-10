@@ -22,7 +22,7 @@ const ROLES = [
 
 export default function InviteForm({ clinicId }: { clinicId: string }) {
   const router = useRouter()
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'receptionist', customRole: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'receptionist', customRole: '', professional_role: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -49,6 +49,7 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
           password: form.password,
           role: finalRole,
           roleLabel: finalRoleLabel,
+          professional_role: form.professional_role || null,
           clinicId,
         }),
       })
@@ -144,6 +145,27 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
             onChange={e => update('customRole', e.target.value)}
             required
           />
+        </div>
+      )}
+
+      {['admin', 'manager', 'receptionist', 'financial', 'viewer', 'assistant'].includes(form.role) && (
+        <div>
+          <label className="label">Também atende pacientes como? <span className="text-slate-400 font-normal">(opcional)</span></label>
+          <select
+            className="input"
+            value={form.professional_role}
+            onChange={e => update('professional_role', e.target.value)}
+          >
+            <option value="">Não atende pacientes</option>
+            <option value="doctor">Médico(a)</option>
+            <option value="biomedic">Biomédico(a)</option>
+            <option value="nurse">Enfermeiro(a)</option>
+            <option value="esthetician">Esteticista</option>
+            <option value="physiotherapist">Fisioterapeuta</option>
+            <option value="nutritionist">Nutricionista</option>
+            <option value="psychologist">Psicólogo(a)</option>
+          </select>
+          <p className="text-xs text-slate-500 mt-1">Se selecionado, aparecerá como profissional disponível na agenda.</p>
         </div>
       )}
       

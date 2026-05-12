@@ -169,6 +169,11 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
               }`}>
                 {ROLE_LABELS[member.role] || member.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
               </span>
+              {(member as any).professional_role && (member as any).professional_role !== member.role && (
+                <span className="text-xs px-2 py-1 rounded-full font-medium bg-teal-100 text-teal-700">
+                  {ROLE_LABELS[(member as any).professional_role] || (member as any).professional_role}
+                </span>
+              )}
               
               {member.id !== currentUserId && (
                 <>
@@ -184,7 +189,7 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                   ) : (
                     // Botões de editar e desativar
                     <>
-                      {PROFESSIONAL_ROLES.has(member.role) && (
+                      {(PROFESSIONAL_ROLES.has(member.role) || PROFESSIONAL_ROLES.has((member as any).professional_role)) && (
                         <>
                           <button
                             onClick={() => setEditingSchedules(member)}

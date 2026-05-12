@@ -5,7 +5,7 @@ import { FACTORY_DEFAULTS } from '@/lib/permissions'
 
 export async function POST(request: Request) {
   try {
-    const { name, email, role, clinicId, password } = await request.json()
+    const { name, email, role, clinicId, password, professional_role } = await request.json()
 
     // Validar dados
     if (!name || !email || !role || !clinicId || !password) {
@@ -137,6 +137,7 @@ export async function POST(request: Request) {
       name,
       email,
       role,
+      professional_role: professional_role || null,
       active: true,
       permissions: inheritedPermissions,
     })
