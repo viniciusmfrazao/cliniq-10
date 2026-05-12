@@ -8,6 +8,7 @@ import PatientTabs, { type PatientTab, isValidTab } from './tabs'
 import MedicalInfo from './medical-info'
 import EvolutionTimeline from './evolution-timeline'
 import NewEvolutionButton from './new-evolution-button'
+import OrcamentosTab from './orcamentos-tab'
 
 /**
  * Central do Paciente.
@@ -224,6 +225,11 @@ export default async function PatientCentralPage({
       {currentTab === 'injetaveis' && (
         <Suspense fallback={<TabSkeleton />}>
           <InjetaveisTab patientId={id} />
+        </Suspense>
+      )}
+      {currentTab === 'orcamentos' && (
+        <Suspense fallback={<TabSkeleton />}>
+          <OrcamentosTabServer patientId={id} clinicId={userData!.clinic_id} patient={patient} />
         </Suspense>
       )}
     </div>
@@ -590,5 +596,39 @@ async function InjetaveisTab({ patientId }: { patientId: string }) {
         </div>
       )}
     </div>
+  )
+}
+
+async function OrcamentosTabServer({
+  patientId,
+  clinicId,
+  patient,
+}: {
+  patientId: string
+  clinicId: string
+  patient: any
+}) {
+  const supabase = await createClient()
+  const { data: orcamentos } = await supabase
+    .from('orcamentos')
+    .select('*, orcamento_itens(*)')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+
+  const { data: clinic } = await supabase
+    .from('clinics')
+    .select('name')
+    .eq('id', clinicId)
+    .single()
+
+  return (
+    <OrcamentosTab
+      patientId={patientId}
+      clinicId={clinicId}
+      patientName={patient.name}
+      patientPhone={patient.phone}
+      clinicName={clinic?.name || 'Clínica'}
+      initialOrcamentos={orcamentos || []}
+    />
   )
 }
