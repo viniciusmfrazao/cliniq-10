@@ -189,12 +189,10 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
             {/* Orçamentos do paciente */}
             {userData?.clinic_id && (
               <Suspense fallback={<div className="card p-4 animate-pulse h-24" />}>
-                <OrcamentosAtendimento
+                <OrcamentosAtendimentoServer
                   patientId={patient.id}
                   clinicId={userData.clinic_id}
-                  patientName={patient.name}
-                  patientPhone={patient.phone}
-                  clinicId2={userData.clinic_id}
+                  patient={patient}
                 />
               </Suspense>
             )}
