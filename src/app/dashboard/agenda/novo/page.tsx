@@ -1,3 +1,4 @@
+import BackButton from '@/components/ui/BackButton'
 import { createClient } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import AppointmentForm from '../appointment-form'
@@ -43,6 +44,7 @@ export default async function NovoAgendamentoPage({
 
   return (
     <div className="max-w-2xl mx-auto">
+      <BackButton href="/dashboard/agenda" label="Agenda" />
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Novo agendamento</h1>
         <p className="text-sm text-slate-500 mt-0.5">Preencha os dados do agendamento</p>

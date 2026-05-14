@@ -9,6 +9,7 @@ export default async function NovoProductPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      <BackButton href="/dashboard/estoque" label="Estoque" />
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Novo Produto</h1>
         <p className="text-sm text-slate-500 mt-0.5">Adicione um produto ao estoque</p>

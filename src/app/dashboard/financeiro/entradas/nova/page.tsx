@@ -1,3 +1,4 @@
+import BackButton from '@/components/ui/BackButton'
 import { createClient } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'

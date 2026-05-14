@@ -1,3 +1,4 @@
+import BackButton from '@/components/ui/BackButton'
 import { createClient } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import { redirect } from 'next/navigation'
@@ -34,6 +35,7 @@ export default async function NovaListaEsperaPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      <BackButton href="/dashboard/lista-espera" label="Lista de Espera" />
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Adicionar à Lista de Espera</h1>
         <p className="text-sm text-slate-500 mt-0.5">Cadastre um paciente que aguarda vaga</p>

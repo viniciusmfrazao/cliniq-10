@@ -1,3 +1,4 @@
+import BackButton from '@/components/ui/BackButton'
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -20,19 +21,12 @@ export default async function EditProductPage({ params }: { params: { id: string
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="flex items-center gap-2 text-sm text-slate-500 mb-4">
-        <Link href="/dashboard/estoque" className="hover:text-slate-700">Estoque</Link>
-        <Icon name="chevronRight" className="w-4 h-4" />
-        <Link href={`/dashboard/estoque/${product.id}`} className="hover:text-slate-700">{product.name}</Link>
-        <Icon name="chevronRight" className="w-4 h-4" />
-        <span className="text-slate-900">Editar</span>
-      </div>
+      <BackButton href="/dashboard/estoque" label="Estoque" />
 
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Editar Produto</h1>
         <p className="text-sm text-slate-500 mt-0.5">Atualize as informações do produto</p>
       </div>
-
       <ProductForm
         product={{
           id: product.id,
