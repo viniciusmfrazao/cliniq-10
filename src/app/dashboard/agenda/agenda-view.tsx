@@ -116,11 +116,21 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.phone)
   const isConfirmed = apt.status === 'confirmed'
+  const isCancelled = apt.status === 'cancelled' || apt.status === 'no_show'
   const canCheckIn = ['scheduled', 'confirmed', 'pending_confirmation'].includes(apt.status) && !apt.checked_in_at
   const isCheckedIn = !!apt.checked_in_at
   const checkedInTime = apt.checked_in_at 
     ? new Date(apt.checked_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     : null
+
+  // URL para agendar no mesmo horário/profissional do cancelado
+  const rescheduleUrl = (() => {
+    const d = new Date(apt.start_time)
+    const date = d.toISOString().split('T')[0]
+    const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    const prof = apt.professional_id || ''
+    return `/dashboard/agenda/novo?date=${date}&time=${time}&professional=${prof}`
+  })()
 
   const ALL_STATUSES = [
     { value: 'scheduled', label: 'Agendado' },
@@ -142,7 +152,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
         href={`/dashboard/atendimento/${apt.id}`}
         draggable={!!onDragStart}
         onDragStart={onDragStart ? (e) => onDragStart(e, apt) : undefined}
-        className={`block p-2 rounded-lg ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''}`}
+        className={`block p-2 rounded-lg ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-50 line-through-partial' : ''}`}
       >
         <div className="flex items-center justify-between gap-1">
           <span className="text-xs font-bold text-slate-700">{aptTime}</span>
@@ -229,6 +239,18 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
           {/* Ações rápidas */}
           <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+            {/* Botão de agendar no mesmo horário — só para cancelados/faltou */}
+            {isCancelled && (
+              <Link
+                href={rescheduleUrl}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full py-2 px-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-violet-600 hover:to-purple-700 transition-all flex items-center justify-center gap-2 shadow-md"
+              >
+                <Icon name="plus" className="w-4 h-4" />
+                Agendar nesse horário
+              </Link>
+            )}
+
             {/* Check-in - destaque */}
             {canCheckIn && (
               <button
@@ -264,7 +286,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
               Abrir atendimento
             </Link>
 
-            {apt.patients?.id && (
+            {apt.patients?.id && !isCancelled && (
               <div className="flex gap-2">
                 <SendAnamneseButton
                   patientId={apt.patients.id}

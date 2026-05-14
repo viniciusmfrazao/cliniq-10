@@ -90,14 +90,13 @@ export default async function AgendaPage({
       .lte('start_time', endDate)
       .order('start_time'),
     
-    // Query 3: Agendamentos de hoje (para estatísticas)
+    // Query 3: Agendamentos de hoje (para estatísticas) — inclui cancelados para relatório
     supabase
       .from('appointments')
       .select('status')
       .eq('clinic_id', clinicId)
       .gte('start_time', startOfDayBR(today))
-      .lte('start_time', endOfDayBR(today))
-      .neq('status', 'cancelled'),
+      .lte('start_time', endOfDayBR(today)),
 
     // Query 4: Bloqueios do período
     supabase
@@ -119,9 +118,12 @@ export default async function AgendaPage({
   const blocks = blocksResult.data || []
 
   // Calcular estatísticas do array (sem queries extras!)
-  const todayTotal = todayAppointments.length
+  const todayTotal = todayAppointments.filter(a => !['cancelled','no_show'].includes(a.status)).length
   const todayConfirmed = todayAppointments.filter(a => a.status === 'confirmed').length
   const todayCompleted = todayAppointments.filter(a => a.status === 'completed').length
+  const todayCancelled = todayAppointments.filter(a => a.status === 'cancelled' || a.status === 'no_show').length
+  const todayGrandTotal = todayAppointments.length
+  const cancellationRate = todayGrandTotal > 0 ? Math.round((todayCancelled / todayGrandTotal) * 100) : 0
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -137,9 +139,9 @@ export default async function AgendaPage({
       </div>
 
       {/* Stats do dia */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
             <Icon name="calendar" className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -148,7 +150,7 @@ export default async function AgendaPage({
           </div>
         </div>
         <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0">
             <Icon name="check" className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -157,12 +159,26 @@ export default async function AgendaPage({
           </div>
         </div>
         <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
             <Icon name="award" className="w-5 h-5 text-white" />
           </div>
           <div>
             <p className="text-2xl font-bold text-slate-900">{todayCompleted || 0}</p>
             <p className="text-xs text-slate-500">Realizados</p>
+          </div>
+        </div>
+        <div className={`card p-4 flex items-center gap-3 ${todayCancelled > 0 ? 'border-l-4 border-red-300' : ''}`}>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center flex-shrink-0">
+            <Icon name="x" className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl font-bold text-slate-900">{todayCancelled || 0}</p>
+              {cancellationRate > 0 && (
+                <span className="text-xs font-semibold text-red-500">{cancellationRate}%</span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">Cancelamentos</p>
           </div>
         </div>
       </div>

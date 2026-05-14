@@ -160,6 +160,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .lte('start_time', endOfDay)
     .eq('status', 'completed')
 
+  const { count: cancelledToday } = await supabase
+    .from('appointments')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', userData?.clinic_id)
+    .gte('start_time', startOfDay)
+    .lte('start_time', endOfDay)
+    .in('status', ['cancelled', 'no_show'])
+
   // Receita do mês (se módulo financeiro ativo)
   let monthlyRevenue = 0
   if (hasModule('/dashboard/financeiro')) {
@@ -293,6 +301,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           <div className="mt-2 flex flex-wrap gap-1">
             <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{completedToday || 0} finalizados</span>
             <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{checkedIn || 0} aguardando</span>
+            {(cancelledToday || 0) > 0 && (
+              <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{cancelledToday} cancelados</span>
+            )}
           </div>
         </div>
 
