@@ -56,8 +56,7 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
   }
 
   function selectDay(day: number) {
-    const d = new Date(pickerMonth.year, pickerMonth.month, day)
-    const iso = d.toFullYear ? d.toISOString().split('T')[0] : `${pickerMonth.year}-${String(pickerMonth.month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+    const iso = `${pickerMonth.year}-${String(pickerMonth.month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
     updateParams('date', iso)
     setShowPicker(false)
   }
