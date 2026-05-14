@@ -131,8 +131,11 @@ export default function ImportPage() {
         {/* Status padrão */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Status dos agendamentos importados
+            Status para agendamentos do passado
           </label>
+          <p className="text-xs text-slate-500 mb-2">
+            Agendamentos com data futura serão importados como &quot;Agendado&quot; automaticamente.
+          </p>
           <select
             value={defaultStatus}
             onChange={e => setDefaultStatus(e.target.value)}

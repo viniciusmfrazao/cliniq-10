@@ -192,13 +192,17 @@ export async function POST(req: NextRequest) {
 
       const notes = (r.Notes || 'Importado do sistema anterior').trim().slice(0, 500)
 
+      // Status automático: data passada usa defaultStatus, data futura vira scheduled
+      const isPast = new Date(start) < new Date()
+      const finalStatus = isPast ? defaultStatus : 'scheduled'
+
       apptBatch.push({
         clinic_id: clinicId,
         patient_id: patientId,
         professional_id: profId,
         start_time: start,
         end_time: end,
-        status: defaultStatus,
+        status: finalStatus,
         notes: notes || 'Importado do sistema anterior',
       })
 
