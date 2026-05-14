@@ -193,6 +193,7 @@ export default function SchedulesModal({ member, clinicId, onClose, onSave }: Pr
     setError('')
     setSaving(true)
 
+    // Guard: evita double-submit
     const { error: delErr } = await supabase
       .from('professional_schedules')
       .delete()

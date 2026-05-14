@@ -612,21 +612,12 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                             })}
                           </div>
                         ) : (
-                          <div className="h-full min-h-[60px] flex items-center justify-center gap-1 group">
-                            <Link
-                              href={`/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}`}
-                              className="flex-1 h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-lg hover:border-violet-300 hover:bg-violet-50 transition-colors group/link"
-                            >
-                              <Icon name="plus" className="w-4 h-4 text-slate-300 group-hover/link:text-violet-500" />
-                            </Link>
-                            <button
-                              onClick={() => setBlockModal({ open: true, hour, profId: prof.id })}
-                              className="w-7 h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-colors opacity-0 group-hover:opacity-100"
-                              title="Bloquear horário"
-                            >
-                              <Icon name="lock" className="w-3.5 h-3.5 text-slate-300 hover:text-orange-500" />
-                            </button>
-                          </div>
+                          <Link
+                            href={`/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}`}
+                            className="h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-lg hover:border-violet-300 hover:bg-violet-50 transition-colors group/link"
+                          >
+                            <Icon name="plus" className="w-4 h-4 text-slate-300 group-hover/link:text-violet-500" />
+                          </Link>
                         )}
                       </div>
                     )
