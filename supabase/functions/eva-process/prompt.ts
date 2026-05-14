@@ -89,6 +89,8 @@ function buildProfessionalSchedulesBlock(ctx: DonnaContext): string {
 
   return lines.join('\n');
 }
+
+function buildClinicInfoBlock(settings: ClinicSettings | null | undefined): string {
   const s = settings || {};
   const lines: string[] = [];
   if (typeof s.address === 'string' && s.address.trim()) lines.push(`- Endereço: ${s.address.trim()}`);
