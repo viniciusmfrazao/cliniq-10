@@ -34,11 +34,43 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   const [loading, setLoading] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [status, setStatus] = useState(appointment.status)
+  const [showReschedule, setShowReschedule] = useState(false)
+  const [rescheduleDate, setRescheduleDate] = useState(
+    new Date(appointment.start_time).toISOString().split('T')[0]
+  )
+  const [rescheduleTime, setRescheduleTime] = useState(
+    new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  )
+  const [savingReschedule, setSavingReschedule] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  const handleReschedule = async () => {
+    if (!rescheduleDate || !rescheduleTime) return
+    setSavingReschedule(true)
+    try {
+      const [h, m] = rescheduleTime.split(':').map(Number)
+      const newStart = new Date(`${rescheduleDate}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`)
+      const newEnd = new Date(newStart.getTime() + (procedure?.duration_minutes || 30) * 60000)
+      const { error } = await supabase
+        .from('appointments')
+        .update({
+          start_time: newStart.toISOString(),
+          end_time: newEnd.toISOString(),
+        })
+        .eq('id', appointment.id)
+      if (error) throw error
+      setShowReschedule(false)
+      router.refresh()
+    } catch (err) {
+      alert('Erro ao reagendar. Tente novamente.')
+    } finally {
+      setSavingReschedule(false)
+    }
+  }
 
   // Calcular idade
   const calculateAge = (birthDate: string | null) => {
@@ -210,8 +242,6 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   const age = calculateAge(patient.birth_date)
 
   return (
-    // Header sticky no topo do <main> do dashboard (que e o scroll container).
-    // Fundo opaco com leve blur evita o conteudo "vazar" por tras quando rola.
     <div className="sticky top-0 z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-slate-200 shadow-sm">
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2.5 md:py-3">
         <div className="flex items-center justify-between gap-3">
@@ -244,9 +274,15 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
                   </span>
                 )}
               </div>
-              <p className="text-xs md:text-sm text-slate-500 truncate">
-                {procedure?.name || 'Consulta'} • {new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              </p>
+              {/* Data/hora clicável para reagendar */}
+              <button
+                onClick={() => setShowReschedule(v => !v)}
+                className="flex items-center gap-1 text-xs md:text-sm text-slate-500 hover:text-violet-600 transition-colors group"
+                title="Clique para alterar data/hora"
+              >
+                <span>{procedure?.name || 'Consulta'} • {new Date(appointment.start_time).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às {new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                <Icon name="edit" className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
             </div>
           </div>
 
@@ -277,6 +313,17 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
                 </span>
               </div>
             )}
+
+            {/* Botão reagendar — sempre visível */}
+            <button
+              onClick={() => setShowReschedule(v => !v)}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                showReschedule ? 'bg-violet-100 text-violet-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+              title="Alterar data/hora"
+            >
+              <Icon name="calendar" className="w-4 h-4" />
+            </button>
 
             {(status === 'confirmed' || status === 'scheduled') && (
               <button
@@ -312,6 +359,58 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
             )}
           </div>
         </div>
+
+        {/* Painel de reagendamento inline */}
+        {showReschedule && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-end gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Data</label>
+              <input
+                type="date"
+                value={rescheduleDate}
+                onChange={e => setRescheduleDate(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Horário</label>
+              <select
+                value={rescheduleTime}
+                onChange={e => setRescheduleTime(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none transition-all"
+              >
+                {Array.from({ length: 26 }, (_, i) => {
+                  const h = Math.floor(i / 2) + 7
+                  const min = i % 2 === 0 ? '00' : '30'
+                  const t = `${String(h).padStart(2,'0')}:${min}`
+                  return <option key={t} value={t}>{t}</option>
+                })}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleReschedule}
+                disabled={savingReschedule}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
+              >
+                {savingReschedule ? (
+                  <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                ) : (
+                  <>
+                    <Icon name="check" className="w-4 h-4" />
+                    Salvar
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setShowReschedule(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
