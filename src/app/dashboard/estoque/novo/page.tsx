@@ -1,3 +1,4 @@
+import BackButton from '@/components/ui/BackButton'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ProductForm from '../product-form'
