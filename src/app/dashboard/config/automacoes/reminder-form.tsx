@@ -136,14 +136,13 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     try {
       const { error } = await supabase
         .from('clinic_automations')
-        .upsert(
+        .update(
           {
-            clinic_id: clinicId,
             confirma_24h: enabled,
             template_confirma_24h: template,
           },
-          { onConflict: 'clinic_id' },
         )
+        .eq('clinic_id', clinicId)
       if (error) {
         alert(`Erro ao salvar: ${error.message}`)
         return

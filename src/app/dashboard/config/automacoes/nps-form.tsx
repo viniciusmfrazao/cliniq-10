@@ -154,16 +154,15 @@ export default function NpsForm({ clinicId, clinicName, initial }: Props) {
     try {
       const { error } = await supabase
         .from('clinic_automations')
-        .upsert(
+        .update(
           {
-            clinic_id: clinicId,
             nps_pos_atendimento: enabled,
             template_nps: template,
             nps_imediato: imediato,
             nps_delay_minutes: delayMinutes,
           },
-          { onConflict: 'clinic_id' },
         )
+        .eq('clinic_id', clinicId)
       if (error) {
         alert(`Erro ao salvar: ${error.message}`)
         return

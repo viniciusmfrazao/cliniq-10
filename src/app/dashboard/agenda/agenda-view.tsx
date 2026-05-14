@@ -178,10 +178,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {/* Preview ao passar o mouse */}
       {showPreview && (
         <div 
-          className={`absolute z-50 top-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 animate-in fade-in duration-200 ${
-            isRightColumn ? 'right-full slide-in-from-right-2' : 'left-full slide-in-from-left-2'
+          className={`absolute z-[60] top-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 ${
+            isRightColumn ? 'right-full' : 'left-full'
           }`}
-          style={isRightColumn ? { marginRight: '-4px', paddingRight: '12px' } : { marginLeft: '-4px', paddingLeft: '12px' }}
+          style={isRightColumn 
+            ? { marginRight: '-12px', paddingRight: '12px' } 
+            : { marginLeft: '-12px', paddingLeft: '12px' }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -664,7 +666,9 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
         
         <div className="overflow-x-auto">
           <div className="min-w-[700px]">
-            <div className="grid grid-cols-7 border-b border-slate-100">
+            <div className="grid grid-cols-[64px_repeat(7,1fr)] border-b border-slate-100">
+              {/* Célula vazia do canto hora */}
+              <div className="bg-slate-50 border-r border-slate-100" />
               {weekDays.map((day, idx) => {
                 const isToday = day.toDateString() === new Date().toDateString()
                 const dayStr = day.toISOString().split('T')[0]
@@ -674,7 +678,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                   <Link
                     key={idx}
                     href={`/dashboard/agenda?date=${dayStr}&view=day`}
-                    className={`p-3 text-center border-l first:border-l-0 border-slate-100 hover:bg-slate-100 transition-colors ${isToday ? 'bg-purple-50' : 'bg-slate-50'}`}
+                    className={`p-3 text-center border-l border-slate-100 hover:bg-slate-100 transition-colors ${isToday ? 'bg-purple-50' : 'bg-slate-50'}`}
                   >
                     <p className="text-xs text-slate-500 uppercase">
                       {day.toLocaleDateString('pt-BR', { weekday: 'short' })}
@@ -692,54 +696,63 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
               })}
             </div>
 
-            <div 
-              className="grid grid-cols-7 min-h-[400px]"
-              onDragOver={handleDragOver}
-            >
-              {weekDays.map((day, idx) => {
-                const dayStr = day.toISOString().split('T')[0]
-                const dayAppointments = appointments.filter(apt => 
-                  apt.start_time.startsWith(dayStr)
-                ).sort((a, b) => a.start_time.localeCompare(b.start_time))
-                const isToday = day.toDateString() === new Date().toDateString()
-
+            {/* Grade com faixas de horário */}
+            <div onDragOver={handleDragOver}>
+              {HOUR_SLOTS.map(hour => {
+                const timeStr = `${String(hour).padStart(2,'0')}:00`
+                const isLunch = hour === 12
                 return (
-                  <div 
-                    key={idx} 
-                    className={`p-2 border-l first:border-l-0 border-slate-100 ${isToday ? 'bg-purple-50/30' : ''}`}
-                    onDrop={(e) => handleDrop(e, dayStr, 9)}
-                  >
-                    {dayAppointments.length === 0 ? (
-                      <Link
-                        href={`/dashboard/agenda/novo?date=${dayStr}`}
-                        className="h-full min-h-[100px] flex flex-col items-center justify-center text-slate-400 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition-colors"
-                      >
-                        <Icon name="plus" className="w-5 h-5" />
-                        <span className="text-xs mt-1">Agendar</span>
-                      </Link>
-                    ) : (
-                      <div className="space-y-1">
-                        {dayAppointments.slice(0, 6).map(apt => (
-                          <AppointmentCard
-                            key={apt.id}
-                            apt={apt}
-                            onStatusChange={handleStatusChange}
-                            onCheckIn={handleCheckIn}
-                            onDragStart={handleDragStart}
-                            compact
-                            isRightColumn={idx >= 5}
-                          />
-                        ))}
-                        {dayAppointments.length > 6 && (
-                          <Link
-                            href={`/dashboard/agenda?date=${dayStr}&view=day`}
-                            className="block text-center text-xs text-violet-600 font-medium hover:underline py-1"
-                          >
-                            +{dayAppointments.length - 6} mais
-                          </Link>
-                        )}
-                      </div>
-                    )}
+                  <div key={hour} className={`grid grid-cols-[64px_repeat(7,1fr)] border-b border-slate-100 ${isLunch ? 'bg-amber-50/30' : ''}`}>
+                    {/* Coluna de hora */}
+                    <div className="p-2 text-center border-r border-slate-100 bg-slate-50 flex items-start justify-center pt-2">
+                      <span className={`text-xs font-semibold ${isLunch ? 'text-amber-600' : 'text-slate-500'}`}>{timeStr}</span>
+                    </div>
+                    {weekDays.map((day, idx) => {
+                      const dayStr = day.toISOString().split('T')[0]
+                      const hourApts = appointments
+                        .filter(apt => {
+                          const aptHour = new Date(apt.start_time).getHours()
+                          return apt.start_time.startsWith(dayStr) && aptHour === hour
+                        })
+                        .sort((a,b) => a.start_time.localeCompare(b.start_time))
+                      const isToday = day.toDateString() === new Date().toDateString()
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-1 border-l border-slate-100 min-h-[56px] ${isToday ? 'bg-purple-50/20' : ''}`}
+                          onDrop={(e) => handleDrop(e, dayStr, hour)}
+                        >
+                          {hourApts.length > 0 ? (
+                            <div className="space-y-0.5">
+                              {hourApts.slice(0,3).map(apt => (
+                                <AppointmentCard
+                                  key={apt.id}
+                                  apt={apt}
+                                  onStatusChange={handleStatusChange}
+                                  onCheckIn={handleCheckIn}
+                                  onDragStart={handleDragStart}
+                                  compact
+                                  isRightColumn={idx >= 5}
+                                />
+                              ))}
+                              {hourApts.length > 3 && (
+                                <Link href={`/dashboard/agenda?date=${dayStr}&view=day`} className="block text-center text-xs text-violet-500 font-medium hover:underline">
+                                  +{hourApts.length - 3}
+                                </Link>
+                              )}
+                            </div>
+                          ) : (
+                            <Link
+                              href={`/dashboard/agenda/novo?date=${dayStr}&time=${timeStr}`}
+                              className="h-full min-h-[48px] flex items-center justify-center hover:bg-violet-50 rounded transition-colors group/wk"
+                            >
+                              <Icon name="plus" className="w-3.5 h-3.5 text-slate-200 group-hover/wk:text-violet-400" />
+                            </Link>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )
               })}

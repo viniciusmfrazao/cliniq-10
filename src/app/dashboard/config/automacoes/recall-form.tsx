@@ -143,15 +143,14 @@ export default function RecallForm({ clinicId, clinicName, initial }: Props) {
     try {
       const { error } = await supabase
         .from('clinic_automations')
-        .upsert(
+        .update(
           {
-            clinic_id: clinicId,
             recall_inativos: enabled,
             recall_dias: diasInativo,
             template_recall: template,
           },
-          { onConflict: 'clinic_id' },
         )
+        .eq('clinic_id', clinicId)
       if (error) {
         alert(`Erro ao salvar: ${error.message}`)
         return
