@@ -51,7 +51,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const hasModule = (route: string) => activeModules.length === 0 || isRouteEnabled(route, activeModules)
 
   const nameParts = (userData?.name || '').trim().split(/\s+/)
-  const firstName = nameParts.find(p => !/^(dr|dra|dr\.|dra\.)$/i.test(p)) || nameParts[0] || ''
+  const firstName = nameParts.find((p: string) => !/^(dr|dra|dr\.|dra\.)$/i.test(p)) || nameParts[0] || ''
   const trialDaysLeft = clinic?.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at).getTime() - Date.now()) / 86400000))
     : 0
