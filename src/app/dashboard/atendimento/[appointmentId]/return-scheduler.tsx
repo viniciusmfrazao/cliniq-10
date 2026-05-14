@@ -9,9 +9,10 @@ type Props = {
   patientId: string
   clinicId: string
   currentAppointmentId: string
+  professionalId?: string | null
 }
 
-export default function ReturnScheduler({ patientId, clinicId, currentAppointmentId }: Props) {
+export default function ReturnScheduler({ patientId, clinicId, currentAppointmentId, professionalId }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -57,6 +58,7 @@ export default function ReturnScheduler({ patientId, clinicId, currentAppointmen
       await supabase.from('appointments').insert({
         clinic_id: clinicId,
         patient_id: patientId,
+        professional_id: professionalId || null,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         status: 'pending_confirmation',

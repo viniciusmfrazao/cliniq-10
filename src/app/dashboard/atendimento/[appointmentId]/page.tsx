@@ -202,6 +202,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               patientId={patient.id}
               clinicId={userData?.clinic_id || ''}
               currentAppointmentId={appointmentId}
+              professionalId={appointment.professional_id || null}
             />
           </div>
         </div>

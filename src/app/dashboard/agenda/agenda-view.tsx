@@ -41,6 +41,7 @@ const HOUR_SLOTS = Array.from({ length: 14 }, (_, i) => i + 7)
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; border: string; label: string }> = {
   scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', label: 'Agendado' },
+  pending_confirmation: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', label: 'Aguard. confirmação' },
   confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', label: 'Confirmado' },
   in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300', label: 'Em atendimento' },
   completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', label: 'Realizado' },
@@ -101,13 +102,21 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.phone)
   const isConfirmed = apt.status === 'confirmed'
-  const canConfirm = apt.status === 'scheduled'
-  const canCancel = ['scheduled', 'confirmed'].includes(apt.status)
-  const canCheckIn = ['scheduled', 'confirmed'].includes(apt.status) && !apt.checked_in_at
+  const canCheckIn = ['scheduled', 'confirmed', 'pending_confirmation'].includes(apt.status) && !apt.checked_in_at
   const isCheckedIn = !!apt.checked_in_at
   const checkedInTime = apt.checked_in_at 
     ? new Date(apt.checked_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     : null
+
+  const ALL_STATUSES = [
+    { value: 'scheduled', label: 'Agendado' },
+    { value: 'pending_confirmation', label: 'Aguard. confirmação' },
+    { value: 'confirmed', label: 'Confirmado' },
+    { value: 'in_progress', label: 'Em atendimento' },
+    { value: 'completed', label: 'Realizado' },
+    { value: 'no_show', label: 'Não compareceu' },
+    { value: 'cancelled', label: 'Cancelado' },
+  ]
 
   return (
     <div 
@@ -215,43 +224,29 @@ const AppointmentCard = React.memo(function AppointmentCard({
               </button>
             )}
             
-            <div className="flex gap-2">
-              {canConfirm && (
-                <button
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'confirmed') }}
-                  className="flex-1 py-1.5 px-2 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-1"
-                >
-                  <Icon name="check" className="w-3 h-3" />
-                  Confirmar
-                </button>
-              )}
-              {canCancel && (
-                <>
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'no_show') }}
-                    className="flex-1 py-1.5 px-2 bg-amber-500 text-white text-xs font-medium rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Icon name="clock" className="w-3 h-3" />
-                    Faltou
-                  </button>
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, 'cancelled') }}
-                    className="flex-1 py-1.5 px-2 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Icon name="x" className="w-3 h-3" />
-                    Cancelar
-                  </button>
-                </>
-              )}
-              <Link
-                href={`/dashboard/atendimento/${apt.id}`}
-                className="flex-1 py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
+            {/* Select de status — todos os status disponíveis, sem restrição de data */}
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500 font-medium">Alterar status:</span>
+              <select
+                value={apt.status}
+                onChange={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(apt.id, e.target.value) }}
                 onClick={(e) => e.stopPropagation()}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none transition-all cursor-pointer"
               >
-                <Icon name="eye" className="w-3 h-3" />
-                Abrir
-              </Link>
+                {ALL_STATUSES.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
             </div>
+
+            <Link
+              href={`/dashboard/atendimento/${apt.id}`}
+              className="w-full py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Icon name="eye" className="w-3 h-3" />
+              Abrir atendimento
+            </Link>
 
             {apt.patients?.id && (
               <div className="flex gap-2">
