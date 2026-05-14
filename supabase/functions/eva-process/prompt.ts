@@ -57,7 +57,38 @@ function buildContextLine(
   return `- ⚠️ Vocês JÁ ESTÃO em conversa (${historyLength} mensagens). NÃO repita "olá", "como posso ajudar", "sou a Eva". Releia o histórico.`;
 }
 
-function buildClinicInfoBlock(settings: ClinicSettings | null | undefined): string {
+function buildProfessionalSchedulesBlock(ctx: DonnaContext): string {
+  const schedules = ctx.professional_schedules;
+  if (!schedules || schedules.length === 0) return '';
+
+  const DAY_NAMES: Record<number, string> = {
+    0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta',
+    4: 'Quinta', 5: 'Sexta', 6: 'Sábado',
+  };
+
+  // Agrupa por profissional
+  const byProf = new Map<string, { name: string; days: Map<number, string[]> }>();
+  for (const s of schedules) {
+    if (!byProf.has(s.professional_id)) {
+      byProf.set(s.professional_id, { name: s.professional_name, days: new Map() });
+    }
+    const prof = byProf.get(s.professional_id)!;
+    if (!prof.days.has(s.day_of_week)) prof.days.set(s.day_of_week, []);
+    const start = String(s.start_time).slice(0, 5);
+    const end = String(s.end_time).slice(0, 5);
+    prof.days.get(s.day_of_week)!.push(`${start}–${end}`);
+  }
+
+  const lines: string[] = [];
+  for (const [, prof] of byProf.entries()) {
+    const dayEntries = [...prof.days.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([dow, ranges]) => `${DAY_NAMES[dow]}: ${ranges.join(', ')}`);
+    lines.push(`- ${prof.name}: ${dayEntries.join(' | ')}`);
+  }
+
+  return lines.join('\n');
+}
   const s = settings || {};
   const lines: string[] = [];
   if (typeof s.address === 'string' && s.address.trim()) lines.push(`- Endereço: ${s.address.trim()}`);
@@ -295,6 +326,11 @@ ${identificacaoPart}${mediaPart}
 
 PROFISSIONAIS DA CLÍNICA:
 ${profissionaisText}
+
+HORÁRIOS DE ATENDIMENTO POR PROFISSIONAL:
+${buildProfessionalSchedulesBlock(ctx) || '- (não cadastrado — diga que vai confirmar com a clínica)'}
+- Use esses dados pra responder "quais dias fulano atende?" diretamente, sem escalar.
+- Para verificar vagas livres em um dia específico, use a tool consultar_agenda.
 
 PROCEDIMENTOS DISPONÍVEIS (preços REAIS — use exatamente estes valores):
 ${procedimentosText}

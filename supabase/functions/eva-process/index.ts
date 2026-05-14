@@ -189,6 +189,7 @@ async function loadContext(payload: IncomingPayload): Promise<{ ok: boolean; ctx
     ctx: {
       history: Array.isArray(data.history) ? data.history : [],
       professionals: Array.isArray(data.professionals) ? data.professionals : [],
+      professional_schedules: Array.isArray(data.professional_schedules) ? data.professional_schedules : [],
       procedures: Array.isArray(data.procedures) ? data.procedures : [],
       clinic: data.clinic ?? { name: 'a clínica', slug: null, settings: {} },
       patient: data.patient ?? null,

@@ -90,9 +90,18 @@ export interface EvolutionConfig {
   status: string | null;
 }
 
+export interface ProfessionalScheduleRow {
+  professional_id: string;
+  professional_name: string;
+  day_of_week: number; // 0=dom, 1=seg, ..., 6=sab
+  start_time: string;  // "09:00:00"
+  end_time: string;    // "18:00:00"
+}
+
 export interface DonnaContext {
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
   professionals: ProfessionalRow[];
+  professional_schedules: ProfessionalScheduleRow[];
   procedures: ProcedureRow[];
   clinic: ClinicRow;
   patient: PatientRow | null;
