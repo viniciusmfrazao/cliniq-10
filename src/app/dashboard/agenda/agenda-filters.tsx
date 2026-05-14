@@ -26,15 +26,21 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
   })
   const pickerRef = useRef<HTMLDivElement>(null)
 
-  // Fecha ao clicar fora
+  // Fecha ao clicar fora — delay de 50ms evita capturar o mesmo clique que abriu
   useEffect(() => {
+    if (!showPicker) return
     function handleClick(e: MouseEvent) {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         setShowPicker(false)
       }
     }
-    if (showPicker) document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClick)
+    }, 50)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('mousedown', handleClick)
+    }
   }, [showPicker])
 
   function updateParams(key: string, value: string) {
