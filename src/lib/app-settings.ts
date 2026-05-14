@@ -17,6 +17,14 @@ type CacheEntry = { value: string | null; expiresAt: number }
 const cache = new Map<SettingKey, CacheEntry>()
 const TTL_MS = 60_000
 
+function normalizeSettingValue(key: SettingKey, value: string | null): string | null {
+  // n8n is no longer an Eva runtime. Keep legacy keys readable for old rows,
+  // but never allow them to route production WhatsApp traffic.
+  if (key === 'eva_engine') return 'edge'
+  if (key === 'n8n_donna_url' || key === 'n8n_donna_secret') return null
+  return value
+}
+
 function getCached(key: SettingKey): string | null | undefined {
   const hit = cache.get(key)
   if (!hit) return undefined
@@ -28,7 +36,7 @@ function getCached(key: SettingKey): string | null | undefined {
 }
 
 function setCached(key: SettingKey, value: string | null) {
-  cache.set(key, { value, expiresAt: Date.now() + TTL_MS })
+  cache.set(key, { value: normalizeSettingValue(key, value), expiresAt: Date.now() + TTL_MS })
 }
 
 export function invalidateSettingsCache(key?: SettingKey) {
@@ -47,7 +55,7 @@ export async function getSetting(key: SettingKey): Promise<string | null> {
     .eq('key', key)
     .maybeSingle()
 
-  const value = data?.value ?? null
+  const value = normalizeSettingValue(key, data?.value ?? null)
   setCached(key, value)
   return value
 }
@@ -77,7 +85,7 @@ export async function getSettings<K extends SettingKey>(
 
   for (const k of missing) {
     const row = data?.find(r => r.key === k)
-    const value = row?.value ?? null
+    const value = normalizeSettingValue(k, row?.value ?? null)
     setCached(k, value)
     result[k] = value
   }
