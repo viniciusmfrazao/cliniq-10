@@ -250,9 +250,8 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   //   'fu_2h' / 'fu_24h' / 'fu_48h' / 'fu_5d' / 'fu_10d' -> bucket especifico
 
   // Filtro global de linha WhatsApp (vem da sidebar)
-  const leadsForLine = selectedLine
-    ? leads.filter(l => (l as any).whatsapp_instance === selectedLine || !(l as any).whatsapp_instance)
-    : leads
+  // CRM mostra todos os leads independente da linha WhatsApp selecionada
+  const leadsForLine = leads
 
   const filteredLeads =
     filter === 'all'

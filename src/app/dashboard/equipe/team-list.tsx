@@ -222,6 +222,24 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                 </button>
               )}
               
+              {!showReactivate && (
+                <>
+                  <button
+                    onClick={() => setEditingSchedules(member)}
+                    className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                    title="Horários de atendimento"
+                  >
+                    <Icon name="clock" className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setEditingUnavail(member)}
+                    className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                    title="Férias e folgas"
+                  >
+                    <Icon name="calendar" className="w-4 h-4" />
+                  </button>
+                </>
+              )}
               {member.id !== currentUserId && (
                 <>
                   {showReactivate ? (
@@ -236,22 +254,6 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                   ) : (
                     // Botões de editar e desativar
                     <>
-                      <>
-                        <button
-                          onClick={() => setEditingSchedules(member)}
-                          className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
-                          title="Horários de atendimento"
-                        >
-                          <Icon name="clock" className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setEditingUnavail(member)}
-                          className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
-                          title="Férias e folgas"
-                        >
-                          <Icon name="calendar" className="w-4 h-4" />
-                        </button>
-                      </>
                       <Link
                         href={`/dashboard/equipe/${member.id}/permissoes`}
                         className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
