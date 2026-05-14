@@ -107,35 +107,15 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
     setSaving(true)
     setSavedAt(null)
     try {
-      // OBS: aniversario_hora foi removido do upsert porque a coluna pode não
-      // existir em todos os ambientes (Supabase) e o cron Hobby roda 1x/dia
-      // fixo às 9h. Quando voltar a ser configurável, rodar
-      // supabase-birthday-automation.sql e voltar o campo aqui.
-      type AutomationsUpsert = {
-        clinic_id: string
-        aniversario: boolean
-        template_aniversario: string
-        aniversario_optin_required?: boolean
-      }
-
-      const payload: AutomationsUpsert = {
-        clinic_id: clinicId,
-        aniversario: enabled,
-        template_aniversario: template,
-      }
-
-      // Tenta primeiro com optinRequired; se a coluna não existir no schema,
-      // refaz sem ela pra não quebrar.
-      let { error } = await supabase
+      const { error } = await supabase
         .from('clinic_automations')
-        .upsert({ ...payload, aniversario_optin_required: optinRequired }, { onConflict: 'clinic_id' })
+        .update({
+          aniversario: enabled,
+          template_aniversario: template,
+          aniversario_optin_required: optinRequired,
+        })
+        .eq('clinic_id', clinicId)
 
-      if (error && /aniversario_optin_required/i.test(error.message)) {
-        const retry = await supabase
-          .from('clinic_automations')
-          .upsert(payload, { onConflict: 'clinic_id' })
-        error = retry.error
-      }
       if (error) {
         alert(`Erro ao salvar: ${error.message}`)
         return

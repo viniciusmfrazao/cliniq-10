@@ -162,7 +162,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             className="fixed inset-0 z-40" 
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+          <div className="fixed bottom-16 left-4 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-[100] overflow-hidden">
             <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-semibold text-slate-900">Notificações</h3>
               {unreadCount > 0 && (

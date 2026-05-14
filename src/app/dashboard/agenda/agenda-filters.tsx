@@ -147,12 +147,12 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
               <Icon name="chevronDown" className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showPicker ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Dropdown do picker — separado do trigger pra evitar conflito de ref */}
+            {/* Dropdown do picker — centralizado no trigger, sem sair da tela */}
             {showPicker && (
               <div
                 ref={pickerDropdownRef}
-                className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 w-72"
-                style={{ animation: 'fadeSlideDown 0.15s ease' }}
+                className="absolute top-full mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 w-72"
+                style={{ animation: 'fadeSlideDown 0.15s ease', left: '50%', transform: 'translateX(-50%)' }}
               >
                 {/* Header mês */}
                 <div className="flex items-center justify-between mb-3">
