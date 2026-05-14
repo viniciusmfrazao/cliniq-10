@@ -8,6 +8,18 @@ import { createClient } from '@/lib/supabase/client'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useToast } from '@/components/ui/Toast'
 import SendAnamneseButton from './send-anamnese-button'
+import BlockModal from './block-modal'
+
+type Block = {
+  id: string
+  title: string
+  start_time: string
+  end_time: string
+  notes: string | null
+  color: string
+  professional_id: string
+  professional?: { name: string } | null
+}
 
 type Appointment = {
   id: string
@@ -30,6 +42,7 @@ type Professional = {
 
 type Props = {
   appointments: Appointment[]
+  blocks: Block[]
   viewMode: string
   selectedDate: string
   professionals: Professional[]
@@ -266,11 +279,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
   )
 })
 
-export default function AgendaView({ appointments: allAppointments, viewMode, selectedDate, professionals, selectedProfessional, clinicId }: Props) {
+export default function AgendaView({ appointments: allAppointments, blocks: allBlocks, viewMode, selectedDate, professionals, selectedProfessional, clinicId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
   const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null)
+  const [blockModal, setBlockModal] = useState<{ open: boolean; hour?: number; profId?: string; editBlock?: Block | null }>({ open: false })
 
   const displayProfessionals = selectedProfessional === 'all' 
     ? professionals 
@@ -281,9 +295,27 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
     ? allAppointments
     : allAppointments.filter(a => a.professional_id === selectedProfessional)
 
+  const blocks = selectedProfessional === 'all'
+    ? allBlocks
+    : allBlocks.filter(b => b.professional_id === selectedProfessional)
+
+  const COLOR_BLOCK: Record<string, { bg: string; text: string; border: string }> = {
+    slate:  { bg: 'bg-slate-200',  text: 'text-slate-700',  border: 'border-slate-400' },
+    red:    { bg: 'bg-red-100',    text: 'text-red-700',    border: 'border-red-400' },
+    orange: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-400' },
+    amber:  { bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-400' },
+    blue:   { bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-400' },
+    purple: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-400' },
+  }
+
   // Realtime: qualquer mudança em appointments da clínica dispara refresh (debounced)
   useRealtimeRefresh({
     table: 'appointments',
+    filter: { column: 'clinic_id', value: clinicId },
+  })
+
+  useRealtimeRefresh({
+    table: 'professional_blocks',
     filter: { column: 'clinic_id', value: clinicId },
   })
 
@@ -449,6 +481,17 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
   // Visão Dia - Colunas por profissional
   if (viewMode === 'day') {
     return (
+      <>
+        <BlockModal
+          isOpen={blockModal.open}
+          onClose={() => setBlockModal({ open: false })}
+          professionals={displayProfessionals}
+          clinicId={clinicId}
+          selectedDate={selectedDate}
+          selectedHour={blockModal.hour}
+          selectedProfessionalId={blockModal.profId}
+          editBlock={blockModal.editBlock}
+        />
       <div className="card overflow-hidden dark:bg-slate-800 dark:border-slate-700">
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -462,6 +505,13 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
               >
                 <Icon name="search" className="w-4 h-4" />
                 Próximo livre
+              </button>
+              <button
+                onClick={() => setBlockModal({ open: true })}
+                className="text-sm text-orange-600 font-medium hover:bg-orange-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+              >
+                <Icon name="lock" className="w-4 h-4" />
+                Bloquear
               </button>
               <Link 
                 href={`/dashboard/agenda/novo?date=${selectedDate}`}
@@ -515,7 +565,12 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
                       const aptHour = new Date(apt.start_time).getHours()
                       return apt.professional_id === prof.id && aptHour === hour
                     })
+                    const hourBlocks = blocks.filter(bl => {
+                      const blHour = new Date(bl.start_time).getHours()
+                      return bl.professional_id === prof.id && blHour === hour
+                    })
                     const isLastColumn = profIdx === displayProfessionals.length - 1
+                    const hasContent = hourAppointments.length > 0 || hourBlocks.length > 0
                     
                     return (
                       <div 
@@ -526,7 +581,7 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, selectedDate, hour, prof.id)}
                       >
-                        {hourAppointments.length > 0 ? (
+                        {hasContent ? (
                           <div className="space-y-1">
                             {hourAppointments.map(apt => (
                               <AppointmentCard
@@ -539,14 +594,39 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
                                 canDrag={true}
                               />
                             ))}
+                            {hourBlocks.map(bl => {
+                              const blStyle = COLOR_BLOCK[bl.color] || COLOR_BLOCK.slate
+                              return (
+                                <button
+                                  key={bl.id}
+                                  onClick={() => setBlockModal({ open: true, editBlock: bl })}
+                                  className={`w-full text-left p-2 rounded-lg border-l-4 ${blStyle.bg} ${blStyle.border} ${blStyle.text} hover:opacity-80 transition-opacity`}
+                                >
+                                  <div className="flex items-center gap-1">
+                                    <Icon name="lock" className="w-3 h-3 flex-shrink-0" />
+                                    <span className="text-xs font-semibold truncate">{bl.title}</span>
+                                  </div>
+                                  {bl.notes && <p className="text-xs opacity-70 truncate mt-0.5">{bl.notes}</p>}
+                                </button>
+                              )
+                            })}
                           </div>
                         ) : (
-                          <Link
-                            href={`/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}`}
-                            className="h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-lg hover:border-violet-300 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors group"
-                          >
-                            <Icon name="plus" className="w-4 h-4 text-slate-300 dark:text-slate-500 group-hover:text-violet-500" />
-                          </Link>
+                          <div className="h-full min-h-[60px] flex items-center justify-center gap-1 group">
+                            <Link
+                              href={`/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}`}
+                              className="flex-1 h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-lg hover:border-violet-300 hover:bg-violet-50 transition-colors group/link"
+                            >
+                              <Icon name="plus" className="w-4 h-4 text-slate-300 group-hover/link:text-violet-500" />
+                            </Link>
+                            <button
+                              onClick={() => setBlockModal({ open: true, hour, profId: prof.id })}
+                              className="w-7 h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-colors opacity-0 group-hover:opacity-100"
+                              title="Bloquear horário"
+                            >
+                              <Icon name="lock" className="w-3.5 h-3.5 text-slate-300 hover:text-orange-500" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     )
@@ -557,6 +637,7 @@ export default function AgendaView({ appointments: allAppointments, viewMode, se
           </div>
         </div>
       </div>
+      </>
     )
   }
 

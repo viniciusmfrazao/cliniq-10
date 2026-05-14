@@ -68,7 +68,7 @@ export default async function AgendaPage({
   const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist']
 
   // EXECUTAR QUERIES EM PARALELO (muito mais rápido!)
-  const [allUsersResult, appointmentsResult, todayAppointmentsResult] = await Promise.all([
+  const [allUsersResult, appointmentsResult, todayAppointmentsResult, blocksResult] = await Promise.all([
     // Query 1: TODOS os usuários da clínica (filtraremos no código)
     supabase
       .from('users')
@@ -97,7 +97,16 @@ export default async function AgendaPage({
       .eq('clinic_id', clinicId)
       .gte('start_time', startOfDayBR(today))
       .lte('start_time', endOfDayBR(today))
-      .neq('status', 'cancelled')
+      .neq('status', 'cancelled'),
+
+    // Query 4: Bloqueios do período
+    supabase
+      .from('professional_blocks')
+      .select('id, title, start_time, end_time, notes, color, professional_id')
+      .eq('clinic_id', clinicId)
+      .gte('start_time', startDate)
+      .lte('start_time', endDate)
+      .order('start_time'),
   ])
 
   // Filtrar profissionais no código (evita problemas com enum)
@@ -107,6 +116,7 @@ export default async function AgendaPage({
   )
   const appointments = appointmentsResult.data || []
   const todayAppointments = todayAppointmentsResult.data || []
+  const blocks = blocksResult.data || []
 
   // Calcular estatísticas do array (sem queries extras!)
   const todayTotal = todayAppointments.length
@@ -175,6 +185,7 @@ export default async function AgendaPage({
           ? (appointments || [])
           : (appointments || []).filter(a => a.status === selectedStatus)
         }
+        blocks={blocks}
         viewMode={viewMode}
         selectedDate={selectedDate}
         professionals={professionals || []}
