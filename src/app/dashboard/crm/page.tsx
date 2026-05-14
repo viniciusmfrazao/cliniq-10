@@ -6,6 +6,43 @@ import CRMView from './crm-view'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+const STATUS_ALIASES: Record<string, string> = {
+  novo: 'new',
+  novo_lead: 'new',
+  lead_novo: 'new',
+  contacted: 'contacted',
+  em_conversa: 'contacted',
+  conversa: 'contacted',
+  in_conversation: 'contacted',
+  conversation: 'contacted',
+  agendado: 'scheduled',
+  agendada: 'scheduled',
+  scheduled: 'scheduled',
+  cliente: 'converted',
+  client: 'converted',
+  convertido: 'converted',
+  converted: 'converted',
+  perdido: 'lost',
+  lost: 'lost',
+}
+
+function normalizeCRMStatus(status: string | null | undefined) {
+  const normalized = (status || '').toLowerCase().trim()
+  return STATUS_ALIASES[normalized] || normalized || 'new'
+}
+
+function normalizeCRMSettings(settings: any) {
+  if (!settings?.custom_stages) return settings
+
+  return {
+    ...settings,
+    custom_stages: settings.custom_stages.map((stage: any) => ({
+      ...stage,
+      id: normalizeCRMStatus(stage.id),
+    })),
+  }
+}
+
 export default async function CRMPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -23,6 +60,11 @@ export default async function CRMPage() {
     .select('*')
     .eq('clinic_id', userData?.clinic_id)
     .order('created_at', { ascending: false })
+
+  const normalizedLeads = (leads || []).map(lead => ({
+    ...lead,
+    status: normalizeCRMStatus(lead.status),
+  }))
 
   // Buscar procedimentos para o select
   const { data: procedures } = await supabase
@@ -44,6 +86,8 @@ export default async function CRMPage() {
     .select('*')
     .eq('clinic_id', userData?.clinic_id)
     .single()
+
+  const normalizedSettings = normalizeCRMSettings(settings)
 
   // Buscar templates de mensagens
   const { data: templates } = await supabase
@@ -68,11 +112,11 @@ export default async function CRMPage() {
 
   return (
     <CRMView
-      leads={leads || []}
+      leads={normalizedLeads}
       procedures={procedures || []}
       users={users || []}
       clinicId={userData?.clinic_id || ''}
-      settings={settings}
+      settings={normalizedSettings}
       templates={templates || []}
       evaPaused={evaPaused}
     />
