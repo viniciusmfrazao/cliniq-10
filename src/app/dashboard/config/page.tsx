@@ -228,6 +228,20 @@ export default async function ConfigPage() {
                 <Icon name="chevronRight" className="w-5 h-5 text-violet-400" />
               </Link>
 
+              <Link
+                href="/dashboard/config/importar"
+                className="flex items-center gap-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 rounded-xl transition-colors border border-blue-200"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow">
+                  <Icon name="upload" className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-blue-900">Importar Agendamentos</p>
+                  <p className="text-xs text-blue-700">Importe histórico de agendamentos via planilha Excel</p>
+                </div>
+                <Icon name="chevronRight" className="w-5 h-5 text-blue-400" />
+              </Link>
+
               <Link 
                 href="/dashboard/config/logs"
                 className="flex items-center gap-4 p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
