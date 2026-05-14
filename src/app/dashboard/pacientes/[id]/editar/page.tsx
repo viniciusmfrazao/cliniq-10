@@ -1,3 +1,4 @@
+import BackButton from '@/components/ui/BackButton'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import PatientForm from '../../patient-form'
