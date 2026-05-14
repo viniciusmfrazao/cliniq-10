@@ -204,7 +204,7 @@ export function buildSystemPrompt(
             ? `12x R$ ${formatBRL(parcela)} sem juros (à vista R$ ${formatBRL(pr.price)} — só mencionar se a paciente pedir explicitamente)`
             : 'consultar valor';
           const profNames = (pr.professional_ids || []).map((id) => profById.get(id)).filter(Boolean);
-          const profPart = profNames.length > 0 ? ` — Faz: ${profNames.join(', ')}` : '';
+          const profPart = profNames.length > 0 ? ` — Faz: ${profNames.join(', ')}` : ' — Faz: qualquer profissional da clínica';
           // Descricao = regras/observacoes do procedimento (ex: "so nas pernas",
           // "indicado para...", "contraindicado em..."). Eva DEVE respeitar.
           const desc = pr.description?.trim();
