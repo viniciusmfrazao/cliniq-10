@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { todayBR } from '@/lib/datetime'
@@ -20,6 +21,7 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
   const router = useRouter()
   const searchParams = useSearchParams()
   const [showPicker, setShowPicker] = useState(false)
+  const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 })
   const [pickerMonth, setPickerMonth] = useState(() => {
     const d = new Date(currentDate + 'T12:00:00')
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -89,23 +91,6 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
     setPickerMonth(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: p.month + 1 })
   }
 
-  // Grade do picker
-  const firstDay = new Date(pickerMonth.year, pickerMonth.month, 1).getDay()
-  const totalDays = new Date(pickerMonth.year, pickerMonth.month + 1, 0).getDate()
-  const pickerDays: (number | null)[] = [
-    ...Array(firstDay).fill(null),
-    ...Array.from({ length: totalDays }, (_, i) => i + 1)
-  ]
-  while (pickerDays.length % 7 !== 0) pickerDays.push(null)
-
-  const selectedDay = (() => {
-    const d = new Date(currentDate + 'T12:00:00')
-    return d.getFullYear() === pickerMonth.year && d.getMonth() === pickerMonth.month ? d.getDate() : null
-  })()
-
-  const todayObj = new Date()
-  const todayMark = todayObj.getFullYear() === pickerMonth.year && todayObj.getMonth() === pickerMonth.month
-    ? todayObj.getDate() : null
 
   const formatDateDisplay = () => {
     const date = new Date(currentDate + 'T12:00:00')
@@ -140,19 +125,29 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
           <div className="relative">
             <button
               ref={triggerRef}
-              onClick={() => setShowPicker(v => !v)}
+              onClick={() => {
+                if (!showPicker && triggerRef.current) {
+                  const rect = triggerRef.current.getBoundingClientRect()
+                  const pickerW = 288 // w-72
+                  // Centraliza no trigger mas não sai da tela
+                  let left = rect.left + rect.width / 2 - pickerW / 2
+                  left = Math.max(8, Math.min(left, window.innerWidth - pickerW - 8))
+                  setPickerPos({ top: rect.bottom + 8, left })
+                }
+                setShowPicker(v => !v)
+              }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-slate-100 transition-colors"
             >
               <span className="text-sm font-semibold text-slate-900 capitalize">{formatDateDisplay()}</span>
               <Icon name="chevronDown" className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showPicker ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Dropdown do picker — centralizado no trigger, sem sair da tela */}
-            {showPicker && (
+            {/* Portal — renderiza no body, sem ser cortado por overflow de nenhum pai */}
+            {showPicker && typeof document !== 'undefined' && createPortal(
               <div
                 ref={pickerDropdownRef}
-                className="absolute top-full mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 w-72"
-                style={{ animation: 'fadeSlideDown 0.15s ease', left: '50%', transform: 'translateX(-50%)' }}
+                className="fixed z-[9999] bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 w-72"
+                style={{ top: pickerPos.top, left: pickerPos.left }}
               >
                 {/* Header mês */}
                 <div className="flex items-center justify-between mb-3">
@@ -184,27 +179,33 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
 
                 {/* Grade de dias */}
                 <div className="grid grid-cols-7 gap-0.5">
-                  {pickerDays.map((day, idx) => {
-                    if (!day) return <div key={idx} />
-                    const isSel = day === selectedDay
-                    const isToday = day === todayMark
-                    return (
-                      <button
-                        key={idx}
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={() => selectDay(day)}
-                        className={`h-9 w-full rounded-lg text-sm font-medium transition-all ${
-                          isSel
-                            ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md shadow-violet-200'
-                            : isToday
-                            ? 'bg-violet-50 text-violet-700 font-bold ring-1 ring-violet-300'
+                  {(() => {
+                    const firstDay = new Date(pickerMonth.year, pickerMonth.month, 1).getDay()
+                    const totalDays = new Date(pickerMonth.year, pickerMonth.month + 1, 0).getDate()
+                    const days: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: totalDays }, (_, i) => i + 1)]
+                    while (days.length % 7 !== 0) days.push(null)
+                    const selD = new Date(currentDate + 'T12:00:00')
+                    const selectedDay = selD.getFullYear() === pickerMonth.year && selD.getMonth() === pickerMonth.month ? selD.getDate() : null
+                    const todayObj = new Date()
+                    const todayMark = todayObj.getFullYear() === pickerMonth.year && todayObj.getMonth() === pickerMonth.month ? todayObj.getDate() : null
+                    return days.map((day, idx) => {
+                      if (!day) return <div key={idx} />
+                      const isSel = day === selectedDay
+                      const isToday = day === todayMark
+                      return (
+                        <button
+                          key={idx}
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={() => selectDay(day)}
+                          className={`h-9 w-full rounded-lg text-sm font-medium transition-all ${
+                            isSel ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md'
+                            : isToday ? 'bg-violet-50 text-violet-700 font-bold ring-1 ring-violet-300'
                             : 'hover:bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {day}
-                      </button>
-                    )
-                  })}
+                          }`}
+                        >{day}</button>
+                      )
+                    })
+                  })()}
                 </div>
 
                 {/* Ir para hoje */}
@@ -217,7 +218,8 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
                     Ir para hoje
                   </button>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>

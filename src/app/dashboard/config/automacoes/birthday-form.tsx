@@ -83,7 +83,7 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
   const router = useRouter()
   const supabase = createClient()
   const [enabled, setEnabled] = useState(initial.enabled)
-  // Horário fixo às 09h BRT no plano Hobby da Vercel (cron 1x/dia).
+  const [hour, setHour] = useState(initial.hour ?? 9)
   const [optinRequired, setOptinRequired] = useState(initial.optinRequired)
   const [template, setTemplate] = useState(initial.template)
   const [saving, setSaving] = useState(false)
@@ -113,6 +113,7 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
           aniversario: enabled,
           template_aniversario: template,
           aniversario_optin_required: optinRequired,
+          aniversario_hora: hour,
         })
         .eq('clinic_id', clinicId)
 
@@ -188,18 +189,26 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
       </label>
 
       <div className={enabled ? '' : 'opacity-50 pointer-events-none'}>
-        {/* Horário (fixo no plano atual) */}
+        {/* Horário editável */}
         <div className="space-y-2 mb-6">
           <label className="block text-sm font-medium text-slate-900">
             Horário do envio
             <span className="ml-2 text-xs text-slate-500">(fuso de Brasília)</span>
           </label>
           <div className="flex items-center gap-3">
-            <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium">
-              09:00
-            </div>
+            <select
+              value={hour}
+              onChange={e => setHour(Number(e.target.value))}
+              className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none"
+            >
+              {Array.from({ length: 16 }, (_, i) => i + 7).map(h => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, '0')}:00
+                </option>
+              ))}
+            </select>
             <p className="text-xs text-slate-500">
-              Envio diário fixo às 09h. Horário customizável em breve.
+              O sistema enviará a mensagem neste horário no dia do aniversário.
             </p>
           </div>
         </div>
