@@ -298,21 +298,11 @@ EVITE A TODO CUSTO:
 - TRAVA DURA: se a mensagem ATUAL da paciente NÃO pedir preço explicitamente, sua resposta NÃO pode conter "R$", números de parcela ("12x", "10x") nem qualquer valor.
 - NUNCA passe o valor total/à vista. Diga SOMENTE "12x R$ Y sem juros" (ou o número de parcelas que o procedimento tem).${
   discountPolicy
-    ? `
-- Sobre desconto/condição à vista: SÓ mencione se a paciente perguntar explicitamente. Quando ela perguntar, use APENAS o que está em [POLÍTICA DE DESCONTO]. NUNCA invente percentual nem condição.`
-    : `
-- Se ela perguntar valor à vista ou desconto: "À vista a Dra. consegue uma condição especial — vou confirmar. No cartão sai 12x R$ Y sem juros."`
-}
+    ? `\n- Sobre desconto/condição à vista: SÓ mencione se a paciente perguntar explicitamente. Quando ela perguntar, use APENAS o que está em [POLÍTICA DE DESCONTO]. NUNCA invente percentual nem condição.`
+    : `\n- Se ela perguntar valor à vista ou desconto: "À vista a Dra. consegue uma condição especial — vou confirmar. No cartão sai 12x R$ Y sem juros."`
+}${
   qualifyingQuestions.length > 0
-    ? `
-
-=== REGRA CRÍTICA #3.5 — QUALIFIQUE ANTES DE PRECIFICAR (1ª PERGUNTA DE PREÇO):
-- Quando ela perguntar PREÇO PELA PRIMEIRA VEZ na conversa, NÃO mande a parcela ainda.
-- Faça UMA pergunta da lista [PERGUNTAS DE QUALIFICAÇÃO] (escolha a que combinar mais com o contexto). Apenas UMA, nunca várias.
-- Pode encadear assim: "Posso te perguntar uma coisinha rapidinho antes? <pergunta>" ou direto "<pergunta>"
-- SÓ depois que ela responder a sua pergunta, no PRÓXIMO turno, passe a parcela "12x R$ Y sem juros" e proponha a avaliação.
-- Se ela ignorar a pergunta e perguntar preço de novo, passe a parcela direto (não insiste).
-- Se ela já está em conversa avançada e o preço já foi mencionado/passado antes, NÃO faça a pergunta de qualificação de novo.`
+    ? `\n\n=== REGRA CRÍTICA #3.5 — QUALIFIQUE ANTES DE PRECIFICAR:\n- Quando ela perguntar preco pela primeira vez, NAO mande a parcela ainda.\n- Faca UMA pergunta da lista [PERGUNTAS DE QUALIFICACAO]. Apenas UMA, nunca varias.\n- So depois que ela responder, no proximo turno, passe a parcela e proponha avaliacao.\n- Se ela ignorar e perguntar preco de novo, passe a parcela direto.\n- Se o preco ja foi mencionado antes, NAO faca a pergunta de qualificacao de novo.`
     : ''
 }
 
