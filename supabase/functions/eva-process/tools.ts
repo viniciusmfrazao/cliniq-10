@@ -102,13 +102,24 @@ export async function consultarAgenda(args: {
   const periodoLabel = periodoAlvo ? ` (${periodoAlvo})` : '';
 
   if (!resp.ok || !Array.isArray(resp.data) || resp.data.length === 0) {
-    // Distingue "clínica fechada nesse dia" (sem schedule no day_of_week)
-    // de "agenda cheia nesse período".
+    // Verificar se e restricao de data do procedimento (Lavieen, Hipro, etc.)
+    if (procedureId) {
+      const restrictUrl = `${env.supabaseUrl}/rest/v1/procedure_available_dates?procedure_id=eq.${procedureId}&available_date=gte.${dataAlvo}&order=available_date.asc&limit=3&select=available_date`;
+      const restrictResp = await fetchJson<Array<{ available_date: string }>>(restrictUrl, {
+        method: 'GET', headers: sbHeaders(env),
+      });
+      if (restrictResp.ok && Array.isArray(restrictResp.data) && restrictResp.data.length > 0) {
+        const proximas = restrictResp.data.map(d => formatarDataBR(d.available_date)).join(', ');
+        return `PROCEDIMENTO_SEM_DATA_DISPONIVEL: Esse procedimento nao esta disponivel em ${dataLabel} — ele funciona em datas especificas conforme agenda do equipamento. Proximas datas disponiveis: ${proximas}. Pergunte qual dessas datas funciona melhor pra ela e use consultar_agenda com essa data.`;
+      }
+      // Sem nenhuma data futura — escalar
+      return `PROCEDIMENTO_SEM_DATA_DISPONIVEL: Nao ha datas cadastradas para esse procedimento no momento. Diga com elegancia que esse procedimento funciona em datas especiais e que voce vai confirmar a proxima disponibilidade. Chame escalar_humano com motivo='duvida_complexa' e detalhes='Paciente tem interesse em ${args.procedimento} — sem datas cadastradas no sistema'.`;
+    }
     const closed = await isClinicClosed(payload.clinicId, dataAlvo, env);
     if (closed) {
       return `FECHADO_NESSE_DIA: ${dataLabel}. A clinica nao atende nesse dia da semana. Diga com elegancia e sugira outro dia util.`;
     }
-    return `SEM_VAGAS_NO_PERIODO: ${dataLabel}${periodoLabel}. Diga que esse periodo esta concorrido e ofereça outro periodo/dia.`;
+    return `SEM_VAGAS_NO_PERIODO: ${dataLabel}${periodoLabel}. Diga que esse periodo esta concorrido e ofereca outro periodo/dia.`;
   }
 
   const slots = resp.data;

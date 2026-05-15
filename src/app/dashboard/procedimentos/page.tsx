@@ -46,13 +46,22 @@ export default async function ProcedimentosPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">
-          Procedimentos
-        </h1>
-        <p className="text-sm text-slate-500">
-          Gerencie os procedimentos da clínica e quem realiza cada um
-        </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">
+            Procedimentos
+          </h1>
+          <p className="text-sm text-slate-500">
+            Gerencie os procedimentos da clínica e quem realiza cada um
+          </p>
+        </div>
+        <a
+          href="/dashboard/procedimentos/disponibilidade"
+          className="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-medium rounded-xl border border-amber-200 transition-colors flex-shrink-0"
+        >
+          <span>📅</span>
+          Dias Lavieen / Hipro
+        </a>
       </div>
 
       {isAdmin && (
