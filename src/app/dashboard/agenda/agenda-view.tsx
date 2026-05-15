@@ -606,11 +606,12 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                     })
                     const isLastColumn = profIdx === displayProfessionals.length - 1
                     const hasContent = hourAppointments.length > 0 || hourBlocks.length > 0
+                    const novoUrl = `/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}&overlap=1`
                     
                     return (
                       <div 
                         key={prof.id}
-                        className={`flex-1 min-w-[180px] p-1.5 border-r border-slate-100 dark:border-slate-700 last:border-r-0 min-h-[70px] transition-colors ${
+                        className={`flex-1 min-w-[180px] p-1.5 border-r border-slate-100 dark:border-slate-700 last:border-r-0 min-h-[70px] transition-colors relative group/cell ${
                           draggedAppointment ? 'hover:bg-violet-100 dark:hover:bg-violet-900/30' : ''
                         }`}
                         onDragOver={handleDragOver}
@@ -646,6 +647,15 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                                 </button>
                               )
                             })}
+                            {/* Botão + para adicionar segundo paciente no mesmo horário */}
+                            <Link
+                              href={novoUrl}
+                              className="w-full flex items-center justify-center gap-1 py-1 rounded-lg border border-dashed border-slate-200 hover:border-violet-300 hover:bg-violet-50 transition-colors opacity-0 group-hover/cell:opacity-100 text-slate-300 hover:text-violet-500"
+                              title="Adicionar outro paciente nesse horário"
+                            >
+                              <Icon name="plus" className="w-3 h-3" />
+                              <span className="text-xs">Adicionar</span>
+                            </Link>
                           </div>
                         ) : (
                           <Link

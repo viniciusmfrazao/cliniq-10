@@ -6,7 +6,7 @@ import AppointmentForm from '../appointment-form'
 export default async function NovoAgendamentoPage({ 
   searchParams 
 }: { 
-  searchParams: { patient?: string; date?: string; time?: string; professional?: string } 
+  searchParams: { patient?: string; date?: string; time?: string; professional?: string; overlap?: string } 
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -60,6 +60,7 @@ export default async function NovoAgendamentoPage({
           defaultDate={searchParams.date}
           defaultTime={searchParams.time}
           defaultProfessionalId={searchParams.professional}
+          allowOverlapDefault={searchParams.overlap === '1'}
         />
       </div>
     </div>

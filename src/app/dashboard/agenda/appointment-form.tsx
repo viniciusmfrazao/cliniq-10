@@ -23,6 +23,7 @@ type Props = {
   defaultDate?: string
   defaultTime?: string
   defaultProfessionalId?: string
+  allowOverlapDefault?: boolean
   appointment?: {
     id: string
     patient_id: string
@@ -46,6 +47,7 @@ export default function AppointmentForm({
   defaultDate,
   defaultTime,
   defaultProfessionalId: propDefaultProfessionalId,
+  allowOverlapDefault = false,
   appointment
 }: Props) {
   const router = useRouter()
@@ -84,8 +86,8 @@ export default function AppointmentForm({
   const [availableSlots, setAvailableSlots] = useState<string[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [hasScheduleConfigured, setHasScheduleConfigured] = useState<boolean | null>(null)
-  const [allowOverlap, setAllowOverlap] = useState(false)
-  const [manualTime, setManualTime] = useState('')
+  const [allowOverlap, setAllowOverlap] = useState(allowOverlapDefault)
+  const [manualTime, setManualTime] = useState(allowOverlapDefault ? (defaultTime || '') : '')
 
   // Calcula duração total baseado nos procedimentos selecionados
   useEffect(() => {
