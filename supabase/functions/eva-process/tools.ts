@@ -92,6 +92,24 @@ export async function consultarAgenda(args: {
   // 1ª tentativa: com procedure_id (se tem)
   let resp = await callRpc(!!procedureId);
   let usouFallback = false;
+
+  // Verificar ANTES do fallback se é procedimento com data disponível mas sem agenda
+  // (Lavieen/Hipro em dia marcado mas sem horários cadastrados para o profissional)
+  if (procedureId && (!resp.ok || !Array.isArray(resp.data) || resp.data.length === 0)) {
+    const dateAvailUrl = `${env.supabaseUrl}/rest/v1/procedure_available_dates?procedure_id=eq.${procedureId}&clinic_id=eq.${payload.clinicId}&available_date=eq.${dataAlvo}&select=id&limit=1`;
+    const dateAvail = await fetchJson<Array<{ id: string }>>(dateAvailUrl, { method: 'GET', headers: sbHeaders(env) });
+    if (dateAvail.ok && Array.isArray(dateAvail.data) && dateAvail.data.length > 0) {
+      // Dia está marcado como disponível mas não tem agenda de profissional
+      // Retornar o dia como disponível e pedir que a equipe confirme o horário
+      return [
+        `Horario disponivel para ${dataLabel} — DIA MARCADO PARA ESTE EQUIPAMENTO:`,
+        `Este procedimento esta disponivel nessa data mas sem horarios fixos cadastrados.`,
+        `Ofereça o dia ${dataLabel} para a paciente e pergunte qual horario funciona melhor pra ela (manha ou tarde).`,
+        `Quando ela confirmar o horario preferido, crie o agendamento usando o professional_id de quem opera o equipamento ou escale para humano com detalhes='Paciente quer ${args.procedimento} em ${dataLabel} — aguarda confirmacao de horario'.`,
+      ].join('\n');
+    }
+  }
+
   // Fallback: se veio vazio E tinha procedure_id, tenta sem ele
   if ((!resp.ok || !Array.isArray(resp.data) || resp.data.length === 0) && procedureId) {
     resp = await callRpc(false);
