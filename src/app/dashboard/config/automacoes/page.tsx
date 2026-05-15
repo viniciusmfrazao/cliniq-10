@@ -53,7 +53,10 @@ export default async function AutomacoesPage() {
     aniversario_optin_required?: boolean | null
     template_aniversario?: string | null
     confirma_24h?: boolean | null
+    confirma_24h_hora?: number | null
     template_confirma_24h?: string | null
+    lembrete_2h?: boolean | null
+    template_lembrete_2h?: string | null
     recall_inativos?: boolean | null
     recall_dias?: number | null
     template_recall?: string | null
@@ -158,7 +161,10 @@ export default async function AutomacoesPage() {
           clinicName={clinic?.name || 'Clínica'}
           initial={{
             enabled: auto?.confirma_24h ?? true,
-            template: auto?.template_confirma_24h || '',
+            hora: auto?.confirma_24h_hora ?? 20,
+            template24h: auto?.template_confirma_24h || '',
+            lembrete2hEnabled: auto?.lembrete_2h ?? false,
+            template2h: auto?.template_lembrete_2h || '',
           }}
         />
       </div>

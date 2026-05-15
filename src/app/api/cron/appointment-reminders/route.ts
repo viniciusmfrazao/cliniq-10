@@ -112,6 +112,7 @@ function renderTemplate(
 type AutomationRow = {
   clinic_id: string
   confirma_24h: boolean | null
+  confirma_24h_hora?: number | null
   template_confirma_24h: string | null
 }
 
@@ -149,10 +150,15 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient()
   const { startISO, endISO, dateLabel } = brTomorrowRange()
 
-  // 1) Carrega automations das clínicas com lembrete ligado e template preenchido.
+  // Hora atual no fuso BRT
+  const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: TZ_BR }))
+  const currentHour = nowBR.getHours()
+
+  // 1) Carrega automations das clínicas com lembrete ligado, template preenchido
+  //    E cujo horário configurado bate com a hora atual
   const { data: automations, error: errAuto } = await svc
     .from('clinic_automations')
-    .select('clinic_id, confirma_24h, template_confirma_24h')
+    .select('clinic_id, confirma_24h, confirma_24h_hora, template_confirma_24h')
     .eq('confirma_24h', true)
 
   if (errAuto) {
@@ -163,9 +169,12 @@ export async function GET(req: NextRequest) {
   }
 
   const enabledClinics =
-    (automations as AutomationRow[] | null)?.filter(
-      (a) => a.template_confirma_24h && a.template_confirma_24h.trim().length > 0,
-    ) ?? []
+    (automations as AutomationRow[] | null)?.filter((a) => {
+      if (!a.template_confirma_24h || a.template_confirma_24h.trim().length === 0) return false
+      // Usar horário configurado ou padrão 20h
+      const targetHour = a.confirma_24h_hora ?? 20
+      return targetHour === currentHour
+    }) ?? []
 
   if (enabledClinics.length === 0) {
     return NextResponse.json({

@@ -152,8 +152,19 @@ const AppointmentCard = React.memo(function AppointmentCard({
         href={`/dashboard/atendimento/${apt.id}`}
         draggable={!!onDragStart}
         onDragStart={onDragStart ? (e) => onDragStart(e, apt) : undefined}
-        className={`block p-2 rounded-lg ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-50 line-through-partial' : ''}`}
+        className={`block p-2 rounded-lg ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-40' : ''}`}
       >
+        {/* Botão rápido de agendar no mesmo slot — só para cancelados */}
+        {isCancelled && (
+          <Link
+            href={rescheduleUrl}
+            onClick={e => e.stopPropagation()}
+            className="absolute top-1 right-1 w-5 h-5 bg-violet-500 hover:bg-violet-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors z-10"
+            title="Agendar nesse horário"
+          >
+            <Icon name="plus" className="w-3 h-3" />
+          </Link>
+        )}
         <div className="flex items-center justify-between gap-1">
           <span className="text-xs font-bold text-slate-700">{aptTime}</span>
           <div className="flex items-center gap-1">
@@ -608,15 +619,16 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                         {hasContent ? (
                           <div className="space-y-1">
                             {hourAppointments.map(apt => (
-                              <AppointmentCard
-                                key={apt.id}
-                                apt={apt}
-                                onStatusChange={handleStatusChange}
-                                onCheckIn={handleCheckIn}
-                                onDragStart={handleDragStart}
-                                isRightColumn={isLastColumn}
-                                canDrag={true}
-                              />
+                              <div key={apt.id} className="relative">
+                                <AppointmentCard
+                                  apt={apt}
+                                  onStatusChange={handleStatusChange}
+                                  onCheckIn={handleCheckIn}
+                                  onDragStart={handleDragStart}
+                                  isRightColumn={isLastColumn}
+                                  canDrag={true}
+                                />
+                              </div>
                             ))}
                             {hourBlocks.map(bl => {
                               const blStyle = COLOR_BLOCK[bl.color] || COLOR_BLOCK.slate

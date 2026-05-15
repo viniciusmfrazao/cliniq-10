@@ -3,94 +3,54 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import Icon from '@/components/ui/Icon'
 
-type Initial = {
-  enabled: boolean
-  template: string
-}
+// ─── Tipos ───────────────────────────────────────────────────────────────────
 
-type Props = {
-  clinicId: string
-  clinicName: string
-  initial: Initial
-}
+type Vars = { nome: string; primeiro_nome: string; clinica: string; profissional: string; procedimento: string; data: string; hora: string; dia_semana: string }
 
-const SUGGESTIONS = [
-  {
-    id: 'amigavel',
-    label: 'Amigável',
-    text: `Oi {{primeiro_nome}}! 😊
-
-Passando pra lembrar do seu agendamento na {{clinica}}:
-
-📅 {{dia_semana}}, {{data}}
-🕐 às {{hora}}
-✨ {{procedimento}}
-👩‍⚕️ com {{profissional}}
-
-Pode confirmar respondendo aqui? Se precisar reagendar, é só avisar.`,
-  },
-  {
-    id: 'profissional',
-    label: 'Profissional',
-    text: `Olá {{nome}},
-
-Lembrete da sua consulta:
-• Data: {{dia_semana}}, {{data}}
-• Horário: {{hora}}
-• Procedimento: {{procedimento}}
-• Profissional: {{profissional}}
-
-Por favor, confirme sua presença respondendo "SIM" ou "NÃO". Em caso de imprevistos, entre em contato pra reagendar.
-
-{{clinica}}`,
-  },
-  {
-    id: 'curto',
-    label: 'Curto e direto',
-    text: `Oi {{primeiro_nome}}, lembrete: amanhã ({{data}}) às {{hora}} você tem {{procedimento}} com {{profissional}} aqui na {{clinica}}.
-
-Confirma? 😊`,
-  },
-  {
-    id: 'sem_emoji',
-    label: 'Sem emoji',
-    text: `Olá {{primeiro_nome}}, tudo bem?
-
-Estou passando para confirmar seu atendimento agendado para {{dia_semana}}, {{data}}, às {{hora}}, com {{profissional}}.
-
-Por favor, responda confirmando sua presença. Caso precise alterar, entre em contato com a clínica.
-
-Atenciosamente,
-{{clinica}}`,
-  },
-]
-
-const PLACEHOLDERS = [
+const TAGS = [
   { tag: '{{primeiro_nome}}', desc: 'Primeiro nome do paciente' },
-  { tag: '{{nome}}', desc: 'Nome completo' },
-  { tag: '{{data}}', desc: 'Data da consulta (dd/mm/aaaa)' },
-  { tag: '{{hora}}', desc: 'Hora da consulta (hh:mm)' },
-  { tag: '{{dia_semana}}', desc: 'Dia da semana (segunda-feira, etc.)' },
-  { tag: '{{procedimento}}', desc: 'Nome do procedimento' },
-  { tag: '{{profissional}}', desc: 'Nome do profissional' },
-  { tag: '{{clinica}}', desc: 'Nome da sua clínica' },
+  { tag: '{{nome}}',          desc: 'Nome completo' },
+  { tag: '{{clinica}}',       desc: 'Nome da clínica' },
+  { tag: '{{profissional}}',  desc: 'Nome do profissional' },
+  { tag: '{{procedimento}}',  desc: 'Nome do procedimento' },
+  { tag: '{{data}}',          desc: 'Data da consulta (dd/mm/aaaa)' },
+  { tag: '{{hora}}',          desc: 'Hora da consulta (hh:mm)' },
+  { tag: '{{dia_semana}}',    desc: 'Dia da semana por extenso' },
 ]
 
-function renderPreview(
-  template: string,
-  vars: {
-    nome: string
-    primeiro_nome: string
-    clinica: string
-    profissional: string
-    procedimento: string
-    data: string
-    hora: string
-    dia_semana: string
+const SUGGESTIONS_24H = [
+  {
+    id: 'simples',
+    label: 'Simples e direto',
+    text: `Oi {{primeiro_nome}}! Passando pra lembrar que amanhã, {{dia_semana}} ({{data}}), você tem {{procedimento}} às {{hora}} aqui na {{clinica}}. Te esperamos! 💕`,
   },
-) {
+  {
+    id: 'detalhado',
+    label: 'Com endereço',
+    text: `Oi {{primeiro_nome}}! Lembrete do seu agendamento amanhã ({{data}}) às {{hora}} com {{profissional}} na {{clinica}}. Qualquer dúvida, estamos por aqui! ✨`,
+  },
+  {
+    id: 'confirme',
+    label: 'Pede confirmação',
+    text: `Oi {{primeiro_nome}}, tudo bem? Amanhã é o seu dia aqui na {{clinica}}! 🗓\n\n{{procedimento}} às {{hora}} com {{profissional}}.\n\nVai conseguir comparecer? Responda SIM ou NOS AVISE se precisar remarcar. 💕`,
+  },
+]
+
+const SUGGESTIONS_2H = [
+  {
+    id: 'simples',
+    label: 'Simples',
+    text: `Oi {{primeiro_nome}}! Daqui a pouco é o seu horário aqui na {{clinica}} 🕐\n\nHoje às {{hora}} com {{profissional}}.\n\nTe esperamos! 💕`,
+  },
+  {
+    id: 'endereco',
+    label: 'Com endereço',
+    text: `Oi {{primeiro_nome}}! Passando pra lembrar que em 2 horas é a sua vez aqui na {{clinica}} — hoje às {{hora}} com {{profissional}}. Já deixamos tudo preparado pra você! ✨`,
+  },
+]
+
+function renderPreview(template: string, vars: Vars): string {
   return template
     .replace(/\{\{\s*nome\s*\}\}/g, vars.nome)
     .replace(/\{\{\s*primeiro_nome\s*\}\}/g, vars.primeiro_nome)
@@ -102,51 +62,64 @@ function renderPreview(
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
 }
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+type Initial = {
+  enabled: boolean
+  hora: number
+  template24h: string
+  lembrete2hEnabled: boolean
+  template2h: string
+}
+
+type Props = { clinicId: string; clinicName: string; initial: Initial }
+
+// ─── Componente ──────────────────────────────────────────────────────────────
+
 export default function AppointmentReminderForm({ clinicId, clinicName, initial }: Props) {
-  const router = useRouter()
   const supabase = createClient()
-  const [enabled, setEnabled] = useState(initial.enabled)
-  const [template, setTemplate] = useState(initial.template)
-  const [saving, setSaving] = useState(false)
-  const [savedAt, setSavedAt] = useState<Date | null>(null)
-  const [testPhone, setTestPhone] = useState('')
-  const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
-  const [testing, setTesting] = useState(false)
+  const router = useRouter()
 
-  // Data fictícia "amanhã" pra preview
-  const previewVars = useMemo(() => {
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
-    return {
-      nome: 'Maria Aparecida da Silva',
-      primeiro_nome: 'Maria',
-      clinica: clinicName,
-      profissional: 'Dra. Sarah',
-      procedimento: 'Limpeza de pele',
-      data: tomorrow.toLocaleDateString('pt-BR'),
-      hora: '14:30',
-      dia_semana: tomorrow.toLocaleDateString('pt-BR', { weekday: 'long' }),
-    }
-  }, [clinicName])
+  const [enabled, setEnabled]             = useState(initial.enabled)
+  const [hora, setHora]                   = useState(String(initial.hora).padStart(2, '0') + ':00')
+  const [template24h, setTemplate24h]     = useState(initial.template24h)
+  const [lembrete2h, setLembrete2h]       = useState(initial.lembrete2hEnabled)
+  const [template2h, setTemplate2h]       = useState(initial.template2h)
+  const [saving, setSaving]               = useState(false)
+  const [savedAt, setSavedAt]             = useState<Date | null>(null)
+  const [activeTab, setActiveTab]         = useState<'24h' | '2h'>('24h')
 
-  const preview = useMemo(() => renderPreview(template, previewVars), [template, previewVars])
+  const previewVars: Vars = {
+    nome: 'Maria Aparecida da Silva',
+    primeiro_nome: 'Maria',
+    clinica: clinicName,
+    profissional: 'Dra. Sarah Pina',
+    procedimento: 'Botox',
+    data: new Date(Date.now() + 86400000).toLocaleDateString('pt-BR'),
+    hora: '14:30',
+    dia_semana: 'terça-feira',
+  }
+
+  const preview24h = useMemo(() => renderPreview(template24h, previewVars), [template24h])
+  const preview2h  = useMemo(() => renderPreview(template2h, previewVars), [template2h])
 
   async function save() {
     setSaving(true)
     setSavedAt(null)
     try {
+      // Converter hora "HH:MM" para número inteiro
+      const horaInt = parseInt(hora.split(':')[0], 10)
       const { error } = await supabase
         .from('clinic_automations')
-        .update(
-          {
-            confirma_24h: enabled,
-            template_confirma_24h: template,
-          },
-        )
+        .update({
+          confirma_24h: enabled,
+          confirma_24h_hora: horaInt,
+          template_confirma_24h: template24h,
+          lembrete_2h: lembrete2h,
+          template_lembrete_2h: template2h || null,
+        })
         .eq('clinic_id', clinicId)
-      if (error) {
-        alert(`Erro ao salvar: ${error.message}`)
-        return
-      }
+      if (error) { alert(`Erro ao salvar: ${error.message}`); return }
       setSavedAt(new Date())
       router.refresh()
     } finally {
@@ -154,209 +127,188 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     }
   }
 
-  async function sendTest() {
-    if (!testPhone.trim()) {
-      setTestMsg({ kind: 'err', text: 'Informe um telefone para teste (com DDD)' })
-      return
-    }
-    setTesting(true)
-    setTestMsg(null)
-    try {
-      const text = renderPreview(template, {
-        ...previewVars,
-        nome: 'Você (teste)',
-        primeiro_nome: 'Você',
-      })
-      const r = await fetch('/api/whatsapp/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
-      })
-      const data = await r.json()
-      if (r.ok && data.ok) {
-        setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada com sucesso!' })
-      } else {
-        setTestMsg({ kind: 'err', text: data.error || `Falha (HTTP ${r.status})` })
-      }
-    } catch (e) {
-      setTestMsg({ kind: 'err', text: e instanceof Error ? e.message : 'Erro de rede' })
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  function applySuggestion(text: string) {
-    if (template.trim() && !confirm('Substituir o texto atual pela sugestão?')) return
-    setTemplate(text)
-  }
+  const tagBtn = (tag: string, setFn: (v: string) => void, current: string) => (
+    <button
+      key={tag}
+      type="button"
+      onClick={() => setFn(current + tag)}
+      className="px-2 py-1 text-xs bg-slate-100 hover:bg-violet-100 hover:text-violet-700 rounded-lg font-mono transition-colors"
+    >
+      {tag}
+    </button>
+  )
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-4">
       {/* Toggle principal */}
       <label className="flex items-start gap-4 cursor-pointer">
         <div className="relative inline-flex items-center mt-1">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-            className="sr-only peer"
-          />
+          <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="sr-only peer" />
           <div className="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-emerald-500 transition-colors" />
           <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
         </div>
-        <div className="flex-1">
+        <div>
           <p className="font-semibold text-slate-900">Ativar lembrete automático</p>
-          <p className="text-sm text-slate-500">
-            Quando ligado, o sistema envia um lembrete na noite anterior (20h) pra todos os
-            pacientes com consulta marcada no dia seguinte.
-          </p>
+          <p className="text-sm text-slate-500">Envia mensagem na véspera e/ou 2h antes da consulta.</p>
         </div>
       </label>
 
       <div className={enabled ? '' : 'opacity-50 pointer-events-none'}>
-        {/* Horário fixo */}
-        <div className="space-y-2 mb-6">
-          <label className="block text-sm font-medium text-slate-900">
-            Horário do envio
-            <span className="ml-2 text-xs text-slate-500">(fuso de Brasília)</span>
-          </label>
-          <div className="flex items-center gap-3">
-            <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium">
-              20:00
+
+        {/* Abas: véspera / 2h antes */}
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-4">
+          <button
+            onClick={() => setActiveTab('24h')}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === '24h' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            📅 Véspera (D-1)
+          </button>
+          <button
+            onClick={() => setActiveTab('2h')}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === '2h' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            🕐 2h antes
+          </button>
+        </div>
+
+        {/* ABA VÉSPERA */}
+        {activeTab === '24h' && (
+          <div className="space-y-4">
+            {/* Horário livre */}
+            <div>
+              <label className="block text-sm font-medium text-slate-900 mb-1">
+                Horário do envio <span className="text-xs text-slate-400">(fuso de Brasília)</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="time"
+                  value={hora}
+                  onChange={e => setHora(e.target.value)}
+                  className="px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none"
+                />
+                <p className="text-xs text-slate-500">
+                  A mensagem é enviada na véspera neste horário para todos os pacientes do dia seguinte.
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-slate-500">
-              Envio diário fixo às 20h (véspera). Lembrete 2h antes da consulta no plano Pro.
-            </p>
-          </div>
-        </div>
 
-        {/* Sugestões */}
-        <div className="space-y-2 mb-3">
-          <label className="block text-sm font-medium text-slate-900">
-            Sugestões de texto
-            <span className="ml-2 text-xs text-slate-500">
-              (clique pra usar como ponto de partida)
-            </span>
-          </label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => applySuggestion(s.text)}
-                className="px-3 py-2 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Editor */}
-        <div className="space-y-2 mb-2">
-          <label className="block text-sm font-medium text-slate-900">Texto da mensagem</label>
-          <textarea
-            value={template}
-            onChange={(e) => setTemplate(e.target.value)}
-            rows={10}
-            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-mono"
-            placeholder="Digite a mensagem... use {{primeiro_nome}}, {{data}}, {{hora}} pra personalizar"
-          />
-        </div>
-
-        {/* Placeholders */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {PLACEHOLDERS.map((p) => (
-            <button
-              key={p.tag}
-              type="button"
-              onClick={() => setTemplate((t) => t + ' ' + p.tag)}
-              className="px-2.5 py-1 text-xs font-mono bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200"
-              title={p.desc}
-            >
-              {p.tag}
-            </button>
-          ))}
-        </div>
-
-        {/* Preview */}
-        {template.trim() && (
-          <div className="space-y-2 mb-6">
-            <label className="block text-sm font-medium text-slate-900">
-              Pré-visualização
-              <span className="ml-2 text-xs text-slate-500">
-                (exemplo com consulta amanhã às 14h30)
-              </span>
-            </label>
-            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
-              <p className="text-sm text-slate-800 whitespace-pre-wrap">{preview}</p>
+            {/* Sugestões */}
+            <div>
+              <p className="text-xs text-slate-500 mb-2 font-medium">Sugestões de texto:</p>
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTIONS_24H.map(s => (
+                  <button key={s.id} type="button" onClick={() => setTemplate24h(s.text)}
+                    className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-violet-100 hover:text-violet-700 rounded-lg transition-colors">
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Tags */}
+            <div>
+              <p className="text-xs text-slate-500 mb-2 font-medium">Inserir variável:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {TAGS.map(t => tagBtn(t.tag, setTemplate24h, template24h))}
+              </div>
+            </div>
+
+            {/* Template */}
+            <div>
+              <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem da véspera</label>
+              <textarea
+                value={template24h}
+                onChange={e => setTemplate24h(e.target.value)}
+                rows={5}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none resize-none"
+                placeholder="Digite a mensagem de lembrete da véspera..."
+              />
+            </div>
+
+            {/* Preview */}
+            {template24h && (
+              <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                <p className="text-xs font-medium text-emerald-700 mb-2">Preview (véspera):</p>
+                <p className="text-sm text-slate-700 whitespace-pre-line">{preview24h}</p>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Teste */}
-        <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-          <p className="font-semibold text-sm text-slate-900 mb-2">Enviar teste pra um número</p>
-          <p className="text-xs text-slate-500 mb-3">
-            Recomendamos testar pro seu próprio celular antes de ativar.
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="tel"
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-              placeholder="Ex: 5534999999999"
-              className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-            <button
-              type="button"
-              onClick={sendTest}
-              disabled={testing || !template.trim()}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium flex items-center gap-2"
-            >
-              {testing ? (
-                <Icon name="loader" className="w-4 h-4 animate-spin" />
-              ) : (
-                <Icon name="send" className="w-4 h-4" />
+        {/* ABA 2H ANTES */}
+        {activeTab === '2h' && (
+          <div className="space-y-4">
+            <label className="flex items-start gap-4 cursor-pointer">
+              <div className="relative inline-flex items-center mt-1">
+                <input type="checkbox" checked={lembrete2h} onChange={e => setLembrete2h(e.target.checked)} className="sr-only peer" />
+                <div className="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-emerald-500 transition-colors" />
+                <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">Ativar lembrete 2h antes</p>
+                <p className="text-sm text-slate-500">Envia uma segunda mensagem 2 horas antes da consulta, no mesmo dia.</p>
+              </div>
+            </label>
+
+            <div className={lembrete2h ? '' : 'opacity-50 pointer-events-none'}>
+              {/* Sugestões */}
+              <div className="mb-3">
+                <p className="text-xs text-slate-500 mb-2 font-medium">Sugestões:</p>
+                <div className="flex flex-wrap gap-2">
+                  {SUGGESTIONS_2H.map(s => (
+                    <button key={s.id} type="button" onClick={() => setTemplate2h(s.text)}
+                      className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-violet-100 hover:text-violet-700 rounded-lg transition-colors">
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="mb-3">
+                <p className="text-xs text-slate-500 mb-2 font-medium">Inserir variável:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {TAGS.map(t => tagBtn(t.tag, setTemplate2h, template2h))}
+                </div>
+              </div>
+
+              {/* Template */}
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem 2h antes</label>
+                <textarea
+                  value={template2h}
+                  onChange={e => setTemplate2h(e.target.value)}
+                  rows={5}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none resize-none"
+                  placeholder="Digite a mensagem enviada 2h antes da consulta..."
+                />
+              </div>
+
+              {/* Preview */}
+              {template2h && (
+                <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                  <p className="text-xs font-medium text-blue-700 mb-2">Preview (2h antes):</p>
+                  <p className="text-sm text-slate-700 whitespace-pre-line">{preview2h}</p>
+                </div>
               )}
-              Enviar teste
-            </button>
-          </div>
-          {testMsg && (
-            <div
-              className={`mt-3 p-2 rounded-lg text-xs ${
-                testMsg.kind === 'ok'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-rose-100 text-rose-700'
-              }`}
-            >
-              {testMsg.text}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Salvar */}
-      <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+      <div className="flex items-center gap-4 pt-2">
         <button
-          type="button"
           onClick={save}
           disabled={saving}
-          className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300 text-white rounded-xl font-semibold flex items-center gap-2"
+          className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors"
         >
-          {saving ? (
-            <Icon name="loader" className="w-4 h-4 animate-spin" />
-          ) : (
-            <Icon name="check" className="w-4 h-4" />
-          )}
-          Salvar configurações
+          {saving ? 'Salvando...' : 'Salvar'}
         </button>
         {savedAt && (
-          <span className="text-sm text-emerald-600 inline-flex items-center gap-1">
-            <Icon name="check" className="w-4 h-4" />
-            Salvo às{' '}
-            {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-          </span>
+          <p className="text-xs text-emerald-600">
+            Salvo às {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          </p>
         )}
       </div>
     </div>
