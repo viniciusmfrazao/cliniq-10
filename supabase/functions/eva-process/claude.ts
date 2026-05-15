@@ -10,13 +10,16 @@ const MODEL = 'claude-sonnet-4-5';
 const MAX_TOKENS = 400;
 const MAX_TOOL_ITERATIONS = 4;
 
-// Retry config — usado em erros transitórios (rate-limit, overload, network)
-// Backoff exponencial: 1s, 2s, 4s. Total max ~7s extra. Vale a pena pq
-// 429/529 da Anthropic costuma resolver em 1-2s.
-const RETRY_MAX_ATTEMPTS = 3;
-const RETRY_BASE_MS = 1000;
-const RETRY_MAX_DELAY_MS = 4000;
-const RETRYABLE_STATUS = new Set([0, 408, 429, 500, 502, 503, 504, 529]);
+// Retry config — só tenta novamente em erros de rede transitórios.
+// 529 (overload) e 429 (rate limit) NÃO retentamos — cada tentativa
+// consome tokens de cache write mesmo sem entregar resposta, dobrando
+// o custo sem benefício real. Melhor fazer silentFail imediatamente
+// e o humano cuida da conversa.
+const RETRY_MAX_ATTEMPTS = 2; // 1 tentativa inicial + 1 retry (era 3)
+const RETRY_BASE_MS = 500;
+const RETRY_MAX_DELAY_MS = 2000;
+// 429 e 529 removidos — não retentar em rate limit / overload da Anthropic
+const RETRYABLE_STATUS = new Set([0, 408, 500, 502, 503, 504]);
 
 interface CallOpts {
   apiKey: string;
