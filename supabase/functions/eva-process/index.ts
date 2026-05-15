@@ -561,12 +561,21 @@ Deno.serve(async (req) => {
 
   const built = buildSystemPrompt(ctx, payload, history.length);
 
+  // Injeta o contexto dinamico como primeira mensagem do historico
+  // Isso permite que o staticPrompt seja cacheado por 1h pela Anthropic
+  // enquanto o contexto especifico do turno (nome, data, sinal de preco)
+  // entra separado sem invalidar o cache.
+  const messagesWithContext: ClaudeMessage[] = [
+    { role: 'user', content: built.dynamicPrompt },
+    { role: 'assistant', content: 'Entendido. Estou pronta para atender.' },
+    ...messages,
+  ];
+
   // 4) Loop Claude — captura se houve criar_agendamento bem sucedido
   let appointmentCreated = false;
-  const conv = await runConversation({
-    apiKey: ANTHROPIC_API_KEY,
-    systemPrompt: built.systemPrompt,
-    messages,
+  const conv = await runConversation({\n    apiKey: ANTHROPIC_API_KEY,
+    systemPrompt: built.staticPrompt,
+    messages: messagesWithContext,
     tools: TOOLS,
     useCache: true,
     executeTool: async (name, input) => {
