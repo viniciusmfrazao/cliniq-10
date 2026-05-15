@@ -84,7 +84,12 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
   const supabase = createClient()
   const initial = (settings.eva ?? {}) as EvaCfg
 
-  const [personalidade, setPersonalidade] = useState<string>(initial.personalidade ?? '')
+  const [personalidade, setPersonalidade] = useState<string>(
+    initial.personalidade ?? PERSONALIDADE_DEFAULT
+  )
+  const [personalidadeModificada, setPersonalidadeModificada] = useState(
+    !!(initial.personalidade && initial.personalidade !== PERSONALIDADE_DEFAULT)
+  )
   const [confirmacaoD1, setConfirmacaoD1] = useState<string>(initial.confirmation_d1 ?? '')
   const [followupTexts, setFollowupTexts] = useState<Record<'1' | '2' | '3' | '4' | '5', string>>({
     '1': initial.followup_texts?.['1'] ?? '',
@@ -112,7 +117,7 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
     setError(null)
     try {
       const evaCfg: EvaCfg = {
-        personalidade: personalidade.trim() || null,
+        personalidade: personalidade.trim() || PERSONALIDADE_DEFAULT,
         confirmation_d1: confirmacaoD1.trim() || null,
         followup_texts: {
           '1': followupTexts['1'].trim() || null,
@@ -175,24 +180,57 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
 
       {/* Personalidade */}
       <div className="card p-5 mb-4">
-        <h2 className="font-semibold text-slate-900 mb-1">Personalidade da Eva</h2>
-        <p className="text-xs text-slate-500 mb-3">
-          Define o tom de todas as mensagens. Use bullet points (um por linha começando com &quot;-&quot;).
-        </p>
+        <div className="flex items-start justify-between mb-1">
+          <div>
+            <h2 className="font-semibold text-slate-900">Personalidade da Eva</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Define o tom de todas as mensagens. Use bullet points (um por linha começando com &quot;-&quot;).
+            </p>
+          </div>
+          {personalidadeModificada && (
+            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium flex-shrink-0 ml-2">
+              Personalizada
+            </span>
+          )}
+        </div>
+
         <textarea
           value={personalidade}
-          onChange={(e) => setPersonalidade(e.target.value)}
-          placeholder={PERSONALIDADE_DEFAULT}
-          rows={6}
-          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-300"
+          onChange={(e) => {
+            setPersonalidade(e.target.value)
+            setPersonalidadeModificada(e.target.value.trim() !== PERSONALIDADE_DEFAULT.trim())
+          }}
+          rows={7}
+          className="w-full mt-3 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-300"
         />
-        <button
-          type="button"
-          onClick={() => setPersonalidade(PERSONALIDADE_DEFAULT)}
-          className="text-xs text-violet-600 hover:underline mt-2"
-        >
-          Restaurar padrão
-        </button>
+
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-xs text-slate-400">
+            {personalidade.split('\n').filter(l => l.trim().startsWith('-')).length} instruções ativas
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setPersonalidade(PERSONALIDADE_DEFAULT)
+              setPersonalidadeModificada(false)
+            }}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+              personalidadeModificada
+                ? 'border-violet-300 text-violet-600 hover:bg-violet-50 font-medium'
+                : 'border-slate-200 text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            ↩ Restaurar padrão
+          </button>
+        </div>
+
+        {/* Preview do que a Eva vai usar */}
+        {personalidadeModificada && (
+          <div className="mt-3 p-3 bg-violet-50 rounded-lg border border-violet-100">
+            <p className="text-xs font-medium text-violet-700 mb-1">Personalidade ativa (personalizada):</p>
+            <p className="text-xs text-violet-600 whitespace-pre-line">{personalidade}</p>
+          </div>
+        )}
       </div>
 
       {/* Política de desconto */}
