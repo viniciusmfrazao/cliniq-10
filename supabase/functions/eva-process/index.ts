@@ -435,7 +435,11 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
       lead_id: ctx.lead?.id ?? null,
       patient_id: ctx.patient?.id ?? null,
       last_agent: 'eva',
-      metadata: baseMeta,
+      metadata: {
+        ...baseMeta,
+        // Salvar tokens para monitoramento de custo
+        usage: conv.totalUsage,
+      },
     }),
   });
 }

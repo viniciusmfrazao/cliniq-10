@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import EvaConfigForm from './eva-config-form'
+import EvaCostPanel from './eva-cost-panel'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -17,7 +18,6 @@ export default async function EvaConfigPage() {
     .single()
 
   if (!userData?.clinic_id) redirect('/dashboard/config')
-  // Apenas admin/super_admin pode editar configuracoes da Eva
   if (userData.role !== 'admin' && userData.role !== 'super_admin') {
     redirect('/dashboard/config')
   }
@@ -31,10 +31,18 @@ export default async function EvaConfigPage() {
   if (!clinic) redirect('/dashboard/config')
 
   return (
-    <EvaConfigForm
-      clinicId={clinic.id}
-      clinicName={clinic.name}
-      settings={(clinic.settings ?? {}) as Record<string, unknown>}
-    />
+    <div className="space-y-6">
+      {/* Painel de custo */}
+      <div className="card p-6">
+        <EvaCostPanel clinicId={clinic.id} />
+      </div>
+
+      {/* Configurações da Eva */}
+      <EvaConfigForm
+        clinicId={clinic.id}
+        clinicName={clinic.name}
+        settings={(clinic.settings ?? {}) as Record<string, unknown>}
+      />
+    </div>
   )
 }
