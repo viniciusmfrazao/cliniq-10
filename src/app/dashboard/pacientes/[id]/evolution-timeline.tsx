@@ -35,6 +35,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
 
 type Props = {
   evolutions: Evolution[]
+  patientId?: string
   /**
    * Anamneses do paciente pra mesclar na timeline. Mostradas inline com
    * o resto, ordenadas por data (completed_at quando preenchidas, senão
@@ -75,6 +76,7 @@ const COLLAPSED_THUMBS = 4
 
 export default function EvolutionTimeline({
   evolutions,
+  patientId,
   anamneses = [],
   photoUrls = {},
 }: Props) {
@@ -184,7 +186,11 @@ export default function EvolutionTimeline({
                   >
                     {cfg.icon}
                   </div>
-                  <AnamneseSummaryCard anamnese={a} variant="compact" />
+                  <AnamneseSummaryCard
+                    anamnese={a}
+                    variant="compact"
+                    returnUrl={patientId ? `/dashboard/pacientes/${patientId}` : '/dashboard/anamnese'}
+                  />
                 </div>
               )
             }

@@ -103,7 +103,7 @@ export default async function AnamnesesPage() {
                   <td className="py-3 px-4 text-right">
                     {a.status === 'completed' ? (
                       <Link
-                        href={`/dashboard/anamnese/${a.id}`}
+                        href={`/dashboard/anamnese/${a.id}?return=${encodeURIComponent('/dashboard/anamnese')}`}
                         className="text-[var(--color-primary)] hover:underline text-sm font-medium"
                       >
                         Ver respostas

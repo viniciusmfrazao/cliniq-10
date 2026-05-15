@@ -146,7 +146,7 @@ export default function AnamneseSummaryCard({
   if (variant === 'compact') {
     return (
       <Link
-        href={`/dashboard/anamnese/${anamnese.id}`}
+        href={`/dashboard/anamnese/${anamnese.id}${returnUrl ? `?return=${encodeURIComponent(returnUrl)}` : ''}`}
         className="block p-3 rounded-xl border border-slate-200 hover:border-violet-300 bg-white hover:bg-violet-50/30 transition-colors"
       >
         <div className="flex items-center justify-between gap-2 mb-1">

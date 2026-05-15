@@ -393,6 +393,7 @@ async function EvolucoesTab({
         evolutions={evolutions || []}
         anamneses={anamneses || []}
         photoUrls={photoUrls}
+        patientId={patientId}
       />
     </div>
   )
@@ -506,7 +507,7 @@ async function AnamnesesTab({ patientId }: { patientId: string }) {
           {anamneses.map((a) => (
             <Link
               key={a.id}
-              href={`/dashboard/anamnese/${a.id}`}
+              href={`/dashboard/anamnese/${a.id}?return=${encodeURIComponent(`/dashboard/pacientes/${patientId}`)}`}
               className="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors gap-3"
             >
               <div>
