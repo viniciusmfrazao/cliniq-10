@@ -96,34 +96,10 @@ export default function AppointmentForm({
     }
   }, [selectedProcedures, procedures])
 
-  // Profissionais elegíveis = interseção dos professional_ids dos procedimentos selecionados
-  // Se nenhum procedimento foi selecionado, ou se o procedimento não tem profs vinculados,
-  // qualquer profissional pode realizar.
-  const eligibleProfessionals = (() => {
-    if (selectedProcedures.length === 0) return professionals
-    const selectedProcs = selectedProcedures
-      .map(id => procedures.find(p => p.id === id))
-      .filter(Boolean) as Procedure[]
-
-    let allowed: Set<string> | null = null
-    for (const proc of selectedProcs) {
-      const ids: string[] = (proc.professional_ids || []).filter((id): id is string => !!id)
-      if (ids.length === 0) continue
-      const set = new Set<string>(ids)
-      if (allowed === null) {
-        allowed = set
-      } else {
-        const intersection = new Set<string>()
-        allowed.forEach(id => {
-          if (set.has(id)) intersection.add(id)
-        })
-        allowed = intersection
-      }
-    }
-    if (allowed === null) return professionals
-    const allowedFinal = allowed
-    return professionals.filter(p => allowedFinal.has(p.id))
-  })()
+  // No agendamento manual, todos os profissionais ficam disponíveis sempre.
+  // O vínculo procedimento → profissional é usado APENAS pela Eva (agendamento automático).
+  // Aqui a secretaria tem liberdade total de escolha.
+  const eligibleProfessionals = professionals
 
   // Se o profissional atual deixou de ser elegível, limpar
   useEffect(() => {
@@ -308,16 +284,6 @@ export default function AppointmentForm({
         </select>
         {!form.professional_id && eligibleProfessionals.length > 0 && (
           <p className="text-xs text-amber-600 mt-1">Obrigatório: selecione o profissional responsável</p>
-        )}
-        {selectedProcedures.length > 0 && eligibleProfessionals.length === 0 && (
-          <p className="text-xs text-red-600 mt-1">
-            Nenhum profissional está vinculado aos procedimentos selecionados. Revise em Procedimentos.
-          </p>
-        )}
-        {selectedProcedures.length > 0 && eligibleProfessionals.length > 0 && eligibleProfessionals.length < professionals.length && (
-          <p className="text-xs text-slate-400 mt-1">
-            Mostrando apenas profissionais que realizam o(s) procedimento(s) selecionado(s).
-          </p>
         )}
       </div>
 
