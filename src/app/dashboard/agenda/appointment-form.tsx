@@ -84,6 +84,8 @@ export default function AppointmentForm({
   const [availableSlots, setAvailableSlots] = useState<string[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [hasScheduleConfigured, setHasScheduleConfigured] = useState<boolean | null>(null)
+  const [allowOverlap, setAllowOverlap] = useState(false)
+  const [manualTime, setManualTime] = useState('')
 
   // Calcula duração total baseado nos procedimentos selecionados
   useEffect(() => {
@@ -369,25 +371,71 @@ export default function AppointmentForm({
               </a>
             </div>
           ) : availableSlots.length === 0 && !loadingSlots ? (
-            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-              Sem horários livres nesta data. Tente outro dia ou ajuste a duração.
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                Sem horários livres nesta data. Tente outro dia ou ajuste a duração.
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allowOverlap}
+                  onChange={e => setAllowOverlap(e.target.checked)}
+                  className="w-4 h-4 text-violet-600 rounded border-slate-300"
+                />
+                <span className="text-xs text-slate-600 font-medium">Agendar mesmo assim (sobrepor horário)</span>
+              </label>
+              {allowOverlap && (
+                <input
+                  type="time"
+                  value={manualTime}
+                  onChange={e => { setManualTime(e.target.value); update('start_time', e.target.value) }}
+                  className="input w-36 text-sm"
+                />
+              )}
+            </div>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {availableSlots.map(slot => (
-                <button
-                  key={slot}
-                  type="button"
-                  onClick={() => update('start_time', slot)}
-                  className={`px-2.5 py-1 rounded-lg text-sm border transition-colors ${
-                    form.start_time === slot
-                      ? 'bg-violet-600 text-white border-violet-600'
-                      : 'bg-white text-slate-700 border-slate-200 hover:border-violet-400 hover:bg-violet-50'
-                  }`}
-                >
-                  {slot}
-                </button>
-              ))}
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {availableSlots.map(slot => (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => update('start_time', slot)}
+                    className={`px-2.5 py-1 rounded-lg text-sm border transition-colors ${
+                      form.start_time === slot
+                        ? 'bg-violet-600 text-white border-violet-600'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-violet-400 hover:bg-violet-50'
+                    }`}
+                  >
+                    {slot}
+                  </button>
+                ))}
+              </div>
+              {/* Opção de sobrepor — mesmo quando há slots livres */}
+              <div className="pt-1 border-t border-slate-100">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowOverlap}
+                    onChange={e => { setAllowOverlap(e.target.checked); if (!e.target.checked) setManualTime('') }}
+                    className="w-4 h-4 text-violet-600 rounded border-slate-300"
+                  />
+                  <span className="text-xs text-slate-500">Marcar em horário já ocupado (dois pacientes)</span>
+                </label>
+                {allowOverlap && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="time"
+                      value={manualTime}
+                      onChange={e => { setManualTime(e.target.value); update('start_time', e.target.value) }}
+                      className="input w-36 text-sm"
+                    />
+                    <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
+                      Será sobreposto ao agendamento existente
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
