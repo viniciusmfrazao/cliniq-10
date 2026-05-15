@@ -9,6 +9,10 @@
       "schedule": "0 23 * * *"
     },
     {
+      "path": "/api/cron/appointment-reminder-2h",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/cron/recall-inactive",
       "schedule": "0 13 * * *"
     },
