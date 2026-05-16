@@ -89,6 +89,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
 }) {
   const [showPreview, setShowPreview] = useState(false)
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const supabaseCard = createClient()
+  const [debitos, setDebitos] = useState<{ valor: number; descricao: string; data_vencimento: string }[]>([])
+  const [debitosLoaded, setDebitosLoaded] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   
@@ -106,6 +109,17 @@ const AppointmentCard = React.memo(function AppointmentCard({
       hideTimeoutRef.current = null
     }
     setShowPreview(true)
+    // Buscar débitos do paciente ao abrir o popup (só uma vez)
+    if (!debitosLoaded && apt.patients?.id) {
+      setDebitosLoaded(true)
+      supabaseCard
+        .from('debitos')
+        .select('valor, descricao, data_vencimento')
+        .eq('paciente_id', apt.patients.id)
+        .eq('status', 'pendente')
+        .order('data_vencimento', { ascending: true })
+        .then(({ data }) => setDebitos(data || []))
+    }
   }
   
   const handleMouseLeave = () => {
@@ -247,6 +261,36 @@ const AppointmentCard = React.memo(function AppointmentCard({
               </div>
             )}
           </div>
+
+          {/* Aviso de débito pendente */}
+          {debitos.length > 0 && (
+            <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Icon name="alertTriangle" className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                <span className="text-xs font-semibold text-red-700">Débito pendente</span>
+              </div>
+              {debitos.map((d, i) => (
+                <div key={i} className="flex items-center justify-between text-xs text-red-600 mt-0.5">
+                  <span className="truncate max-w-[120px]">{d.descricao || 'Débito'}</span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                    <span className="font-semibold">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(d.valor))}
+                    </span>
+                    <span className="text-red-400 text-[10px]">
+                      vence {d.data_vencimento.split('-').reverse().join('/')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              <a
+                href="/dashboard/financeiro/devedores"
+                onClick={e => e.stopPropagation()}
+                className="text-[10px] text-red-500 hover:text-red-700 hover:underline mt-1 block"
+              >
+                Ver no financeiro →
+              </a>
+            </div>
+          )}
 
           {/* Ações rápidas */}
           <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">

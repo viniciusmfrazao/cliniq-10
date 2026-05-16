@@ -1,10 +1,91 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
+
+// ─── Busca de paciente por nome/telefone/CPF ─────────────────────────────────
+function PatientSearch({ pacientes, value, onChange }: {
+  pacientes: Paciente[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Preenche o campo com o nome do paciente selecionado
+  const selected = pacientes.find(p => p.id === value)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [])
+
+  const filtered = query.length < 2 ? [] : pacientes.filter(p => {
+    const q = query.toLowerCase()
+    return (
+      p.name.toLowerCase().includes(q) ||
+      (p.phone || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
+      ((p as any).cpf || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''))
+    )
+  }).slice(0, 8)
+
+  function select(p: Paciente) {
+    onChange(p.id)
+    setQuery(p.name)
+    setOpen(false)
+  }
+
+  function clear() {
+    onChange('')
+    setQuery('')
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative">
+        <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          value={selected && !open ? selected.name : query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); if (value) onChange('') }}
+          onFocus={() => { setOpen(true); if (selected) setQuery('') }}
+          placeholder="Buscar por nome, telefone ou CPF..."
+          className="w-full pl-9 pr-9 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-sm"
+          required={!value}
+        />
+        {value && (
+          <button type="button" onClick={clear} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <Icon name="x" className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden">
+          {filtered.map(p => (
+            <button key={p.id} type="button" onClick={() => select(p)}
+              className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+              <p className="text-sm font-medium text-slate-900">{p.name}</p>
+              {p.phone && <p className="text-xs text-slate-400">{p.phone}</p>}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && query.length >= 2 && filtered.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-100 px-4 py-3">
+          <p className="text-sm text-slate-400">Nenhum paciente encontrado</p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 type Debito = {
   id: string
@@ -198,13 +279,13 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <h3 className="font-bold text-slate-900 mb-4">Novo Débito</h3>
           <form onSubmit={handleSubmit} className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
+            <div className="md:col-span-2 lg:col-span-4">
               <label className="block text-sm font-medium text-slate-700 mb-1">Paciente *</label>
-              <select value={form.paciente_id} onChange={e => setForm({ ...form, paciente_id: e.target.value })}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500" required>
-                <option value="">Selecione</option>
-                {pacientes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <PatientSearch
+                pacientes={pacientes}
+                value={form.paciente_id}
+                onChange={id => setForm({ ...form, paciente_id: id })}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Valor *</label>
