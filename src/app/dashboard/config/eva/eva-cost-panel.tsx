@@ -49,7 +49,12 @@ export default function EvaCostPanel({ clinicId }: { clinicId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-900">Custo da API Anthropic</h3>
-        <span className="text-xs text-slate-400">Últimos 14 dias</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">
+            Haiku 3.5
+          </span>
+          <span className="text-xs text-slate-400">Últimos 14 dias</span>
+        </div>
       </div>
 
       {/* KPIs */}

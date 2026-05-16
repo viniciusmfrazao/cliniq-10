@@ -416,6 +416,7 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
   };
   const baseMeta = {
     engine: 'edge-function',
+    model: 'claude-haiku-4-5-20251001',
     customer_name: payload.customerName ?? null,
     lead_id: ctx.lead?.id ?? null,
     patient_id: ctx.patient?.id ?? null,
