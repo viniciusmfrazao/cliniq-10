@@ -578,7 +578,8 @@ Deno.serve(async (req) => {
 
   // 4) Loop Claude — captura se houve criar_agendamento bem sucedido
   let appointmentCreated = false;
-  const conv = await runConversation({\n    apiKey: ANTHROPIC_API_KEY,
+  const conv = await runConversation({
+    apiKey: ANTHROPIC_API_KEY,
     systemPrompt: built.staticPrompt,
     messages: messagesWithContext,
     tools: TOOLS,
