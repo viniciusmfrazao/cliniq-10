@@ -275,30 +275,6 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
         </p>
       </div>
 
-      {/* Confirmação D-1 */}
-      <div className="card p-5 mb-4">
-        <h2 className="font-semibold text-slate-900 mb-1">
-          Mensagem de confirmação D-1 <span className="text-xs text-slate-400 font-normal">(véspera do agendamento)</span>
-        </h2>
-        <p className="text-xs text-slate-500 mb-3">
-          Use <code className="px-1 bg-slate-100 rounded">(Nome)</code> e <code className="px-1 bg-slate-100 rounded">(horas)</code> como placeholders. Quebras de linha permitidas.
-        </p>
-        <textarea
-          value={confirmacaoD1}
-          onChange={(e) => setConfirmacaoD1(e.target.value)}
-          placeholder={D1_DEFAULT}
-          rows={6}
-          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
-        />
-        <button
-          type="button"
-          onClick={() => setConfirmacaoD1(D1_DEFAULT)}
-          className="text-xs text-violet-600 hover:underline mt-2"
-        >
-          Restaurar padrão
-        </button>
-      </div>
-
       {/* Follow-up: 5 estagios */}
       <div className="card p-5 mb-4">
         <h2 className="font-semibold text-slate-900 mb-1">Follow-up automático (5 estágios)</h2>
