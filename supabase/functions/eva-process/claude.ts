@@ -1,4 +1,4 @@
-// deploy: 2026-05-15 v2
+// deploy: 2026-05-16 haiku
 // ============================================================================
 // Wrapper da API Anthropic (Messages) com prompt caching + retry com backoff
 // Roda em loop até no máximo N iterações, alternando text ↔ tool_use.
