@@ -52,7 +52,7 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 // Recomendado: 6000-10000ms (8s default) — nao incomoda na percepcao
 // de WhatsApp (paciente nao espera resposta instantanea) e captura
 // 95% das rajadas.
-const EVA_DEBOUNCE_MS = Number(Deno.env.get('EVA_DEBOUNCE_MS') ?? '8000');
+const EVA_DEBOUNCE_MS = Number(Deno.env.get('EVA_DEBOUNCE_MS') ?? '15000');
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
