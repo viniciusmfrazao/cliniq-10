@@ -9,6 +9,7 @@ import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useToast } from '@/components/ui/Toast'
 import SendAnamneseButton from './send-anamnese-button'
 import BlockModal from './block-modal'
+import PaymentModal from '@/components/agenda/payment-modal'
 
 type Block = {
   id: string
@@ -92,6 +93,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const supabaseCard = createClient()
   const [debitos, setDebitos] = useState<{ valor: number; descricao: string; data_vencimento: string }[]>([])
   const [debitosLoaded, setDebitosLoaded] = useState(false)
+  const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   
@@ -213,7 +215,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {/* Preview ao passar o mouse */}
       {showPreview && (
         <div 
-          className={`absolute z-[60] top-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 ${
+          className={`absolute z-[60] bottom-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 ${
             isRightColumn ? 'right-full' : 'left-full'
           }`}
           style={isRightColumn 
@@ -341,6 +343,21 @@ const AppointmentCard = React.memo(function AppointmentCard({
               Abrir atendimento
             </Link>
 
+            {/* Botão Registrar Pagamento — só para atendimentos realizados */}
+            {apt.status === 'completed' && !isCancelled && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPayment(true) }}
+                className={`w-full py-2 px-3 text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                  (apt as any).payment_registered_at
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                }`}
+              >
+                <Icon name="dollarSign" className="w-4 h-4" />
+                {(apt as any).payment_registered_at ? 'Pagamento registrado ✓' : 'Registrar Pagamento'}
+              </button>
+            )}
+
             {apt.patients?.id && !isCancelled && (
               <div className="flex gap-2">
                 <SendAnamneseButton
@@ -353,6 +370,22 @@ const AppointmentCard = React.memo(function AppointmentCard({
             )}
           </div>
         </div>
+      )}
+
+      {/* Modal de pagamento */}
+      {showPayment && (
+        <PaymentModal
+          appointmentId={apt.id}
+          clinicId={(apt as any).clinic_id || ''}
+          patientId={apt.patients?.id || null}
+          patientName={apt.patients?.name || ''}
+          procedureName={(apt as any).procedures?.name || 'Atendimento'}
+          procedurePrice={(apt as any).procedures?.price || null}
+          professionalId={apt.professional_id || null}
+          professionalName={(apt as any).users?.name || ''}
+          onClose={() => setShowPayment(false)}
+          onSuccess={() => { setShowPayment(false); onStatusChange(apt.id, apt.status) }}
+        />
       )}
     </div>
   )
