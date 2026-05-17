@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 
@@ -45,25 +45,26 @@ export default function CrmReport({ clinicId }: { clinicId: string }) {
     return d.toISOString().split('T')[0]
   })
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0])
+  const [appliedFrom, setAppliedFrom] = useState(dateFrom)
+  const [appliedTo, setAppliedTo] = useState(dateTo)
   const [exporting, setExporting] = useState(false)
 
-  const load = useCallback(async () => {
+  async function load(from: string, to: string) {
     setLoading(true)
     const { data } = await supabase
       .from('leads')
       .select('id, name, phone, interest, status, created_at, last_whatsapp_at, lost_reason')
       .eq('clinic_id', clinicId)
-      .gte('created_at', dateFrom + 'T00:00:00')
-      .lte('created_at', dateTo + 'T23:59:59')
+      .gte('created_at', from + 'T00:00:00')
+      .lte('created_at', to + 'T23:59:59')
       .order('created_at', { ascending: false })
 
-    // Buscar agendamentos separadamente
     const phones = (data || []).map((l: any) => l.phone)
     let apts: any[] = []
     if (phones.length > 0) {
       const { data: aptsData } = await supabase
         .from('appointments')
-        .select('id, start_time, status, patient_id, patients(phone), procedures(name)')
+        .select('id, start_time, status, patients(phone), procedures(name)')
         .eq('clinic_id', clinicId)
         .in('status', ['scheduled','confirmed','pending_confirmation','completed','no_show','cancelled'])
       apts = aptsData || []
@@ -87,9 +88,9 @@ export default function CrmReport({ clinicId }: { clinicId: string }) {
     })
     setLeads(mapped)
     setLoading(false)
-  }, [clinicId, dateFrom, dateTo])
+  }
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(appliedFrom, appliedTo) }, [appliedFrom, appliedTo])
 
   // Estatísticas
   const total = leads.length
@@ -176,7 +177,7 @@ export default function CrmReport({ clinicId }: { clinicId: string }) {
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
             className="input text-sm" />
         </div>
-        <button onClick={load} className="btn-secondary text-sm h-10 px-4">
+        <button onClick={() => { setAppliedFrom(dateFrom); setAppliedTo(dateTo) }} className="btn-secondary text-sm h-10 px-4">
           Filtrar
         </button>
         <button onClick={exportXLS} disabled={exporting || leads.length === 0}
