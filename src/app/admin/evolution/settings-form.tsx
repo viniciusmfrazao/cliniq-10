@@ -15,7 +15,7 @@ type FieldDef = {
   key: string
   label: string
   hint: string
-  group: 'evolution' | 'n8n'
+  group: 'evolution'
   placeholder?: string
   isUrl?: boolean
 }
@@ -40,20 +40,6 @@ const FIELDS: FieldDef[] = [
     label: 'Webhook Secret',
     hint: 'Usado para validar webhooks recebidos da Evolution. Pode gerar automático.',
     group: 'evolution',
-  },
-  {
-    key: 'n8n_donna_url',
-    label: 'URL do Webhook da Donna (N8N)',
-    hint: 'Onde o sistema envia mensagens recebidas pra Donna processar.',
-    group: 'n8n',
-    placeholder: 'https://vfrazao.app.n8n.cloud/webhook/donna-v4',
-    isUrl: true,
-  },
-  {
-    key: 'n8n_donna_secret',
-    label: 'Secret de chamadas da Donna',
-    hint: 'Header enviado pra Donna autenticar que a chamada veio do Cliniq.',
-    group: 'n8n',
   },
 ]
 
@@ -109,16 +95,11 @@ export default function EvolutionSettingsForm({ initial }: { initial: Record<str
     setFeedback({ type: 'info', msg: 'Secret gerado. Lembre de salvar.' })
   }
 
-  const groups: Array<{ id: 'evolution' | 'n8n'; title: string; description: string }> = [
+  const groups: Array<{ id: 'evolution'; title: string; description: string }> = [
     {
       id: 'evolution',
       title: 'Evolution API (WhatsApp)',
       description: 'Servidor único compartilhado por todas as clínicas. Cada clínica cria a própria instance.',
-    },
-    {
-      id: 'n8n',
-      title: 'N8N (Donna)',
-      description: 'Workflow conversacional. Recebe mensagens de qualquer clínica com clinic_id no payload.',
     },
   ]
 

@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
 
   // 1) Lê motor da Eva — só faz follow-up se o motor estiver na Edge Function
   const settings = await getSettings(['eva_engine', 'eva_edge_url'])
-  const engine = (settings.eva_engine || 'n8n').toLowerCase()
+  const engine = (settings.eva_engine || 'edge').toLowerCase()
   if (engine !== 'edge') {
     return NextResponse.json({ ok: true, processed: 0, reason: 'eva_engine_off_or_legacy' })
   }

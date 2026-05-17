@@ -1069,84 +1069,22 @@ async function forwardToDonna(payload: {
   kind?: ParsedKind
   mediaUrl?: string | null
 }): Promise<ForwardResult> {
-  // Roteador: lê app_settings.eva_engine pra decidir entre n8n (legado) ou
-  // Edge Function eva-process (novo). Default: n8n (sem mudança).
+  // Roteador: sempre usa Edge Function eva-process (n8n removido)
   const settings = await getSettings([
     'eva_engine',
     'eva_edge_url',
     'eva_internal_secret',
-    'n8n_donna_url',
-    'n8n_donna_secret',
   ])
-  const engine = (settings.eva_engine || 'n8n').toLowerCase()
+  const engine = (settings.eva_engine || 'edge').toLowerCase()
 
-  if (engine === 'edge') {
-    return forwardToEdgeFunction(payload, {
-      url: settings.eva_edge_url || '',
-      secret: settings.eva_internal_secret || '',
-    })
+  if (engine === 'none') {
+    return { ok: false, engine: 'none', status: 0, error: 'Eva desativada para esta clínica' }
   }
 
-  // ─── Legado: n8n ────────────────────────────────────────────────────────
-  const { n8n_donna_url, n8n_donna_secret } = settings
-  if (!n8n_donna_url) {
-    return { ok: false, engine: 'none', status: 0, error: 'n8n_donna_url ausente' }
-  }
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (n8n_donna_secret) headers['x-cliniq-secret'] = n8n_donna_secret
-
-  const evolutionLikeMessage =
-    payload.kind === 'text' || !payload.kind
-      ? { conversation: payload.message }
-      : payload.kind === 'image'
-        ? { imageMessage: { caption: payload.message, url: payload.mediaUrl ?? undefined } }
-        : payload.kind === 'audio'
-          ? { audioMessage: { url: payload.mediaUrl ?? undefined } }
-          : payload.kind === 'video'
-            ? { videoMessage: { caption: payload.message, url: payload.mediaUrl ?? undefined } }
-            : payload.kind === 'document'
-              ? { documentMessage: { caption: payload.message, url: payload.mediaUrl ?? undefined } }
-              : { conversation: payload.message }
-
-  try {
-    const r = await fetch(n8n_donna_url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        event: 'messages.upsert',
-        instance: payload.instance,
-        clinic_id: payload.clinicId,
-        data: {
-          key: {
-            remoteJid: payload.remoteJid,
-            fromMe: false,
-            id: payload.messageId ?? `cliniq-${Date.now()}`,
-          },
-          message: evolutionLikeMessage,
-          pushName: payload.pushName ?? null,
-          messageType: payload.kind ?? 'text',
-        },
-        _cliniq: {
-          kind: payload.kind ?? 'text',
-          media_url: payload.mediaUrl ?? null,
-          forwarded_from: 'cliniq-app',
-        },
-      }),
-    })
-    if (!r.ok) {
-      const txt = await r.text().catch(() => '')
-      return { ok: false, engine: 'n8n', status: r.status, error: txt.slice(0, 400) }
-    }
-    return { ok: true, engine: 'n8n', status: r.status }
-  } catch (err) {
-    return {
-      ok: false,
-      engine: 'n8n',
-      status: 0,
-      error: err instanceof Error ? err.message : String(err),
-    }
-  }
+  return forwardToEdgeFunction(payload, {
+    url: settings.eva_edge_url || '',
+    secret: settings.eva_internal_secret || '',
+  })
 }
 
 /**

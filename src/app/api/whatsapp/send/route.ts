@@ -77,20 +77,14 @@ export async function POST(req: NextRequest) {
 
   let clinicId: string | undefined
   let userId: string | null = null
-  /** 'manual' = secretaria pelo painel; 'automation' = cron/n8n. */
+  /** 'manual' = secretaria pelo painel; 'automation' = cron/edge. */
   let purpose: 'manual' | 'automation' = 'manual'
 
   const cronSecret = req.headers.get('x-cron-secret')
-  const cliniqSecret = req.headers.get('x-cliniq-secret')
-
-  const settings = cliniqSecret ? await getSettings(['n8n_donna_secret']) : null
-  const expectedCliniqSecret = settings?.n8n_donna_secret
 
   const isValidCron = cronSecret && cronSecret === process.env.CRON_SECRET
-  const isValidCliniq =
-    cliniqSecret && expectedCliniqSecret && cliniqSecret === expectedCliniqSecret
 
-  if (isValidCron || isValidCliniq) {
+  if (isValidCron) {
     if (!body.clinic_id) {
       return NextResponse.json(
         { ok: false, error: 'clinic_id é obrigatório em chamadas server-to-server' },

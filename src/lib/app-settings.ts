@@ -4,8 +4,6 @@ export const SETTING_KEYS = [
   'evolution_url',
   'evolution_master_key',
   'evolution_webhook_secret',
-  'n8n_donna_url',
-  'n8n_donna_secret',
   'eva_engine',
   'eva_edge_url',
   'eva_internal_secret',
@@ -18,10 +16,8 @@ const cache = new Map<SettingKey, CacheEntry>()
 const TTL_MS = 60_000
 
 function normalizeSettingValue(key: SettingKey, value: string | null): string | null {
-  // n8n is no longer an Eva runtime. Keep legacy keys readable for old rows,
-  // but never allow them to route production WhatsApp traffic.
+  // Eva sempre usa Edge Function
   if (key === 'eva_engine') return 'edge'
-  if (key === 'n8n_donna_url' || key === 'n8n_donna_secret') return null
   return value
 }
 
