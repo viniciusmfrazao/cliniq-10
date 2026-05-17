@@ -15,7 +15,7 @@ export default async function AdminEvolutionPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Evolution API & N8N</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Evolution API</h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
           Configurações globais do SaaS. Cada clínica usa estas credenciais para conectar seu próprio número de WhatsApp.
         </p>

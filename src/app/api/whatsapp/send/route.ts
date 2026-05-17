@@ -40,8 +40,6 @@ type SendBody = {
  *    Header: x-cron-secret: <CRON_SECRET (env)>
  *    Body: { clinic_id, phone, message }
  *
- * 3) Server-to-server N8N (Donna):
- *    Header: x-cliniq-secret: <n8n_donna_secret (app_settings)>
  *    Body: { clinic_id, phone, message }
  *
  * Persistência: depois do send bem-sucedido, inserimos a mensagem em

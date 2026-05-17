@@ -1049,7 +1049,7 @@ export async function POST(
 
 type ForwardResult = {
   ok: boolean
-  engine: 'edge' | 'n8n' | 'none'
+  engine: 'edge' | 'none'
   status: number
   error?: string
   /** Se a edge fez silentFail (lead em human review), aparece aqui */
