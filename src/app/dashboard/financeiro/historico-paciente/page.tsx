@@ -22,7 +22,7 @@ export default async function HistoricoPacientePage() {
           <Icon name="arrowLeft" className="w-5 h-5 text-slate-500" />
         </Link>
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900">Histórico do Paciente</h1>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900">Ranking de Pacientes</h1>
           <p className="text-slate-500">Ranking de pacientes por faturamento</p>
         </div>
       </div>

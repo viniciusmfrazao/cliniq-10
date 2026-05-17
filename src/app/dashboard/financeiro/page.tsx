@@ -198,8 +198,18 @@ export default async function FinanceiroPage() {
             <Icon name="users" className="w-5 h-5 text-amber-600" />
           </div>
           <div>
-            <p className="font-semibold text-slate-900 text-sm">Histórico Paciente</p>
+            <p className="font-semibold text-slate-900 text-sm">Ranking de Pacientes</p>
             <p className="text-xs text-slate-500">Ranking</p>
+          </div>
+        </Link>
+
+        <Link href="/dashboard/financeiro/ranking-procedimentos" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-emerald-200 hover:shadow-md transition group flex items-center gap-3">
+          <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 transition">
+            <Icon name="barChart" className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 text-sm">Ranking de Procedimentos</p>
+            <p className="text-xs text-slate-500">Faturamento por procedimento</p>
           </div>
         </Link>
 
