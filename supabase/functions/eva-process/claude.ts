@@ -235,9 +235,12 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
     // Sem tool_use → resposta final
     if (r.stop_reason !== 'tool_use' || !toolUse) {
       steps.push(stepLog);
-      const text = textBlock?.text?.trim();
+      // Tentar extrair texto de qualquer bloco disponível
+      const text = textBlock?.text?.trim() ||
+        content.map(b => b.text || '').join(' ').trim() ||
+        'Pode repetir, por favor? Quero te ajudar direitinho.';
       return {
-        finalText: text || 'Pode repetir, por favor? Quero te ajudar direitinho.',
+        finalText: text,
         steps,
         totalUsage,
         errors,
