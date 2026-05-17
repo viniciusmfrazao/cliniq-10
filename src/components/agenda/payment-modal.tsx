@@ -7,6 +7,7 @@ import Icon from '@/components/ui/Icon'
 type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number }
 type ProcItem = { id: string; name: string; price: number }
 type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; liquido: number }
+type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean }
 
 type Props = {
   appointmentId: string
@@ -36,6 +37,7 @@ export default function PaymentModal({
   const [taxas, setTaxas] = useState<Taxa[]>([])
   const [procs, setProcs] = useState<ProcItem[]>([])
   const [splits, setSplits] = useState<Split[]>([])
+  const [debitos, setDebitos] = useState<Debito[]>([])
   const [obs, setObs] = useState('')
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -69,6 +71,18 @@ export default function PaymentModal({
       // Valor total dos procedimentos como valor inicial do split
       const total = procList.reduce((s, p) => s + p.price, 0)
       setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: total, parcelas: 1, taxa: 0, liquido: total }])
+      // Buscar débitos pendentes do paciente
+      if (patientId) {
+        const { data: debitosData } = await supabase
+          .from('debitos')
+          .select('id, descricao, valor, data_vencimento')
+          .eq('clinic_id', clinicId)
+          .eq('paciente_id', patientId)
+          .eq('status', 'pendente')
+          .order('data_vencimento', { ascending: true })
+        setDebitos((debitosData || []).map((d: any) => ({ ...d, quitar: false })))
+      }
+
       setLoading(false)
     }
     init()
@@ -89,9 +103,11 @@ export default function PaymentModal({
   }
 
   const totalProcs = procs.reduce((s, p) => s + p.price, 0)
+  const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valor, 0)
   const totalPago = splits.reduce((s, p) => s + p.valor, 0)
   const totalLiquido = splits.reduce((s, p) => s + p.liquido, 0)
-  const saldo = Math.max(0, totalProcs - totalPago)
+  const totalDever = totalProcs + totalDebitos
+  const saldo = Math.max(0, totalDever - totalPago)
 
   async function save() {
     setSaving(true)
@@ -124,6 +140,12 @@ export default function PaymentModal({
             observacoes: obs || null,
           })
         }
+      }
+
+      // Quitar débitos marcados
+      const debitosQuitar = debitos.filter(d => d.quitar)
+      for (const d of debitosQuitar) {
+        await supabase.from('debitos').update({ status: 'pago' }).eq('id', d.id)
       }
 
       // Saldo devedor → Devedores
@@ -190,6 +212,45 @@ export default function PaymentModal({
             </div>
           </div>
 
+          {/* Débitos pendentes */}
+          {debitos.length > 0 && (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Icon name="alertTriangle" className="w-4 h-4 text-red-500" />
+                <p className="text-xs font-semibold text-red-700">Débitos pendentes — quitar junto?</p>
+              </div>
+              <div className="space-y-2">
+                {debitos.map(d => (
+                  <label key={d.id} className="flex items-center justify-between gap-3 cursor-pointer group">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={d.quitar}
+                        onChange={e => setDebitos(prev => prev.map(x => x.id === d.id ? { ...x, quitar: e.target.checked } : x))}
+                        className="w-4 h-4 text-red-500 rounded border-red-300"
+                      />
+                      <div>
+                        <p className="text-xs font-medium text-red-800 group-hover:text-red-900">{d.descricao}</p>
+                        <p className="text-xs text-red-400">Vence: {new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold text-red-600 flex-shrink-0">
+                      {d.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </label>
+                ))}
+                {totalDebitos > 0 && (
+                  <div className="flex justify-between pt-1.5 border-t border-red-200">
+                    <span className="text-xs font-semibold text-red-700">Total débitos selecionados</span>
+                    <span className="text-sm font-bold text-red-700">
+                      {totalDebitos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Splits de pagamento */}
           {splits.map((s, idx) => (
             <div key={s.id} className="bg-slate-50 rounded-xl p-4 space-y-3">
@@ -250,6 +311,22 @@ export default function PaymentModal({
 
           {/* Resumo */}
           <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">
+            {totalDebitos > 0 && (
+              <div className="flex justify-between text-sm text-slate-500 pb-1.5 border-b border-slate-200">
+                <span>Procedimentos</span>
+                <span>{totalProcs.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              </div>
+            )}
+            {totalDebitos > 0 && (
+              <div className="flex justify-between text-sm text-red-500 pb-1.5 border-b border-slate-200">
+                <span>Débitos anteriores</span>
+                <span>{totalDebitos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Total a pagar</span>
+              <span className="font-bold text-slate-900">{totalDever.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            </div>
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Total pago</span>
               <span className="font-semibold">{totalPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
