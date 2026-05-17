@@ -621,7 +621,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  const finalText = sanitizeWhatsapp(conv.finalText);
+  const finalText = sanitizeWhatsapp(conv.finalText)
+
+  // Proteção: se finalText ficou vazio após sanitize, não salvar nem enviar
+  if (!finalText || finalText.trim().length === 0) {
+    errors.push('finalText vazio após sanitize — resposta descartada')
+    return jsonResponse({ ok: true, silentFail: true, reason: 'empty_final_text', errors })
+  }
 
   // 5) Salvar resposta
   await saveTurn(payload, ctx, finalText, conv.errors).catch((e) => errors.push(`saveTurn: ${e?.message ?? e}`));
