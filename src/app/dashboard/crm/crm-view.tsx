@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import CrmReport from './crm-report'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import CRMSettingsModal from './crm-settings-modal'
 import { useWaLine } from '@/contexts/WaLineContext'
@@ -157,7 +158,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const router = useRouter()
   const supabase = createClient()
   const { selectedLine } = useWaLine()
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'report'>('kanban')
   const [showNewLead, setShowNewLead] = useState(false)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [filter, setFilter] = useState<string>('all')
@@ -586,6 +587,15 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
             <Icon name="list" className="w-4 h-4" />
             Lista
           </button>
+          <button
+            onClick={() => setViewMode('report')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              viewMode === 'report' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <Icon name="barChart" className="w-4 h-4" />
+            Relatório
+          </button>
         </div>
         
         <select
@@ -948,6 +958,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           onClose={() => setShowSettings(false)}
           onSave={() => { setShowSettings(false); router.refresh() }}
         />
+      )}
+
+      {/* Relatório */}
+      {viewMode === 'report' && (
+        <CrmReport clinicId={clinicId} />
       )}
     </div>
   )
