@@ -51,18 +51,26 @@ export default function CrmReport({ clinicId }: { clinicId: string }) {
     setLoading(true)
     const { data } = await supabase
       .from('leads')
-      .select(`
-        id, name, phone, interest, status, created_at,
-        last_whatsapp_at, lost_reason,
-        appointments(start_time, status, procedures(name))
-      `)
+      .select('id, name, phone, interest, status, created_at, last_whatsapp_at, lost_reason')
       .eq('clinic_id', clinicId)
       .gte('created_at', dateFrom + 'T00:00:00')
       .lte('created_at', dateTo + 'T23:59:59')
       .order('created_at', { ascending: false })
 
+    // Buscar agendamentos separadamente
+    const phones = (data || []).map((l: any) => l.phone)
+    let apts: any[] = []
+    if (phones.length > 0) {
+      const { data: aptsData } = await supabase
+        .from('appointments')
+        .select('id, start_time, status, patient_id, patients(phone), procedures(name)')
+        .eq('clinic_id', clinicId)
+        .in('status', ['scheduled','confirmed','pending_confirmation','completed','no_show','cancelled'])
+      apts = aptsData || []
+    }
+
     const mapped: ReportLead[] = (data || []).map((l: any) => {
-      const apt = l.appointments?.[0]
+      const apt = apts.find((a: any) => (a.patients as any)?.phone === l.phone)
       return {
         id: l.id,
         name: l.name,
@@ -74,7 +82,7 @@ export default function CrmReport({ clinicId }: { clinicId: string }) {
         lost_reason: l.lost_reason,
         appointment_date: apt?.start_time || null,
         appointment_status: apt?.status || null,
-        procedure_name: apt?.procedures?.name || null,
+        procedure_name: (apt?.procedures as any)?.name || null,
       }
     })
     setLeads(mapped)
