@@ -24,12 +24,15 @@ type Block = {
 
 type Appointment = {
   id: string
+  clinic_id: string
   start_time: string
   end_time: string | null
   status: string
   notes: string | null
   professional_id: string | null
+  procedure_id: string | null
   checked_in_at: string | null
+  payment_registered_at: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
   professional: { id: string; name: string } | null
@@ -346,15 +349,20 @@ const AppointmentCard = React.memo(function AppointmentCard({
             {/* Botão Registrar Pagamento — só para atendimentos realizados */}
             {apt.status === 'completed' && !isCancelled && (
               <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPayment(true) }}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShowPreview(false) // fecha o popup
+                  setShowPayment(true)
+                }}
                 className={`w-full py-2 px-3 text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 ${
-                  (apt as any).payment_registered_at
+                  apt.payment_registered_at
                     ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                     : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
                 }`}
               >
                 <Icon name="dollarSign" className="w-4 h-4" />
-                {(apt as any).payment_registered_at ? 'Pagamento registrado ✓' : 'Registrar Pagamento'}
+                {apt.payment_registered_at ? 'Pagamento registrado ✓' : 'Registrar Pagamento'}
               </button>
             )}
 
@@ -376,13 +384,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {showPayment && (
         <PaymentModal
           appointmentId={apt.id}
-          clinicId={(apt as any).clinic_id || ''}
+          clinicId={apt.clinic_id}
           patientId={apt.patients?.id || null}
           patientName={apt.patients?.name || ''}
-          procedureName={(apt as any).procedures?.name || 'Atendimento'}
-          procedurePrice={(apt as any).procedures?.price || null}
+          procedureName={apt.procedures?.name || 'Atendimento'}
+          procedurePrice={apt.procedures?.price || null}
+          procedureId={apt.procedure_id || null}
           professionalId={apt.professional_id || null}
-          professionalName={(apt as any).users?.name || ''}
+          professionalName={apt.professional?.name || ''}
           onClose={() => setShowPayment(false)}
           onSuccess={() => { setShowPayment(false); onStatusChange(apt.id, apt.status) }}
         />
