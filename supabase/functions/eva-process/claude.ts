@@ -1,4 +1,4 @@
-// deploy: 2026-05-16 haiku
+// deploy: 2026-05-17-204008
 // ============================================================================
 // Wrapper da API Anthropic (Messages) com prompt caching + retry com backoff
 // Roda em loop até no máximo N iterações, alternando text ↔ tool_use.
@@ -286,4 +286,4 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
   };
 }
 // staging deploy Sat May 16 18:53:05 UTC 2026
-// deploy: 2026-05-17-2021
+// deploy: 2026-05-17-204008
