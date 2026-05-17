@@ -692,6 +692,12 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                       {lead.phone && (
                         <p className="text-xs text-slate-500 mb-1">{lead.phone}</p>
                       )}
+                      {(lead as any).whatsapp_name && (lead as any).whatsapp_name !== lead.name && (
+                        <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
+                          <span>📱</span>
+                          <span className="truncate">{(lead as any).whatsapp_name}</span>
+                        </p>
+                      )}
                       {humanReview && (
                         <div
                           className="flex flex-col gap-0.5 text-xs px-2 py-1.5 rounded-md border bg-rose-50 text-rose-800 border-rose-200 mb-2"
@@ -830,6 +836,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                             </span>
                           </div>
                           {lead.phone && <p className="text-sm text-slate-500 mt-0.5">{lead.phone}</p>}
+                          {(lead as any).whatsapp_name && (lead as any).whatsapp_name !== lead.name && (
+                            <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                              <span>📱</span>{(lead as any).whatsapp_name}
+                            </p>
+                          )}
                           {lead.interest && <p className="text-sm text-violet-600 mt-1 truncate">{lead.interest}</p>}
                           <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400">
                             <span>{source?.icon} {source?.label}</span>

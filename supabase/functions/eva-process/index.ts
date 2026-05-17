@@ -215,6 +215,7 @@ async function ensureLead(payload: IncomingPayload, ctx: DonnaContext): Promise<
     body: JSON.stringify({
       clinic_id: payload.clinicId,
       name: payload.customerName || 'Lead WhatsApp',
+      whatsapp_name: payload.customerName || null, // nome original do WhatsApp
       phone: payload.phone,
       source: 'whatsapp',
       status: 'new',
