@@ -530,8 +530,27 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 2) Cria lead se necessario (paralelo ao restante seria ideal, mas precisamos dele em saveTurn)
+  // 2) Cria lead se necessario
   await ensureLead(payload, ctx).catch((e) => errors.push(`ensureLead: ${e?.message ?? e}`));
+
+  // 2.1) Se lead está em 'new' e a pessoa mandou mensagem real (não followup),
+  // avança para 'contacted' imediatamente — indica que a conversa começou
+  if (!payload.isFollowup && ctx.lead?.id && ctx.lead.status === 'new') {
+    fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        status: 'contacted',
+        last_whatsapp_at: new Date().toISOString(),
+        last_contact_at: new Date().toISOString(),
+      }),
+    }).catch(() => {});
+    ctx.lead.status = 'contacted';
+  }
 
   // 3) Build prompt + messages
   // historia ja vem em ordem cronologica do RPC (asc). Limita a 20 ultimas
