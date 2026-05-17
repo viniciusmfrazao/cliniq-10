@@ -533,23 +533,26 @@ Deno.serve(async (req) => {
   // 2) Cria lead se necessario
   await ensureLead(payload, ctx).catch((e) => errors.push(`ensureLead: ${e?.message ?? e}`));
 
-  // 2.1) Se lead está em 'new' e a pessoa mandou mensagem real (não followup),
-  // avança para 'contacted' imediatamente — indica que a conversa começou
+  // 2.1) Se lead está em 'new' e a pessoa mandou mensagem APÓS a Eva já ter respondido,
+  // avança para 'contacted' — indica conversa real iniciada (não só primeiro contato)
   if (!payload.isFollowup && ctx.lead?.id && ctx.lead.status === 'new') {
-    fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
-      method: 'PATCH',
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        status: 'contacted',
-        last_whatsapp_at: new Date().toISOString(),
-        last_contact_at: new Date().toISOString(),
-      }),
-    }).catch(() => {});
-    ctx.lead.status = 'contacted';
+    const jaRespondeu = ctx.history.some(m => m.role === 'assistant');
+    if (jaRespondeu) {
+      fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'contacted',
+          last_whatsapp_at: new Date().toISOString(),
+          last_contact_at: new Date().toISOString(),
+        }),
+      }).catch(() => {});
+      ctx.lead.status = 'contacted';
+    }
   }
 
   // 3) Build prompt + messages
