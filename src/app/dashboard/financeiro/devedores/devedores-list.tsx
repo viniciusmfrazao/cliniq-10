@@ -227,9 +227,9 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
 
   async function handlePagarParcial() {
     if (!pagandoParcial) return
-    const valor = parseFloat(valorParcial.replace(',', '.'))
+    const valor = parseFloat(valorParcial)
     if (!valor || valor <= 0 || valor > pagandoParcial.valor) {
-      alert('Valor inválido')
+      alert(`Valor inválido. Máximo: ${Number(pagandoParcial.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`)
       return
     }
     setLoadingId(pagandoParcial.id)
@@ -543,18 +543,26 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
                 <input
                   type="number"
                   value={valorParcial}
-                  onChange={e => setValorParcial(e.target.value)}
+                  onChange={e => {
+                    const v = e.target.value
+                    // Evitar valores maiores que o débito
+                    if (parseFloat(v) > pagandoParcial.valor) return
+                    setValorParcial(v)
+                  }}
                   max={pagandoParcial.valor}
                   min={0.01}
                   step={0.01}
-                  placeholder="0,00"
+                  placeholder={`Máx: ${Number(pagandoParcial.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                   className="input w-full text-lg font-bold"
                   autoFocus
                 />
-                {valorParcial && parseFloat(valorParcial.replace(',','.')) > 0 && parseFloat(valorParcial.replace(',','.')) < pagandoParcial.valor && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Restante: <strong className="text-amber-600">
-                      {(pagandoParcial.valor - parseFloat(valorParcial.replace(',','.'))).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                <p className="text-xs text-slate-400 mt-1">
+                  Total do débito: <strong>{Number(pagandoParcial.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+                </p>
+                {valorParcial && parseFloat(valorParcial) > 0 && parseFloat(valorParcial) < pagandoParcial.valor && (
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    Restante: <strong>
+                      {(pagandoParcial.valor - parseFloat(valorParcial)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </strong>
                   </p>
                 )}
