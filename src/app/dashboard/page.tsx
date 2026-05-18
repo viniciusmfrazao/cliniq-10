@@ -168,16 +168,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .lte('start_time', endOfDay)
     .in('status', ['cancelled', 'no_show'])
 
-  // Receita do mês (se módulo financeiro ativo)
+  // Receita do mês + entradas hoje + saídas do mês
   let monthlyRevenue = 0
+  let todayRevenue = 0
+  let monthlySaidas = 0
+
   if (hasModule('/dashboard/financeiro')) {
-    const { data: entradas } = await supabase
-      .from('entradas')
-      .select('valor_liquido')
-      .eq('clinic_id', userData?.clinic_id)
-      .gte('data_venda', startOfMonthDate)
-    
-    monthlyRevenue = entradas?.reduce((sum, e) => sum + (e.valor_liquido || 0), 0) || 0
+    const [{ data: entMes }, { data: entHoje }, { data: saidas }] = await Promise.all([
+      supabase.from('entradas').select('valor_liquido').eq('clinic_id', userData?.clinic_id).gte('data_venda', startOfMonthDate),
+      supabase.from('entradas').select('valor_liquido').eq('clinic_id', userData?.clinic_id).eq('data_venda', today),
+      supabase.from('saidas').select('valor').eq('clinic_id', userData?.clinic_id).gte('data', startOfMonthDate).neq('status','cancelado'),
+    ])
+    monthlyRevenue = entMes?.reduce((s, e) => s + (e.valor_liquido || 0), 0) || 0
+    todayRevenue = entHoje?.reduce((s, e) => s + (e.valor_liquido || 0), 0) || 0
+    monthlySaidas = saidas?.reduce((s, e) => s + (Number(e.valor) || 0), 0) || 0
   }
 
   const { data: nextAppointments } = await supabase
@@ -344,6 +348,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
               </span>
             </p>
             <p className="text-xs md:text-sm text-slate-500 mt-1 truncate">Receita do mês</p>
+
+            {/* Entradas de hoje e saídas */}
+            <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs text-slate-400">Entradas hoje</p>
+                <p className="text-sm font-bold text-emerald-600">{formatBRLCompact(todayRevenue)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Saídas do mês</p>
+                <p className="text-sm font-bold text-red-500">{formatBRLCompact(monthlySaidas)}</p>
+              </div>
+            </div>
+
             <Link href="/dashboard/financeiro" className="mt-2 text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
               Ver financeiro <Icon name="arrowRight" className="w-3 h-3" />
             </Link>

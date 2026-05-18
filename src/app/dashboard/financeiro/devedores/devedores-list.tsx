@@ -6,6 +6,33 @@ import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
 
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+
+type Debito = {
+  id: string
+  paciente_id: string
+  valor: number
+  descricao: string
+  data_vencimento: string
+  data_promessa: string | null
+  observacao_cobranca: string | null
+  status: string
+  patients: { name: string; phone: string | null } | null
+}
+
+type Paciente = {
+  id: string
+  name: string
+  phone: string | null
+}
+
+type Props = {
+  debitos: Debito[]
+  pacientes: Paciente[]
+  clinicId: string
+  clinicName: string
+}
+
 // ─── Busca de paciente por nome/telefone/CPF ─────────────────────────────────
 function PatientSearch({ pacientes, value, onChange }: {
   pacientes: Paciente[]
@@ -87,30 +114,6 @@ function PatientSearch({ pacientes, value, onChange }: {
   )
 }
 
-type Debito = {
-  id: string
-  paciente_id: string
-  valor: number
-  descricao: string
-  data_vencimento: string
-  data_promessa: string | null
-  observacao_cobranca: string | null
-  status: string
-  patients: { name: string; phone: string | null } | null
-}
-
-type Paciente = {
-  id: string
-  name: string
-  phone: string | null
-}
-
-type Props = {
-  debitos: Debito[]
-  pacientes: Paciente[]
-  clinicId: string
-  clinicName: string
-}
 
 function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
@@ -138,6 +141,9 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [pagandoParcial, setPagandoParcial] = useState<Debito | null>(null)
+  const [valorParcial, setValorParcial] = useState('')
+  const [formaParcial, setFormaParcial] = useState('pix')
   const [editingPromessa, setEditingPromessa] = useState<string | null>(null)
   const [promessaForm, setPromessaForm] = useState({ data: '', observacao: '' })
 
@@ -207,6 +213,57 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
       if (errEntrada) console.error('Erro ao criar entrada:', errEntrada)
     }
 
+    setLoadingId(null)
+    router.refresh()
+  }
+
+  async function handleExcluir(id: string) {
+    if (!confirm('Excluir este débito?')) return
+    setLoadingId(id)
+    await supabase.from('debitos').delete().eq('id', id)
+    setLoadingId(null)
+    router.refresh()
+  }
+
+  async function handlePagarParcial() {
+    if (!pagandoParcial) return
+    const valor = parseFloat(valorParcial.replace(',', '.'))
+    if (!valor || valor <= 0 || valor > pagandoParcial.valor) {
+      alert('Valor inválido')
+      return
+    }
+    setLoadingId(pagandoParcial.id)
+    const hoje = new Date().toISOString().split('T')[0]
+    const restante = Math.round((pagandoParcial.valor - valor) * 100) / 100
+
+    // Criar entrada do valor pago
+    await supabase.from('entradas').insert({
+      clinic_id: clinicId,
+      data_venda: hoje,
+      paciente_id: pagandoParcial.paciente_id,
+      paciente_nome: pagandoParcial.patients?.name || '',
+      procedimento_nome: pagandoParcial.descricao,
+      forma_pagamento: formaParcial,
+      valor_bruto: valor,
+      taxa_percentual: 0,
+      valor_taxa: 0,
+      valor_liquido: valor,
+      observacoes: `Pagamento parcial de débito (restante: ${restante.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})`,
+    })
+
+    if (restante > 0) {
+      // Atualizar débito com novo valor restante
+      await supabase.from('debitos').update({
+        valor: restante,
+        observacao_cobranca: `Pagou ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em ${new Date().toLocaleDateString('pt-BR')}. Restante: ${restante.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+      }).eq('id', pagandoParcial.id)
+    } else {
+      // Quitou tudo
+      await supabase.from('debitos').update({ status: 'pago', data_pagamento: hoje }).eq('id', pagandoParcial.id)
+    }
+
+    setPagandoParcial(null)
+    setValorParcial('')
     setLoadingId(null)
     router.refresh()
   }
@@ -427,8 +484,12 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
                             <Icon name="calendar" className="w-4 h-4" />
                           </button>
                           <button onClick={() => handlePagar(debito.id)} disabled={isLoading}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Marcar como pago">
+                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Marcar como pago total">
                             <Icon name="check" className="w-5 h-5" />
+                          </button>
+                          <button onClick={() => { setPagandoParcial(debito); setValorParcial('') }} disabled={isLoading}
+                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Pagamento parcial">
+                            <Icon name="dollarSign" className="w-5 h-5" />
                           </button>
                           <button onClick={() => handleExcluir(debito.id)} disabled={isLoading}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50" title="Excluir">
@@ -468,6 +529,67 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal de pagamento parcial */}
+      {pagandoParcial && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setPagandoParcial(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-slate-900 mb-1">Pagamento parcial</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              {pagandoParcial.patients?.name} — {pagandoParcial.descricao}
+              <br />
+              <span className="font-semibold text-red-600">
+                Total: {Number(pagandoParcial.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </span>
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Valor pago agora (R$)</label>
+                <input
+                  type="number"
+                  value={valorParcial}
+                  onChange={e => setValorParcial(e.target.value)}
+                  max={pagandoParcial.valor}
+                  min={0.01}
+                  step={0.01}
+                  placeholder="0,00"
+                  className="input w-full text-lg font-bold"
+                  autoFocus
+                />
+                {valorParcial && parseFloat(valorParcial.replace(',','.')) > 0 && parseFloat(valorParcial.replace(',','.')) < pagandoParcial.valor && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Restante: <strong className="text-amber-600">
+                      {(pagandoParcial.valor - parseFloat(valorParcial.replace(',','.'))).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </strong>
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Forma de pagamento</label>
+                <select value={formaParcial} onChange={e => setFormaParcial(e.target.value)} className="input w-full text-sm">
+                  <option value="pix">PIX</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="credito">Crédito</option>
+                  <option value="debito">Débito</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setPagandoParcial(null)}
+                className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button onClick={handlePagarParcial} disabled={!!loadingId}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">
+                {loadingId ? 'Salvando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
