@@ -220,21 +220,47 @@ export default function AppointmentForm({
     }
 
     let result
+    let appointmentId: string | null = null
     if (isEditing) {
       result = await supabase
         .from('appointments')
         .update(appointmentData)
         .eq('id', appointment.id)
+      appointmentId = appointment.id
     } else {
       result = await supabase
         .from('appointments')
         .insert(appointmentData)
+        .select('id')
+        .single()
+      appointmentId = result.data?.id || null
     }
 
     if (result.error) {
       setError(result.error.message)
       setLoading(false)
       return
+    }
+
+    // Salvar múltiplos procedimentos em appointment_procedures
+    if (appointmentId && selectedProcedures.length > 0) {
+      // Remover os anteriores (em caso de edição)
+      if (isEditing) {
+        await supabase.from('appointment_procedures').delete().eq('appointment_id', appointmentId)
+      }
+      // Inserir todos os procedimentos selecionados
+      const apRows = selectedProcedures.map(procId => {
+        const proc = procedures.find(p => p.id === procId)
+        return {
+          clinic_id: clinicId,
+          appointment_id: appointmentId,
+          procedure_id: procId,
+          procedure_name: proc?.name || '',
+          price: proc?.price || 0,
+          duration_minutes: proc?.duration_minutes || 30,
+        }
+      })
+      await supabase.from('appointment_procedures').insert(apRows)
     }
 
     router.push(`/dashboard/agenda?date=${form.date}`)

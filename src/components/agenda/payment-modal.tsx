@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 
@@ -31,6 +32,7 @@ function uid() { return Math.random().toString(36).slice(2) }
 
 export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, onClose, onSuccess }: Props) {
   const supabase = createClient()
+  const router = useRouter()
   const [taxas, setTaxas] = useState<Taxa[]>([])
   const [procs, setProcs] = useState<ProcItem[]>([])
   const [splits, setSplits] = useState<Split[]>([])
@@ -153,6 +155,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         .update({ payment_registered_at: new Date().toISOString() })
         .eq('id', appointmentId)
 
+      router.refresh()
       onSuccess()
     } finally { setSaving(false) }
   }
