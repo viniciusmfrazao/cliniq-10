@@ -407,7 +407,7 @@ async function markLeadForHumanReview(
 }
 
 // ─── Salvar turno (user + assistant) em eva_conversations ──────────────────
-async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: string, errors: string[]): Promise<void> {
+async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: string, errors: string[], usage?: unknown): Promise<void> {
   // Salva como 2 rows separadas (role/content) — modelo atual da tabela
   const url = `${SUPABASE_URL}/rest/v1/eva_conversations`;
   const headers = {
@@ -439,8 +439,7 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
       last_agent: 'eva',
       metadata: {
         ...baseMeta,
-        // Salvar tokens para monitoramento de custo
-        usage: conv.totalUsage,
+        usage: usage ?? null,
       },
     }),
   });
@@ -653,7 +652,7 @@ Deno.serve(async (req) => {
   }
 
   // 5) Salvar resposta
-  await saveTurn(payload, ctx, finalText, conv.errors).catch((e) => errors.push(`saveTurn: ${e?.message ?? e}`));
+  await saveTurn(payload, ctx, finalText, conv.errors, conv.totalUsage).catch((e) => errors.push(`saveTurn: ${e?.message ?? e}`));
 
   // 6) Enviar pela Evolution (skipSend pula — útil em smoke tests via SQL)
   const send = payload.skipSend
