@@ -268,14 +268,6 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
     router.refresh()
   }
 
-  async function handleExcluir(id: string) {
-    if (!confirm('Excluir este débito?')) return
-    setLoadingId(id)
-    await supabase.from('debitos').delete().eq('id', id)
-    setLoadingId(null)
-    router.refresh()
-  }
-
   async function handleSalvarPromessa(id: string) {
     setLoadingId(id)
     await supabase.from('debitos').update({
