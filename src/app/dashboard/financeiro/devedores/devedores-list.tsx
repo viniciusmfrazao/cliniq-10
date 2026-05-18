@@ -173,7 +173,34 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
   async function handlePagar(id: string) {
     if (!confirm('Confirma que este débito foi pago?')) return
     setLoadingId(id)
-    await supabase.from('debitos').update({ status: 'pago', data_pagamento: new Date().toISOString() }).eq('id', id)
+
+    // Encontrar o débito para criar a entrada
+    const debito = debitos.find(d => d.id === id)
+
+    // Marcar como pago
+    await supabase.from('debitos').update({
+      status: 'pago',
+      data_pagamento: new Date().toISOString()
+    }).eq('id', id)
+
+    // Criar entrada no financeiro
+    if (debito) {
+      const hoje = new Date().toISOString().split('T')[0]
+      await supabase.from('entradas').insert({
+        clinic_id: clinicId,
+        data_venda: hoje,
+        paciente_id: debito.paciente_id,
+        paciente_nome: debito.patients?.name || '',
+        procedimento_nome: debito.descricao,
+        forma_pagamento: 'pix', // padrão — secretaria pode editar depois
+        valor_bruto: debito.valor,
+        taxa_percentual: 0,
+        valor_taxa: 0,
+        valor_liquido: debito.valor,
+        observacoes: 'Quitação de débito',
+      })
+    }
+
     setLoadingId(null)
     router.refresh()
   }

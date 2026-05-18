@@ -121,7 +121,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         const proporcao = totalProcs > 0 ? proc.price / totalProcs : 1 / procs.length
         for (const s of splits) {
           if (s.valor <= 0) continue
-          const val = s.valor * proporcao
+          const val = Math.round(s.valor * proporcao * 100) / 100
+          const taxa = Math.round(val * s.taxa) / 100
+          const liquido = Math.round((val - taxa) * 100) / 100
           await supabase.from('entradas').insert({
             clinic_id: clinicId, data_venda: hoje,
             paciente_id: patientId, paciente_nome: patientName,
@@ -129,7 +131,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
             profissional_id: professionalId, profissional_nome: professionalName,
             forma_pagamento: s.forma, bandeira: s.bandeira || null,
             valor_bruto: val, taxa_percentual: s.taxa,
-            valor_taxa: val * s.taxa / 100, valor_liquido: val * (1 - s.taxa / 100),
+            valor_taxa: taxa, valor_liquido: liquido,
             n_parcelas: s.parcelas, observacoes: obs || null,
           })
         }
