@@ -284,13 +284,28 @@ export async function criarAgendamento(args: {
     }
   }
 
-  // 4) Criar appointment
+  // 4) Verificar se já existe agendamento igual (idempotência)
   const [hh, mm] = String(args.horario).split(':').map(Number);
   const startIso = `${args.data}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00-03:00`;
   const endMin = hh * 60 + mm + 30;
   const endH = Math.floor(endMin / 60);
   const endM = endMin % 60;
   const endIso = `${args.data}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00-03:00`;
+
+  // Checar duplicata: mesmo paciente + mesmo horário + status ativo
+  const checkUrl = `${env.supabaseUrl}/rest/v1/appointments?clinic_id=eq.${payload.clinicId}&patient_id=eq.${patientId}&start_time=eq.${encodeURIComponent(startIso)}&status=in.(scheduled,confirmed,pending_confirmation)&select=id&limit=1`;
+  const checkR = await fetchJson<Array<{ id: string }>>(checkUrl, {
+    method: 'GET',
+    headers: sbHeaders(env),
+  });
+  if (checkR.ok && Array.isArray(checkR.data) && checkR.data.length > 0) {
+    // Agendamento já existe — retornar como sucesso sem criar duplicata
+    return {
+      toolResultStr: `Agendamento ja confirmado para ${args.nome_paciente} em ${args.data} as ${args.horario}. Confirme com elegancia que o horario ja esta reservado.`,
+      appointmentCreated: true,
+      patientId,
+    };
+  }
 
   const apptUrl = `${env.supabaseUrl}/rest/v1/appointments`;
   const apptHeaders = { ...sbHeaders(env), Prefer: 'return=representation' };
