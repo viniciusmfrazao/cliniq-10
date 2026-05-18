@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
   // 2) Carregar dados em paralelo
   const [{ data: automations }, { data: waList }, { data: clinics },
          { data: patients }, { data: profs }, { data: procs }] = await Promise.all([
-    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h').in('clinic_id', clinicIds),
+    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h').in('clinic_id', clinicIds),
     svc.from('clinic_whatsapp').select('clinic_id, instance_name, status, is_default, role_outbound_automation').in('clinic_id', clinicIds),
     svc.from('clinics').select('id, name').in('id', clinicIds),
     patientIds.length ? svc.from('patients').select('id, name, phone').in('id', patientIds) : { data: [] },
@@ -107,8 +107,12 @@ export async function GET(req: NextRequest) {
     if (!wa || wa.status !== 'connected') { summary.skipped++; continue }
 
     const auto = autoMap.get(app.clinic_id)
-    // Usa template específico de 2h se existir, senão o D-1, senão o default
-    const template = auto?.template_lembrete_2h || auto?.template_confirma_24h || DEFAULT_TEMPLATE_2H
+
+    // Só envia se lembrete_2h estiver ativo
+    if (!auto?.lembrete_2h) { summary.skipped++; continue }
+
+    // Usa template específico de 2h — NUNCA o D-1 (que fala "amanhã")
+    const template = auto?.template_lembrete_2h || DEFAULT_TEMPLATE_2H
 
     const patient = patientMap.get(app.patient_id)
     if (!patient?.phone) { summary.skipped++; continue }
