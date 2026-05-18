@@ -427,16 +427,27 @@ export default function WhatsAppPage() {
     const seen = new Set<string>()
     const convs: Conversation[] = []
     const linesFound = new Set<string>()
+
+    // Instâncias que têm role_inbound=true (linha da Eva)
+    const inboundInstances = new Set(
+      waInboundLines.map((l) => l.instance_name)
+    )
+
     for (const r of data as EvaRow[]) {
       if (!r.content) continue
       // Filtrar grupos: telefones de grupos têm formato diferente (ex: 120363..., muito longo)
       const phone = r.phone ?? ''
       if (phone.length > 15) continue // grupos têm IDs muito longos
       if (phone.includes('@g.us')) continue // formato grupo
-      
+
       const inst = rowInstanceName(r)
+
+      // Mostrar APENAS conversas da instância com role_inbound (número da Eva)
+      // Se não há instâncias inbound definidas ainda, mostra tudo (fallback)
+      if (inboundInstances.size > 0 && inst && !inboundInstances.has(inst)) continue
+
       if (inst) linesFound.add(inst)
-      
+
       // Agrupa por telefone apenas — sem duplicar por linha
       if (seen.has(phone)) continue
       seen.add(phone)
