@@ -137,18 +137,25 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         }
       }
 
-      // Quitar débitos marcados
+      // Quitar débitos marcados — com data de pagamento real
       for (const d of debitos.filter(x => x.quitar)) {
-        const { error } = await supabase.from('debitos').update({ status: 'pago' }).eq('id', d.id)
+        const { error } = await supabase.from('debitos').update({
+          status: 'pago',
+          data_pagamento: hoje,
+        }).eq('id', d.id)
         if (error) console.error('Erro ao quitar débito:', error)
       }
 
       // Novo saldo devedor
       if (saldo > 0.01 && patientId) {
         await supabase.from('debitos').insert({
-          clinic_id: clinicId, paciente_id: patientId,
-          valor: saldo, descricao: `Saldo devedor — ${procs.map(p => p.name).join(' + ')}`,
-          data_vencimento: hoje, status: 'pendente',
+          clinic_id: clinicId,
+          paciente_id: patientId,
+          paciente_nome: patientName,
+          valor: saldo,
+          descricao: `Saldo devedor — ${procs.map(p => p.name).join(' + ')}`,
+          data_vencimento: hoje,
+          status: 'pendente',
         })
       }
 

@@ -174,31 +174,37 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
     if (!confirm('Confirma que este débito foi pago?')) return
     setLoadingId(id)
 
-    // Encontrar o débito para criar a entrada
     const debito = debitos.find(d => d.id === id)
+    const hoje = new Date().toISOString().split('T')[0] // YYYY-MM-DD
 
-    // Marcar como pago
-    await supabase.from('debitos').update({
+    // Marcar como pago com data correta
+    const { error: errUpdate } = await supabase.from('debitos').update({
       status: 'pago',
-      data_pagamento: new Date().toISOString()
+      data_pagamento: hoje, // usar date, não timestamp
     }).eq('id', id)
 
-    // Criar entrada no financeiro
+    if (errUpdate) {
+      alert('Erro ao marcar como pago: ' + errUpdate.message)
+      setLoadingId(null)
+      return
+    }
+
+    // Criar entrada no financeiro com a data de HOJE (data do pagamento real)
     if (debito) {
-      const hoje = new Date().toISOString().split('T')[0]
-      await supabase.from('entradas').insert({
+      const { error: errEntrada } = await supabase.from('entradas').insert({
         clinic_id: clinicId,
-        data_venda: hoje,
+        data_venda: hoje, // data que o pagamento aconteceu de fato
         paciente_id: debito.paciente_id,
         paciente_nome: debito.patients?.name || '',
         procedimento_nome: debito.descricao,
-        forma_pagamento: 'pix', // padrão — secretaria pode editar depois
-        valor_bruto: debito.valor,
+        forma_pagamento: 'pix',
+        valor_bruto: Number(debito.valor),
         taxa_percentual: 0,
         valor_taxa: 0,
-        valor_liquido: debito.valor,
-        observacoes: 'Quitação de débito',
+        valor_liquido: Number(debito.valor),
+        observacoes: `Quitação de débito${debito.data_vencimento !== hoje ? ` (vencimento: ${new Date(debito.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')})` : ''}`,
       })
+      if (errEntrada) console.error('Erro ao criar entrada:', errEntrada)
     }
 
     setLoadingId(null)
