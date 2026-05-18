@@ -9,6 +9,7 @@ import MedicalInfo from './medical-info'
 import EvolutionTimeline from './evolution-timeline'
 import NewEvolutionButton from './new-evolution-button'
 import OrcamentosTab from './orcamentos-tab'
+import PackagesTab from './packages-tab'
 
 /**
  * Central do Paciente.
@@ -49,6 +50,7 @@ export default async function PatientCentralPage({
     anamnesesCountResult,
     applicationsCountResult,
     activeAppointmentResult,
+    packagesCountResult,
   ] = await Promise.all([
     supabase.from('patients').select('*').eq('id', id).maybeSingle(),
     supabase.from('medical_records').select('*').eq('patient_id', id).maybeSingle(),
@@ -77,6 +79,11 @@ export default async function PatientCentralPage({
       .order('start_time', { ascending: true })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from('patient_packages')
+      .select('id', { count: 'exact', head: true })
+      .eq('patient_id', id)
+      .eq('status', 'active'),
   ])
 
   const activeAppointment = activeAppointmentResult.data
@@ -100,6 +107,7 @@ export default async function PatientCentralPage({
     consultas: completedAppointmentsCountResult.count || 0,
     anamneses: anamnesesCountResult.count || 0,
     injetaveis: applicationsCountResult.count || 0,
+    pacotes: packagesCountResult.count || 0,
   }
 
   const age = patient.birth_date
@@ -234,6 +242,13 @@ export default async function PatientCentralPage({
       {currentTab === 'injetaveis' && (
         <Suspense fallback={<TabSkeleton />}>
           <InjetaveisTab patientId={id} />
+        </Suspense>
+      )}
+      {currentTab === 'pacotes' && (
+        <Suspense fallback={<TabSkeleton />}>
+          {userData?.clinic_id && (
+            <PackagesTabServer patientId={id} clinicId={userData.clinic_id} />
+          )}
         </Suspense>
       )}
     </div>
@@ -634,6 +649,38 @@ async function OrcamentosTabServer({
       patientPhone={patient.phone}
       clinicName={clinic?.name || 'Clínica'}
       initialOrcamentos={orcamentos || []}
+    />
+  )
+}
+
+async function PackagesTabServer({
+  patientId,
+  clinicId,
+}: {
+  patientId: string
+  clinicId: string
+}) {
+  const supabase = await createClient()
+  const [packagesResult, proceduresResult] = await Promise.all([
+    supabase
+      .from('patient_packages')
+      .select('*, patient_package_sessions(*)')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('procedures')
+      .select('id, name')
+      .eq('clinic_id', clinicId)
+      .eq('active', true)
+      .order('name'),
+  ])
+
+  return (
+    <PackagesTab
+      patientId={patientId}
+      clinicId={clinicId}
+      initialPackages={packagesResult.data || []}
+      procedures={proceduresResult.data || []}
     />
   )
 }

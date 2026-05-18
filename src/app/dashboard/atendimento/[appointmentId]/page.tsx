@@ -10,6 +10,7 @@ import AnamneseSummaryCard from '@/components/anamnese/AnamneseSummaryCard'
 import OrcamentosTab from '@/app/dashboard/pacientes/[id]/orcamentos-tab'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import PackageSessionAlert from './package-session-alert'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
   const { appointmentId } = params
@@ -87,6 +88,14 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .select('*, products(name, unit)')
     .eq('appointment_id', appointmentId)
 
+  // Pacotes ativos do paciente (para mostrar alerta de usar sessão)
+  const { data: activePackages } = await supabase
+    .from('patient_packages')
+    .select('id, name, total_sessions, used_sessions, status')
+    .eq('patient_id', patient.id)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+
   // Anamnese mais recente preenchida pelo paciente — se não houver
   // preenchida ainda, mostramos a pendente (pra avisar o profissional
   // que tem ficha esperando preenchimento). Carregamos `responses` pra
@@ -135,6 +144,15 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               clinicId={userData?.clinic_id || ''}
               professionalId={user.id}
             />
+
+            {/* Pacotes ativos — alerta para usar sessão */}
+            {activePackages && activePackages.length > 0 && (
+              <PackageSessionAlert
+                packages={activePackages}
+                clinicId={userData?.clinic_id || ''}
+                appointmentId={appointmentId}
+              />
+            )}
 
             {latestAnamnese ? (
               <AnamneseSummaryCard
