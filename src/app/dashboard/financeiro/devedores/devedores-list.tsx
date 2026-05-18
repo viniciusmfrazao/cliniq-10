@@ -253,10 +253,15 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
 
     if (restante > 0) {
       // Atualizar débito com novo valor restante
-      await supabase.from('debitos').update({
+      const { error: errUpdate } = await supabase.from('debitos').update({
         valor: restante,
-        observacao_cobranca: `Pagou ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em ${new Date().toLocaleDateString('pt-BR')}. Restante: ${restante.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+        observacoes: `Pagou ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em ${new Date().toLocaleDateString('pt-BR')}. Restante: ${restante.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
       }).eq('id', pagandoParcial.id)
+      if (errUpdate) {
+        alert('Erro ao atualizar débito: ' + errUpdate.message)
+        setLoadingId(null)
+        return
+      }
     } else {
       // Quitou tudo
       await supabase.from('debitos').update({ status: 'pago', data_pagamento: hoje }).eq('id', pagandoParcial.id)
