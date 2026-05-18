@@ -343,14 +343,14 @@ export default function WhatsAppPage() {
         setConfigured(true)
         setClinicId(userData.clinic_id)
 
-        setWaInboundLines(
-          inboundConnected.map((i) => ({
-            instance_name: i.instance_name,
-            auto_reply_enabled: i.auto_reply_enabled !== false,
-            label: i.label ?? null,
-            phone_number: i.phone_number ?? null,
-          })),
-        )
+        const inboundLines = inboundConnected.map((i) => ({
+          instance_name: i.instance_name,
+          auto_reply_enabled: i.auto_reply_enabled !== false,
+          label: i.label ?? null,
+          phone_number: i.phone_number ?? null,
+        }))
+
+        setWaInboundLines(inboundLines)
 
         const nextCtrl =
           (evaControlInstance &&
@@ -363,7 +363,7 @@ export default function WhatsAppPage() {
         const ctrlRow = inboundConnected.find((i) => i.instance_name === nextCtrl) ?? mainForEva
         setEvaEnabled(ctrlRow?.auto_reply_enabled !== false)
 
-        loadConversations(userData.clinic_id)
+        loadConversations(userData.clinic_id, inboundLines)
       } else {
         setConfigured(false)
       }
@@ -413,7 +413,11 @@ export default function WhatsAppPage() {
     }
   }
 
-  async function loadConversations(clinicId: string) {
+  type InboundLine = { instance_name: string; auto_reply_enabled: boolean; label: string | null; phone_number: string | null }
+
+  async function loadConversations(clinicId: string, inboundLinesParam?: InboundLine[]) {
+    // Usa as inbound lines passadas como parâmetro ou as do estado
+    const effectiveInboundLines = inboundLinesParam ?? waInboundLines
     const { data } = await supabase
       .from('eva_conversations')
       .select('*')
@@ -430,7 +434,7 @@ export default function WhatsAppPage() {
 
     // Instâncias que têm role_inbound=true (linha da Eva)
     const inboundInstances = new Set(
-      waInboundLines.map((l) => l.instance_name)
+      effectiveInboundLines.map((l) => l.instance_name)
     )
 
     for (const r of data as EvaRow[]) {
