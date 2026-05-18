@@ -393,7 +393,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
           professionalId={apt.professional_id || null}
           professionalName={apt.professional?.name || ''}
           onClose={() => setShowPayment(false)}
-          onSuccess={() => { setShowPayment(false); onStatusChange(apt.id, apt.status); router.refresh() }}
+          onSuccess={() => { setShowPayment(false); onStatusChange(apt.id, apt.status) }}
         />
       )}
     </div>
