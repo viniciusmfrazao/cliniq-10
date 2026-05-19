@@ -126,14 +126,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, processed: 0, reason: 'queue_empty' })
   }
 
-  // ─── DEFESA ANTI-SPAM ────────────────────────────────────────────────────
-  // Pra cada lead, verifica se o paciente tem PELO MENOS 1 mensagem real
-  // (role='user') nas últimas 30 dias. Se não tem (lead "abandonado" ou criado
-  // por bug/teste), pula o follow-up. Isso evita disparar pra phones aleatórios
-  // de stress test ou pra leads dormentes que nunca interagiram.
-  //
-  // Adiciona zero overhead em fluxo normal: a query só roda pros leads
-  // já filtrados pela query principal, e usa o index (clinic_id, phone, role).
+  // ─── DEFESA ANTI-SPAM ─────────────────────────────────────────────────────────────
+  // Pra cada lead, verifica duas coisas:
+  // 1) O paciente tem PELO MENOS 1 mensagem real (role='user') nos últimos 30d
+  //    → evita disparar pra leads dormentes, importados ou de teste
+  // 2) A ÚLTIMA mensagem da conversa é do paciente (role='user')
+  //    → se a Eva já falou por último, ela ESPERA o paciente responder
+  //    antes de mandar qualquer follow-up. Nunca follow-up sobre follow-up.
   const phonesPorClinica = new Map<string, Set<string>>()
   for (const lead of queue) {
     if (!lead.phone) continue
@@ -143,11 +142,16 @@ export async function GET(req: NextRequest) {
     phonesPorClinica.get(lead.clinic_id)!.add(lead.phone)
   }
 
-  // Map clinic_id → Set<phone> pra busca rápida
+  // Map clinic_id → Set<phone> com interação de usuário recente
   const recentInteraction = new Map<string, Set<string>>()
+  // Map "clinicId:phone" → última role da conversa
+  const lastRoleMap = new Map<string, 'user' | 'assistant'>()
+
   const cutoffRecent = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   for (const [clinicId, phones] of phonesPorClinica) {
     if (phones.size === 0) continue
+
+    // 1) Interação recente do usuário (últimos 30d)
     const { data: recents } = await svc
       .from('eva_conversations')
       .select('phone')
@@ -160,6 +164,22 @@ export async function GET(req: NextRequest) {
       if (r.phone) setOk.add(r.phone)
     }
     recentInteraction.set(clinicId, setOk)
+
+    // 2) Última role de cada conversa — se foi 'assistant', Eva já falou
+    // por último e deve esperar o cliente responder antes de novo follow-up
+    for (const phone of phones) {
+      const { data: lastMsg } = await svc
+        .from('eva_conversations')
+        .select('role')
+        .eq('clinic_id', clinicId)
+        .eq('phone', phone)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (lastMsg?.role === 'user' || lastMsg?.role === 'assistant') {
+        lastRoleMap.set(`${clinicId}:${phone}`, lastMsg.role as 'user' | 'assistant')
+      }
+    }
   }
 
   // 3) Pra cada clínica, valida que o WhatsApp está conectado E a Eva
@@ -260,6 +280,20 @@ export async function GET(req: NextRequest) {
         phone: lead.phone,
         stage: (lead.eva_followup_count ?? 0) + 1,
         skipped: 'no_recent_user_message_30d',
+      })
+      continue
+    }
+
+    // Última mensagem foi da Eva (assistant) → ela já falou por último.
+    // Não manda follow-up em cima de follow-up — espera o cliente responder.
+    const lastRole = lastRoleMap.get(`${lead.clinic_id}:${lead.phone}`)
+    if (lastRole === 'assistant') {
+      results.push({
+        lead_id: lead.id,
+        clinic_id: lead.clinic_id,
+        phone: lead.phone,
+        stage: (lead.eva_followup_count ?? 0) + 1,
+        skipped: 'eva_already_spoke_last',
       })
       continue
     }
