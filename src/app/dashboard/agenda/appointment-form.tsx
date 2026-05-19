@@ -95,6 +95,18 @@ export default function AppointmentForm({
       .then(({ data }) => setActivePackages(data || []))
   }, [form.patient_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Estado do pacote a criar no agendamento
+  const [isPackage, setIsPackage] = useState(false)
+  const [packageForm, setPackageForm] = useState({ name: '', total_sessions: 3, price_total: '' })
+
+  // Pré-preenche nome do pacote com o procedimento selecionado
+  useEffect(() => {
+    if (isPackage && selectedProcedures.length > 0 && !packageForm.name) {
+      const proc = procedures.find(p => p.id === selectedProcedures[0])
+      if (proc) setPackageForm(f => ({ ...f, name: proc.name }))
+    }
+  }, [isPackage, selectedProcedures]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [availableSlots, setAvailableSlots] = useState<string[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [hasScheduleConfigured, setHasScheduleConfigured] = useState<boolean | null>(null)
@@ -273,6 +285,34 @@ export default function AppointmentForm({
         }
       })
       await supabase.from('appointment_procedures').insert(apRows)
+    }
+
+    // Se é pacote, criar o pacote e registrar a 1ª sessão
+    if (isPackage && packageForm.name.trim() && appointmentId) {
+      const { data: newPkg } = await supabase
+        .from('patient_packages')
+        .insert({
+          clinic_id: clinicId,
+          patient_id: form.patient_id,
+          name: packageForm.name.trim(),
+          total_sessions: packageForm.total_sessions,
+          price_total: packageForm.price_total ? parseFloat(packageForm.price_total) : null,
+          procedure_id: selectedProcedures[0] || null,
+          sold_at: form.date,
+          status: 'active',
+        })
+        .select('id')
+        .single()
+
+      if (newPkg) {
+        await supabase.from('patient_package_sessions').insert({
+          clinic_id: clinicId,
+          package_id: newPkg.id,
+          appointment_id: appointmentId,
+          performed_at: form.date,
+          notes: '1ª sessão — agendada junto com a criação do pacote',
+        })
+      }
     }
 
     router.push(`/dashboard/agenda?date=${form.date}`)
@@ -564,6 +604,62 @@ export default function AppointmentForm({
           onChange={e => update('notes', e.target.value)}
         />
       </div>
+
+      {/* Pacote de sessões — só aparece quando há paciente selecionado */}
+      {form.patient_id && (
+        <div className="border border-slate-200 rounded-2xl overflow-hidden">
+          <label className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
+            <input
+              type="checkbox"
+              checked={isPackage}
+              onChange={e => setIsPackage(e.target.checked)}
+              className="w-4 h-4 text-violet-600 rounded border-slate-300 focus:ring-violet-500"
+            />
+            <div>
+              <p className="text-sm font-medium text-slate-800">Agendar como pacote de sessões</p>
+              <p className="text-xs text-slate-400">Clube do Botox, Lavieen, Microvasos...</p>
+            </div>
+          </label>
+
+          {isPackage && (
+            <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-3 bg-violet-50/40">
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Nome do pacote *</label>
+                <input
+                  className="input"
+                  placeholder="Ex: Clube do Botox, Pacote Lavieen..."
+                  value={packageForm.name}
+                  onChange={e => setPackageForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Total de sessões *</label>
+                  <input
+                    type="number" min={1} max={100}
+                    className="input"
+                    value={packageForm.total_sessions}
+                    onChange={e => setPackageForm(f => ({ ...f, total_sessions: parseInt(e.target.value) || 1 }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Valor total (R$)</label>
+                  <input
+                    type="number" step="0.01" min={0}
+                    className="input"
+                    placeholder="0,00"
+                    value={packageForm.price_total}
+                    onChange={e => setPackageForm(f => ({ ...f, price_total: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-violet-600 bg-violet-100 rounded-xl px-3 py-2">
+                Este agendamento será contado como a 1ª sessão do pacote.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
