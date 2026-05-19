@@ -9,7 +9,7 @@ import type { ClinicSettings, DonnaContext, IncomingPayload, ProfessionalRow } f
 import { formatBRL } from './utils.ts';
 
 const DEFAULT_FOLLOWUP_TEXTS: Record<'1' | '2' | '3' | '4' | '5', string> = {
-  '1': 'Conseguiu dar uma olhadinha nas informacoes? Se quiser, posso verificar um horario especial pra voce e ja deixar seu atendimento reservado *',
+  '1': 'Conseguiu dar uma olhadinha nas informacoes? Se tiver alguma duvida ou quiser saber os horarios disponiveis, estou aqui pra te ajudar *',
   '2': 'Passei aqui pra te lembrar que o cuidado com voce e uma prioridade — qualquer duvida estou por perto *',
   '3': 'Tudo bem? Quis passar novamente pra saber se posso te ajudar com algo. Vai ser um prazer te receber aqui na clinica *',
   '4': 'As vezes a gente acaba adiando algo que pode fazer tao bem pra autoestima... Se quiser, estou aqui pra te ajudar a dar esse primeiro passo olhando algum horario pra voce *',
@@ -40,6 +40,8 @@ function buildContextLine(
       `- ${tom}. Texto de referencia: "${textoBase}"`,
       `- Use o texto de referencia adaptando para soar natural (com o NOME dela uma unica vez no inicio).`,
       `- NAO finja que ela perguntou algo — VOCE esta retomando o contato proativamente.`,
+      `- NUNCA diga que o horario esta "reservado" ou "garantido" — nada foi agendado ainda.`,
+      `- Se o lead tem interesse registrado, mencione o procedimento pelo nome no follow-up.`,
       `- Se ja mostrou horarios antes, NAO repita — so reabra a porta.`,
     ].join('\n');
   }
