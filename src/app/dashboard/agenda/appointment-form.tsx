@@ -83,6 +83,18 @@ export default function AppointmentForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Pacotes ativos do paciente selecionado
+  const [activePackages, setActivePackages] = useState<{ id: string; name: string; total_sessions: number; used_sessions: number }[]>([])
+  useEffect(() => {
+    if (!form.patient_id) { setActivePackages([]); return }
+    supabase
+      .from('patient_packages')
+      .select('id, name, total_sessions, used_sessions')
+      .eq('patient_id', form.patient_id)
+      .eq('status', 'active')
+      .then(({ data }) => setActivePackages(data || []))
+  }, [form.patient_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [availableSlots, setAvailableSlots] = useState<string[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [hasScheduleConfigured, setHasScheduleConfigured] = useState<boolean | null>(null)
@@ -296,6 +308,35 @@ export default function AppointmentForm({
           placeholder="Digite o nome do paciente..."
           required
         />
+
+        {/* Alerta de pacotes ativos */}
+        {activePackages.length > 0 && (
+          <div className="mt-2 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 space-y-1.5">
+            <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-500" />
+              Pacotes ativos — sessões disponíveis
+            </p>
+            {activePackages.map(pkg => {
+              const remaining = pkg.total_sessions - pkg.used_sessions
+              const pct = Math.min((pkg.used_sessions / pkg.total_sessions) * 100, 100)
+              return (
+                <div key={pkg.id} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-800 truncate">{pkg.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <div className="w-20 h-1.5 bg-violet-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-violet-500 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-[10px] text-violet-600 font-medium whitespace-nowrap">
+                        {remaining} sessão{remaining !== 1 ? 'ões' : ''} restante{remaining !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div>
