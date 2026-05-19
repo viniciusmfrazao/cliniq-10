@@ -410,7 +410,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
               <div>
                 <h3 className="font-bold text-slate-900 text-base md:text-lg">Atendimentos da Semana</h3>
                 <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-                  Total: <span className="font-semibold text-violet-600">{weekTotal} consultas</span>
+                  Total: <span className="font-semibold text-violet-600">{weekTotal} atendimentos</span>
                 </p>
               </div>
               <Link href="/dashboard/agenda" className="text-xs md:text-sm text-violet-600 font-semibold flex items-center gap-1">
