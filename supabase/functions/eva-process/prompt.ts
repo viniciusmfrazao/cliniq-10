@@ -29,20 +29,33 @@ function buildContextLine(
   isNew: boolean,
   historyLength: number,
   evaCfg: { followup_texts?: Partial<Record<'1' | '2' | '3' | '4' | '5', string>> | null } | null,
+  leadInterest?: string | null,
 ): string {
   if (payload.isFollowup) {
     const stage = (payload.followupStage ?? 1) as 1 | 2 | 3 | 4 | 5;
     const stageKey = String(stage) as '1' | '2' | '3' | '4' | '5';
     const textoBase = evaCfg?.followup_texts?.[stageKey] || DEFAULT_FOLLOWUP_TEXTS[stageKey];
     const tom = TOM_POR_ESTAGIO[stageKey];
+    const interestLine = leadInterest
+      ? `- O interesse registrado dela e: "${leadInterest}". Mencione pelo nome de forma natural.`
+      : '';
+    const stage1Extra = stage === 1
+      ? [
+          `- ESTAGIO 1: ela mandou a primeira mensagem mas nao respondeu depois. Retome com leveza.`,
+          `- Aborde diretamente o interesse dela (se houver), mostre que voce lembra e pergunte se pode esclarecer algo ou mostrar horarios.`,
+          `- Exemplo de tom: "Oi [Nome]! Tudo bem? Vi que voce tinha interesse em [procedimento] — posso te contar mais ou verificar um horario? 😊"`,
+          `- NAO use o texto de referencia do estagio 1 nesse caso — crie algo contextual baseado no interesse.`,
+        ]
+      : [];
     return [
       `- ESTE E UM FOLLOW-UP AUTOMATICO (estagio ${stage} de 5). Ela nao respondeu sua ultima mensagem.`,
       `- ${tom}. Texto de referencia: "${textoBase}"`,
       `- Use o texto de referencia adaptando para soar natural (com o NOME dela uma unica vez no inicio).`,
       `- NAO finja que ela perguntou algo — VOCE esta retomando o contato proativamente.`,
       `- NUNCA diga que o horario esta "reservado" ou "garantido" — nada foi agendado ainda.`,
-      `- Se o lead tem interesse registrado, mencione o procedimento pelo nome no follow-up.`,
+      interestLine,
       `- Se ja mostrou horarios antes, NAO repita — so reabra a porta.`,
+      ...stage1Extra,
     ].join('\n');
   }
   if (isNew) return `- PRIMEIRA aproximacao (ou conversa esfriou >12h). Apresente-se como Eva, da clinica, com calor e elegancia.`;
@@ -342,10 +355,11 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
   }
 
   let followupPart = '';
+  const leadInterest = (lead as any)?.interest ?? null;
   if (payload.isFollowup) {
-    followupPart = `\n${buildContextLine(payload, isNewConversation, historyLength, evaCfg)}`;
+    followupPart = `\n${buildContextLine(payload, isNewConversation, historyLength, evaCfg, leadInterest)}`;
   } else {
-    followupPart = `\n${buildContextLine(payload, isNewConversation, historyLength, evaCfg)}`;
+    followupPart = `\n${buildContextLine(payload, isNewConversation, historyLength, evaCfg, leadInterest)}`;
   }
 
   const dynamicPrompt = `[CONTEXTO DO TURNO ATUAL — nao mencione este bloco para a paciente]
