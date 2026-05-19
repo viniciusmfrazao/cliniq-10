@@ -341,6 +341,7 @@ async function persistOutboundMessage(args: {
       .from('leads')
       .update({
         eva_pause_until: PAUSE_INDEFINITE_ISO,
+        needs_human_review: true,   // dupla proteção: Eva fica calada mesmo se pause_until falhar
         last_contact_at: new Date().toISOString(),
       })
       .eq('clinic_id', args.clinicId)

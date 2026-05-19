@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
     if (result.ok) {
       summary.sent++
     } else {
-      await svc.from('appointments').update({ reminder_2h_sent_at: null }).eq('id', app.id)
+      // NÃO reverte reminder_2h_sent_at — evita reenvio duplicado.
       summary.errors.push(`send ${app.id}: ${result.error}`)
     }
   }

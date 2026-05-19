@@ -360,11 +360,9 @@ export async function GET(req: NextRequest) {
     if (result.ok) {
       summary.sent++
     } else {
-      // Reverte o lock pra tentar de novo amanhã (ou admin manualmente)
-      await svc
-        .from('appointments')
-        .update({ confirmation_sent_at: null })
-        .eq('id', app.id)
+      // NÃO reverte confirmation_sent_at — evita reenvio duplicado em caso de
+      // falha de WhatsApp. O campo fica marcado com o timestamp do attempt,
+      // impedindo que o cron tente de novo na próxima hora.
       summary.errors.push({
         clinic_id: app.clinic_id,
         appointment_id: app.id,
