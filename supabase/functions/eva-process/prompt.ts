@@ -42,9 +42,13 @@ function buildContextLine(
     const stage1Extra = stage === 1
       ? [
           `- ESTAGIO 1: ela mandou a primeira mensagem mas nao respondeu depois. Retome com leveza.`,
-          `- Aborde diretamente o interesse dela (se houver), mostre que voce lembra e pergunte se pode esclarecer algo ou mostrar horarios.`,
-          `- Exemplo de tom: "Oi [Nome]! Tudo bem? Vi que voce tinha interesse em [procedimento] — posso te contar mais ou verificar um horario? 😊"`,
-          `- NAO use o texto de referencia do estagio 1 nesse caso — crie algo contextual baseado no interesse.`,
+          `- FLUXO OBRIGATORIO do estagio 1:`,
+          `  1) Cumprimente pelo nome com calor`,
+          `  2) SE ha interesse registrado: explique brevemente o procedimento (o que e, beneficio principal) E mencione o valor ou faixa de preco se disponivel nos procedimentos`,
+          `  3) SO DEPOIS pergunte se ficou alguma duvida ou se quer ver horarios disponíveis`,
+          `- Exemplo: "Oi [Nome]! O tratamento de microvasos e feito com escleroterapia, eliminando as varizes das pernas com resultados visiveis ja nas primeiras sessoes. Os valores partem de R$ X. Ficou alguma duvida ou quer que eu verifique um horario pra voce? 😊"`,
+          `- NAO use o texto de referencia do estagio 1 — crie algo contextual baseado no interesse e nos dados reais do procedimento.`,
+          `- Se NAO ha interesse registrado: apresente os principais procedimentos da clinica brevemente e pergunte qual tem mais a ver com ela.`,
         ]
       : [];
     return [
