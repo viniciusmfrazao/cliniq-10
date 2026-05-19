@@ -654,7 +654,7 @@ export async function POST(
             phone,
             role: fromMe ? 'assistant' : 'user',
             content,
-            customer_name: parsed.pushName ?? null,
+            customer_name: pushName ?? null,
             metadata: baseMetadata,
           })
           if (insertConv.error) {
