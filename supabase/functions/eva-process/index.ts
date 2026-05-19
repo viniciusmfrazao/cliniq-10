@@ -384,8 +384,10 @@ async function markLeadForHumanReview(
 ): Promise<void> {
   if (!ctx.lead?.id) return;
   const friendlyReason = reason === 'claude_error' ? 'instabilidade' : 'duvida_complexa';
-  const friendlyDetails =
-    reason === 'claude_error'
+  const isBookingFail = details.includes('confirmou agendamento sem chamar criar_agendamento');
+  const friendlyDetails = isBookingFail
+    ? `⚠️ AGENDAMENTO NÃO CRIADO: paciente confirmou horário mas o sistema não conseguiu registrar. Confirme manualmente na agenda e avise a paciente. ${details.slice(0, 200)}`
+    : reason === 'claude_error'
       ? `Eva ficou instável tecnicamente. Última msg precisa de resposta manual. ${details.slice(0, 200)}`
       : `Eva ficou em loop sem chegar numa resposta. Última msg precisa de resposta manual. ${details.slice(0, 200)}`;
   await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
