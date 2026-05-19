@@ -492,6 +492,18 @@ Deno.serve(async (req) => {
   if (!v.ok) return bad(v.reason, 400);
   const payload = v.payload;
 
+  // LOG DE ENTRADA — visível nos Supabase Edge Function Logs
+  console.log(JSON.stringify({
+    evt: 'eva_recv',
+    clinic: payload.clinicId,
+    phone: payload.phone?.slice(-8),  // últimos 8 dígitos por privacidade
+    instance: payload.instance,
+    is_followup: payload.isFollowup ?? false,
+    followup_stage: payload.followupStage ?? null,
+    msg_len: typeof payload.message === 'string' ? payload.message.length : 0,
+    msg_preview: typeof payload.message === 'string' ? payload.message.slice(0, 60) : null,
+  }));
+
   // 0) Debounce — espera N segundos pra ver se paciente manda mais msgs em rajada.
   //    Se chegar msg nova durante a espera, aborta e deixa a proxima invocacao
   //    (disparada pela msg nova) responder com o contexto completo.
@@ -624,6 +636,14 @@ Deno.serve(async (req) => {
   // Em vez de mandar mensagem genérica de erro pro paciente, marca o lead
   // pra revisão humana e devolve sem enviar nada via Evolution.
   if (conv.silentFail) {
+    console.log(JSON.stringify({
+      evt: 'eva_silent_fail',
+      clinic: payload.clinicId,
+      phone: payload.phone?.slice(-8),
+      reason: conv.silentFailReason,
+      errors: conv.errors,
+      elapsed_ms: Date.now() - t0,
+    }));
     await markLeadForHumanReview(
       ctx,
       conv.silentFailReason ?? 'claude_error',
@@ -644,6 +664,19 @@ Deno.serve(async (req) => {
   }
 
   const finalText = sanitizeWhatsapp(conv.finalText)
+
+  // LOG DE SAÍDA — resposta que será enviada ao paciente
+  console.log(JSON.stringify({
+    evt: 'eva_reply',
+    clinic: payload.clinicId,
+    phone: payload.phone?.slice(-8),
+    is_followup: payload.isFollowup ?? false,
+    steps: conv.steps,
+    reply_preview: finalText?.slice(0, 80) ?? null,
+    reply_len: finalText?.length ?? 0,
+    errors: conv.errors.length > 0 ? conv.errors : undefined,
+    elapsed_ms: Date.now() - t0,
+  }));
 
   // Proteção: se finalText ficou vazio após sanitize, não salvar nem enviar
   if (!finalText || finalText.trim().length === 0) {
