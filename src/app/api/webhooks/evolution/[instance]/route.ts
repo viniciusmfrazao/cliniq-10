@@ -654,12 +654,22 @@ export async function POST(
             phone,
             role: fromMe ? 'assistant' : 'user',
             content,
+            customer_name: parsed.pushName ?? null,
             metadata: baseMetadata,
           })
           if (insertConv.error) {
             internalErrors.push(
               `insert eva_conversations: ${insertConv.error.message} (code=${insertConv.error.code})`,
             )
+            console.error(JSON.stringify({
+              evt: 'conv_insert_fail',
+              clinic_id: clinicId,
+              phone: phone?.slice(-8),
+              role: fromMe ? 'assistant' : 'user',
+              error: insertConv.error.message,
+              code: insertConv.error.code,
+              hint: insertConv.error.hint,
+            }))
           } else {
             debugTrace.push('eva_conversations inserted ok')
           }
