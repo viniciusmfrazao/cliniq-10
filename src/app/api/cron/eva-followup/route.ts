@@ -144,8 +144,9 @@ export async function GET(req: NextRequest) {
 
   // Map clinic_id → Set<phone> com interação de usuário recente
   const recentInteraction = new Map<string, Set<string>>()
-  // Map "clinicId:phone" → última role da conversa
-  const lastRoleMap = new Map<string, 'user' | 'assistant'>()
+  // Map "clinicId:phone" → timestamp da última msg de cada role
+  const lastAssistantMap = new Map<string, string>()
+  const lastUserMap = new Map<string, string>()
 
   const cutoffRecent = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   for (const [clinicId, phones] of phonesPorClinica) {
@@ -165,19 +166,26 @@ export async function GET(req: NextRequest) {
     }
     recentInteraction.set(clinicId, setOk)
 
-    // 2) Última role de cada conversa — se foi 'assistant', Eva já falou
-    // por último e deve esperar o cliente responder antes de novo follow-up
+    // 2) Timestamp da última mensagem de cada role por conversa
+    // Usamos isso para saber se o cliente respondeu DEPOIS do último follow-up
     for (const phone of phones) {
-      const { data: lastMsg } = await svc
+      const { data: msgs } = await svc
         .from('eva_conversations')
-        .select('role')
+        .select('role, created_at')
         .eq('clinic_id', clinicId)
         .eq('phone', phone)
+        .in('role', ['user', 'assistant'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (lastMsg?.role === 'user' || lastMsg?.role === 'assistant') {
-        lastRoleMap.set(`${clinicId}:${phone}`, lastMsg.role as 'user' | 'assistant')
+        .limit(20)
+      const key = `${clinicId}:${phone}`
+      for (const m of (msgs as { role: string; created_at: string }[] | null) ?? []) {
+        if (m.role === 'assistant' && !lastAssistantMap.has(key)) {
+          lastAssistantMap.set(key, m.created_at)
+        }
+        if (m.role === 'user' && !lastUserMap.has(key)) {
+          lastUserMap.set(key, m.created_at)
+        }
+        if (lastAssistantMap.has(key) && lastUserMap.has(key)) break
       }
     }
   }
@@ -284,18 +292,37 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Última mensagem foi da Eva (assistant) → ela já falou por último.
-    // Não manda follow-up em cima de follow-up — espera o cliente responder.
-    const lastRole = lastRoleMap.get(`${lead.clinic_id}:${lead.phone}`)
-    if (lastRole === 'assistant') {
-      results.push({
-        lead_id: lead.id,
-        clinic_id: lead.clinic_id,
-        phone: lead.phone,
-        stage: (lead.eva_followup_count ?? 0) + 1,
-        skipped: 'eva_already_spoke_last',
-      })
-      continue
+    // Proteção anti follow-up em cascata:
+    // Só dispara se o cliente mandou PELO MENOS 1 mensagem DEPOIS da última
+    // mensagem da Eva. Isso evita:
+    //   - follow-up 1 → follow-up 2 sem o cliente ter respondido nada
+    // Mas permite:
+    //   - cliente sumiu após Eva responder pela primeira vez → dispara
+    //   - cliente respondeu → Eva respondeu → cliente sumiu → dispara
+    //
+    // Lógica: busca a última mensagem do assistant e verifica se existe
+    // alguma mensagem do user DEPOIS dela. Se não existe → pula.
+    // Exceção: se o lead nunca recebeu follow-up (count=0), significa que
+    // é a primeira tentativa — deixa passar mesmo que Eva falou por último,
+    // pois o cliente pode ter sumido após a apresentação inicial.
+    const followupCount = lead.eva_followup_count ?? 0
+    if (followupCount > 0) {
+      const lastAssistantMsg = lastAssistantMap.get(`${lead.clinic_id}:${lead.phone}`)
+      const lastUserMsg = lastUserMap.get(`${lead.clinic_id}:${lead.phone}`)
+      // Se Eva falou depois do cliente pela última vez → cliente não respondeu o follow-up anterior
+      if (
+        lastAssistantMsg &&
+        (!lastUserMsg || lastUserMsg <= lastAssistantMsg)
+      ) {
+        results.push({
+          lead_id: lead.id,
+          clinic_id: lead.clinic_id,
+          phone: lead.phone,
+          stage: followupCount + 1,
+          skipped: 'client_did_not_reply_last_followup',
+        })
+        continue
+      }
     }
 
     const stage = (lead.eva_followup_count ?? 0) + 1
