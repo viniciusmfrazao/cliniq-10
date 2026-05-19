@@ -235,10 +235,49 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
     // Sem tool_use → resposta final
     if (r.stop_reason !== 'tool_use' || !toolUse) {
       steps.push(stepLog);
-      // Tentar extrair texto de qualquer bloco disponível
+
+      // Log para debug — captura stop_reason inesperado sem tool call
+      if (r.stop_reason !== 'end_turn') {
+        errors.push(`[iter#${i}] stop_reason inesperado: ${r.stop_reason}`);
+      }
+
+      // Extrair texto — se vazio, silentFail em vez de mandar fallback genérico
       const text = textBlock?.text?.trim() ||
-        content.map(b => b.text || '').join(' ').trim() ||
-        'Pode repetir, por favor? Quero te ajudar direitinho.';
+        content.filter(b => b.type === 'text').map(b => b.text || '').join(' ').trim();
+
+      if (!text) {
+        // Sem texto e sem tool_use — Claude teve output vazio. silentFail.
+        errors.push(`[iter#${i}] output vazio — stop_reason=${r.stop_reason}, content_types=${content.map(b => b.type).join(',')}`);
+        return {
+          finalText: '',
+          steps,
+          totalUsage,
+          errors,
+          silentFail: true,
+          silentFailReason: 'claude_error',
+        };
+      }
+
+      // Guard crítica: se o texto confirma agendamento mas criar_agendamento
+      // nunca foi chamado, é um falso positivo do Haiku. silentFail em vez
+      // de mandar mensagem enganosa pro paciente.
+      const toolsCalledSoFar = steps.filter(s => s.toolName).map(s => s.toolName);
+      const fakeBooking =
+        !toolsCalledSoFar.includes('criar_agendamento') &&
+        /(j[aá] deixei|horario reservado|agendamento confirmado|horario marcado)/i.test(text);
+
+      if (fakeBooking) {
+        errors.push(`[iter#${i}] Eva confirmou agendamento sem chamar criar_agendamento — bloqueado`);
+        return {
+          finalText: '',
+          steps,
+          totalUsage,
+          errors,
+          silentFail: true,
+          silentFailReason: 'claude_error',
+        };
+      }
+
       return {
         finalText: text,
         steps,

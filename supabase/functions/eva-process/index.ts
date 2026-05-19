@@ -666,12 +666,25 @@ Deno.serve(async (req) => {
   const finalText = sanitizeWhatsapp(conv.finalText)
 
   // LOG DE SAÍDA — resposta que será enviada ao paciente
+  const toolsUsed = conv.steps.filter(s => s.toolName).map(s => s.toolName);
+  const skippedTool = finalText.includes('reservado') && !toolsUsed.includes('criar_agendamento');
+  if (skippedTool) {
+    console.error(JSON.stringify({
+      evt: 'eva_skipped_tool',
+      alert: 'CRITICO: Eva confirmou agendamento sem chamar criar_agendamento!',
+      clinic: payload.clinicId,
+      phone: payload.phone?.slice(-8),
+      reply_preview: finalText?.slice(0, 120),
+      steps: conv.steps,
+    }));
+  }
   console.log(JSON.stringify({
     evt: 'eva_reply',
     clinic: payload.clinicId,
     phone: payload.phone?.slice(-8),
     is_followup: payload.isFollowup ?? false,
-    steps: conv.steps,
+    tools_used: toolsUsed,
+    steps_count: conv.steps.length,
     reply_preview: finalText?.slice(0, 80) ?? null,
     reply_len: finalText?.length ?? 0,
     errors: conv.errors.length > 0 ? conv.errors : undefined,
