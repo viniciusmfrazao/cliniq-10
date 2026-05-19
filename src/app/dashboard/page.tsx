@@ -301,7 +301,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             )}
           </div>
           <p className="text-2xl md:text-3xl font-black text-slate-900 truncate">{appointmentsToday || 0}</p>
-          <p className="text-xs md:text-sm text-slate-500 mt-1 truncate">Consultas hoje</p>
+          <p className="text-xs md:text-sm text-slate-500 mt-1 truncate">Atendimentos hoje</p>
           <div className="mt-2 flex flex-wrap gap-1">
             <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{completedToday || 0} finalizados</span>
             <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{checkedIn || 0} aguardando</span>
@@ -420,7 +420,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             <WeeklyChart data={weekData} color="#8B5CF6" />
           </div>
 
-          {/* Próximas Consultas */}
+          {/* Próximos Atendimentos */}
           <div className="bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between p-4 md:p-5 border-b border-slate-100">
               <div className="flex items-center gap-3">
@@ -428,7 +428,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                   <Icon name="calendar" className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm md:text-base">Próximas Consultas</h3>
+                  <h3 className="font-bold text-slate-900 text-sm md:text-base">Próximos Atendimentos</h3>
                   <p className="text-[10px] md:text-xs text-slate-500">Agenda de hoje</p>
                 </div>
               </div>
@@ -463,7 +463,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                     }`} />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-900 truncate text-sm md:text-base">{apt.patients?.name}</p>
-                      <p className="text-xs md:text-sm text-slate-500 truncate">{apt.procedures?.name || 'Consulta'}</p>
+                      <p className="text-xs md:text-sm text-slate-500 truncate">{apt.procedures?.name || 'Atendimento'}</p>
                     </div>
                     <span className={`text-[10px] md:text-xs px-2 md:px-3 py-1 md:py-1.5 rounded-lg font-semibold flex-shrink-0 ${
                       apt.status === 'confirmed' 

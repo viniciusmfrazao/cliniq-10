@@ -25,7 +25,7 @@ type AnamneseTimelineItem = {
 }
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
-  consultation: { icon: '🩺', color: 'bg-blue-100 text-blue-700', label: 'Consulta' },
+  consultation: { icon: '🩺', color: 'bg-blue-100 text-blue-700', label: 'Atendimento' },
   procedure: { icon: '💉', color: 'bg-purple-100 text-purple-700', label: 'Procedimento' },
   note: { icon: '📝', color: 'bg-slate-100 text-slate-700', label: 'Anotacao' },
   prescription: { icon: '💊', color: 'bg-green-100 text-green-700', label: 'Prescricao' },
@@ -52,7 +52,7 @@ type Props = {
 
 const FILTERS: Array<{ id: string; label: string }> = [
   { id: 'all', label: 'Tudo' },
-  { id: 'consultation', label: 'Consultas' },
+  { id: 'consultation', label: 'Atendimentos' },
   { id: 'procedure', label: 'Procedimentos' },
   { id: 'note', label: 'Notas' },
   { id: 'prescription', label: 'Prescrições' },

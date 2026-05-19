@@ -211,7 +211,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
           {apt.patients?.name || 'Paciente'}
         </p>
         {!compact && (
-          <p className="text-xs text-slate-500 truncate">{apt.procedures?.name || 'Consulta'}</p>
+          <p className="text-xs text-slate-500 truncate">{apt.procedures?.name || 'Atendimento'}</p>
         )}
       </Link>
 
@@ -245,7 +245,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
           <div className="space-y-2 text-xs mb-3">
             <div className="flex justify-between">
               <span className="text-slate-500">Procedimento:</span>
-              <span className="font-medium text-slate-700">{apt.procedures?.name || 'Consulta'}</span>
+              <span className="font-medium text-slate-700">{apt.procedures?.name || 'Atendimento'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Profissional:</span>
@@ -503,7 +503,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
           user_id: apt.professional_id,
           type: 'check_in',
           title: `${apt.patients?.name || 'Paciente'} chegou!`,
-          message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${apt.procedures?.name || 'Consulta'}`,
+          message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${apt.procedures?.name || 'Atendimento'}`,
           link: `/dashboard/atendimento/${appointmentId}`
         })
       }

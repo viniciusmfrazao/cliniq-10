@@ -234,7 +234,7 @@ export default function MedicalRecordSection({
           }`}
         >
           <Icon name="edit" className="w-4 h-4 inline mr-2" />
-          Consulta Atual
+          Atendimento Atual
         </button>
         <button
           onClick={() => setActiveTab('history')}
@@ -473,15 +473,15 @@ export default function MedicalRecordSection({
               </div>
             )}
 
-            {/* Consultas anteriores */}
+            {/* Atendimentos anteriores */}
             {pastAppointments.length > 0 && (
               <div className="mt-6 pt-6 border-t border-slate-100">
-                <h4 className="font-semibold text-slate-900 mb-3">Consultas anteriores</h4>
+                <h4 className="font-semibold text-slate-900 mb-3">Atendimentos anteriores</h4>
                 <div className="space-y-2">
                   {pastAppointments.map(apt => (
                     <div key={apt.id} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
                       <span className="text-sm text-slate-700">
-                        {Array.isArray(apt.procedures) ? apt.procedures[0]?.name : apt.procedures?.name || 'Consulta'}
+                        {Array.isArray(apt.procedures) ? apt.procedures[0]?.name : apt.procedures?.name || 'Atendimento'}
                       </span>
                       <span className="text-xs text-slate-400">
                         {new Date(apt.start_time).toLocaleDateString('pt-BR')}

@@ -108,7 +108,7 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
         user_id: apt.professional_id,
         type: 'check_in',
         title: `${apt.patients?.name || 'Paciente'} chegou!`,
-        message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${apt.procedures?.name || 'Consulta'}`,
+        message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${apt.procedures?.name || 'Atendimento'}`,
         link: `/dashboard/atendimento/${appointmentId}`
       })
       
@@ -349,7 +349,7 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
                       )}
                     </div>
                     <p className="text-sm text-slate-500 truncate">
-                      {apt.procedures?.name || 'Consulta'} • {apt.professional?.name || 'Sem profissional'}
+                      {apt.procedures?.name || 'Atendimento'} • {apt.professional?.name || 'Sem profissional'}
                     </p>
                     {apt.patients?.phone && (
                       <p className="text-xs text-slate-400">{apt.patients.phone}</p>

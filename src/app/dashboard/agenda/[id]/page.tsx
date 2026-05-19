@@ -138,7 +138,7 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
           <div>
             <p className="text-xs text-slate-400 mb-1">Procedimento</p>
             <p className="text-sm font-medium text-slate-900">
-              {appointment.procedures?.name || 'Consulta'}
+              {appointment.procedures?.name || 'Atendimento'}
             </p>
             {appointment.procedures?.price && (
               <p className="text-xs text-slate-500">R$ {appointment.procedures.price.toFixed(2)}</p>

@@ -12,7 +12,7 @@ export type PatientTab =
 const TABS: Array<{ id: PatientTab; label: string; icon: string }> = [
   { id: 'overview', label: 'Visão geral', icon: 'user' },
   { id: 'evolucoes', label: 'Evoluções', icon: 'file' },
-  { id: 'consultas', label: 'Consultas', icon: 'calendar' },
+  { id: 'consultas', label: 'Atendimentos', icon: 'calendar' },
   { id: 'anamneses', label: 'Anamneses', icon: 'clipboard' },
   { id: 'injetaveis', label: 'Injetáveis', icon: 'syringe' },
   { id: 'pacotes', label: 'Pacotes', icon: 'package' },

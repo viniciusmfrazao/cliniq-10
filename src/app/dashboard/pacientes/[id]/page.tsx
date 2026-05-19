@@ -433,7 +433,7 @@ async function ConsultasTab({ patientId }: { patientId: string }) {
 
   return (
     <div className="card p-5">
-      <h2 className="text-sm font-semibold text-slate-900 mb-4">Histórico de consultas</h2>
+      <h2 className="text-sm font-semibold text-slate-900 mb-4">Histórico de atendimentos</h2>
       {!appointments || appointments.length === 0 ? (
         <p className="text-sm text-slate-500 text-center py-8">
           Nenhuma consulta registrada
@@ -463,7 +463,7 @@ async function ConsultasTab({ patientId }: { patientId: string }) {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-900 truncate">
-                    {procName || 'Consulta'}
+                    {procName || 'Atendimento'}
                   </p>
                   <p className="text-xs text-slate-500">
                     {new Date(apt.start_time).toLocaleDateString('pt-BR', {
