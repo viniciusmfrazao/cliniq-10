@@ -43,7 +43,7 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
   useEffect(() => {
     async function load() {
       const [profRes, procRes] = await Promise.all([
-        supabase.from('users').select('id, name').eq('clinic_id', clinicId).eq('role', 'professional').eq('active', true).order('name'),
+        supabase.from('users').select('id, name').eq('clinic_id', clinicId).in('role', ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'professional', 'admin']).eq('active', true).order('name'),
         supabase.from('procedures').select('id, name, duration_minutes').eq('clinic_id', clinicId).eq('active', true).order('name'),
       ])
       setProfessionals(profRes.data || [])
@@ -62,8 +62,8 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
     setForm(f => ({ ...f, time: '' }))
 
     async function loadSlots() {
-      const startOfDay = `${form.date}T00:00:00`
-      const endOfDay = `${form.date}T23:59:59`
+      const startOfDay = `${form.date}T00:00:00-03:00`
+      const endOfDay = `${form.date}T23:59:59-03:00`
 
       const { data: existing } = await supabase
         .from('appointments')
@@ -113,10 +113,10 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
     startSaving(async () => {
       const proc = procedures.find(p => p.id === form.procedure_id)
       const duration = proc?.duration_minutes || 30
-      const startISO = `${form.date}T${form.time}:00`
-      const endDate = new Date(`${form.date}T${form.time}:00`)
+      const startISO = `${form.date}T${form.time}:00-03:00`
+      const endDate = new Date(`${form.date}T${form.time}:00-03:00`)
       endDate.setMinutes(endDate.getMinutes() + duration)
-      const endISO = endDate.toISOString().slice(0, 19)
+      const endISO = endDate.toISOString()
 
       const { error: err } = await supabase.from('appointments').insert({
         clinic_id: clinicId,
