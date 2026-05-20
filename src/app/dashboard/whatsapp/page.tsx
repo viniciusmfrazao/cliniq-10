@@ -126,7 +126,10 @@ function buildConversationFromRow(
 ): Conversation | null {
   if (!r.content) return prev ?? null
   const instanceName = rowInstanceName(r)
-  const name = r.metadata?.push_name || prev?.name || r.phone
+  // Usa push_name só de mensagens do cliente (role='user')
+  // Evita exibir nome da secretária/Eva quando ela foi a última a falar
+  const pushName = r.role === 'user' ? (r.metadata?.push_name || null) : null
+  const name = pushName || prev?.name || r.phone
   // unread aumenta se for do paciente (role='user') E nao e a aberta no momento
   const isFromPatient = r.role === 'user'
   return {
