@@ -344,10 +344,14 @@ export default function WhatsappConfigPage() {
                     (i) => i.instance_name !== inst.instance_name && i.role_inbound
                   )
                   for (const other of others) {
-                    await patchInstance(other, { role_inbound: false }, `role-${other.instance_name}-role_inbound`)
+                    await patchInstance(other, { role_inbound: false, auto_reply_enabled: false }, `role-${other.instance_name}-role_inbound`)
                   }
                 }
-                patchInstance(inst, { [role]: value }, `role-${inst.instance_name}-${role}`)
+                // Sincroniza auto_reply_enabled com role_inbound
+                // (o cron de follow-up usa auto_reply_enabled para decidir se dispara)
+                const patch: Record<string, boolean> = { [role]: value }
+                if (role === 'role_inbound') patch.auto_reply_enabled = value
+                patchInstance(inst, patch, `role-${inst.instance_name}-${role}`)
               }}
               onSaveLabel={label =>
                 patchInstance(inst, { label }, `label-${inst.instance_name}`)
