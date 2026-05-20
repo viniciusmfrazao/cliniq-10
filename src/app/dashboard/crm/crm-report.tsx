@@ -35,7 +35,15 @@ const STATUS_COLOR: Record<string, string> = {
   lost: 'bg-red-100 text-red-600',
 }
 
-export default function CrmReport({ clinicId }: { clinicId: string }) {
+type Stage = { id: string; label: string; color: string; order: number }
+
+export default function CrmReport({ clinicId, stages = [] }: { clinicId: string; stages?: Stage[] }) {
+  // Mapa de id -> label para stages customizados e padrão
+  const stageLabel = (status: string) => {
+    const custom = stages.find(s => s.id === status)
+    if (custom) return custom.label
+    return STATUS_LABEL[status] || status
+  }
   const supabase = createClient()
   const [leads, setLeads] = useState<ReportLead[]>([])
   const [loading, setLoading] = useState(true)
@@ -227,7 +235,7 @@ export default function CrmReport({ clinicId }: { clinicId: string }) {
                   <td className="py-2.5 px-3 text-slate-600">{l.interest || <span className="text-slate-300">-</span>}</td>
                   <td className="py-2.5 px-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[l.status] || 'bg-slate-100 text-slate-600'}`}>
-                      {STATUS_LABEL[l.status] || l.status}
+                      {stageLabel(l.status)}
                     </span>
                   </td>
                   <td className="py-2.5 px-3 whitespace-nowrap text-slate-500">{fmt(l.appointment_date)}</td>
