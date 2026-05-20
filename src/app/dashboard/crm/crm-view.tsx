@@ -622,7 +622,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
       {/* Kanban View */}
       {viewMode === 'kanban' && (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory" style={{scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
           {STAGES.filter(s => s.id !== 'lost').map(stage => {
             const stageColor = STAGE_COLORS[stage.color] || STAGE_COLORS.slate
             const stageIcon = STAGE_ICONS[stage.id] || 'circle'
@@ -640,7 +640,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                 </span>
               </div>
               <div
-                className={`bg-slate-100 rounded-b-xl p-2 min-h-[400px] space-y-2 transition-colors ${isHovering ? 'bg-violet-100 ring-2 ring-violet-400 ring-inset' : ''}`}
+                className={`bg-slate-100 rounded-b-xl p-2 min-h-[400px] space-y-2 transition-colors duration-100 ${isHovering ? 'bg-violet-100 ring-2 ring-violet-400 ring-inset' : ''}`}
                 onDragOver={(e) => handleDragOver(e, stage.id)}
                 onDragLeave={() => handleDragLeave(stage.id)}
                 onDrop={(e) => handleDrop(e, stage.id)}
@@ -685,7 +685,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                       onDragStart={(e) => handleDragStart(e, lead)}
                       onDragEnd={handleDragEnd}
                       onClick={() => setSelectedLead(lead)}
-                      className={`bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${cardRing} ${isDragging ? 'opacity-40 scale-95' : ''}`}
+                      className={`bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-all duration-100 cursor-grab active:cursor-grabbing ${cardRing} ${isDragging ? 'opacity-40 scale-95' : ''}`}
                       title="Arraste para mover de coluna"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">

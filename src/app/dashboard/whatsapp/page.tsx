@@ -482,6 +482,24 @@ export default function WhatsAppPage() {
       const conv = buildConversationFromRow(undefined, r)
       if (conv) convs.push({ ...conv, unread: unreadMap.get(phone) ?? 0 })
     }
+    // Buscar nomes dos leads para enriquecer a lista
+    const phones = convs.map(c => c.phone).filter(Boolean)
+    if (phones.length > 0 && clinicId) {
+      const { data: leadsData } = await supabase
+        .from('leads')
+        .select('phone, name')
+        .eq('clinic_id', clinicId)
+        .in('phone', phones)
+      if (leadsData && leadsData.length > 0) {
+        const leadNameMap = new Map(leadsData.map(l => [l.phone, l.name]))
+        convs.forEach(c => {
+          const leadName = leadNameMap.get(c.phone)
+          if (leadName && leadName.trim().length > 2 && !/^lead whatsapp$/i.test(leadName)) {
+            c.name = leadName
+          }
+        })
+      }
+    }
     setConversations(convs)
     setAllLines(Array.from(linesFound))
   }
