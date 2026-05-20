@@ -296,9 +296,9 @@ export async function setInstanceWebhook(args: {
         webhook: {
           enabled: true,
           url: args.webhookUrl,
-          byEvents: false,
-          base64: true,
-          events: ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
+          webhookByEvents: false,
+          webhookBase64: false,
+          events: ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE'],
         },
       }),
     }
