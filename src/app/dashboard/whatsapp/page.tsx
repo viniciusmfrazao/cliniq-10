@@ -1113,7 +1113,6 @@ export default function WhatsAppPage() {
           )}
         </div>
       </div>
-    </div>
 
       {/* Modal de agendamento rápido */}
       {showScheduleModal && clinicId && (
