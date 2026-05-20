@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { useWaLine } from '@/contexts/WaLineContext'
+import ScheduleModal from './schedule-modal'
 
 type MessageKind =
   | 'text'
@@ -189,6 +190,14 @@ export default function WhatsAppPage() {
   const [allLines, setAllLines] = useState<string[]>([])
 
   const { selectedLine } = useWaLine()
+
+  // Busca e filtro de status
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting'>('all')
+
+  // Modal de agendamento direto pelo chat
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [schedulePatient, setSchedulePatient] = useState<any>(null)
 
   // Mantem ref atualizada pra o handler de realtime saber qual conversa esta aberta
   useEffect(() => {
@@ -437,26 +446,38 @@ export default function WhatsAppPage() {
       effectiveInboundLines.map((l) => l.instance_name)
     )
 
+    // Conta mensagens não lidas por telefone (role='user' após última msg 'assistant')
+    const unreadMap = new Map<string, number>()
+    const lastAssistantMap = new Map<string, string>()
+    for (const r of (data as EvaRow[]).slice().reverse()) {
+      const phone = r.phone ?? ''
+      if (r.role === 'assistant') {
+        lastAssistantMap.set(phone, r.created_at)
+        unreadMap.set(phone, 0) // zera quando Eva/secretária respondeu
+      } else if (r.role === 'user') {
+        const lastAsst = lastAssistantMap.get(phone)
+        if (!lastAsst || r.created_at > lastAsst) {
+          unreadMap.set(phone, (unreadMap.get(phone) ?? 0) + 1)
+        }
+      }
+    }
+
     for (const r of data as EvaRow[]) {
       if (!r.content) continue
-      // Filtrar grupos: telefones de grupos têm formato diferente (ex: 120363..., muito longo)
       const phone = r.phone ?? ''
-      if (phone.length > 15) continue // grupos têm IDs muito longos
-      if (phone.includes('@g.us')) continue // formato grupo
+      if (phone.length > 15) continue
+      if (phone.includes('@g.us')) continue
 
       const inst = rowInstanceName(r)
 
-      // Mostrar APENAS conversas da instância com role_inbound (número da Eva)
-      // Se não há instâncias inbound definidas ainda, mostra tudo (fallback)
       if (inboundInstances.size > 0 && inst && !inboundInstances.has(inst)) continue
 
       if (inst) linesFound.add(inst)
 
-      // Agrupa por telefone apenas — sem duplicar por linha
       if (seen.has(phone)) continue
       seen.add(phone)
       const conv = buildConversationFromRow(undefined, r)
-      if (conv) convs.push({ ...conv, unread: 0 })
+      if (conv) convs.push({ ...conv, unread: unreadMap.get(phone) ?? 0 })
     }
     setConversations(convs)
     setAllLines(Array.from(linesFound))
@@ -816,14 +837,35 @@ export default function WhatsAppPage() {
       <div className="flex-1 card overflow-hidden flex">
         {/* Lista de conversas — esconde no mobile quando tem chat aberto */}
         <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-slate-200 dark:border-slate-700 flex-col flex-shrink-0`}>
-          <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+          <div className="p-3 border-b border-slate-100 dark:border-slate-700 space-y-2">
             <div className="relative">
               <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar conversa..."
+                placeholder="Buscar por nome ou número..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === 'all' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700'}`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setStatusFilter('waiting')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${statusFilter === 'waiting' ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700'}`}
+              >
+                Aguardando
+                {conversations.filter(c => c.unread > 0).length > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${statusFilter === 'waiting' ? 'bg-white/30 text-white' : 'bg-emerald-500 text-white'}`}>
+                    {conversations.filter(c => c.unread > 0).length}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -876,7 +918,13 @@ export default function WhatsAppPage() {
             ) : (
               conversations
                 .filter(c => {
-                  return !lineFilter || c.instanceName === lineFilter
+                  if (lineFilter && c.instanceName !== lineFilter) return false
+                  if (statusFilter === 'waiting' && c.unread === 0) return false
+                  if (searchQuery.trim()) {
+                    const q = searchQuery.toLowerCase()
+                    return c.name.toLowerCase().includes(q) || c.phone.includes(q)
+                  }
+                  return true
                 })
                 .map(conv => {
                 const isInbound = conv.instanceName
@@ -989,6 +1037,17 @@ export default function WhatsAppPage() {
                     Ver ficha
                   </Link>
                 )}
+                <button
+                  onClick={() => {
+                    setSchedulePatient(patient)
+                    setShowScheduleModal(true)
+                  }}
+                  className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+                  title="Agendar consulta"
+                >
+                  <Icon name="calendar" className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Agendar</span>
+                </button>
               </div>
 
               {/* Banner: Eva pausada (intervencao humana) */}
@@ -1054,6 +1113,17 @@ export default function WhatsAppPage() {
           )}
         </div>
       </div>
+    </div>
+
+      {/* Modal de agendamento rápido */}
+      {showScheduleModal && clinicId && (
+        <ScheduleModal
+          clinicId={clinicId}
+          patient={schedulePatient || (selectedConversation ? { id: patient?.id || '', name: selectedConversation.name, phone: selectedConversation.phone } : null)}
+          onClose={() => setShowScheduleModal(false)}
+          onScheduled={() => {}}
+        />
+      )}
     </div>
   )
 }
