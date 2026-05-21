@@ -264,9 +264,10 @@ const AppointmentCard = React.memo(function AppointmentCard({
         <div 
           ref={popupRef}
           className={`absolute z-[60] w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
-            popupDir === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
+            isRightColumn ? 'right-full mr-2' : 'left-full ml-2'
+          } ${
+            popupDir === 'up' ? 'bottom-0' : 'top-0'
           }`}
-          style={{ left: '50%', transform: 'translateX(-50%)' }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -751,7 +752,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
           selectedProfessionalId={blockModal.profId}
           editBlock={blockModal.editBlock}
         />
-      <div className="card overflow-hidden dark:bg-slate-800 dark:border-slate-700">
+      <div className="card dark:bg-slate-800 dark:border-slate-700" style={{overflow: "visible"}}>
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
@@ -916,7 +917,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     })
 
     return (
-      <div className="card overflow-hidden">
+      <div className="card" style={{overflow: "visible"}}>
         <div className="p-4 border-b border-slate-100 bg-slate-50">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-slate-600">
