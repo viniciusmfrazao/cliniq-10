@@ -100,9 +100,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [debitosLoaded, setDebitosLoaded] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
-  const popupRef = useRef<HTMLDivElement>(null)
   const [popupDir, setPopupDir] = useState<'up' | 'down'>('up')
-  const [popupPos, setPopupPos] = useState<{ top: number; bottom: number; left: number }>({ top: 0, bottom: 0, left: 0 })
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -152,16 +150,11 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
-    // Calcular posição fixed do popup no viewport
+    // Detectar espaço disponível
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
-      const dir = spaceBelow < 420 ? 'up' : 'down'
-      setPopupDir(dir)
-      const left = isRightColumn
-        ? rect.left - 324
-        : rect.right + 4
-      setPopupPos({ top: rect.bottom + 4, bottom: rect.top - 4, left })
+      setPopupDir(spaceBelow < 420 ? 'up' : 'down')
     }
     setShowPreview(true)
     // Buscar débitos do paciente ao abrir o popup (só uma vez)
@@ -268,12 +261,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {/* Preview ao passar o mouse */}
       {showPreview && (
         <div 
-          ref={popupRef}
-          className="fixed z-[9999] w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
-          style={popupDir === 'up'
-            ? { bottom: (typeof window !== 'undefined' ? window.innerHeight : 800) - popupPos.bottom, left: Math.max(8, Math.min(popupPos.left, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 328)) }
-            : { top: popupPos.top, left: Math.max(8, Math.min(popupPos.left, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 328)) }
-          }
+          className={`absolute z-[60] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[85vh] ${
+            isRightColumn ? 'right-full' : 'left-full'
+          } ${
+            popupDir === 'up' ? 'bottom-0' : 'top-0'
+          }`}
+          style={isRightColumn ? { marginRight: '-12px' } : { marginLeft: '-12px' }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
