@@ -149,6 +149,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
+    // Detectar se popup deve abrir para cima ou para baixo
+    if (cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      setPopupDir(spaceBelow < 420 ? 'up' : 'down')
+    }
     setShowPreview(true)
     // Buscar débitos do paciente ao abrir o popup (só uma vez)
     if (!debitosLoaded && apt.patients?.id) {
@@ -254,12 +260,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {/* Preview ao passar o mouse */}
       {showPreview && (
         <div 
-          className={`absolute z-[60] bottom-0 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[85vh] ${
-            isRightColumn ? 'right-full' : 'left-full'
+          ref={popupRef}
+          className={`absolute z-[60] w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
+            isRightColumn ? 'right-full mr-1' : 'left-full ml-1'
+          } ${
+            popupDir === 'up' ? 'bottom-0' : 'top-0'
           }`}
-          style={isRightColumn 
-            ? { marginRight: '-12px', paddingRight: '12px' } 
-            : { marginLeft: '-12px', paddingLeft: '12px' }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
