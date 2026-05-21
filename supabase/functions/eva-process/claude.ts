@@ -259,11 +259,11 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
       }
 
       // Guard crítica: se o texto confirma agendamento mas criar_agendamento
-      // nunca foi chamado, é um falso positivo do Haiku. silentFail em vez
-      // de mandar mensagem enganosa pro paciente.
+      // nunca foi chamado COM SUCESSO, é um falso positivo do Haiku.
       const toolsCalledSoFar = steps.filter(s => s.toolName).map(s => s.toolName);
+      const agendamentoCriado = toolsCalledSoFar.includes('criar_agendamento');
       const fakeBooking =
-        !toolsCalledSoFar.includes('criar_agendamento') &&
+        !agendamentoCriado &&
         /(j[aá] deixei|horario reservado|agendamento confirmado|horario marcado)/i.test(text);
 
       if (fakeBooking) {

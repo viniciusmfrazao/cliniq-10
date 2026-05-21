@@ -669,7 +669,9 @@ Deno.serve(async (req) => {
 
   // LOG DE SAÍDA — resposta que será enviada ao paciente
   const toolsUsed = conv.steps.filter(s => s.toolName).map(s => s.toolName);
-  const skippedTool = finalText.includes('reservado') && !toolsUsed.includes('criar_agendamento');
+  const agendamentoCriado = toolsUsed.includes('criar_agendamento');
+  const skippedTool = !agendamentoCriado &&
+    /(reservado|horario marcado|agendamento confirmado)/i.test(finalText);
   if (skippedTool) {
     console.error(JSON.stringify({
       evt: 'eva_skipped_tool',
