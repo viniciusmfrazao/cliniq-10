@@ -33,6 +33,8 @@ type Appointment = {
   procedure_id: string | null
   checked_in_at: string | null
   payment_registered_at: string | null
+  valor_sinal: number | null
+  forma_pagamento_sinal: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
   professional: { id: string; name: string } | null
@@ -218,7 +220,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {/* Preview ao passar o mouse */}
       {showPreview && (
         <div 
-          className={`absolute z-[60] bottom-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 ${
+          className={`absolute z-[60] bottom-0 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[85vh] ${
             isRightColumn ? 'right-full' : 'left-full'
           }`}
           style={isRightColumn 
@@ -262,7 +264,17 @@ const AppointmentCard = React.memo(function AppointmentCard({
             {apt.notes && (
               <div className="pt-2 border-t border-slate-100">
                 <p className="text-slate-500 mb-1">Observações:</p>
-                <p className="text-slate-700 line-clamp-2">{apt.notes}</p>
+                <p className="text-slate-700 line-clamp-3">{apt.notes}</p>
+              </div>
+            )}
+            {apt.valor_sinal && (
+              <div className="pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Sinal recebido:</span>
+                  <span className="font-semibold text-emerald-600">
+                    R$ {Number(apt.valor_sinal).toFixed(2).replace('.', ',')} <span className="text-xs font-normal text-slate-400 capitalize">({apt.forma_pagamento_sinal})</span>
+                  </span>
+                </div>
               </div>
             )}
           </div>
