@@ -102,7 +102,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const cardRef = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
   const [popupDir, setPopupDir] = useState<'up' | 'down'>('up')
-  const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null)
+  const [popupPos, setPopupPos] = useState<{ top: number; bottom: number; left: number } | null>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -152,7 +152,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
-    // Calcular posição do popup via Portal
+    // Calcular posição fixed do popup no viewport
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
@@ -161,10 +161,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
       const left = isRightColumn
         ? rect.left - 324
         : rect.right + 4
-      const top = dir === 'up'
-        ? rect.top - 10
-        : rect.bottom + 4
-      setPopupPos({ top, left })
+      setPopupPos({ top: rect.bottom + 4, bottom: rect.top - 4, left })
     }
     setShowPreview(true)
     // Buscar débitos do paciente ao abrir o popup (só uma vez)
@@ -269,14 +266,15 @@ const AppointmentCard = React.memo(function AppointmentCard({
       </Link>
 
       {/* Preview ao passar o mouse */}
-      {showPreview && (
+      {showPreview && popupPos && (
         <div 
           ref={popupRef}
-          className={`absolute z-[60] w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
-            isRightColumn ? 'right-full mr-2' : 'left-full ml-2'
-          } ${
-            popupDir === 'up' ? 'bottom-0' : 'top-0'
-          }`}
+          className="fixed z-[9999] w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
+          style={{
+            top: popupDir === 'down' ? popupPos.top : undefined,
+            bottom: popupDir === 'up' ? window.innerHeight - popupPos.bottom : undefined,
+            left: Math.max(8, Math.min(popupPos.left, window.innerWidth - 328)),
+          }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
