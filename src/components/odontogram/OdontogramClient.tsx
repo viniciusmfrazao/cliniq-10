@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 
 const CONDITIONS = [
@@ -139,6 +140,7 @@ type Props = {
 }
 
 export default function OdontogramClient({ patientId, clinicId, appointmentId, initialData }: Props) {
+  const router = useRouter()
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -231,6 +233,7 @@ export default function OdontogramClient({ patientId, clinicId, appointmentId, i
       }
 
       setSaved(true)
+      router.refresh()
       setTimeout(() => setSaved(false), 2500)
     })
   }
