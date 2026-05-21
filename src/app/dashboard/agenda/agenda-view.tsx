@@ -101,6 +101,40 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+  const router = useRouter()
+
+  // Observações inline
+  const [editingNotes, setEditingNotes] = useState(false)
+  const [notes, setNotes] = useState(apt.notes || '')
+  const [savingNotes, setSavingNotes] = useState(false)
+
+  // Sinal inline
+  const [showSinal, setShowSinal] = useState(false)
+  const [valorSinal, setValorSinal] = useState(apt.valor_sinal?.toString() || '')
+  const [formaPgSinal, setFormaPgSinal] = useState(apt.forma_pagamento_sinal || 'pix')
+  const [savingSinal, setSavingSinal] = useState(false)
+  const [sinalSalvo, setSinalSalvo] = useState(!!apt.valor_sinal)
+
+  async function saveNotes() {
+    setSavingNotes(true)
+    await supabaseCard.from('appointments').update({ notes: notes.trim() || null }).eq('id', apt.id)
+    setSavingNotes(false)
+    setEditingNotes(false)
+    router.refresh()
+  }
+
+  async function saveSinal() {
+    if (!valorSinal || parseFloat(valorSinal) <= 0) return
+    setSavingSinal(true)
+    await supabaseCard.from('appointments').update({
+      valor_sinal: parseFloat(valorSinal),
+      forma_pagamento_sinal: formaPgSinal,
+    }).eq('id', apt.id)
+    setSavingSinal(false)
+    setSinalSalvo(true)
+    setShowSinal(false)
+    router.refresh()
+  }
   
   useEffect(() => {
     return () => {
@@ -261,22 +295,97 @@ const AppointmentCard = React.memo(function AppointmentCard({
               <span className="text-slate-500">Status:</span>
               <span className={`font-medium ${status.text}`}>{status.label}</span>
             </div>
-            {apt.notes && (
-              <div className="pt-2 border-t border-slate-100">
-                <p className="text-slate-500 mb-1">Observações:</p>
-                <p className="text-slate-700 line-clamp-3">{apt.notes}</p>
+            {/* Observações editáveis */}
+            <div className="pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-slate-500">Observações:</p>
+                {!editingNotes && (
+                  <button onClick={e => { e.stopPropagation(); setEditingNotes(true) }} className="text-[10px] text-violet-600 hover:text-violet-800 font-medium">
+                    {notes ? 'Editar' : '+ Adicionar'}
+                  </button>
+                )}
               </div>
-            )}
-            {apt.valor_sinal && (
-              <div className="pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Sinal recebido:</span>
-                  <span className="font-semibold text-emerald-600">
-                    R$ {Number(apt.valor_sinal).toFixed(2).replace('.', ',')} <span className="text-xs font-normal text-slate-400 capitalize">({apt.forma_pagamento_sinal})</span>
+              {editingNotes ? (
+                <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
+                  <textarea
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-2 focus:ring-violet-300"
+                    rows={3}
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Observações..."
+                    autoFocus
+                  />
+                  <div className="flex gap-1.5">
+                    <button onClick={saveNotes} disabled={savingNotes} className="flex-1 py-1 text-xs bg-violet-500 text-white rounded-lg font-medium hover:bg-violet-600 disabled:opacity-50">
+                      {savingNotes ? 'Salvando...' : 'Salvar'}
+                    </button>
+                    <button onClick={() => { setEditingNotes(false); setNotes(apt.notes || '') }} className="flex-1 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className={`text-xs ${notes ? 'text-slate-700' : 'text-slate-400 italic'}`} onClick={e => { e.stopPropagation(); setEditingNotes(true) }}>
+                  {notes || 'Clique para adicionar...'}
+                </p>
+              )}
+            </div>
+
+            {/* Sinal / Pagamento antecipado */}
+            <div className="pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-slate-500">Sinal:</p>
+                {!showSinal && (
+                  <button onClick={e => { e.stopPropagation(); setShowSinal(true) }} className="text-[10px] text-emerald-600 hover:text-emerald-800 font-medium">
+                    {sinalSalvo ? 'Editar' : '+ Registrar'}
+                  </button>
+                )}
+              </div>
+              {sinalSalvo && !showSinal && (
+                <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 py-1.5">
+                  <Icon name="check" className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-emerald-700">
+                    R$ {parseFloat(valorSinal || '0').toFixed(2).replace('.', ',')}
+                    <span className="font-normal text-emerald-600 ml-1 capitalize">({formaPgSinal})</span>
                   </span>
                 </div>
-              </div>
-            )}
+              )}
+              {!sinalSalvo && !showSinal && (
+                <p className="text-xs text-slate-400 italic">Nenhum sinal registrado.</p>
+              )}
+              {showSinal && (
+                <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      type="number" step="0.01" min="0"
+                      className="text-xs border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                      placeholder="Valor R$"
+                      value={valorSinal}
+                      onChange={e => setValorSinal(e.target.value)}
+                      autoFocus
+                    />
+                    <select
+                      className="text-xs border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                      value={formaPgSinal}
+                      onChange={e => setFormaPgSinal(e.target.value)}
+                    >
+                      <option value="pix">Pix</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="credito">Crédito</option>
+                      <option value="debito">Débito</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button onClick={saveSinal} disabled={savingSinal || !valorSinal} className="flex-1 py-1 text-xs bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 disabled:opacity-50">
+                      {savingSinal ? 'Salvando...' : 'Confirmar'}
+                    </button>
+                    <button onClick={() => setShowSinal(false)} className="flex-1 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Aviso de débito pendente */}
