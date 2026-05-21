@@ -464,14 +464,24 @@ const AppointmentCard = React.memo(function AppointmentCard({
               </select>
             </div>
 
-            <Link
-              href={`/dashboard/atendimento/${apt.id}`}
-              className="w-full py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Icon name="eye" className="w-3 h-3" />
-              Abrir atendimento
-            </Link>
+            <div className="flex gap-1.5">
+              <Link
+                href={`/dashboard/atendimento/${apt.id}`}
+                className="flex-1 py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Icon name="eye" className="w-3 h-3" />
+                Atendimento
+              </Link>
+              <Link
+                href={`/dashboard/agenda/${apt.id}`}
+                className="flex-1 py-1.5 px-2 bg-violet-50 text-violet-700 text-xs font-medium rounded-lg hover:bg-violet-100 transition-colors flex items-center justify-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Icon name="edit" className="w-3 h-3" />
+                Editar
+              </Link>
+            </div>
 
             {/* Botão Registrar Pagamento — só para atendimentos realizados */}
             {apt.status === 'completed' && !isCancelled && (
