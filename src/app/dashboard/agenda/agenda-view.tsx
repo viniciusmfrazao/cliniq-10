@@ -102,7 +102,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const cardRef = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
   const [popupDir, setPopupDir] = useState<'up' | 'down'>('up')
-  const [popupPos, setPopupPos] = useState<{ top: number; bottom: number; left: number } | null>(null)
+  const [popupPos, setPopupPos] = useState<{ top: number; bottom: number; left: number }>({ top: 0, bottom: 0, left: 0 })
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -266,15 +266,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
       </Link>
 
       {/* Preview ao passar o mouse */}
-      {showPreview && popupPos && (
+      {showPreview && (
         <div 
           ref={popupRef}
           className="fixed z-[9999] w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
-          style={{
-            top: popupDir === 'down' ? popupPos.top : undefined,
-            bottom: popupDir === 'up' ? window.innerHeight - popupPos.bottom : undefined,
-            left: Math.max(8, Math.min(popupPos.left, window.innerWidth - 328)),
-          }}
+          style={popupDir === 'up'
+            ? { bottom: window.innerHeight - popupPos.bottom, left: Math.max(8, Math.min(popupPos.left, window.innerWidth - 328)) }
+            : { top: popupPos.top, left: Math.max(8, Math.min(popupPos.left, window.innerWidth - 328)) }
+          }
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
