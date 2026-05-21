@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -527,7 +526,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
             )}
           </div>
         </div>
-      , document.body)}
+      )}
 
       {/* Modal de pagamento */}
       {showPayment && (
