@@ -18,7 +18,9 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
       patients(id, name, phone, email, cpf, birth_date),
       procedures(id, name, price),
       users(id, name),
-      rooms(id, name, color)
+      rooms(id, name, color),
+      valor_sinal,
+      forma_pagamento_sinal
     `)
     .eq('id', id)
     .maybeSingle()
@@ -172,6 +174,16 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
             <div className="col-span-2">
               <p className="text-xs text-slate-400 mb-1">Observacoes</p>
               <p className="text-sm text-slate-600">{appointment.notes}</p>
+            </div>
+          )}
+
+          {appointment.valor_sinal && (
+            <div>
+              <p className="text-xs text-slate-400 mb-1">Sinal recebido</p>
+              <p className="text-sm font-semibold text-emerald-600">
+                R$ {Number(appointment.valor_sinal).toFixed(2).replace('.', ',')}
+                <span className="text-xs font-normal text-slate-500 ml-1 capitalize">({appointment.forma_pagamento_sinal})</span>
+              </p>
             </div>
           )}
         </div>
