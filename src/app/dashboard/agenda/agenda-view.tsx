@@ -100,6 +100,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [debitosLoaded, setDebitosLoaded] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+  const [popupDir, setPopupDir] = useState<'up' | 'down'>('up')
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
