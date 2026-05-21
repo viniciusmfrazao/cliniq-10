@@ -323,11 +323,7 @@ export async function GET(req: NextRequest) {
           .update({ status: 'error', error: result.error })
           .eq('id', inserted.id)
       }
-      // Reverte sent_at e mantem scheduled_at limpo (vai pegar no cron diario)
-      await svc
-        .from('appointments')
-        .update({ nps_sent_at: null })
-        .eq('id', app.id)
+      // NÃO reverte nps_sent_at — evita reenvio duplicado em caso de falha de envio
       summary.errors.push({
         clinic_id: app.clinic_id,
         appointment_id: app.id,

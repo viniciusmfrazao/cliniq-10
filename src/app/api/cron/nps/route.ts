@@ -415,11 +415,7 @@ export async function GET(req: NextRequest) {
           .from('nps_responses')
           .update({ status: 'error', error: result.error })
           .eq('id', inserted!.id)
-        // Reverte nps_sent_at pra tentar de novo amanhã
-        await svc
-          .from('appointments')
-          .update({ nps_sent_at: null })
-          .eq('id', app.appointment_id)
+        // NÃO reverte nps_sent_at — evita reenvio duplicado em caso de falha
         summary.errors.push({
           clinic_id: clinicId,
           appointment_id: app.appointment_id,
