@@ -851,8 +851,12 @@ export async function POST(
               if (looksGeneric && pushName && pushName.trim().length >= 2) {
                 patch.name = pushName.trim()
               }
-              // Se estava marcado como lost/converted e ele esta voltando,
-              // reativa pra contacted (oportunidade de re-engajar).
+              // Avanca status automaticamente quando lead manda mensagem
+              // new -> contacted: lead entrou em contato, Eva vai responder
+              if (leadRes.data.status === 'new') {
+                patch.status = 'contacted'
+              }
+              // lost -> contacted: oportunidade de re-engajar
               if (leadRes.data.status === 'lost') {
                 patch.status = 'contacted'
               }
