@@ -264,10 +264,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
         <div 
           ref={popupRef}
           className={`absolute z-[60] w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
-            isRightColumn ? 'right-full mr-1' : 'left-full ml-1'
-          } ${
-            popupDir === 'up' ? 'bottom-0' : 'top-0'
+            popupDir === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
           }`}
+          style={{ left: '50%', transform: 'translateX(-50%)' }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
