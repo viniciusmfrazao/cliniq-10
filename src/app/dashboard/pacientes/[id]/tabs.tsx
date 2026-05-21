@@ -28,7 +28,7 @@ export function isValidTab(tab: string | undefined): tab is PatientTab {
  * deep-linkável e prefetchable. Não usa estado client por design.
  */
 export function getVisibleTabs(enabledModules: string[] = []) {
-  return ALL_TABS.filter(t => !t.module || enabledModules.includes(t.module))
+  return TABS.filter(t => !t.module || enabledModules.includes(t.module))
 }
 
 export default function PatientTabs({
