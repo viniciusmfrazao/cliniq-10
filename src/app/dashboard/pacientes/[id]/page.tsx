@@ -10,6 +10,7 @@ import EvolutionTimeline from './evolution-timeline'
 import NewEvolutionButton from './new-evolution-button'
 import OrcamentosTab from './orcamentos-tab'
 import PackagesTab from './packages-tab'
+import OdontogramTab from './odontogram-tab'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 
 /**
@@ -102,6 +103,15 @@ export default async function PatientCentralPage({
       .maybeSingle()
     medicalRecord = created
   }
+
+  // Verificar módulos ativos da clínica via active_modules
+  const { data: clinicData } = await supabase
+    .from('clinics')
+    .select('settings')
+    .eq('id', userData?.clinic_id || '')
+    .single()
+
+  const enabledModules: string[] = clinicData?.settings?.active_modules || []
 
   const counts = {
     evolucoes: evolutionsCountResult.count || 0,
@@ -249,6 +259,13 @@ export default async function PatientCentralPage({
       {currentTab === 'injetaveis' && (
         <Suspense fallback={<TabSkeleton />}>
           <InjetaveisTab patientId={id} />
+        </Suspense>
+      )}
+      {currentTab === 'odontograma' && enabledModules.includes('odontograma') && (
+        <Suspense fallback={<TabSkeleton />}>
+          {userData?.clinic_id && (
+            <OdontogramTab patientId={id} clinicId={userData.clinic_id} />
+          )}
         </Suspense>
       )}
       {currentTab === 'pacotes' && (

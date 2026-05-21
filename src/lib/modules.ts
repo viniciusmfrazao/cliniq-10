@@ -1,4 +1,5 @@
 export type ModuleId = 
+  | 'odontograma'
   | 'recepcao'
   | 'agenda'
   | 'lista_espera'
@@ -83,6 +84,14 @@ export const AVAILABLE_MODULES: Module[] = [
     icon: '📑',
     category: 'clinical',
     defaultEnabled: true
+  },
+  { 
+    id: 'odontograma', 
+    name: 'Odontograma', 
+    description: 'Mapa dental interativo — adulto e leite. Ideal para clínicas odontológicas.',
+    icon: '🦷',
+    category: 'clinical',
+    defaultEnabled: false
   },
   { 
     id: 'lista_espera', 
@@ -195,6 +204,7 @@ export const MODULE_ROUTES: Record<ModuleId, string[]> = {
   financeiro: ['/dashboard/financeiro', '/dashboard/financeiro/entradas', '/dashboard/financeiro/saidas', '/dashboard/financeiro/dre'],
   equipe: ['/dashboard/equipe'],
   auditoria: ['/dashboard/auditoria'],
+  odontograma: [],  // tab dentro da ficha do paciente, sem rota própria
 }
 
 // Verifica se uma rota está habilitada para os módulos ativos

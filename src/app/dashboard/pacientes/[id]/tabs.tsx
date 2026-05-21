@@ -8,8 +8,9 @@ export type PatientTab =
   | 'anamneses'
   | 'injetaveis'
   | 'pacotes'
+  | 'odontograma'
 
-const TABS: Array<{ id: PatientTab; label: string; icon: string }> = [
+const TABS: Array<{ id: PatientTab; label: string; icon: string; module?: string }> = [
   { id: 'overview', label: 'Visão geral', icon: 'user' },
   { id: 'evolucoes', label: 'Evoluções', icon: 'file' },
   { id: 'consultas', label: 'Atendimentos', icon: 'calendar' },
@@ -26,6 +27,10 @@ export function isValidTab(tab: string | undefined): tab is PatientTab {
  * Tabs server-side. Cada tab é um <Link> que troca o ?tab=... — simples,
  * deep-linkável e prefetchable. Não usa estado client por design.
  */
+export function getVisibleTabs(enabledModules: string[] = []) {
+  return ALL_TABS.filter(t => !t.module || enabledModules.includes(t.module))
+}
+
 export default function PatientTabs({
   patientId,
   current,
