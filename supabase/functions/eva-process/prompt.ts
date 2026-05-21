@@ -112,6 +112,10 @@ function hasRealName(name: string): boolean {
   if (/^cliente$/i.test(trimmed)) return false;
   if (/^lead\s*whatsapp$/i.test(trimmed)) return false;
   if (/^[\d\s().+-]+$/.test(trimmed)) return false;
+  // Rejeita nomes com emojis — indicam apelidos de WhatsApp, nao nomes reais
+  if (/[\u{1F300}-\u{1FFFF}]/u.test(trimmed)) return false;
+  // Rejeita nomes que comecam com palavras genericas/titulos/negocios
+  if (/^(senhor|senhora|sr\.?|sra\.?|studio|clinica|salao|loja|barbearia)\b/i.test(trimmed)) return false;
   return true;
 }
 
@@ -354,10 +358,10 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
     identificacaoPart = `- ${firstName} ja e PACIENTE da clinica mas e uma nova aproximacao.\n- Se apresente como Eva da ${clinic.name}, acolha com calor e retome o relacionamento.`;
   } else if (lead && knowsRealName && !isNewConversation) {
     identificacaoPart = `- ${firstName} e um LEAD em acompanhamento (status: ${lead.status})${lead.interest ? `, interesse anterior: ${lead.interest}` : ''}. Continue o relacionamento naturalmente.`;
-  } else if ((lead || true) && knowsRealName && isNewConversation) {
-    identificacaoPart = `- PRIMEIRA APROXIMACAO. Voce sabe que o nome dela e ${firstName} (veio do WhatsApp).\n- OBRIGATORIO: se apresente como Eva da ${clinic.name}, acolha com calor, responda brevemente o que ela perguntou E convide para continuar.\n- NUNCA va direto ao procedimento sem se apresentar primeiro como Eva.`;
+  } else if (knowsRealName && isNewConversation) {
+    identificacaoPart = `- PRIMEIRA APROXIMACAO. Voce sabe que o nome dela e ${firstName} (veio do WhatsApp).\n!! ORDEM OBRIGATORIA:\n  1) Se apresente como Eva da ${clinic.name}\n  2) Acolha com calor (1 frase curta)\n  3) Pergunte se pode confirmar: 'Posso te chamar de ${firstName}?'\n  4) SÓ DEPOIS que ela confirmar o nome, continue a conversa\n- NUNCA va direto ao procedimento sem se apresentar e confirmar o nome.`;
   } else if (!knowsRealName) {
-    identificacaoPart = `- PRIMEIRA APROXIMACAO E NAO SABEMOS O NOME AINDA.\n- OBRIGATORIO: se apresente como Eva da ${clinic.name}, acolha com calor, responda brevemente e pergunte como prefere ser chamada.\n- Quando ela responder com o nome, CHAME 'atualizar_nome_lead' ANTES de continuar.`;
+    identificacaoPart = `- PRIMEIRA APROXIMACAO E NAO SABEMOS O NOME AINDA.\n!! ORDEM OBRIGATORIA — NAO PODE PULAR ETAPAS:\n  1) Se apresente como Eva da ${clinic.name}\n  2) Acolha com calor (1 frase curta sobre o interesse dela, NO MAXIMO)\n  3) Pergunte como prefere ser chamada — SEMPRE, SEM EXCECAO\n  4) NAO explique procedimento, NAO mostre horarios, NAO fale de valores ANTES de saber o nome\n- Quando ela responder com o nome, CHAME 'atualizar_nome_lead' ANTES de continuar.`;
   } else {
     identificacaoPart = `- Conversa em andamento. Continue naturalmente.`;
   }
