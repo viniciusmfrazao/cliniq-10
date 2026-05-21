@@ -171,7 +171,9 @@ export function buildSystemPrompt(
           ? `12x R$ ${formatBRL(parcela)} sem juros (a vista R$ ${formatBRL(pr.price)} — so mencionar se a paciente pedir explicitamente)`
           : 'consultar valor';
         const profNames = (pr.professional_ids || []).map((id) => profById.get(id)).filter(Boolean);
-        const profPart = profNames.length > 0 ? ` — Faz: ${profNames.join(', ')}` : ' — Faz: qualquer profissional da clinica';
+        // Se nao tem profissionais vinculados, NAO dizer 'qualquer profissional'
+        // A descricao do procedimento ja deve explicar quem faz e quando
+        const profPart = profNames.length > 0 ? ` — Aplicado por: ${profNames.join(', ')}` : '';
         const desc = pr.description?.trim();
         const obsPart = desc ? `\n  * Obs: ${desc}` : '';
         return `- ${pr.name} (${valorPart})${profPart}${obsPart}`;
@@ -237,6 +239,7 @@ EVITE A TODO CUSTO:
 === LINGUAGEM DE PROCEDIMENTOS — USE TERMOS ACESSIVEIS:
 - Escleroterapia: use "tratamento de microvasos" ou "vasinhos"
 - So use o nome tecnico se o proprio paciente usar primeiro.
+- SOBRE DISPONIBILIDADE DE PROCEDIMENTOS: respeite EXATAMENTE o que diz a descricao (Obs) de cada procedimento. Se a descricao diz que so a clinica disponibiliza (sem profissional especifico), NAO diga que qualquer profissional faz. Se diz que e em datas especificas, informe isso. A descricao e a fonte de verdade.
 
 === REGRA BV — MENSAGEM DE BOAS-VINDAS (SEMPRE na primeira aproximacao):
 INDEPENDENTE de saber o nome ou nao, na PRIMEIRA mensagem voce SEMPRE:
