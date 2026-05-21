@@ -10,6 +10,7 @@ import EvolutionTimeline from './evolution-timeline'
 import NewEvolutionButton from './new-evolution-button'
 import OrcamentosTab from './orcamentos-tab'
 import PackagesTab from './packages-tab'
+import RealtimeWatcher from '@/components/RealtimeWatcher'
 
 /**
  * Central do Paciente.
@@ -202,6 +203,12 @@ export default async function PatientCentralPage({
           <DeletePatientButton patientId={id} />
         </div>
       </div>
+
+      {/* Realtime — atualiza ficha quando anamnese, evolução ou agendamento muda */}
+      <RealtimeWatcher table="anamneses" column="patient_id" value={id} />
+      <RealtimeWatcher table="evolutions" column="patient_id" value={id} />
+      <RealtimeWatcher table="appointments" column="patient_id" value={id} />
+      <RealtimeWatcher table="patient_packages" column="patient_id" value={id} />
 
       {/* Tabs */}
       <PatientTabs patientId={id} current={currentTab} counts={counts} />

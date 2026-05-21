@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -102,6 +103,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const cardRef = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
   const [popupDir, setPopupDir] = useState<'up' | 'down'>('up')
+  const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -151,11 +153,19 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
-    // Detectar se popup deve abrir para cima ou para baixo
+    // Calcular posição do popup via Portal
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
-      setPopupDir(spaceBelow < 420 ? 'up' : 'down')
+      const dir = spaceBelow < 420 ? 'up' : 'down'
+      setPopupDir(dir)
+      const left = isRightColumn
+        ? rect.left - 324
+        : rect.right + 4
+      const top = dir === 'up'
+        ? rect.top - 10
+        : rect.bottom + 4
+      setPopupPos({ top, left })
     }
     setShowPreview(true)
     // Buscar débitos do paciente ao abrir o popup (só uma vez)
@@ -517,7 +527,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
             )}
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Modal de pagamento */}
       {showPayment && (

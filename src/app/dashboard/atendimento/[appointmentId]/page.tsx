@@ -11,6 +11,7 @@ import OrcamentosTab from '@/app/dashboard/pacientes/[id]/orcamentos-tab'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PackageSessionAlert from './package-session-alert'
+import RealtimeWatcher from '@/components/RealtimeWatcher'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
   const { appointmentId } = params
