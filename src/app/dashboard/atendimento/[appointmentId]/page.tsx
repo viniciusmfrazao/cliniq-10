@@ -194,6 +194,25 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
                 </div>
               </div>
             )}
+
+            {/* Orçamentos do paciente */}
+            {userData?.clinic_id && (
+              <Suspense fallback={<div className="card p-4 animate-pulse h-24" />}>
+                <OrcamentosAtendimentoServer
+                  patientId={patient.id}
+                  clinicId={userData.clinic_id}
+                  patient={patient}
+                />
+              </Suspense>
+            )}
+
+            {/* Agendamento de Retorno */}
+            <ReturnScheduler
+              patientId={patient.id}
+              clinicId={userData?.clinic_id || ''}
+              currentAppointmentId={appointmentId}
+              professionalId={appointment.professional_id || null}
+            />
           </div>
 
           {/* Coluna Direita - Mapa de Injetaveis / Odontograma + Produtos */}
@@ -226,24 +245,6 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               usedProducts={usedProducts || []}
             />
 
-            {/* Orçamentos do paciente */}
-            {userData?.clinic_id && (
-              <Suspense fallback={<div className="card p-4 animate-pulse h-24" />}>
-                <OrcamentosAtendimentoServer
-                  patientId={patient.id}
-                  clinicId={userData.clinic_id}
-                  patient={patient}
-                />
-              </Suspense>
-            )}
-
-            {/* Agendamento de Retorno */}
-            <ReturnScheduler
-              patientId={patient.id}
-              clinicId={userData?.clinic_id || ''}
-              currentAppointmentId={appointmentId}
-              professionalId={appointment.professional_id || null}
-            />
           </div>
         </div>
       </div>
