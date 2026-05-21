@@ -180,25 +180,56 @@ export default function OdontogramClient({ patientId, clinicId, appointmentId, i
   async function handleSave() {
     startSaving(async () => {
       let odoId = odontogramId
+
       if (!odoId) {
-        const { data } = await supabase.from('odontograms').insert({
-          clinic_id: clinicId, patient_id: patientId,
+        const { data, error: errCreate } = await supabase.from('odontograms').insert({
+          clinic_id: clinicId,
+          patient_id: patientId,
           appointment_id: appointmentId || null,
-          tooth_type: toothType, notes: generalNotes,
+          tooth_type: toothType,
+          notes: generalNotes,
         }).select('id').single()
+
+        if (errCreate) {
+          console.error('[Odontogram] erro ao criar:', errCreate)
+          alert('Erro ao salvar: ' + errCreate.message)
+          return
+        }
         odoId = data?.id || null
-        setOdontogramId(odoId)
+        if (odoId) setOdontogramId(odoId)
       } else {
-        await supabase.from('odontograms')
+        const { error: errUpdate } = await supabase.from('odontograms')
           .update({ tooth_type: toothType, notes: generalNotes, updated_at: new Date().toISOString() })
           .eq('id', odoId)
+        if (errUpdate) {
+          console.error('[Odontogram] erro ao atualizar:', errUpdate)
+          alert('Erro ao salvar: ' + errUpdate.message)
+          return
+        }
       }
-      if (!odoId) return
+
+      if (!odoId) { console.error('[Odontogram] odoId nulo após criar'); return }
+
       await supabase.from('odontogram_teeth').delete().eq('odontogram_id', odoId)
+
       const rows = Object.entries(states)
         .filter(([, v]) => v.length > 0)
-        .map(([num, v]) => ({ odontogram_id: odoId, tooth_number: parseInt(num), conditions: v, notes: null }))
-      if (rows.length > 0) await supabase.from('odontogram_teeth').insert(rows)
+        .map(([num, v]) => ({
+          odontogram_id: odoId,
+          tooth_number: parseInt(num),
+          conditions: v,
+          notes: null,
+        }))
+
+      if (rows.length > 0) {
+        const { error: errTeeth } = await supabase.from('odontogram_teeth').insert(rows)
+        if (errTeeth) {
+          console.error('[Odontogram] erro ao salvar dentes:', errTeeth)
+          alert('Erro ao salvar dentes: ' + errTeeth.message)
+          return
+        }
+      }
+
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     })
