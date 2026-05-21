@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 
@@ -157,7 +157,7 @@ export default function OdontogramClient({ patientId, clinicId, appointmentId, i
   })
   const [generalNotes, setGeneralNotes] = useState(initialData?.notes || '')
   const [odontogramId, setOdontogramId] = useState<string | null>(initialData?.id || null)
-  const [saving, startSaving] = useTransition()
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   const upper = toothType === 'adult' ? ADULT_UPPER : CHILD_UPPER
@@ -180,7 +180,8 @@ export default function OdontogramClient({ patientId, clinicId, appointmentId, i
   }
 
   async function handleSave() {
-    startSaving(async () => {
+    setSaving(true)
+    try {
       let odoId = odontogramId
 
       if (!odoId) {
@@ -192,25 +193,17 @@ export default function OdontogramClient({ patientId, clinicId, appointmentId, i
           notes: generalNotes,
         }).select('id').single()
 
-        if (errCreate) {
-          console.error('[Odontogram] erro ao criar:', errCreate)
-          alert('Erro ao salvar: ' + errCreate.message)
-          return
-        }
+        if (errCreate) throw new Error(errCreate.message)
         odoId = data?.id || null
         if (odoId) setOdontogramId(odoId)
       } else {
         const { error: errUpdate } = await supabase.from('odontograms')
           .update({ tooth_type: toothType, notes: generalNotes, updated_at: new Date().toISOString() })
           .eq('id', odoId)
-        if (errUpdate) {
-          console.error('[Odontogram] erro ao atualizar:', errUpdate)
-          alert('Erro ao salvar: ' + errUpdate.message)
-          return
-        }
+        if (errUpdate) throw new Error(errUpdate.message)
       }
 
-      if (!odoId) { console.error('[Odontogram] odoId nulo após criar'); return }
+      if (!odoId) throw new Error('ID nulo após criar odontograma')
 
       await supabase.from('odontogram_teeth').delete().eq('odontogram_id', odoId)
 
@@ -225,17 +218,18 @@ export default function OdontogramClient({ patientId, clinicId, appointmentId, i
 
       if (rows.length > 0) {
         const { error: errTeeth } = await supabase.from('odontogram_teeth').insert(rows)
-        if (errTeeth) {
-          console.error('[Odontogram] erro ao salvar dentes:', errTeeth)
-          alert('Erro ao salvar dentes: ' + errTeeth.message)
-          return
-        }
+        if (errTeeth) throw new Error(errTeeth.message)
       }
 
       setSaved(true)
       router.refresh()
       setTimeout(() => setSaved(false), 2500)
-    })
+    } catch(e: any) {
+      console.error('[Odontogram] erro:', e)
+      alert('Erro ao salvar: ' + (e?.message || String(e)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -255,8 +249,8 @@ export default function OdontogramClient({ patientId, clinicId, appointmentId, i
             <span className="text-xs text-slate-500">{markedCount} dente{markedCount !== 1 ? 's' : ''} marcado{markedCount !== 1 ? 's' : ''}</span>
           )}
           <button onClick={handleSave} disabled={saving}
-            className="btn-primary text-sm py-2 px-4">
-            {saving ? 'Salvando...' : saved ? '✓ Salvo' : 'Salvar'}
+            className={`text-sm py-2 px-5 rounded-xl font-semibold transition-all ${saved ? 'bg-emerald-500 text-white' : 'btn-primary'}`}>
+            {saving ? 'Salvando...' : saved ? '✓ Salvo!' : 'Salvar odontograma'}
           </button>
         </div>
       </div>
