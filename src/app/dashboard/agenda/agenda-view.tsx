@@ -271,8 +271,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
           ref={popupRef}
           className="fixed z-[9999] w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
           style={popupDir === 'up'
-            ? { bottom: window.innerHeight - popupPos.bottom, left: Math.max(8, Math.min(popupPos.left, window.innerWidth - 328)) }
-            : { top: popupPos.top, left: Math.max(8, Math.min(popupPos.left, window.innerWidth - 328)) }
+            ? { bottom: (typeof window !== 'undefined' ? window.innerHeight : 800) - popupPos.bottom, left: Math.max(8, Math.min(popupPos.left, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 328)) }
+            : { top: popupPos.top, left: Math.max(8, Math.min(popupPos.left, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 328)) }
           }
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
