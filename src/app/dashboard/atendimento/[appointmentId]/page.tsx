@@ -11,6 +11,7 @@ import OrcamentosTab from '@/app/dashboard/pacientes/[id]/orcamentos-tab'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PackageSessionAlert from './package-session-alert'
+import OdontogramMapToggle from './odontogram-map-toggle'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
@@ -88,6 +89,15 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .from('appointment_products')
     .select('*, products(name, unit)')
     .eq('appointment_id', appointmentId)
+
+  // Módulos ativos da clínica
+  const { data: clinicData } = await supabase
+    .from('clinics')
+    .select('settings')
+    .eq('id', userData?.clinic_id || '')
+    .maybeSingle()
+  const enabledModules: string[] = clinicData?.settings?.active_modules || []
+  const hasOdontogram = enabledModules.includes('odontograma')
 
   // Pacotes ativos do paciente (para mostrar alerta de usar sessão)
   const { data: activePackages } = await supabase
@@ -186,15 +196,26 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
             )}
           </div>
 
-          {/* Coluna Direita - Mapa de Injetaveis + Produtos */}
+          {/* Coluna Direita - Mapa de Injetaveis / Odontograma + Produtos */}
           <div className="space-y-6">
-            <InjectableMapSection
+            {hasOdontogram && (
+              <OdontogramMapToggle
+                hasOdontogram={hasOdontogram}
+                patientId={patient.id}
+                clinicId={userData?.clinic_id || ''}
+                appointmentId={appointmentId}
+                patient={patient}
+                productsForMap={productsForMap || []}
+                currentInjections={currentInjections || []}
+              />
+            )}
+            {!hasOdontogram && <InjectableMapSection
               patient={patient}
               appointmentId={appointmentId}
               products={productsForMap || []}
               currentInjections={currentInjections || []}
               clinicId={userData?.clinic_id || ''}
-            />
+            />}
 
             {/* Produtos Utilizados (seringas, fios, materiais) */}
             <ProductsUsedSection
