@@ -9,9 +9,10 @@ import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 type Props = {
   userRole: string
   activeModules?: ModuleId[]
+  userPermissions?: string[]
 }
 
-export default function BottomNav({ userRole, activeModules = [] }: Props) {
+export default function BottomNav({ userRole, activeModules = [], userPermissions = [] }: Props) {
   const pathname = usePathname()
   const items = BOTTOM_NAV.filter(i => {
     if (!i.roles.includes(userRole)) return false

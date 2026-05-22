@@ -105,7 +105,12 @@ export default function PermissionsModal({ member, onClose, onSave }: Props) {
   const hasAll = Array.isArray(permissions) && permissions.includes('all')
   
   function togglePermission(permId: string) {
-    if (hasAll) return
+    // Se tem 'all', expandir para lista completa antes de toggle
+    if (hasAll) {
+      const allIds = PERMISSION_GROUPS.flatMap(g => g.permissions.map(p => p.id))
+      setPermissions(allIds.filter(id => id !== permId))
+      return
+    }
     setPermissions(prev => 
       prev.includes(permId) 
         ? prev.filter(p => p !== permId)
@@ -168,7 +173,7 @@ export default function PermissionsModal({ member, onClose, onSave }: Props) {
 
           {/* Grupos de permissões */}
           {PERMISSION_GROUPS.map(group => (
-            <div key={group.label} className={hasAll ? 'opacity-50' : ''}>
+            <div key={group.label}>
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
                 {group.label}
               </h3>

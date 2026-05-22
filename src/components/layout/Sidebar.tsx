@@ -18,9 +18,10 @@ type Props = {
   trialDaysLeft: number
   userId?: string
   activeModules?: ModuleId[]
+  userPermissions?: string[]
 }
 
-export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId, activeModules = [] }: Props) {
+export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId, activeModules = [], userPermissions = [] }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -50,15 +51,46 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
   }, [])
   
   // Filtra por role E por módulos ativos (se houver módulos configurados)
+  const hasAllPermissions = userPermissions.includes('all')
+
+  // Mapa de rota → permissão necessária para acessar
+  const ROUTE_PERMISSIONS: Record<string, string> = {
+    '/dashboard/agenda':       'agenda_view',
+    '/dashboard/recepcao':     'agenda_view',
+    '/dashboard/lista-espera': 'agenda_view',
+    '/dashboard/pacientes':    'patients_view',
+    '/dashboard/injetaveis':   'records_view',
+    '/dashboard/documentos':   'records_view',
+    '/dashboard/procedimentos':'agenda_view',
+    '/dashboard/estoque':      'stock_view',
+    '/dashboard/financeiro':   'financial_view',
+    '/dashboard/crm':          'crm_view',
+    '/dashboard/whatsapp':     'crm_view',
+    '/dashboard/eva':          'crm_view',
+    '/dashboard/equipe':       'all',
+    '/dashboard/auditoria':    'all',
+  }
+
   const nav = NAV_ITEMS.filter(i => {
-    // Primeiro verifica se o usuário tem a role necessária
-    if (!i.roles.includes(userRole)) return false
-    
-    // Se não há módulos configurados, libera tudo (compatibilidade)
-    if (activeModules.length === 0) return true
-    
-    // Verifica se a rota está habilitada pelos módulos
-    return isRouteEnabled(i.href, activeModules)
+    // Módulos primeiro
+    if (activeModules.length > 0 && !isRouteEnabled(i.href, activeModules)) return false
+
+    // Se tem 'all' nas permissões, libera tudo
+    if (hasAllPermissions) return true
+
+    // Rotas sempre disponíveis para todos
+    if (i.href === '/dashboard' || i.href === '/dashboard/config') return true
+
+    // Verificar permissão específica da rota
+    const requiredPerm = ROUTE_PERMISSIONS[i.href]
+    if (requiredPerm) {
+      if (requiredPerm === 'all') return false // só admin
+      return userPermissions.includes(requiredPerm)
+    }
+
+    // Fallback: verificar role se não tem permissões definidas
+    if (userPermissions.length === 0) return i.roles.includes(userRole)
+    return false
   })
   const isActive = (href: string) => href === '/dashboard' ? pathname === href : pathname.startsWith(href)
   

@@ -7,7 +7,7 @@ export type NavItem = {
   children?: NavSubItem[]
 }
 
-const ALL_PROFESSIONALS = ['doctor','biomedic','nurse','esthetician','physiotherapist','nutritionist','psychologist']
+const ALL_PROFESSIONALS = ['doctor','dentist','biomedic','nurse','esthetician','physiotherapist','nutritionist','psychologist']
 const RECEPTION = ['receptionist', 'assistant']
 const MANAGEMENT = ['admin', 'super_admin', 'manager']
 const FINANCIAL = ['admin', 'super_admin', 'manager', 'financial']
@@ -24,7 +24,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   // ── Clínico ─────────────────────────────────────────────────────────────
   { label: 'Procedimentos',   href: '/dashboard/procedimentos', icon: 'clipboard', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS] },
-  { label: 'Injetaveis',      href: '/dashboard/injetaveis',    icon: 'syringe',   roles: [...MANAGEMENT, 'doctor', 'biomedic', 'nurse', 'esthetician'] },
+  { label: 'Injetaveis',      href: '/dashboard/injetaveis',    icon: 'syringe',   roles: [...MANAGEMENT, 'doctor', 'dentist', 'biomedic', 'nurse', 'esthetician'] },
   { label: 'Documentos',      href: '/dashboard/documentos',    icon: 'file',      roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
 
   // ── Comercial / IA ──────────────────────────────────────────────────────
