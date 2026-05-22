@@ -98,7 +98,8 @@ export async function POST(request: NextRequest) {
       })
 
     if (userError) {
-      // Rollback
+      // Rollback: apagar Auth user E clínica
+      await serviceSupabase.auth.admin.deleteUser(authData.user.id).catch(() => {})
       await serviceSupabase.from('clinics').delete().eq('id', clinic.id)
       console.error('User error:', userError)
       return NextResponse.json({ error: 'Erro ao criar usuário' }, { status: 500 })
