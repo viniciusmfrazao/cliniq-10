@@ -177,7 +177,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     const [{ data: entMes }, { data: entHoje }, { data: saidas }] = await Promise.all([
       supabase.from('entradas').select('valor_liquido').eq('clinic_id', userData?.clinic_id).gte('data_venda', startOfMonthDate),
       supabase.from('entradas').select('valor_liquido').eq('clinic_id', userData?.clinic_id).eq('data_venda', today),
-      supabase.from('saidas').select('valor').eq('clinic_id', userData?.clinic_id).gte('data', startOfMonthDate).neq('status','cancelado'),
+      supabase.from('saidas').select('valor').eq('clinic_id', userData?.clinic_id).gte('data', startOfMonthDate),
     ])
     monthlyRevenue = entMes?.reduce((s, e) => s + (e.valor_liquido || 0), 0) || 0
     todayRevenue = entHoje?.reduce((s, e) => s + (e.valor_liquido || 0), 0) || 0

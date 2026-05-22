@@ -85,7 +85,7 @@ export default async function CRMPage() {
     .from('crm_settings')
     .select('*')
     .eq('clinic_id', userData?.clinic_id)
-    .single()
+    .maybeSingle()
 
   const normalizedSettings = normalizeCRMSettings(settings)
 
