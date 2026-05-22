@@ -194,6 +194,22 @@ export async function GET(req: NextRequest) {
   // está em modo automático. Se a clinica colocou a Eva em manual pelo
   // toggle, o cron de follow-up também respeita.
   const clinicIds = Array.from(new Set(queue.map((l) => l.clinic_id)))
+
+  // Filtrar clínicas que têm módulo eva_ia ativo
+  const { data: clinicsData } = await svc
+    .from('clinics')
+    .select('id, settings')
+    .in('id', clinicIds)
+  const clinicsWithEva = new Set<string>(
+    (clinicsData ?? []).filter((c: any) => {
+      const modules: string[] = c.settings?.active_modules || []
+      return modules.length === 0 || modules.includes('eva_ia')
+    }).map((c: any) => c.id)
+  )
+  // Remover da fila leads de clínicas sem Eva
+  const filteredQueue = queue.filter(l => clinicsWithEva.has(l.clinic_id))
+  if (filteredQueue.length === 0) return NextResponse.json({ ok: true, skipped: 'no_eva_clinics' })
+
   const { data: waList } = await svc
     .from('clinic_whatsapp')
     .select(

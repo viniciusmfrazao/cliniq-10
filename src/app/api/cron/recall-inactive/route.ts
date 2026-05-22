@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
       .from('clinic_whatsapp')
       .select('clinic_id, instance_name, status, is_default, role_outbound_automation')
       .in('clinic_id', clinicIds),
-    svc.from('clinics').select('id, name').in('id', clinicIds),
+    svc.from('clinics').select('id, name, settings').in('id', clinicIds),
   ])
   const waByClinic = new Map<string, WaRow>()
   type WaScored = WaRow & { is_default?: boolean | null; role_outbound_automation?: boolean | null }
