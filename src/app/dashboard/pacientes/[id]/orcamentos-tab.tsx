@@ -12,6 +12,7 @@ type Orcamento = {
   valido_ate: string | null
   observacoes: string | null
   created_at: string
+  whatsapp_sent_at: string | null
   orcamento_itens: Item[]
 }
 

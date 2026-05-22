@@ -94,7 +94,7 @@ function PrimeirosPassos() {
         <Step number={8} title="Comece a agendar!" description="Sua clínica está pronta. Crie o primeiro agendamento." link="/dashboard/agenda" />
       </div>
       <div className="bg-violet-50 border border-violet-100 rounded-xl p-4">
-        <p className="text-sm text-violet-800"><strong>💡 Dica:</strong> Configure os horários de cada profissional em Equipe antes de ativar a Eva. Isso é essencial para ela responder sobre disponibilidade corretamente.</p>
+        <p className="text-sm text-violet-800"><strong>Dica:</strong> Configure os horários de cada profissional em Equipe antes de ativar a Eva. Isso é essencial para ela responder sobre disponibilidade corretamente.</p>
       </div>
     </div>
   )
@@ -133,7 +133,7 @@ function TutorialAtendimento() {
         <Tutorial title="Finalizar atendimento" steps={['Clique em \"Finalizar\" no topo da tela','O status do agendamento muda para \"Realizado\" automaticamente na agenda','O sistema envia NPS automático ao paciente após o atendimento','Você é redirecionado de volta para a agenda']} />
       </div>
       <div className="bg-violet-50 border border-violet-100 rounded-xl p-4">
-        <p className="text-sm text-violet-800"><strong>💡 Dica:</strong> Use a tela de atendimento no tablet durante a consulta. O mapa facial fica visualmente claro e o prontuário salva em tempo real.</p>
+        <p className="text-sm text-violet-800"><strong>Dica:</strong> Use a tela de atendimento no tablet durante a consulta. O mapa facial fica visualmente claro e o prontuário salva em tempo real.</p>
       </div>
     </div>
   )
@@ -226,7 +226,7 @@ function TutorialEva() {
         <Tutorial title="Configurações importantes" steps={['Personalidade: tom da Eva (ex: \"calorosa, elegante, use emojis com moderação\")','Follow-up: textos e intervalos de cada estágio','Política de desconto: a Eva só menciona quando perguntada diretamente','Horários dos profissionais: configure em Equipe — essencial para disponibilidade correta']} />
       </div>
       <div className="bg-violet-50 border border-violet-100 rounded-xl p-4">
-        <p className="text-sm text-violet-800"><strong>💡 Dica:</strong> A Eva lê a descrição de cada procedimento para responder corretamente. Quanto mais detalhada a descrição, melhor a Eva explica para o paciente.</p>
+        <p className="text-sm text-violet-800"><strong>Dica:</strong> A Eva lê a descrição de cada procedimento para responder corretamente. Quanto mais detalhada a descrição, melhor a Eva explica para o paciente.</p>
       </div>
     </div>
   )
@@ -269,7 +269,7 @@ function TutorialEquipe() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">{'👩'} ‍⚕️ Gestão de Equipe</h2>
+        <h2 className="text-lg font-bold text-slate-900">Gestão de Equipe</h2>
         <p className="text-slate-600 mt-2">Adicione membros, defina permissões e configure horários de atendimento.</p>
       </div>
       <div className="space-y-4">
@@ -285,15 +285,15 @@ function TutorialImportar() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">{'📥'} Importar Dados do Sistema Anterior</h2>
-        <p className="text-slate-600 mt-2">Importe histórico de agendamentos e pacientes via planilha Excel.</p>
+        <h2 className="text-lg font-bold text-slate-900">Importar Dados do Sistema Anterior</h2>
+        <p className="text-slate-600 mt-2">Importe historico de agendamentos e pacientes via planilha Excel.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Como importar agendamentos" steps={['Vá em Configurações → Importar Agendamentos','Selecione o arquivo Excel exportado do sistema anterior','Configure os profissionais para ignorar','Defina o status para agendamentos do passado (recomendado: Realizado)','Agendamentos futuros viram \"Agendado\" automaticamente','Clique em \"Iniciar Importação\" e aguarde']} />
-        <Tutorial title="Regras aplicadas automaticamente" steps={['Agendamentos cancelados são ignorados','Pacientes já cadastrados com o mesmo telefone NÃO são duplicados','Pacientes novos são criados com os dados da planilha','Profissionais são mapeados pelo nome']} />
+        <Tutorial title="Como importar agendamentos" steps={['Va em Configuracoes - Importar Agendamentos','Selecione o arquivo Excel exportado do sistema anterior','Configure os profissionais para ignorar','Defina o status para agendamentos do passado (recomendado: Realizado)','Agendamentos futuros viram Agendado automaticamente','Clique em Iniciar Importacao e aguarde']} />
+        <Tutorial title="Regras aplicadas automaticamente" steps={['Agendamentos cancelados sao ignorados','Pacientes ja cadastrados com o mesmo telefone NAO sao duplicados','Pacientes novos sao criados com os dados da planilha','Profissionais sao mapeados pelo nome']} />
       </div>
       <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-        <p className="text-sm text-amber-800"><strong>⚠️ Atenção:</strong> Faça a importação uma única vez. Rodar duas vezes pode duplicar agendamentos. Se precisar reimportar, entre em contato com o suporte antes.</p>
+        <p className="text-sm text-amber-800"><strong>Atencao:</strong> Faca a importacao uma unica vez. Rodar duas vezes pode duplicar agendamentos. Se precisar reimportar, entre em contato com o suporte antes.</p>
       </div>
     </div>
   )
@@ -303,20 +303,20 @@ function DicasAtalhos() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">{'⚡'} Dicas e Atalhos</h2>
+        <h2 className="text-lg font-bold text-slate-900">Dicas e Atalhos</h2>
         <p className="text-slate-600 mt-2">Seja mais produtivo com estas dicas.</p>
       </div>
       <div className="grid gap-4">
-        <Dica icon="🔍" title="Busca rápida global" description="Use Ctrl+K (ou Cmd+K no Mac) para buscar pacientes, agendamentos e mais em qualquer tela." />
-        <Dica icon="📱" title="Funciona no celular e tablet" description="O sistema é 100% responsivo. Use pelo celular para check-ins rápidos e pelo tablet durante o atendimento." />
-        <Dica icon="💬" title="Agende pelo WhatsApp" description="No painel WhatsApp, clique em \"Agendar\" no header da conversa para criar agendamentos sem sair do chat." />
-        <Dica icon="🦷" title="Odontograma ativável" description="O módulo Odontograma pode ser ativado por clínica pelo painel admin. Ideal para clínicas odontológicas ou mistas." />
-        <Dica icon="📦" title="Pacotes de sessões" description="Crie pacotes (Clube do Botox, Lavieen etc) na ficha do paciente ou direto ao agendar. O sistema controla sessões restantes automaticamente." />
-        <Dica icon="💰" title="Sinal no agendamento" description="Registre o sinal cobrado no ato do agendamento diretamente no popup da agenda. A recepcionista vê o valor na chegada do paciente." />
-        <Dica icon="🤖" title="Eva respeita o cadastro" description="A Eva lê a descrição de cada procedimento. Coloque instruções claras lá para ela responder corretamente sobre disponibilidade e quem aplica." />
-        <Dica icon="📊" title="CRM atualizado automaticamente" description="Todo lead do WhatsApp entra no CRM automaticamente e avança para \"Em Conversa\" na primeira mensagem." />
-        <Dica icon="🔔" title="Realtime na ficha" description="Quando o paciente preenche a anamnese, ela aparece na ficha automaticamente sem precisar recarregar a página." />
-        <Dica icon="✅" title="Finalizar = Realizado" description="Ao clicar em Finalizar no atendimento, o status da agenda muda para Realizado automaticamente." />
+        <Dica icon="🔍" title="Busca rapida global" description="Use Ctrl+K (ou Cmd+K no Mac) para buscar pacientes, agendamentos e mais em qualquer tela." />
+        <Dica icon="📱" title="Funciona no celular e tablet" description="O sistema e 100% responsivo. Use pelo celular para check-ins rapidos e pelo tablet durante o atendimento." />
+        <Dica icon="💬" title="Agende pelo WhatsApp" description="No painel WhatsApp, clique em Agendar no header da conversa para criar agendamentos sem sair do chat." />
+        <Dica icon="🦷" title="Odontograma ativavel" description="O modulo Odontograma pode ser ativado por clinica pelo painel admin. Ideal para clinicas odontologicas ou mistas." />
+        <Dica icon="📦" title="Pacotes de sessoes" description="Crie pacotes na ficha do paciente ou direto ao agendar. O sistema controla sessoes restantes automaticamente." />
+        <Dica icon="💰" title="Sinal no agendamento" description="Registre o sinal cobrado no ato do agendamento diretamente no popup da agenda. A recepcao ve o valor na chegada do paciente." />
+        <Dica icon="🤖" title="Eva respeita o cadastro" description="A Eva le a descricao de cada procedimento. Coloque instrucoes claras la para ela responder corretamente." />
+        <Dica icon="📊" title="CRM atualizado automaticamente" description="Todo lead do WhatsApp entra no CRM automaticamente e avanca para Em Conversa na primeira mensagem." />
+        <Dica icon="🔔" title="Realtime na ficha" description="Quando o paciente preenche a anamnese, ela aparece na ficha automaticamente sem precisar recarregar a pagina." />
+        <Dica icon="✅" title="Finalizar igual Realizado" description="Ao clicar em Finalizar no atendimento, o status da agenda muda para Realizado automaticamente." />
       </div>
       <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 mt-6">
         <p className="text-sm text-emerald-800"><strong>Precisa de ajuda?</strong> Entre em contato pelo WhatsApp: (34) 99180-5722</p>
