@@ -11,6 +11,7 @@ import NewEvolutionButton from './new-evolution-button'
 import OrcamentosTab from './orcamentos-tab'
 import PackagesTab from './packages-tab'
 import OdontogramTab from './odontogram-tab'
+import DocumentosTab from './documentos-tab'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 
 /**
@@ -259,6 +260,18 @@ export default async function PatientCentralPage({
       {currentTab === 'injetaveis' && (
         <Suspense fallback={<TabSkeleton />}>
           <InjetaveisTab patientId={id} />
+        </Suspense>
+      )}
+      {currentTab === 'documentos' && (
+        <Suspense fallback={<TabSkeleton />}>
+          {userData?.clinic_id && patient && (
+            <DocumentosTab
+              patientId={id}
+              patientName={patient.name}
+              patientPhone={patient.phone}
+              clinicId={userData.clinic_id}
+            />
+          )}
         </Suspense>
       )}
       {currentTab === 'odontograma' && enabledModules.includes('odontograma') && (

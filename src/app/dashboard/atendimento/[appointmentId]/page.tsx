@@ -12,6 +12,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PackageSessionAlert from './package-session-alert'
 import OdontogramMapToggle from './odontogram-map-toggle'
+import DocumentosAtendimento from './documentos-atendimento'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
@@ -204,6 +205,18 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
                   patient={patient}
                 />
               </Suspense>
+            )}
+
+            {/* Documentos do atendimento */}
+            {userData?.clinic_id && (
+              <DocumentosAtendimento
+                patientId={patient.id}
+                patientName={patient.name}
+                patientPhone={patient.phone}
+                appointmentId={appointmentId}
+                procedureName={appointment.procedures?.name || null}
+                clinicId={userData.clinic_id}
+              />
             )}
 
             {/* Agendamento de Retorno */}
