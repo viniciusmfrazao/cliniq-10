@@ -506,6 +506,7 @@ function InstanceCard({
   onSetDefault,
   onUpdateRole,
   onSaveLabel,
+  hasEva = true,
 }: {
   instance: InstanceItem
   expanded: boolean
