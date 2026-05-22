@@ -22,6 +22,13 @@ export default async function EvaConfigPage() {
     redirect('/dashboard/config')
   }
 
+  // Verificar se módulo eva_ia está ativo
+  const { data: clinicCheck } = await supabase.from('clinics').select('settings').eq('id', userData.clinic_id).single()
+  const activeModules: string[] = clinicCheck?.settings?.active_modules || []
+  if (activeModules.length > 0 && !activeModules.includes('eva_ia')) {
+    redirect('/dashboard/config')
+  }
+
   const { data: clinic } = await supabase
     .from('clinics')
     .select('id, name, settings')

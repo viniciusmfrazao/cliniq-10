@@ -14,6 +14,16 @@ export default async function EvaPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Verificar se módulo eva_ia está ativo para esta clínica
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).single()
+  if (userData?.clinic_id) {
+    const { data: clinic } = await supabase.from('clinics').select('settings').eq('id', userData.clinic_id).single()
+    const activeModules: string[] = clinic?.settings?.active_modules || []
+    if (activeModules.length > 0 && !activeModules.includes('eva_ia')) {
+      redirect('/dashboard')
+    }
+  }
+
   const { data: userData } = await supabase
     .from('users')
     .select('clinic_id')

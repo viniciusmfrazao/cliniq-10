@@ -44,6 +44,9 @@ export default async function ConfigPage() {
     .eq('id', currentUser.clinic_id)
     .single()
 
+  const activeModules: string[] = clinic?.settings?.active_modules || []
+  const hasEva = activeModules.length === 0 || activeModules.includes('eva_ia')
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
@@ -150,6 +153,7 @@ export default async function ConfigPage() {
                 <Icon name="chevronRight" className="w-5 h-5 text-pink-400" />
               </Link>
 
+              {hasEva && (
               <Link
                 href="/dashboard/config/eva"
                 className="flex items-center gap-4 p-4 bg-gradient-to-br from-violet-50 to-purple-50 hover:from-violet-100 hover:to-purple-100 rounded-xl transition-colors border border-violet-200"
@@ -163,6 +167,7 @@ export default async function ConfigPage() {
                 </div>
                 <Icon name="chevronRight" className="w-5 h-5 text-violet-400" />
               </Link>
+              )}
 
               <Link
                 href="/dashboard/config/anamnese"
