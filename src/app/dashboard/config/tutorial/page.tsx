@@ -80,7 +80,7 @@ function PrimeirosPassos() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">🚀 Bem-vindo ao Clinike!</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'🚀'} Bem-vindo ao Clinike!</h2>
         <p className="text-slate-600 mt-2">Siga estes passos para configurar sua clínica e começar a usar o sistema.</p>
       </div>
       <div className="space-y-4">
@@ -104,7 +104,7 @@ function TutorialAgenda() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">📅 Como usar a Agenda</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'📅'} Como usar a Agenda</h2>
         <p className="text-slate-600 mt-2">A agenda é o coração do sistema. Aqui você gerencia todos os atendimentos.</p>
       </div>
       <div className="space-y-4">
@@ -123,7 +123,7 @@ function TutorialAtendimento() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">🩺 Tela de Atendimento</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'🩺'} Tela de Atendimento</h2>
         <p className="text-slate-600 mt-2">Tudo que o profissional precisa durante a consulta em uma única tela.</p>
       </div>
       <div className="space-y-4">
@@ -143,7 +143,7 @@ function TutorialPacientes() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">👥 Gestão de Pacientes</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'👥'} Gestão de Pacientes</h2>
         <p className="text-slate-600 mt-2">Cadastre e gerencie todos os pacientes da sua clínica.</p>
       </div>
       <div className="space-y-4">
@@ -160,7 +160,7 @@ function TutorialFinanceiro() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">💰 Módulo Financeiro</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'💰'} Módulo Financeiro</h2>
         <p className="text-slate-600 mt-2">Controle entradas, saídas, devedores e tenha visão completa do faturamento.</p>
       </div>
       <div className="space-y-4">
@@ -179,7 +179,7 @@ function TutorialCRM() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">🎯 CRM e Leads</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'🎯'} CRM e Leads</h2>
         <p className="text-slate-600 mt-2">Gerencie interessados e converta mais pacientes. Leads do WhatsApp entram automaticamente.</p>
       </div>
       <div className="space-y-4">
@@ -197,7 +197,7 @@ function TutorialWhatsApp() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">💬 WhatsApp da Clínica</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'💬'} WhatsApp da Clínica</h2>
         <p className="text-slate-600 mt-2">Conecte o número da clínica e gerencie conversas diretamente no sistema.</p>
       </div>
       <div className="space-y-4">
@@ -215,7 +215,7 @@ function TutorialEva() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">✨ Eva IA — Sua Assistente Virtual</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'✨'} Eva IA — Sua Assistente Virtual</h2>
         <p className="text-slate-600 mt-2">A Eva atende no WhatsApp 24/7, agenda consultas, registra leads e faz follow-up automaticamente.</p>
       </div>
       <div className="space-y-4">
@@ -236,7 +236,7 @@ function TutorialEstoque() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">📦 Controle de Estoque</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'📦'} Controle de Estoque</h2>
         <p className="text-slate-600 mt-2">Gerencie produtos, injetáveis e alertas de validade e estoque mínimo.</p>
       </div>
       <div className="space-y-4">
@@ -253,7 +253,7 @@ function TutorialDocumentos() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">📄 Documentos e Assinaturas</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'📄'} Documentos e Assinaturas</h2>
         <p className="text-slate-600 mt-2">Crie termos de consentimento e colete assinaturas digitais.</p>
       </div>
       <div className="space-y-4">
@@ -269,7 +269,7 @@ function TutorialEquipe() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">👩‍⚕️ Gestão de Equipe</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'👩'} ‍⚕️ Gestão de Equipe</h2>
         <p className="text-slate-600 mt-2">Adicione membros, defina permissões e configure horários de atendimento.</p>
       </div>
       <div className="space-y-4">
@@ -285,7 +285,7 @@ function TutorialImportar() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">📥 Importar Dados do Sistema Anterior</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'📥'} Importar Dados do Sistema Anterior</h2>
         <p className="text-slate-600 mt-2">Importe histórico de agendamentos e pacientes via planilha Excel.</p>
       </div>
       <div className="space-y-4">
@@ -303,7 +303,7 @@ function DicasAtalhos() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">⚡ Dicas e Atalhos</h2>
+        <h2 className="text-lg font-bold text-slate-900">{'⚡'} Dicas e Atalhos</h2>
         <p className="text-slate-600 mt-2">Seja mais produtivo com estas dicas.</p>
       </div>
       <div className="grid gap-4">
