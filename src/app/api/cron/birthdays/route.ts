@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
       .from('clinic_whatsapp')
       .select('clinic_id, instance_name, status, is_default, role_outbound_automation')
       .in('clinic_id', clinicIds),
-    svc.from('clinics').select('id, name, settings').in('id', clinicIds),
+    svc.from('clinics').select('id, name').in('id', clinicIds),
   ])
 
   // Multi-numero: prioriza connected + role_outbound_automation pra cada clinica
@@ -159,13 +159,7 @@ export async function GET(req: NextRequest) {
   }
 
   const nameByClinic = new Map<string, string>()
-  // Clínicas com módulo eva_ia ativo (ou sem módulos configurados = compatibilidade)
-  const clinicsWithEva = new Set<string>()
-  for (const c of (clinicNames as any[] | null) ?? []) {
-    nameByClinic.set(c.id, c.name)
-    const modules: string[] = c.settings?.active_modules || []
-    if (modules.length === 0 || modules.includes('eva_ia')) clinicsWithEva.add(c.id)
-  }
+  for (const c of (clinicNames as any[] | null) ?? []) nameByClinic.set(c.id, c.name)
 
   // 3) Pra cada clínica conectada, processa aniversariantes
   const summary = {
