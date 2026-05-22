@@ -109,15 +109,40 @@ export default function OrcamentosTab({
     setOrcamentos(p => p.filter(o => o.id !== id))
   }
 
-  function sendWhatsApp(orc: Orcamento) {
+  const [sending, setSending] = useState<string | null>(null)
+
+  async function sendWhatsApp(orc: Orcamento) {
     if (!patientPhone) return alert('Paciente sem telefone cadastrado.')
-    const t = total(orc.orcamento_itens)
-    const itensText = orc.orcamento_itens.map(i =>
-      `• ${i.descricao} (${i.quantidade}x) — ${fmt(i.quantidade * i.valor_unitario)}`
-    ).join('\n')
-    const msg = `Olá ${patientName.split(' ')[0]}! 😊\n\nSegue o orçamento da ${clinicName}:\n\n*${orc.titulo}*\n\n${itensText}\n\n*Total: ${fmt(t)}*${orc.valido_ate ? `\nVálido até: ${new Date(orc.valido_ate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}\n\nQualquer dúvida, estamos à disposição! 🤍`
-    const phone = patientPhone.replace(/\D/g, '')
-    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+    setSending(orc.id)
+    try {
+      const res = await fetch('/api/orcamento/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orcamentoId: orc.id }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        alert('Orçamento enviado pelo WhatsApp da clínica! ✅')
+        // Atualizar estado local
+        setOrcamentos(prev => prev.map(o => o.id === orc.id
+          ? { ...o, whatsapp_sent_at: new Date().toISOString() }
+          : o
+        ))
+      } else {
+        // Fallback: abrir WhatsApp Web
+        const t = total(orc.orcamento_itens)
+        const itensText = orc.orcamento_itens.map(i =>
+          `• ${i.descricao} (${i.quantidade}x) — ${fmt(i.quantidade * i.valor_unitario)}`
+        ).join('\n')
+        const msg = `Olá ${patientName.split(' ')[0]}! 😊\n\nSegue o orçamento da ${clinicName}:\n\n*${orc.titulo}*\n\n${itensText}\n\n*Total: ${fmt(t)}*\n\nQualquer dúvida, estamos à disposição! 🤍`
+        const phone = patientPhone.replace(/\D/g, '')
+        window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+      }
+    } catch {
+      alert('Erro ao enviar. Tente novamente.')
+    } finally {
+      setSending(null)
+    }
   }
 
   const totalForm = total(form.itens)
@@ -302,9 +327,10 @@ export default function OrcamentosTab({
                           Reabrir
                         </button>
                       )}
-                      <button onClick={() => sendWhatsApp(orc)}
+                      <button onClick={() => sendWhatsApp(orc)} disabled={sending === orc.id}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition-colors">
-                        <Icon name="phone" className="w-3.5 h-3.5" /> Enviar WhatsApp
+                        <Icon name="phone" className="w-3.5 h-3.5" />
+                        {sending === orc.id ? 'Enviando...' : orc.whatsapp_sent_at ? 'Reenviar WhatsApp' : 'Enviar WhatsApp'}
                       </button>
                       <button onClick={() => deleteOrcamento(orc.id)}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-red-500 text-xs rounded-lg transition-colors ml-auto">
