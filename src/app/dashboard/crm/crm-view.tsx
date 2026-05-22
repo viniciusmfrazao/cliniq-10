@@ -1116,6 +1116,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
   const [tab, setTab] = useState<'info' | 'history'>('info')
   const [form, setForm] = useState({
     status: lead.status,
+    source: lead.source || 'whatsapp',
     interest: lead.interest || '',
     next_contact_at: lead.next_contact_at?.split('T')[0] || '',
     lost_reason: lead.lost_reason || ''
@@ -1133,6 +1134,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
     setLoading(true)
     const updateData: Record<string, string | null> = {
       status: form.status,
+      source: form.source || null,
       interest: form.interest || null,
       next_contact_at: form.next_contact_at ? `${form.next_contact_at}T09:00:00` : null,
     }
@@ -1335,6 +1337,20 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
                   />
                 </div>
               )}
+
+              {/* Origem do Lead */}
+              <div>
+                <label className="label">Origem do Lead</label>
+                <select
+                  className="input"
+                  value={form.source}
+                  onChange={e => setForm(prev => ({ ...prev, source: e.target.value }))}
+                >
+                  {sources.map(s => (
+                    <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
+                  ))}
+                </select>
+              </div>
 
               {/* Interesse */}
               <div>
