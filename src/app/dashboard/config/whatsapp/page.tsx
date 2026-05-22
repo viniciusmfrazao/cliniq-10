@@ -63,16 +63,25 @@ export default function WhatsappConfigPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [hasEva, setHasEva] = useState(true) // default true enquanto carrega
   const [showAddForm, setShowAddForm] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
     try {
-      const r = await fetch('/api/whatsapp/instance', { cache: 'no-store' })
+      const [r, mR] = await Promise.all([
+        fetch('/api/whatsapp/instance', { cache: 'no-store' }),
+        fetch('/api/clinic/modules', { cache: 'no-store' }),
+      ])
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const data = await r.json()
       setState(data)
+      if (mR.ok) {
+        const mData = await mR.json()
+        const modules: string[] = mData.active_modules || []
+        setHasEva(modules.length === 0 || modules.includes('eva_ia'))
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar')
     } finally {
@@ -336,6 +345,7 @@ export default function WhatsappConfigPage() {
               onSetDefault={() =>
                 patchInstance(inst, { is_default: true }, `default-${inst.instance_name}`)
               }
+              hasEva={hasEva}
               onUpdateRole={async (role, value) => {
                 // Exclusividade: Eva só pode atender em 1 número por vez
                 if (role === 'role_inbound' && value === true) {
@@ -506,6 +516,7 @@ function InstanceCard({
   onDestroy: () => void
   onForceReset: () => void
   onSetDefault: () => void
+  hasEva?: boolean
   onUpdateRole: (
     role: 'role_inbound' | 'role_outbound_automation' | 'role_outbound_manual',
     value: boolean,
@@ -561,12 +572,12 @@ function InstanceCard({
 
         {/* Papeis em chips */}
         <div className="flex flex-wrap gap-1.5 mt-3">
-          <RoleChip
+          {hasEva && <RoleChip
             active={instance.role_inbound}
             label="Eva atende"
             emoji="📥"
             title="Eva responde mensagens recebidas neste número"
-          />
+          />}
           <RoleChip
             active={instance.role_outbound_automation}
             label="Sai automação"
@@ -640,12 +651,12 @@ function InstanceCard({
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Pra que esse número é usado
             </p>
-            <RoleToggle
+            {hasEva && <RoleToggle
               label="Eva atende mensagens recebidas aqui"
               hint="Quando o paciente manda mensagem nesse número, a Eva responde automaticamente."
               checked={instance.role_inbound}
               onChange={v => onUpdateRole('role_inbound', v)}
-            />
+            />}
             <RoleToggle
               label="Automação sai por aqui"
               hint="NPS pós-atendimento, lembretes, aniversários e recall de inativos saem deste número."
