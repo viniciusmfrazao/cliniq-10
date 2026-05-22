@@ -14,7 +14,7 @@ type Member = {
   permissions?: string[]
 }
 
-type Props = { member: Member }
+type Props = { member: Member; activeModules?: string[] }
 
 type IconName =
   | 'calendar'
@@ -31,6 +31,7 @@ type PermissionGroup = {
   description: string
   icon: IconName
   color: string
+  requiredModule?: string
   permissions: { id: string; label: string; description: string }[]
 }
 
@@ -96,6 +97,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     description: 'Leads e pipeline comercial',
     icon: 'target',
     color: 'pink',
+    requiredModule: 'crm',
     permissions: [
       { id: 'crm_view', label: 'Ver leads', description: 'Visualizar pipeline e conversas com leads' },
       { id: 'crm_edit', label: 'Gerenciar leads', description: 'Mover etapa, atribuir responsáveis e responder conversas' },
@@ -158,7 +160,7 @@ const COLOR_STYLES: Record<string, { bg: string; text: string; ring: string; sof
   slate: { bg: 'bg-slate-500', text: 'text-slate-700', ring: 'ring-slate-500', soft: 'bg-slate-50' },
 }
 
-export default function PermissionsForm({ member }: Props) {
+export default function PermissionsForm({ member, activeModules = [] }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -288,7 +290,7 @@ export default function PermissionsForm({ member }: Props) {
       </button>
 
       <div className={`space-y-4 ${hasAll ? 'opacity-50 pointer-events-none' : ''}`}>
-        {PERMISSION_GROUPS.map((group) => {
+        {PERMISSION_GROUPS.filter(group => !group.requiredModule || activeModules.length === 0 || activeModules.includes(group.requiredModule)).map((group) => {
           const styles = COLOR_STYLES[group.color]
           const groupPermIds = group.permissions.map((p) => p.id)
           const selectedCount = groupPermIds.filter((id) => permissions.includes(id)).length

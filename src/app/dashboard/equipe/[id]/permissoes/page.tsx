@@ -43,6 +43,13 @@ export default async function MemberPermissionsPage({ params }: PageProps) {
     redirect('/dashboard/equipe')
   }
 
+  const { data: clinic } = await supabase
+    .from('clinics')
+    .select('settings')
+    .eq('id', currentUser.clinic_id)
+    .single()
+  const activeModules: string[] = clinic?.settings?.active_modules || []
+
   return (
     <div className="max-w-3xl mx-auto pb-32">
       <div className="mb-6">
@@ -68,6 +75,7 @@ export default async function MemberPermissionsPage({ params }: PageProps) {
           role: member.role,
           permissions: member.permissions ?? undefined,
         }}
+        activeModules={activeModules}
       />
     </div>
   )
