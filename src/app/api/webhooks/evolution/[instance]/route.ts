@@ -900,7 +900,20 @@ export async function POST(
               parsed.kind === 'sticker' ||
               !(parsed.text && parsed.text.trim().length >= 3))
 
-          if (isMediaToEscalate) {
+          // Anti-duplicata: checar se já mandou auto-reply de mídia para este phone nos últimos 30s
+          const { data: recentAutoReply } = await svc
+            .from('eva_conversations')
+            .select('id')
+            .eq('clinic_id', clinicId)
+            .eq('phone', phone)
+            .eq('role', 'assistant')
+            .filter('metadata->>auto_reply_for_media', 'is', 'not.null')
+            .gte('created_at', new Date(Date.now() - 30_000).toISOString())
+            .limit(1)
+            .maybeSingle()
+          const mediaAutoReplyRecentlySent = !!recentAutoReply
+
+          if (isMediaToEscalate && row.auto_reply_enabled !== false && !mediaAutoReplyRecentlySent) {
             const mediaLabel =
               parsed.kind === 'audio'
                 ? 'mensagem de voz'
