@@ -43,7 +43,7 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
   useEffect(() => {
     async function load() {
       const [profRes, procRes] = await Promise.all([
-        supabase.from('users').select('id, name, role').eq('clinic_id', clinicId).in('role', ['doctor', 'esthetician', 'biomedic', 'manager', 'admin']).eq('active', true).order('name'),
+        supabase.from('users').select('id, name, role').eq('clinic_id', clinicId).in('role', ['doctor', 'dentist', 'esthetician', 'biomedic', 'manager', 'admin']).eq('active', true).order('name'),
         supabase.from('procedures').select('id, name, duration_minutes').eq('clinic_id', clinicId).eq('active', true).order('name'),
       ])
       console.log('[ScheduleModal] profissionais:', profRes.data, profRes.error)

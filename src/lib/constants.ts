@@ -10,6 +10,7 @@
 export const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
   doctor: 'Médico(a)',
+  dentist: 'Dentista',
   biomedic: 'Biomédico(a)',
   nurse: 'Enfermeiro(a)',
   esthetician: 'Esteticista',
@@ -26,6 +27,7 @@ export const ROLE_LABELS: Record<string, string> = {
 export const ROLE_COLORS: Record<string, string> = {
   admin: 'bg-purple-100 text-purple-700',
   doctor: 'bg-blue-100 text-blue-700',
+  dentist: 'bg-sky-100 text-sky-800',
   biomedic: 'bg-teal-100 text-teal-700',
   nurse: 'bg-cyan-100 text-cyan-700',
   esthetician: 'bg-pink-100 text-pink-700',
