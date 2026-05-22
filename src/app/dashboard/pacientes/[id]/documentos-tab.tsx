@@ -246,7 +246,6 @@ export default function DocumentosTab({ patientId, patientName, patientPhone, cl
           ))}
         </div>
       )}
-    </div>
 
       {viewingDoc && (
         <DocumentViewModal

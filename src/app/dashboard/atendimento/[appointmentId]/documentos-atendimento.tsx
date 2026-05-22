@@ -220,7 +220,6 @@ export default function DocumentosAtendimento({
           ))}
         </div>
       )}
-    </div>
 
       {viewingDoc && (
         <DocumentViewModal
