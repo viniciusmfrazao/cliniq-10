@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
+import DocumentViewModal from '@/components/DocumentViewModal'
 import { useToast } from '@/components/ui/Toast'
 
 type Document = {
@@ -51,6 +52,7 @@ export default function DocumentosTab({ patientId, patientName, patientPhone, cl
   const [loading, setLoading] = useState(true)
   const [showPicker, setShowPicker] = useState(false)
   const [sending, setSending] = useState<string | null>(null)
+  const [viewingDoc, setViewingDoc] = useState<string | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -243,6 +245,14 @@ export default function DocumentosTab({ patientId, patientName, patientPhone, cl
             </div>
           ))}
         </div>
+      )}
+    </div>
+
+      {viewingDoc && (
+        <DocumentViewModal
+          documentId={viewingDoc}
+          onClose={() => setViewingDoc(null)}
+        />
       )}
     </div>
   )

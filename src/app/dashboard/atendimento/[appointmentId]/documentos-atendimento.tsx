@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
+import DocumentViewModal from '@/components/DocumentViewModal'
 import { useToast } from '@/components/ui/Toast'
 
 type Document = {
@@ -45,6 +46,7 @@ export default function DocumentosAtendimento({
   const [templates, setTemplates] = useState<Template[]>([])
   const [showPicker, setShowPicker] = useState(false)
   const [sending, setSending] = useState<string | null>(null)
+  const [viewingDoc, setViewingDoc] = useState<string | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -199,12 +201,10 @@ export default function DocumentosAtendimento({
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                {doc.sign_token && (
-                  <a href={`${siteUrl}/assinar/${doc.sign_token}`} target="_blank" rel="noreferrer"
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
-                    <Icon name="eye" className="w-3.5 h-3.5" />
-                  </a>
-                )}
+                <button onClick={() => setViewingDoc(doc.id)}
+                  className="p-1 text-slate-400 hover:text-violet-600 rounded-lg">
+                  <Icon name="eye" className="w-3.5 h-3.5" />
+                </button>
                 {doc.status !== 'signed' && doc.status !== 'expired' && (
                   <button onClick={() => resend(doc.id)} disabled={sending === doc.id}
                     className="p-1 text-slate-400 hover:text-emerald-600 rounded-lg"
@@ -219,6 +219,14 @@ export default function DocumentosAtendimento({
             </div>
           ))}
         </div>
+      )}
+    </div>
+
+      {viewingDoc && (
+        <DocumentViewModal
+          documentId={viewingDoc}
+          onClose={() => setViewingDoc(null)}
+        />
       )}
     </div>
   )
