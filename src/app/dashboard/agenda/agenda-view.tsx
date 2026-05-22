@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useToast } from '@/components/ui/Toast'
 import SendAnamneseButton from './send-anamnese-button'
+import SendTermoButton from './send-termo-button'
 import BlockModal from './block-modal'
 import PaymentModal from '@/components/agenda/payment-modal'
 
@@ -511,6 +512,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
                   patientName={apt.patients.name}
                   patientPhone={apt.patients.phone}
                   appointmentId={apt.id}
+                />
+                <SendTermoButton
+                  patientId={apt.patients.id}
+                  patientName={apt.patients.name}
+                  patientPhone={apt.patients.phone}
+                  appointmentId={apt.id}
+                  procedureName={apt.procedures?.name}
+                  clinicId={apt.clinic_id}
                 />
               </div>
             )}
