@@ -495,8 +495,26 @@ export default function WhatsAppPage() {
         const leadNameMap = new Map(leadsData.map(l => [l.phone, l.name]))
         convs.forEach(c => {
           const leadName = leadNameMap.get(c.phone)
-          if (leadName && leadName.trim().length > 2 && !/^lead whatsapp$/i.test(leadName)) {
+          const isPhoneAsName = leadName && /^\d{8,}$/.test(leadName.replace(/[\s+()-]/g, ''))
+          if (leadName && leadName.trim().length > 2 && !isPhoneAsName && !/^lead whatsapp$/i.test(leadName)) {
             c.name = leadName
+          }
+        })
+      }
+    }
+    // Enriquecer com nome do paciente cadastrado (prioridade sobre lead)
+    if (phones.length > 0 && clinicId) {
+      const { data: patientsData } = await supabase
+        .from('patients')
+        .select('phone, name')
+        .eq('clinic_id', clinicId)
+        .in('phone', phones)
+      if (patientsData && patientsData.length > 0) {
+        const patientNameMap = new Map(patientsData.map((p: any) => [p.phone, p.name]))
+        convs.forEach(c => {
+          const patientName = patientNameMap.get(c.phone)
+          if (patientName && patientName.trim().length > 2) {
+            c.name = patientName
           }
         })
       }
