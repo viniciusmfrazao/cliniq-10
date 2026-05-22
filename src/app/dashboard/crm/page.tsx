@@ -108,7 +108,10 @@ export default async function CRMPage() {
        waList.find(w => w.role_inbound !== false) ??
        waList[0])
     : null
-  const evaPaused = waInstance?.auto_reply_enabled === false
+  // Banner só aparece se clínica tem módulo eva_ia E Eva está em modo manual
+  const clinicModules: string[] = (await supabase.from('clinics').select('settings').eq('id', userData?.clinic_id || '').single()).data?.settings?.active_modules || []
+  const hasEvaModule = clinicModules.length === 0 || clinicModules.includes('eva_ia')
+  const evaPaused = hasEvaModule && waInstance?.auto_reply_enabled === false
 
   return (
     <CRMView

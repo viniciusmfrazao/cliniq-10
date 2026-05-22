@@ -171,6 +171,7 @@ export default function WhatsAppPage() {
   // Toggle Eva auto/manual: true = Eva responde automaticamente,
   // false = Eva fica calada e secretária responde pelo painel.
   const [evaEnabled, setEvaEnabled] = useState<boolean>(true)
+  const [hasEvaModule, setHasEvaModule] = useState<boolean>(false)
   const [evaToggling, setEvaToggling] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const selectedThreadIdRef = useRef<string | null>(null)
@@ -1071,8 +1072,8 @@ export default function WhatsAppPage() {
                 </button>
               </div>
 
-              {/* Banner: Eva pausada (intervencao humana) */}
-              {(leadEvaStatus.paused || leadEvaStatus.needsReview) && (
+              {/* Banner: Eva pausada - so aparece se clinica tem Eva */}
+              {hasEvaModule && (leadEvaStatus.paused || leadEvaStatus.needsReview) && (
                 <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/50 flex items-center gap-3">
                   <span className="text-lg">🤝</span>
                   <div className="flex-1 min-w-0">
