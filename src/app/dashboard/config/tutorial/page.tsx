@@ -4,21 +4,22 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
-type Section = 'inicio' | 'agenda' | 'pacientes' | 'financeiro' | 'crm' | 'whatsapp' | 'eva' | 'estoque' | 'documentos' | 'equipe' | 'importar' | 'dicas'
+type Section = 'inicio' | 'agenda' | 'atendimento' | 'pacientes' | 'financeiro' | 'crm' | 'whatsapp' | 'eva' | 'estoque' | 'documentos' | 'equipe' | 'importar' | 'dicas'
 
 const sections: { id: Section; title: string; icon: string }[] = [
-  { id: 'inicio',     title: 'Primeiros Passos',   icon: 'sparkles' },
-  { id: 'agenda',     title: 'Agenda',              icon: 'calendar' },
-  { id: 'pacientes',  title: 'Pacientes',           icon: 'users' },
-  { id: 'financeiro', title: 'Financeiro',          icon: 'dollarSign' },
-  { id: 'crm',        title: 'CRM e Leads',         icon: 'target' },
-  { id: 'whatsapp',   title: 'WhatsApp',            icon: 'messageCircle' },
-  { id: 'eva',        title: 'Eva IA',              icon: 'sparkles' },
-  { id: 'estoque',    title: 'Estoque',             icon: 'box' },
-  { id: 'documentos', title: 'Documentos',          icon: 'file' },
-  { id: 'equipe',     title: 'Equipe',              icon: 'userPlus' },
-  { id: 'importar',   title: 'Importar Dados',      icon: 'upload' },
-  { id: 'dicas',      title: 'Dicas e Atalhos',     icon: 'zap' },
+  { id: 'inicio',      title: 'Primeiros Passos',    icon: 'sparkles'     },
+  { id: 'agenda',      title: 'Agenda',               icon: 'calendar'     },
+  { id: 'atendimento', title: 'Atendimento',          icon: 'clipboard'    },
+  { id: 'pacientes',   title: 'Pacientes',            icon: 'users'        },
+  { id: 'financeiro',  title: 'Financeiro',           icon: 'dollarSign'   },
+  { id: 'crm',         title: 'CRM e Leads',          icon: 'target'       },
+  { id: 'whatsapp',    title: 'WhatsApp',             icon: 'messageCircle'},
+  { id: 'eva',         title: 'Eva IA',               icon: 'sparkles'     },
+  { id: 'estoque',     title: 'Estoque',              icon: 'box'          },
+  { id: 'documentos',  title: 'Documentos',           icon: 'file'         },
+  { id: 'equipe',      title: 'Equipe',               icon: 'userPlus'     },
+  { id: 'importar',    title: 'Importar Dados',       icon: 'upload'       },
+  { id: 'dicas',       title: 'Dicas e Atalhos',      icon: 'zap'          },
 ]
 
 export default function TutorialPage() {
@@ -55,18 +56,19 @@ export default function TutorialPage() {
 
         <div className="lg:col-span-3">
           <div className="card p-6">
-            {activeSection === 'inicio'     && <PrimeirosPassos />}
-            {activeSection === 'agenda'     && <TutorialAgenda />}
-            {activeSection === 'pacientes'  && <TutorialPacientes />}
-            {activeSection === 'financeiro' && <TutorialFinanceiro />}
-            {activeSection === 'crm'        && <TutorialCRM />}
-            {activeSection === 'whatsapp'   && <TutorialWhatsApp />}
-            {activeSection === 'eva'        && <TutorialEva />}
-            {activeSection === 'estoque'    && <TutorialEstoque />}
-            {activeSection === 'documentos' && <TutorialDocumentos />}
-            {activeSection === 'equipe'     && <TutorialEquipe />}
-            {activeSection === 'importar'   && <TutorialImportar />}
-            {activeSection === 'dicas'      && <DicasAtalhos />}
+            {activeSection === 'inicio'      && <PrimeirosPassos />}
+            {activeSection === 'agenda'      && <TutorialAgenda />}
+            {activeSection === 'atendimento' && <TutorialAtendimento />}
+            {activeSection === 'pacientes'   && <TutorialPacientes />}
+            {activeSection === 'financeiro'  && <TutorialFinanceiro />}
+            {activeSection === 'crm'         && <TutorialCRM />}
+            {activeSection === 'whatsapp'    && <TutorialWhatsApp />}
+            {activeSection === 'eva'         && <TutorialEva />}
+            {activeSection === 'estoque'     && <TutorialEstoque />}
+            {activeSection === 'documentos'  && <TutorialDocumentos />}
+            {activeSection === 'equipe'      && <TutorialEquipe />}
+            {activeSection === 'importar'    && <TutorialImportar />}
+            {activeSection === 'dicas'       && <DicasAtalhos />}
           </div>
         </div>
       </div>
@@ -83,15 +85,16 @@ function PrimeirosPassos() {
       </div>
       <div className="space-y-4">
         <Step number={1} title="Configure os dados da clínica" description="Preencha nome, endereço, telefone, Instagram e horário de funcionamento em Configurações → Dados da Clínica." link="/dashboard/config" />
-        <Step number={2} title="Cadastre sua equipe" description="Adicione os profissionais com nome, email e papel. Defina os horários de atendimento de cada um clicando no ícone de relógio." link="/dashboard/equipe" />
-        <Step number={3} title="Cadastre os procedimentos" description="Liste todos os serviços com preço, duração e quem realiza. Sem profissional vinculado = qualquer membro pode realizar." link="/dashboard/procedimentos" />
+        <Step number={2} title="Cadastre sua equipe" description="Adicione os profissionais com nome, email e papel. Configure os horários de atendimento de cada um." link="/dashboard/equipe" />
+        <Step number={3} title="Cadastre os procedimentos" description="Liste todos os serviços com preço, duração e profissional responsável. Adicione uma descrição clara para a Eva usar nas respostas." link="/dashboard/procedimentos" />
         <Step number={4} title="Conecte o WhatsApp" description="Vá em Configurações → WhatsApp e escaneie o QR code para conectar o número da clínica." link="/dashboard/config/whatsapp" />
         <Step number={5} title="Configure a Eva IA" description="Personalize a personalidade, mensagens de follow-up e política de desconto da sua assistente virtual." link="/dashboard/config/eva" />
-        <Step number={6} title="Importe o histórico (opcional)" description="Importe agendamentos e pacientes do sistema anterior via planilha Excel." link="/dashboard/config/importar" />
-        <Step number={7} title="Comece a agendar!" description="Sua clínica está pronta. Crie o primeiro agendamento." link="/dashboard/agenda" />
+        <Step number={6} title="Configure as taxas de pagamento" description="Cadastre as taxas de cada bandeira de cartão para o sistema calcular o valor líquido automaticamente." link="/dashboard/config/taxas" />
+        <Step number={7} title="Importe o histórico (opcional)" description="Importe agendamentos e pacientes do sistema anterior via planilha Excel." link="/dashboard/config/importar" />
+        <Step number={8} title="Comece a agendar!" description="Sua clínica está pronta. Crie o primeiro agendamento." link="/dashboard/agenda" />
       </div>
       <div className="bg-violet-50 border border-violet-100 rounded-xl p-4">
-        <p className="text-sm text-violet-800"><strong>💡 Dica:</strong> Configure os horários de cada profissional em Equipe → ícone de relógio antes de ativar a Eva. Isso é essencial para ela responder sobre disponibilidade corretamente.</p>
+        <p className="text-sm text-violet-800"><strong>💡 Dica:</strong> Configure os horários de cada profissional em Equipe antes de ativar a Eva. Isso é essencial para ela responder sobre disponibilidade corretamente.</p>
       </div>
     </div>
   )
@@ -102,13 +105,35 @@ function TutorialAgenda() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-slate-900">📅 Como usar a Agenda</h2>
-        <p className="text-slate-600 mt-2">A agenda é o coração do sistema. Aqui você gerencia todos os agendamentos.</p>
+        <p className="text-slate-600 mt-2">A agenda é o coração do sistema. Aqui você gerencia todos os atendimentos.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Criar um agendamento" steps={['Clique no botão "Agendar" no topo da tela','Selecione o paciente (ou cadastre um novo)','Escolha o procedimento desejado','Selecione o profissional responsável','Defina data e horário','Clique em "Confirmar Agendamento"']} />
-        <Tutorial title="Visualizar a agenda" steps={['Use os botões "Dia", "Semana" ou "Mês" para trocar a visualização','Filtre por profissional clicando no nome dele no topo','Clique em um agendamento para ver detalhes e alterar status']} />
-        <Tutorial title="Status dos agendamentos" steps={['Agendado: Consulta marcada, aguardando confirmação','Confirmado: Paciente confirmou presença','Check-in: Paciente chegou na clínica','Em atendimento: Consulta em andamento','Concluído: Atendimento finalizado','Cancelado / Não compareceu: Consulta não realizada']} />
-        <Tutorial title="Confirmação automática D-1" steps={['O sistema envia mensagem de confirmação 24h antes automaticamente','Quando o paciente responder "sim/confirmo", o status muda para Confirmado','Configure o texto da mensagem em Configurações → Eva IA']} />
+        <Tutorial title="Criar um agendamento" steps={['Clique no botão \"+ Novo Agendamento\" no topo da tela','Selecione o paciente (ou cadastre um novo)', 'Escolha o procedimento desejado','Selecione o profissional responsável','Defina data e horário disponível','Opcionalmente registre um sinal (pagamento antecipado)','Clique em \"Confirmar Agendamento\"']} />
+        <Tutorial title="Registrar sinal (pagamento antecipado)" steps={['Ao passar o mouse sobre um agendamento, clique nele para abrir o popup','Na seção \"Sinal\", clique em \"+ Registrar\"','Informe o valor e a forma de pagamento (Pix, dinheiro, crédito, débito)','O sinal fica registrado e visível no popup e no card']} />
+        <Tutorial title="Adicionar observações" steps={['Abra o popup do agendamento passando o mouse','Clique em \"+ Adicionar\" na seção Observações','Digite e salve diretamente no popup sem sair da agenda']} />
+        <Tutorial title="Visualizar a agenda" steps={['Use os botões \"Dia\", \"Semana\" ou \"Mês\" para trocar a visualização','Filtre por profissional usando o seletor no topo','Clique em um agendamento para ver detalhes, alterar status, editar ou abrir atendimento']} />
+        <Tutorial title="Status dos agendamentos" steps={['Agendado: Consulta marcada, aguardando confirmação','Confirmado: Paciente confirmou presença','Check-in: Paciente chegou na clínica','Em atendimento: Consulta em andamento','Realizado: Atendimento finalizado (automático ao clicar em Finalizar)','Cancelado / Não compareceu: Consulta não realizada']} />
+        <Tutorial title="Confirmação automática" steps={['O sistema envia mensagem de confirmação 24h antes automaticamente','Também envia lembrete 2h antes do atendimento','Configure os textos em Configurações → Eva IA']} />
+      </div>
+    </div>
+  )
+}
+
+function TutorialAtendimento() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-bold text-slate-900">🩺 Tela de Atendimento</h2>
+        <p className="text-slate-600 mt-2">Tudo que o profissional precisa durante a consulta em uma única tela.</p>
+      </div>
+      <div className="space-y-4">
+        <Tutorial title="Acessar o atendimento" steps={['Na agenda, clique no agendamento','Clique em \"Abrir Atendimento\"','Ou diretamente pelo popup da agenda no botão \"Atendimento\"']} />
+        <Tutorial title="Coluna esquerda — Prontuário" steps={['Queixa principal: o que trouxe o paciente hoje','Conduta / Procedimento realizado: descreva o que foi feito','Observações: recomendações pós-procedimento','Fotos antes/depois: adicione até 20MB por foto (JPG, PNG, WEBP)','Pacotes ativos: se o paciente tiver pacote, aparece o botão \"Usar Sessão\"','Orçamentos: visualize e crie orçamentos sem sair da tela','Anamnese: veja as respostas do paciente ou reenvie o formulário','Agendar retorno: sugira a próxima data para a recepção confirmar']} />
+        <Tutorial title="Coluna direita — Mapa / Odontograma" steps={['Alterne entre Mapa de Injetáveis e Odontograma (se habilitado)','Mapa facial: marque os pontos de aplicação com produto e quantidade','Odontograma: marque condições por dente (cárie, coroa, canal, etc.)','Selecione a condição na legenda e clique nos dentes para marcar','Salve o odontograma — fica registrado na ficha do paciente']} />
+        <Tutorial title="Finalizar atendimento" steps={['Clique em \"Finalizar\" no topo da tela','O status do agendamento muda para \"Realizado\" automaticamente na agenda','O sistema envia NPS automático ao paciente após o atendimento','Você é redirecionado de volta para a agenda']} />
+      </div>
+      <div className="bg-violet-50 border border-violet-100 rounded-xl p-4">
+        <p className="text-sm text-violet-800"><strong>💡 Dica:</strong> Use a tela de atendimento no tablet durante a consulta. O mapa facial fica visualmente claro e o prontuário salva em tempo real.</p>
       </div>
     </div>
   )
@@ -122,9 +147,9 @@ function TutorialPacientes() {
         <p className="text-slate-600 mt-2">Cadastre e gerencie todos os pacientes da sua clínica.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Cadastrar novo paciente" steps={['Vá em Pacientes → Novo Paciente','Preencha nome e telefone (obrigatórios)','Adicione CPF, data de nascimento e endereço','Use o campo "Observações" para informações importantes','Clique em "Salvar"']} />
-        <Tutorial title="Ficha completa do paciente" steps={['Dados pessoais e histórico de contato','Todos os agendamentos passados e futuros','Prontuário e evoluções clínicas','Anamnese respondida','Documentos assinados','Aplicações de injetáveis com mapa facial']} />
-        <Tutorial title="Filtros de pacientes" steps={['Busque por nome, telefone, email ou CPF','Filtre "Pendentes" para ver pacientes sem CPF ou data de nascimento','Use essa lista para completar o cadastro gradualmente']} />
+        <Tutorial title="Cadastrar novo paciente" steps={['Vá em Pacientes → Novo Paciente','Preencha nome e telefone (obrigatórios)','Adicione CPF, data de nascimento e endereço','Use o campo \"Observações\" para informações importantes','Clique em \"Salvar\"']} />
+        <Tutorial title="Ficha completa do paciente" steps={['Visão geral: dados, próximo agendamento e resumo','Evoluções: histórico de prontuários e fotos','Atendimentos: todos os agendamentos passados e futuros','Anamneses: formulários respondidos pelo paciente','Injetáveis: histórico de aplicações com mapa facial','Pacotes: sessões de pacote compradas e consumidas','Odontograma: mapa dental (se módulo habilitado)']} />
+        <Tutorial title="Pacotes de sessões" steps={['Na tab Pacotes da ficha do paciente, clique em \"Novo Pacote\"','Informe nome do pacote (ex: Clube do Botox), total de sessões e valor','A cada atendimento, clique em \"+ Sessão\" para descontar','O progresso aparece em barra visual e pontos coloridos','Ao agendar, você pode criar um pacote diretamente no formulário de agendamento']} />
         <Tutorial title="Lista de Espera" steps={['Vá em Lista de Espera para ver pacientes aguardando vaga','Quando um horário abrir, notifique o próximo da fila','O paciente pode ser adicionado manualmente ou solicitar pela Eva']} />
       </div>
     </div>
@@ -136,13 +161,15 @@ function TutorialFinanceiro() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-slate-900">💰 Módulo Financeiro</h2>
-        <p className="text-slate-600 mt-2">Controle entradas, saídas e tenha visão completa do faturamento.</p>
+        <p className="text-slate-600 mt-2">Controle entradas, saídas, devedores e tenha visão completa do faturamento.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Registrar entrada (receita)" steps={['Vá em Financeiro → Entradas → Nova Entrada','Selecione o paciente e procedimento','Informe valor bruto e forma de pagamento','Se cartão, informe bandeira e número de parcelas','O sistema calcula automaticamente taxa e valor líquido','Salve o registro']} />
-        <Tutorial title="Registrar saída (despesa)" steps={['Vá em Financeiro → Saídas → Nova Saída','Informe descrição, categoria e valor','Categorias: aluguel, material, equipamento, salário, etc','Adicione observações e salve']} />
-        <Tutorial title="Configurar taxas de pagamento" steps={['Vá em Configurações → Taxas de Pagamento','Cadastre a taxa de cada bandeira de cartão','O sistema desconta automaticamente ao registrar entradas','O DRE mostra o valor líquido real que entra no caixa']} />
-        <Tutorial title="Metas financeiras" steps={['Configure metas mensais de faturamento no dashboard','Acompanhe o progresso em tempo real','Veja comparativo mês a mês']} />
+        <Tutorial title="Registrar entrada (receita)" steps={['Vá em Financeiro → Entradas → Nova Entrada','Selecione o paciente e procedimento','Informe valor bruto e forma de pagamento','Se cartão, informe número de parcelas','O sistema calcula automaticamente taxa e valor líquido','Salve o registro — aparece no dashboard imediatamente']} />
+        <Tutorial title="Sinal na agenda" steps={['Na agenda, abra o popup de qualquer agendamento','Clique em \"+ Registrar\" na seção Sinal','Informe valor e forma (Pix, dinheiro, crédito, débito)','O sinal fica visível no popup para a secretária conferir na chegada do paciente']} />
+        <Tutorial title="Registrar saída (despesa)" steps={['Vá em Financeiro → Saídas → Nova Saída','Informe descrição, categoria e valor','Categorias: aluguel, material, equipamento, salário, marketing, etc','Adicione observações e salve']} />
+        <Tutorial title="Controle de devedores" steps={['Vá em Financeiro → Devedores','Veja todos os pacientes com parcelas em aberto','Registre um pagamento clicando no débito','O sistema atualiza o saldo automaticamente','Parcelas vencidas ficam destacadas em vermelho']} />
+        <Tutorial title="DRE e relatórios" steps={['Vá em Financeiro → DRE para ver o resultado mensal','Receita bruta, deduções de taxas e lucro líquido','Rankings de procedimentos mais rentáveis e profissionais','Fluxo de caixa com projeção anual','Metas mensais com progresso em tempo real']} />
+        <Tutorial title="Configurar taxas de pagamento" steps={['Vá em Configurações → Taxas de Pagamento','Cadastre a taxa de cada bandeira de cartão','O sistema desconta automaticamente ao registrar entradas','O DRE mostra o valor líquido real']} />
       </div>
     </div>
   )
@@ -156,10 +183,11 @@ function TutorialCRM() {
         <p className="text-slate-600 mt-2">Gerencie interessados e converta mais pacientes. Leads do WhatsApp entram automaticamente.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Entendendo o funil" steps={['Novo Lead: Pessoa que entrou em contato pelo WhatsApp','Em Conversa: Eva já está atendendo','Agendado: Marcou uma consulta ou avaliação','Cliente: Virou paciente após o agendamento','Perdido: Não teve interesse após todos os follow-ups']} />
-        <Tutorial title="Leads automáticos da Eva" steps={['Toda mensagem no WhatsApp vira lead automaticamente','A Eva registra interesse, prioridade e histórico','Badge "Atendimento" aparece quando escalado para humano','Clique em "Devolver pra Eva" para ela retomar o atendimento']} />
-        <Tutorial title="Adicionar lead manualmente" steps={['Clique em "Novo Lead"','Preencha nome, telefone e origem (Instagram, indicação, etc)','Selecione o procedimento de interesse','Adicione observações sobre o contato']} />
-        <Tutorial title="Follow-up automático" steps={['A Eva envia 5 mensagens automáticas para leads sem resposta','Estágios: 2h, 1 dia, 2 dias, 5 dias e 10 dias','Configure os textos em Configurações → Eva IA','Após o 5° follow-up sem resposta, lead é marcado como Perdido']} />
+        <Tutorial title="Entendendo o funil" steps={['Novo Lead: Pessoa que entrou em contato pelo WhatsApp','Em Conversa: Eva está atendendo ou aguardando resposta','Agendado: Marcou uma consulta ou avaliação','Cliente: Virou paciente após o agendamento','Perdido: Não teve interesse após todos os follow-ups']} />
+        <Tutorial title="Leads automáticos" steps={['Toda mensagem no WhatsApp vira lead automaticamente','O lead sai de \"Novo Lead\" para \"Em Conversa\" assim que manda a primeira mensagem','A Eva registra interesse, histórico e prioridade','Badge \"Atendimento Humano\" aparece quando escalado','Clique em \"Devolver pra Eva\" para ela retomar']} />
+        <Tutorial title="Relatório do CRM" steps={['Clique em \"Relatório\" no topo do CRM','Veja total de leads, agendados, conversão e perdidos','Filtre por período, origem e status','Exporte para Excel com um clique','As colunas mostram nome real do stage mesmo quando personalizado']} />
+        <Tutorial title="Follow-up automático" steps={['A Eva envia follow-ups apenas quando o cliente respondeu e depois sumiu','Não envia em cascata — respeita o ritmo do lead','Configure os textos em Configurações → Eva IA','Após o 5° follow-up sem interação, lead é marcado como Perdido']} />
+        <Tutorial title="Stages personalizados" steps={['Clique em ⚙️ no CRM para configurar','Crie stages com nome e cor da sua escolha','Arraste leads entre stages no kanban','O relatório usa os nomes corretos dos seus stages']} />
       </div>
     </div>
   )
@@ -173,10 +201,11 @@ function TutorialWhatsApp() {
         <p className="text-slate-600 mt-2">Conecte o número da clínica e gerencie conversas diretamente no sistema.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Conectar o WhatsApp" steps={['Vá em Configurações → WhatsApp da Clínica','Clique em "Conectar novo número"','Abra o WhatsApp no celular → três pontinhos → Aparelhos conectados','Escaneie o QR code exibido na tela','Aguarde a conexão — ícone verde "Conectado" confirma']} />
-        <Tutorial title="Visualizar conversas" steps={['Vá em WhatsApp no menu lateral','Veja todas as conversas em tempo real','Conversas com a Eva ativa mostram respostas automáticas','Conversas escaladas mostram banner amarelo "Atendimento humano"']} />
-        <Tutorial title="Atendimento humano" steps={['Quando a Eva escala, aparece banner amarelo na conversa','A Eva fica em silêncio enquanto você responde','Ao terminar, clique em "Devolver pra Eva" para ela retomar','A Eva não perde o contexto da conversa']} />
-        <Tutorial title="Múltiplos números" steps={['A clínica pode ter mais de um número conectado','Cada número pode ter papel específico: entrada de leads, automações, manual','Gerencie os números em Configurações → WhatsApp']} />
+        <Tutorial title="Conectar o WhatsApp" steps={['Vá em Configurações → WhatsApp da Clínica','Clique em \"Conectar novo número\"','Abra o WhatsApp no celular → três pontinhos → Aparelhos conectados','Escaneie o QR code exibido na tela','Aguarde a conexão — ícone verde \"Conectado\" confirma']} />
+        <Tutorial title="Papéis do número" steps={['Eva atende mensagens recebidas: a Eva responde automaticamente neste número','Automação sai por aqui: lembretes, NPS, aniversário e recall saem por este número','Secretária pode usar manualmente: aparece no painel WhatsApp para responder','Você pode ter múltiplos números com papéis diferentes']} />
+        <Tutorial title="Painel de conversas" steps={['Vá em WhatsApp no menu lateral','Busque por nome ou número no campo de pesquisa','Filtre por \"Aguardando\" para ver só quem está esperando resposta','Badge verde mostra mensagens não lidas','Clique em \"Agendar\" no header para abrir o modal de agendamento sem sair da conversa']} />
+        <Tutorial title="Agendar pelo chat" steps={['Abra qualquer conversa no painel WhatsApp','Clique no botão verde \"Agendar\" no topo direito','Selecione profissional, procedimento e data','Os horários disponíveis aparecem em tempo real — sem slots ocupados','Confirme para criar o agendamento diretamente']} />
+        <Tutorial title="Atendimento humano" steps={['Quando a Eva escala, aparece badge \"Atendimento Humano\" no CRM','Responda normalmente pelo painel WhatsApp','A Eva fica em silêncio enquanto você responde','Ao terminar, clique em \"Devolver pra Eva\" para ela retomar']} />
       </div>
     </div>
   )
@@ -190,15 +219,14 @@ function TutorialEva() {
         <p className="text-slate-600 mt-2">A Eva atende no WhatsApp 24/7, agenda consultas, registra leads e faz follow-up automaticamente.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="O que a Eva faz automaticamente" steps={['Recebe e responde mensagens no WhatsApp 24/7','Apresenta procedimentos e preços quando perguntado','Consulta horários disponíveis em tempo real','Cria agendamentos confirmados diretamente na agenda','Registra o lead no CRM com interesse e prioridade','Envia follow-ups automáticos para quem não respondeu','Escala para atendimento humano quando não sabe responder']} />
-        <Tutorial title="Configurar personalidade" steps={['Vá em Configurações → Eva IA','Edite o campo "Personalidade" com o tom que sua clínica prefere','Exemplo: "Seja calorosa, elegante, use emojis com moderação"','Se deixar em branco, a Eva usa o padrão Clinike']} />
-        <Tutorial title="Configurar horários (ESSENCIAL)" steps={['Vá em Equipe e clique no ícone de relógio de cada profissional','Defina quais dias e horários cada um atende','A Eva usa esses dados para responder sobre disponibilidade','Sem horários cadastrados, a Eva inventa ou escala desnecessariamente']} />
-        <Tutorial title="Mensagens de follow-up" steps={['Configure até 5 textos em Configurações → Eva IA','Cada texto tem tom diferente: curioso, sutil, emocional...','Configure o intervalo entre cada follow-up (em minutos)','Se não configurar, a Eva usa os textos padrão do Clinike']} />
-        <Tutorial title="Política de desconto" steps={['Em Configurações → Eva IA, adicione a política de desconto','Exemplo: "À vista no Pix: 5% de desconto"','A Eva só menciona quando o paciente perguntar explicitamente','Nunca oferece proativamente — segue boas práticas de venda']} />
-        <Tutorial title="Quando a Eva escala para humano" steps={['Cancelamentos e reagendamentos','Reclamações','Dúvidas que ela não sabe responder','Você recebe badge no CRM e banner amarelo no WhatsApp','Ao terminar, clique em "Devolver pra Eva"']} />
+        <Tutorial title="O que a Eva faz" steps={['Recebe e responde mensagens no WhatsApp 24/7','Apresenta procedimentos e preços com base no cadastro','Consulta horários disponíveis em tempo real','Cria agendamentos confirmados diretamente na agenda','Registra o lead no CRM com interesse e histórico','Envia follow-ups inteligentes — só quando o cliente sumiu após interagir','Escala para atendimento humano quando necessário']} />
+        <Tutorial title="Comportamento dos follow-ups" steps={['Follow-up 1: explica o procedimento de interesse + valor e pergunta se ficou dúvida','Follow-up 2+: só dispara se o cliente respondeu alguma vez e sumiu depois','Nunca envia em cascata sem o cliente ter interagido','Configure os textos em Configurações → Eva IA — se deixar em branco usa o padrão']} />
+        <Tutorial title="Configurar procedimentos para a Eva" steps={['Vá em Procedimentos e abra cada um','Use o campo Descrição/Observações para dar contexto à Eva','Exemplo: \"Disponível apenas em datas especiais. Não é aplicado pela Dra. X\"','A Eva respeita essas instruções como fonte de verdade','Vincule o profissional responsável — a Eva nunca mente sobre quem aplica']} />
+        <Tutorial title="Quando a Eva escala" steps={['Cancelamentos e reagendamentos','Reclamações','Dúvidas que ela não consegue responder','Pedido explícito de atendimento humano','Você recebe badge no CRM e pode responder pelo painel WhatsApp']} />
+        <Tutorial title="Configurações importantes" steps={['Personalidade: tom da Eva (ex: \"calorosa, elegante, use emojis com moderação\")','Follow-up: textos e intervalos de cada estágio','Política de desconto: a Eva só menciona quando perguntada diretamente','Horários dos profissionais: configure em Equipe — essencial para disponibilidade correta']} />
       </div>
       <div className="bg-violet-50 border border-violet-100 rounded-xl p-4">
-        <p className="text-sm text-violet-800"><strong>💡 Dica:</strong> Cadastre os horários de todos os profissionais antes de ativar a Eva. Isso evita respostas erradas sobre disponibilidade.</p>
+        <p className="text-sm text-violet-800"><strong>💡 Dica:</strong> A Eva lê a descrição de cada procedimento para responder corretamente. Quanto mais detalhada a descrição, melhor a Eva explica para o paciente.</p>
       </div>
     </div>
   )
@@ -209,13 +237,13 @@ function TutorialEstoque() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-slate-900">📦 Controle de Estoque</h2>
-        <p className="text-slate-600 mt-2">Gerencie produtos, injetáveis e alertas de validade.</p>
+        <p className="text-slate-600 mt-2">Gerencie produtos, injetáveis e alertas de validade e estoque mínimo.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Cadastrar produto" steps={['Vá em Estoque → Novo Produto','Preencha nome, marca e categoria','Defina unidade de medida (ml, unidade, etc)','Informe estoque mínimo para alertas automáticos','Adicione preço de custo','Salve o produto']} />
-        <Tutorial title="Dar entrada no estoque" steps={['Abra o produto desejado','Clique em "Nova Entrada"','Informe quantidade, lote e validade','Adicione nota fiscal se tiver','Confirme a entrada']} />
-        <Tutorial title="Injetáveis e mapa facial" steps={['Vá em Injetáveis para registrar aplicações','Selecione o paciente e o produto aplicado','Marque os pontos no mapa facial interativo','Registre quantidade em unidades ou ml','O histórico fica salvo na ficha do paciente']} />
-        <Tutorial title="Alertas automáticos" steps={['Produtos abaixo do estoque mínimo aparecem em vermelho','Produtos próximos da validade são destacados em amarelo','Verifique o painel de estoque regularmente para reposição']} />
+        <Tutorial title="Cadastrar produto" steps={['Vá em Estoque → Novo Produto','Preencha nome, marca e categoria','Defina unidade de medida (ml, unidade, caixa, etc)','Informe estoque mínimo — alerta automático quando abaixo','Adicione preço de custo e preço de venda','Salve o produto']} />
+        <Tutorial title="Dar entrada no estoque" steps={['Abra o produto desejado','Clique em \"Nova Entrada\"','Informe quantidade, lote e validade','Adicione nota fiscal se tiver','Confirme a entrada — estoque atualiza automaticamente']} />
+        <Tutorial title="Injetáveis e mapa facial" steps={['Vá em Injetáveis para registrar aplicações','Selecione o paciente e o produto aplicado','Marque os pontos no mapa facial interativo','Registre quantidade em unidades ou ml','O histórico fica salvo na ficha do paciente com data e profissional']} />
+        <Tutorial title="Alertas de estoque" steps={['Produtos abaixo do mínimo aparecem destacados no painel','Produtos próximos da validade são sinalizados','Verifique o painel de estoque regularmente','Configure o estoque mínimo de cada produto para alertas precisos']} />
       </div>
     </div>
   )
@@ -229,9 +257,9 @@ function TutorialDocumentos() {
         <p className="text-slate-600 mt-2">Crie termos de consentimento e colete assinaturas digitais.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Criar template de documento" steps={['Vá em Configurações → Templates de Documentos','Clique em "Novo Template"','Dê um nome (ex: Termo de Consentimento Botox)','Escreva o conteúdo do documento','Use variáveis: {nome_paciente}, {data}, {procedimento}','Salve o template']} />
-        <Tutorial title="Enviar para assinatura" steps={['Na ficha do paciente, clique em "Documentos"','Selecione o template desejado','O sistema preenche as variáveis automaticamente','Envie por WhatsApp ou email','O paciente assina pelo celular','Documento assinado fica salvo no prontuário']} />
-        <Tutorial title="Anamnese digital" steps={['Configure o formulário em Configurações → Anamnese','Adicione seções e perguntas personalizadas','Envie o link para o paciente antes da consulta','As respostas ficam salvas na ficha do paciente']} />
+        <Tutorial title="Criar template de documento" steps={['Vá em Configurações → Templates de Documentos','Clique em \"Novo Template\"','Dê um nome (ex: Termo de Consentimento Botox)','Escreva o conteúdo do documento','Use variáveis: {nome_paciente}, {data}, {procedimento}','Salve o template']} />
+        <Tutorial title="Enviar para assinatura" steps={['Na ficha do paciente, clique em \"Documentos\"','Selecione o template desejado','O sistema preenche as variáveis automaticamente','Envie por WhatsApp — o paciente assina pelo celular','Documento assinado fica salvo no prontuário']} />
+        <Tutorial title="Anamnese digital" steps={['Configure o formulário em Configurações → Anamnese','Adicione seções e perguntas personalizadas','Envie o link para o paciente antes da consulta','As respostas ficam salvas na ficha do paciente','Na tela de atendimento, o profissional vê as respostas em destaque']} />
       </div>
     </div>
   )
@@ -245,10 +273,9 @@ function TutorialEquipe() {
         <p className="text-slate-600 mt-2">Adicione membros, defina permissões e configure horários de atendimento.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Adicionar membro" steps={['Vá em Equipe → Adicionar Membro','Preencha nome e email','Selecione a função (Admin, Esteticista, Recepcionista, etc)','O membro receberá email para definir a senha no primeiro acesso']} />
-        <Tutorial title="Configurar horários de atendimento" steps={['Na lista de equipe, clique no ícone de relógio do profissional','Ative os dias que ele atende','Defina os horários de início e fim de cada turno','Pode adicionar múltiplos turnos por dia (manhã + tarde)','Use "Copiar segunda → ter/qua/qui/sex" para agilizar','Salve — a Eva e a agenda usam esses horários automaticamente']} />
-        <Tutorial title="Configurar férias e folgas" steps={['Clique no ícone de calendário do profissional','Adicione períodos de indisponibilidade','A agenda bloqueia automaticamente esses dias','A Eva não oferecerá horários nesses períodos']} />
-        <Tutorial title="Funções e permissões" steps={['Admin: Acesso total ao sistema','Esteticista/Médico/Biomédica: Agenda, pacientes, prontuário','Recepcionista: Agenda e check-in (sem financeiro)','Personalize em Configurações → Permissões por Papel']} />
+        <Tutorial title="Adicionar membro" steps={['Vá em Equipe → Adicionar Membro','Preencha nome e email','Selecione a função (Admin, Esteticista, Biomédica, Recepcionista, etc)','O membro recebe email para definir a senha no primeiro acesso']} />
+        <Tutorial title="Configurar horários de atendimento" steps={['Na lista de equipe, clique no ícone de relógio do profissional','Ative os dias que ele atende','Defina horários de início e fim por turno','Pode ter múltiplos turnos por dia (manhã + tarde)','Use \"Copiar\" para replicar para outros dias','Salve — a Eva e a agenda usam esses horários automaticamente']} />
+        <Tutorial title="Funções e permissões" steps={['Admin: Acesso total ao sistema incluindo financeiro','Esteticista/Médico/Biomédica: Agenda, pacientes e prontuário','Recepcionista: Agenda, check-in e CRM','Personalize em Configurações → Permissões por Papel']} />
       </div>
     </div>
   )
@@ -262,8 +289,8 @@ function TutorialImportar() {
         <p className="text-slate-600 mt-2">Importe histórico de agendamentos e pacientes via planilha Excel.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Como importar agendamentos" steps={['Vá em Configurações → Importar Agendamentos','Selecione o arquivo Excel exportado do sistema anterior','Configure os profissionais para ignorar (ex: quem saiu da clínica)','Defina o nome do profissional fictício para quem não está mais cadastrado','Escolha o status para agendamentos do passado (recomendado: Realizado)','Agendamentos com data futura viram "Agendado" automaticamente','Clique em "Iniciar Importação" e aguarde até 1 minuto']} />
-        <Tutorial title="Regras aplicadas automaticamente" steps={['Agendamentos deletados e cancelados são ignorados','Pacientes já cadastrados com o mesmo telefone NÃO são duplicados','Pacientes novos são criados com os dados da planilha','Profissionais são mapeados pelo nome (busca parcial)']} />
+        <Tutorial title="Como importar agendamentos" steps={['Vá em Configurações → Importar Agendamentos','Selecione o arquivo Excel exportado do sistema anterior','Configure os profissionais para ignorar','Defina o status para agendamentos do passado (recomendado: Realizado)','Agendamentos futuros viram \"Agendado\" automaticamente','Clique em \"Iniciar Importação\" e aguarde']} />
+        <Tutorial title="Regras aplicadas automaticamente" steps={['Agendamentos cancelados são ignorados','Pacientes já cadastrados com o mesmo telefone NÃO são duplicados','Pacientes novos são criados com os dados da planilha','Profissionais são mapeados pelo nome']} />
       </div>
       <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
         <p className="text-sm text-amber-800"><strong>⚠️ Atenção:</strong> Faça a importação uma única vez. Rodar duas vezes pode duplicar agendamentos. Se precisar reimportar, entre em contato com o suporte antes.</p>
@@ -281,13 +308,15 @@ function DicasAtalhos() {
       </div>
       <div className="grid gap-4">
         <Dica icon="🔍" title="Busca rápida global" description="Use Ctrl+K (ou Cmd+K no Mac) para buscar pacientes, agendamentos e mais em qualquer tela." />
-        <Dica icon="📱" title="Funciona no celular" description="O sistema é 100% responsivo. Use pelo celular para check-ins rápidos e consultar a agenda." />
-        <Dica icon="⏰" title="Cadastre os horários dos profissionais" description="Fundamental para a Eva funcionar corretamente. Sem horários, ela não sabe quais dias cada profissional atende." />
-        <Dica icon="🤖" title="Eva responde 24/7" description="A Eva fica ativa mesmo fora do horário da clínica. Configure a personalidade para soar como sua clínica." />
-        <Dica icon="🎯" title="CRM atualizado automaticamente" description="Todo lead do WhatsApp entra no CRM automaticamente com interesse, prioridade e histórico registrados pela Eva." />
-        <Dica icon="🎨" title="Personalize o tema" description="Em Configurações, escolha a cor do sistema que combina com a identidade visual da sua clínica." />
-        <Dica icon="📊" title="Dashboard diário" description="A página inicial mostra consultas do dia, pacientes cadastrados e receita do mês. Comece sempre por lá." />
-        <Dica icon="🔔" title="Confirmação automática" description="O sistema envia mensagem de confirmação 24h antes de cada consulta. Configure o texto em Configurações → Eva IA." />
+        <Dica icon="📱" title="Funciona no celular e tablet" description="O sistema é 100% responsivo. Use pelo celular para check-ins rápidos e pelo tablet durante o atendimento." />
+        <Dica icon="💬" title="Agende pelo WhatsApp" description="No painel WhatsApp, clique em \"Agendar\" no header da conversa para criar agendamentos sem sair do chat." />
+        <Dica icon="🦷" title="Odontograma ativável" description="O módulo Odontograma pode ser ativado por clínica pelo painel admin. Ideal para clínicas odontológicas ou mistas." />
+        <Dica icon="📦" title="Pacotes de sessões" description="Crie pacotes (Clube do Botox, Lavieen etc) na ficha do paciente ou direto ao agendar. O sistema controla sessões restantes automaticamente." />
+        <Dica icon="💰" title="Sinal no agendamento" description="Registre o sinal cobrado no ato do agendamento diretamente no popup da agenda. A recepcionista vê o valor na chegada do paciente." />
+        <Dica icon="🤖" title="Eva respeita o cadastro" description="A Eva lê a descrição de cada procedimento. Coloque instruções claras lá para ela responder corretamente sobre disponibilidade e quem aplica." />
+        <Dica icon="📊" title="CRM atualizado automaticamente" description="Todo lead do WhatsApp entra no CRM automaticamente e avança para \"Em Conversa\" na primeira mensagem." />
+        <Dica icon="🔔" title="Realtime na ficha" description="Quando o paciente preenche a anamnese, ela aparece na ficha automaticamente sem precisar recarregar a página." />
+        <Dica icon="✅" title="Finalizar = Realizado" description="Ao clicar em Finalizar no atendimento, o status da agenda muda para Realizado automaticamente." />
       </div>
       <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 mt-6">
         <p className="text-sm text-emerald-800"><strong>Precisa de ajuda?</strong> Entre em contato pelo WhatsApp: (34) 99180-5722</p>
