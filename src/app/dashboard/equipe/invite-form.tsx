@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 const ROLES = [
   { value: 'admin', label: 'Administrador' },
   { value: 'doctor', label: 'Médico(a)' },
+  { value: 'dentist', label: 'Dentista' },
   { value: 'biomedic', label: 'Biomédico(a)' },
   { value: 'nurse', label: 'Enfermeiro(a)' },
   { value: 'esthetician', label: 'Esteticista' },
