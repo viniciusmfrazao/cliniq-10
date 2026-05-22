@@ -143,6 +143,8 @@ export async function POST(request: Request) {
     })
 
     if (dbError) {
+      // Rollback: apagar do Auth para não deixar conta órfã
+      await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => {})
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
