@@ -38,28 +38,36 @@ export default function AnamneseFormClient({ token }: { token: string }) {
 
   // Form state
   const DRAFT_KEY = `anamnese_draft_${token}`
-  const [responses, setResponses] = useState<Record<string, any>>(() => {
-    // Restaurar rascunho do localStorage ao carregar
-    try {
-      const saved = localStorage.getItem(`anamnese_draft_${token}`)
-      if (saved) return JSON.parse(saved)
-    } catch {}
-    return {}
-  })
-  const [hasDraft, setHasDraft] = useState(() => {
-    try { return !!localStorage.getItem(`anamnese_draft_${token}`) } catch { return false }
-  })
+  const [responses, setResponses] = useState<Record<string, any>>({})
+  const [hasDraft, setHasDraft] = useState(false)
+  const [draftLoaded, setDraftLoaded] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
 
-  // Autosave: salvar no localStorage a cada mudança
+  // Restaurar rascunho do localStorage após montar no cliente (evita erro SSR)
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Object.keys(parsed).length > 0) {
+          setResponses(parsed)
+          setHasDraft(true)
+        }
+      }
+    } catch {}
+    setDraftLoaded(true)
+  }, [DRAFT_KEY])
+
+  // Autosave: salvar no localStorage a cada mudança (só após draft ter sido carregado)
+  useEffect(() => {
+    if (!draftLoaded) return
     if (Object.keys(responses).length === 0) return
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(responses))
       setHasDraft(true)
     } catch {}
-  }, [responses])
+  }, [responses, draftLoaded, DRAFT_KEY])
 
   useEffect(() => {
     fetchAnamnese()
