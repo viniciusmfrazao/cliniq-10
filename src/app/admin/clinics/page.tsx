@@ -10,6 +10,8 @@ export default async function ClinicsPage() {
   if (!ok) redirect('/dashboard')
 
   const svc = createServiceClient()
+  // Diagnóstico: logar se service key estiver ausente
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) console.error('[ADMIN] SUPABASE_SERVICE_ROLE_KEY ausente!')
 
   // Buscar clínicas com contagens via SQL direto (evita ambiguidade do count do Supabase JS)
   const { data: clinics } = await svc.rpc('admin_get_clinics_overview') as any

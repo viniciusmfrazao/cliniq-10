@@ -26,9 +26,14 @@ export async function createClient() {
 
 // Service role client for admin operations (creating users, etc.)
 export function createServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    console.error('[createServiceClient] FATAL: SUPABASE_SERVICE_ROLE_KEY ou URL ausente nas env vars!')
+  }
   return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    url!,
+    key!,
     {
       auth: {
         autoRefreshToken: false,

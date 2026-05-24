@@ -50,7 +50,8 @@ export default async function AdminUsersPage({
   if (status === 'inactive') query = query.eq('active', false)
   if (clinic) query = query.eq('clinic_id', clinic)
 
-  const { data, count } = await query
+  const { data, count, error: queryError } = await query
+  if (queryError) console.error("[admin] query error:", queryError.message, queryError.code)
   const users = (data as unknown as UserRow[] | null) ?? []
 
   // Lista de clinicas pra dropdown
