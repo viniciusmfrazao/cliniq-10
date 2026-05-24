@@ -2,10 +2,14 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getClientIp, getUserAgent, getClientCountry } from '@/lib/client-ip'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const dynamic = 'force-dynamic'
+
+function getAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function GET(
   request: Request,
@@ -13,7 +17,7 @@ export async function GET(
 ) {
   try {
     const { token } = params
-    const { data: anamnese, error } = await supabaseAdmin
+    const { data: anamnese, error } = await getAdmin()
       .from('anamneses')
       .select('*, patients(name, email, phone, cpf, birth_date), clinics(name)')
       .eq('token', token)
@@ -28,7 +32,7 @@ export async function GET(
     }
 
     // Buscar configuração personalizada da clínica
-    const { data: anamneseConfig } = await supabaseAdmin
+    const { data: anamneseConfig } = await getAdmin()
       .from('anamnese_config')
       .select('*')
       .eq('clinic_id', anamnese.clinic_id)
@@ -36,7 +40,7 @@ export async function GET(
 
     // Mark as viewed if pending
     if (anamnese.status === 'pending') {
-      await supabaseAdmin
+      await getAdmin()
         .from('anamneses')
         .update({ status: 'viewed', viewed_at: new Date().toISOString() })
         .eq('id', anamnese.id)
@@ -71,7 +75,7 @@ export async function POST(
     const country = getClientCountry(request.headers)
 
     // Find anamnese
-    const { data: anamnese, error: findError } = await supabaseAdmin
+    const { data: anamnese, error: findError } = await getAdmin()
       .from('anamneses')
       .select('id, status')
       .eq('token', token)
@@ -90,7 +94,7 @@ export async function POST(
     }
 
     // Update anamnese with responses
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await getAdmin()
       .from('anamneses')
       .update({
         status: 'completed',

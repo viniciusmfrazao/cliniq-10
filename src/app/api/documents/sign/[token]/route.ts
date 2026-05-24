@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
+
+export const dynamic = 'force-dynamic'
+
+function getAdmin() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+}
 import { NextResponse } from 'next/server'
 import { getClientIp, getUserAgent, getClientCountry } from '@/lib/client-ip'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 export async function GET(
   request: Request,
@@ -13,7 +14,7 @@ export async function GET(
 ) {
   try {
     const { token } = params
-    const { data: doc, error } = await supabaseAdmin
+    const { data: doc, error } = await getAdmin()
       .from('documents_sent')
       .select('*, patients(name), clinics(name)')
       .eq('sign_token', token)
@@ -25,7 +26,7 @@ export async function GET(
 
     // Mark as viewed if pending
     if (doc.status === 'pending') {
-      await supabaseAdmin
+      await getAdmin()
         .from('documents_sent')
         .update({ status: 'viewed', viewed_at: new Date().toISOString() })
         .eq('id', doc.id)
@@ -59,7 +60,7 @@ export async function POST(
     const country = getClientCountry(request.headers)
 
     // Find document
-    const { data: doc, error: findError } = await supabaseAdmin
+    const { data: doc, error: findError } = await getAdmin()
       .from('documents_sent')
       .select('id, status')
       .eq('sign_token', token)
@@ -78,7 +79,7 @@ export async function POST(
     }
 
     // Update document with signature
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await getAdmin()
       .from('documents_sent')
       .update({
         status: 'signed',
