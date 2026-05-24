@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
@@ -75,6 +75,10 @@ export default function MedicalRecordSection({
     conduct: '',
     observations: '',
   })
+
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [autoSaving, setAutoSaving] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -162,6 +166,47 @@ export default function MedicalRecordSection({
     }
     return urls
   }
+
+  const autoSave = useCallback(async (formData: typeof form) => {
+    if (!formData.complaint && !formData.conduct && !formData.observations) return
+    setAutoSaving(true)
+    try {
+      const { data: existing } = await supabase
+        .from('medical_records')
+        .select('id')
+        .eq('appointment_id', appointmentId)
+        .maybeSingle()
+
+      if (existing?.id) {
+        await supabase.from('medical_records').update({
+          complaint: formData.complaint,
+          conduct: formData.conduct,
+          observations: formData.observations,
+          updated_at: new Date().toISOString(),
+        }).eq('id', existing.id)
+      } else {
+        await supabase.from('medical_records').insert({
+          appointment_id: appointmentId,
+          clinic_id: clinicId,
+          professional_id: professionalId,
+          patient_id: patient.id,
+          complaint: formData.complaint,
+          conduct: formData.conduct,
+          observations: formData.observations,
+        })
+      }
+      setLastSaved(new Date())
+    } catch (e) {
+      console.error('autosave error:', e)
+    } finally {
+      setAutoSaving(false)
+    }
+  }, [appointmentId, clinicId, professionalId, supabase])
+
+  const scheduleAutoSave = useCallback((formData: typeof form) => {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(() => autoSave(formData), 2000)
+  }, [autoSave])
 
   const saveMedicalRecord = async () => {
     if (!form.complaint && !form.conduct && !form.observations && photos.length === 0) {
@@ -259,7 +304,7 @@ export default function MedicalRecordSection({
               </label>
               <AutoTextarea
                 value={form.complaint}
-                onChange={e => setForm({ ...form, complaint: e.target.value })}
+                onChange={e => { const f = { ...form, complaint: e.target.value }; setForm(f); scheduleAutoSave(f) }}
                 placeholder="O que trouxe a paciente hoje..."
                 minRows={3}
                 maxRows={10}
@@ -273,7 +318,7 @@ export default function MedicalRecordSection({
               </label>
               <AutoTextarea
                 value={form.conduct}
-                onChange={e => setForm({ ...form, conduct: e.target.value })}
+                onChange={e => { const f = { ...form, conduct: e.target.value }; setForm(f); scheduleAutoSave(f) }}
                 placeholder="Descreva o procedimento realizado..."
                 minRows={4}
                 maxRows={14}
@@ -287,7 +332,7 @@ export default function MedicalRecordSection({
               </label>
               <AutoTextarea
                 value={form.observations}
-                onChange={e => setForm({ ...form, observations: e.target.value })}
+                onChange={e => { const f = { ...form, observations: e.target.value }; setForm(f); scheduleAutoSave(f) }}
                 placeholder="Notas adicionais, recomendações..."
                 minRows={3}
                 maxRows={10}
@@ -374,6 +419,16 @@ export default function MedicalRecordSection({
               )}
             </button>
             
+            {autoSaving && (
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <span className="animate-spin inline-block">⟳</span> Salvando...
+              </span>
+            )}
+            {!autoSaving && lastSaved && !saved && (
+              <span className="text-xs text-slate-400">
+                ✓ Salvo às {lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
             {saved && (
               <p className="text-center text-sm text-emerald-600 mt-2">
                 Registro salvo. Para adicionar outro, recarregue a página.
