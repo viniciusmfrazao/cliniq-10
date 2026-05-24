@@ -246,16 +246,10 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
         content.filter(b => b.type === 'text').map(b => b.text || '').join(' ').trim();
 
       if (!text) {
-        // Sem texto e sem tool_use — Claude teve output vazio. silentFail.
-        errors.push(`[iter#${i}] output vazio — stop_reason=${r.stop_reason}, content_types=${content.map(b => b.type).join(',')}`);
-        return {
-          finalText: '',
-          steps,
-          totalUsage,
-          errors,
-          silentFail: true,
-          silentFailReason: 'claude_error',
-        };
+        // Output vazio apos tool_use -- forcar resposta
+        errors.push(`[iter#${i}] output vazio -- forcando nova tentativa`);
+        messages.push({ role: 'user', content: '[SISTEMA: voce precisa enviar uma mensagem de texto para a paciente agora.]' });
+        continue;
       }
 
       // Guard crítica: se o texto confirma agendamento mas criar_agendamento
