@@ -24,6 +24,7 @@ type Props = {
     trial_ends_at?: string | null
     plan_price?: number | null
     plan_expires_at?: string | null
+    clinic_phone?: string | null
     billing_whatsapp?: string | null
     billing_notes?: string | null
     settings?: Record<string, unknown> | null
@@ -53,6 +54,7 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
     trial_ends_at: clinic.trial_ends_at ? clinic.trial_ends_at.slice(0, 10) : '',
     plan_price: clinic.plan_price ? String(clinic.plan_price) : '',
     plan_expires_at: clinic.plan_expires_at ? clinic.plan_expires_at.slice(0, 10) : '',
+    clinic_phone: clinic.clinic_phone || '',
     billing_whatsapp: clinic.billing_whatsapp || '',
     billing_notes: clinic.billing_notes || '',
     max_whatsapp_numbers_override: initialOverride,
@@ -75,6 +77,7 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
         trial_ends_at: form.trial_ends_at || null,
         plan_price: form.plan_price ? parseFloat(form.plan_price) : null,
         plan_expires_at: form.plan_expires_at || null,
+        clinic_phone: form.clinic_phone.trim() || null,
         billing_whatsapp: form.billing_whatsapp.trim() || null,
         billing_notes: form.billing_notes.trim() || null,
         max_whatsapp_numbers_override: form.max_whatsapp_numbers_override
