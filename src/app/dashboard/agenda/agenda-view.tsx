@@ -834,8 +834,11 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                       return apt.professional_id === prof.id && aptHour === hour
                     })
                     const hourBlocks = blocks.filter(bl => {
-                      const blHour = new Date(bl.start_time).getHours()
-                      return bl.professional_id === prof.id && blHour === hour
+                      if (bl.professional_id !== prof.id) return false
+                      const blStart = new Date(bl.start_time).getHours()
+                      const blEndDate = new Date(bl.end_time)
+                      const blEnd = blEndDate.getHours() + (blEndDate.getMinutes() > 0 ? 1 : 0)
+                      return hour >= blStart && hour < blEnd
                     })
                     const isLastColumn = profIdx === displayProfessionals.length - 1
                     const hasContent = hourAppointments.length > 0 || hourBlocks.length > 0
