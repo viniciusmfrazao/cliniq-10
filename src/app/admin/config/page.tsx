@@ -19,11 +19,23 @@ export default async function AdminConfigPage() {
   for (const s of (settings || [])) cfg[s.key] = s.value
 
   // Buscar instâncias conectadas disponíveis
-  const { data: instances } = await svc
+  const { data: instancesRaw } = await svc
     .from('clinic_whatsapp')
-    .select('instance_name, status, clinic_id')
+    .select('instance_name, status, clinic_id, phone_number')
     .eq('status', 'connected')
     .order('instance_name')
 
-  return <AdminConfigClient config={cfg} instances={instances || []} />
+  // Buscar nomes das clínicas
+  const clinicIds = (instancesRaw || []).map((i: any) => i.clinic_id)
+  const { data: clinicNames } = await svc
+    .from('clinics').select('id, name').in('id', clinicIds)
+  const clinicNameMap: Record<string, string> = {}
+  for (const c of (clinicNames || [])) clinicNameMap[c.id] = c.name
+
+  const instances = (instancesRaw || []).map((i: any) => ({
+    ...i,
+    clinic_name: clinicNameMap[i.clinic_id] || i.clinic_id,
+  }))
+
+  return <AdminConfigClient config={cfg} instances={instances} />
 }

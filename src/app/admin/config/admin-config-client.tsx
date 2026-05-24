@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 type Props = {
   config: Record<string, string>
-  instances: Array<{ instance_name: string; status: string; clinic_id: string }>
+  instances: Array<{ instance_name: string; status: string; clinic_id: string; phone_number?: string | null; clinic_name?: string }>
 }
 
 export default function AdminConfigClient({ config, instances }: Props) {
@@ -62,7 +62,7 @@ export default function AdminConfigClient({ config, instances }: Props) {
             <option value="">Selecione uma instância...</option>
             {instances.map(i => (
               <option key={i.instance_name} value={i.instance_name}>
-                {i.instance_name} ({i.status})
+                {i.phone_number ? `📱 ${i.phone_number}` : i.instance_name} — {i.clinic_name || i.clinic_id}
               </option>
             ))}
           </select>
