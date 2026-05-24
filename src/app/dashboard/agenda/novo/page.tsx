@@ -27,14 +27,20 @@ export default async function NovoAgendamentoPage({
 
   // Buscar TODOS os usuários e filtrar no código (evita problemas com enum)
   // admin NÃO é profissional
-  const PROFESSIONAL_ROLES = ['doctor', 'dentist', 'esthetician', 'biomedic', 'manager', 'admin']
+  // So mostra quem realmente atende pacientes:
+  // - Role puro de profissional (biomedic, esthetician, etc.) OU
+  // - Admin/manager com professional_role preenchido (ex: Dra. Sarah = admin + professional_role=biomedic)
+  const PURE_PROFESSIONAL_ROLES = ['doctor', 'dentist', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist']
   const { data: allUsers } = await supabase
     .from('users')
     .select('id, name, role, professional_role, active')
     .eq('clinic_id', userData?.clinic_id)
   
-  const professionals = (allUsers || []).filter(u => 
-    (PROFESSIONAL_ROLES.includes(u.role) || PROFESSIONAL_ROLES.includes(u.professional_role || '')) && u.active !== false
+  const professionals = (allUsers || []).filter(u =>
+    u.active !== false && (
+      PURE_PROFESSIONAL_ROLES.includes(u.role) ||
+      (u.professional_role && PURE_PROFESSIONAL_ROLES.includes(u.professional_role))
+    )
   )
 
   const { data: rooms } = await supabase

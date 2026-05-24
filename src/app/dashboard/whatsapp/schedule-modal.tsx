@@ -65,12 +65,16 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
   useEffect(() => {
     async function load() {
       const [profRes, procRes] = await Promise.all([
-        supabase.from('users').select('id, name, role').eq('clinic_id', clinicId).in('role', ['doctor', 'dentist', 'esthetician', 'biomedic', 'manager', 'admin']).eq('active', true).order('name'),
+        supabase.from('users').select('id, name, role, professional_role').eq('clinic_id', clinicId).eq('active', true).order('name'),
         supabase.from('procedures').select('id, name, duration_minutes').eq('clinic_id', clinicId).eq('active', true).order('name'),
       ])
       console.log('[ScheduleModal] profissionais:', profRes.data, profRes.error)
       console.log('[ScheduleModal] procedimentos:', procRes.data, procRes.error)
-      setProfessionals(profRes.data || [])
+      const PROF_ROLES = ['doctor','dentist','esthetician','biomedic','nurse','physiotherapist','nutritionist','psychologist']
+      const filteredProfs = (profRes.data || []).filter((u: any) =>
+        PROF_ROLES.includes(u.role) || (u.professional_role && PROF_ROLES.includes(u.professional_role))
+      )
+      setProfessionals(filteredProfs)
       setProcedures(procRes.data || [])
       if (profRes.data?.length === 1) {
         setForm(f => ({ ...f, professional_id: profRes.data![0].id }))
