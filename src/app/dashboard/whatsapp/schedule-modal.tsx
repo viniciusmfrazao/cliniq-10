@@ -11,6 +11,8 @@ type Props = {
   onScheduled: () => void
 }
 
+type PatientOption = { id: string; name: string; phone: string }
+
 type Professional = { id: string; name: string }
 type Procedure = { id: string; name: string; duration_minutes: number | null }
 type Slot = { time: string; available: boolean }
@@ -23,6 +25,9 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
 
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [procedures, setProcedures] = useState<Procedure[]>([])
+  const [patientOptions, setPatientOptions] = useState<PatientOption[]>([])
+  const [patientSearch, setPatientSearch] = useState(patient?.name || '')
+  const [resolvedPatientId, setResolvedPatientId] = useState(patient?.id || '')
   const [slots, setSlots] = useState<Slot[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [saving, startSaving] = useTransition()
@@ -38,6 +43,23 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
     time: '',
     notes: '',
   })
+
+  // Buscar pacientes por nome ou telefone
+  useEffect(() => {
+    if (!patientSearch || patientSearch.length < 2) { setPatientOptions([]); return }
+    const search = patientSearch
+    async function searchPatients() {
+      const { data } = await supabase
+        .from('patients')
+        .select('id, name, phone')
+        .eq('clinic_id', clinicId)
+        .or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+        .limit(5)
+      setPatientOptions(data || [])
+    }
+    const timer = setTimeout(searchPatients, 300)
+    return () => clearTimeout(timer)
+  }, [patientSearch, clinicId])
 
   // Carregar profissionais e procedimentos
   useEffect(() => {
@@ -87,13 +109,23 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
         }
       }
 
-      const generatedSlots: Slot[] = []
+      // Buscar slots reais via RPC
+      const { data: rpcSlots } = await supabase.rpc('get_available_slots', {
+        p_clinic_id: clinicId,
+        p_date: form.date,
+        p_professional_id: form.professional_id,
+        p_duration_min: 30,
+        p_period: null,
+        p_procedure_id: null,
+      })
+
       const now = new Date()
       const isToday = form.date === today
+      const generatedSlots: Slot[] = []
 
-      for (let h = 7; h < 20; h++) {
-        for (const m of [0, 30]) {
-          const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      if (rpcSlots && rpcSlots.length > 0) {
+        for (const slot of rpcSlots) {
+          const time = String(slot.slot_time).slice(0, 5)
           const slotDate = new Date(`${form.date}T${time}:00`)
           if (isToday && slotDate <= now) continue
           generatedSlots.push({ time, available: !occupied.has(time) })
@@ -106,7 +138,8 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
   }, [form.professional_id, form.date, clinicId, today])
 
   async function handleSubmit() {
-    if (!form.patient_id) { setError('Selecione um paciente.'); return }
+    const pid = resolvedPatientId || form.patient_id
+    if (!pid) { setError('Selecione um paciente.'); return }
     if (!form.professional_id) { setError('Selecione um profissional.'); return }
     if (!form.date) { setError('Selecione uma data.'); return }
     if (!form.time) { setError('Selecione um horário.'); return }
@@ -122,7 +155,7 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
 
       const { error: err } = await supabase.from('appointments').insert({
         clinic_id: clinicId,
-        patient_id: form.patient_id,
+        patient_id: resolvedPatientId || form.patient_id,
         professional_id: form.professional_id,
         procedure_id: form.procedure_id || null,
         start_time: startISO,
@@ -146,7 +179,7 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white">Novo agendamento</h2>
-            {patient && <p className="text-xs text-slate-500 mt-0.5">{patient.name}</p>}
+            {patient?.name && <p className="text-xs text-slate-500 mt-0.5">{patient.name}</p>}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <Icon name="x" className="w-5 h-5" />
@@ -154,6 +187,40 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
         </div>
 
         <div className="space-y-4">
+          {/* Paciente */}
+          <div>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">Paciente *</label>
+            {resolvedPatientId ? (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                <span className="text-sm text-emerald-800 font-medium flex-1">{patientSearch}</span>
+                <button onClick={() => { setResolvedPatientId(''); setPatientSearch('') }} className="text-xs text-emerald-600 hover:text-red-500">trocar</button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  className="input"
+                  placeholder="Buscar por nome ou telefone..."
+                  value={patientSearch}
+                  onChange={e => { setPatientSearch(e.target.value); setResolvedPatientId('') }}
+                />
+                {patientOptions.length > 0 && (
+                  <div className="absolute z-10 w-full bg-white border border-slate-200 rounded-xl shadow-lg mt-1 max-h-40 overflow-y-auto">
+                    {patientOptions.map(p => (
+                      <button key={p.id} className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex flex-col"
+                        onClick={() => { setResolvedPatientId(p.id); setPatientSearch(p.name) }}>
+                        <span className="font-medium">{p.name}</span>
+                        <span className="text-xs text-slate-400">{p.phone}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {patientSearch.length >= 2 && patientOptions.length === 0 && !resolvedPatientId && (
+                  <p className="text-xs text-slate-400 mt-1">Nenhum paciente encontrado. O agendamento será sem cadastro.</p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Profissional */}
           <div>
             <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">Profissional *</label>
