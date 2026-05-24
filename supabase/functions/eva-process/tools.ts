@@ -110,8 +110,38 @@ export async function consultarAgenda(args: {
     }
   }
 
-  // Fallback: se veio vazio E tinha procedure_id, tenta sem ele
+  // Se procedureId existe e não tem resultado, verificar ANTES se é procedimento restrito
+  // NUNCA fazer fallback sem procedureId para procedimentos com datas específicas (Lavieen, Hipro, etc.)
   if ((!resp.ok || !Array.isArray(resp.data) || resp.data.length === 0) && procedureId) {
+    // Verificar se esse procedimento tem datas restritas
+    const checkRestrictUrl = `${env.supabaseUrl}/rest/v1/procedure_available_dates?procedure_id=eq.${procedureId}&clinic_id=eq.${payload.clinicId}&select=id&limit=1`;
+    const checkRestrict = await fetchJson<Array<{ id: string }>>(checkRestrictUrl, { method: 'GET', headers: sbHeaders(env) });
+    const hasDateRestriction = checkRestrict.ok && Array.isArray(checkRestrict.data) && checkRestrict.data.length > 0;
+
+    if (hasDateRestriction) {
+      // Procedimento com datas específicas — NUNCA fazer fallback geral
+      // Verificar se a data solicitada está disponível
+      const dateAvailUrl2 = `${env.supabaseUrl}/rest/v1/procedure_available_dates?procedure_id=eq.${procedureId}&clinic_id=eq.${payload.clinicId}&available_date=eq.${dataAlvo}&select=id&limit=1`;
+      const dateAvail2 = await fetchJson<Array<{ id: string }>>(dateAvailUrl2, { method: 'GET', headers: sbHeaders(env) });
+      if (!dateAvail2.ok || !Array.isArray(dateAvail2.data) || dateAvail2.data.length === 0) {
+        // Data não disponível — mostrar próximas datas
+        const restrictUrl2 = `${env.supabaseUrl}/rest/v1/procedure_available_dates?procedure_id=eq.${procedureId}&available_date=gte.${dataAlvo}&order=available_date.asc&limit=3&select=available_date`;
+        const restrictResp2 = await fetchJson<Array<{ available_date: string }>>(restrictUrl2, { method: 'GET', headers: sbHeaders(env) });
+        if (restrictResp2.ok && Array.isArray(restrictResp2.data) && restrictResp2.data.length > 0) {
+          const proximas = restrictResp2.data.map(d => formatarDataBR(d.available_date)).join(', ');
+          return `PROCEDIMENTO_SEM_DATA_DISPONIVEL: Esse procedimento nao esta disponivel em ${dataLabel} — ele so funciona em datas especificas. Proximas datas disponiveis: ${proximas}. Pergunte qual dessas datas funciona melhor pra ela e use consultar_agenda com essa data.`;
+        }
+        return `PROCEDIMENTO_SEM_DATA_DISPONIVEL: Nao ha datas cadastradas para esse procedimento. Escale para humano.`;
+      }
+      // Data disponível mas sem horários — oferecer o dia e perguntar horário
+      return [
+        `Horario disponivel para ${dataLabel} — DIA MARCADO PARA ESTE EQUIPAMENTO:`,
+        `Ofereça o dia ${dataLabel} para a paciente e pergunte qual horario funciona melhor pra ela (manha ou tarde).`,
+        `Quando ela confirmar o horario preferido, crie o agendamento ou escale para humano com detalhes.`,
+      ].join('\n');
+    }
+
+    // Procedimento sem restrição de data — fazer fallback normal
     resp = await callRpc(false);
     usouFallback = true;
   }
