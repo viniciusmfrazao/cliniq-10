@@ -70,15 +70,17 @@ export default function MedicalRecordSection({
     return record.photos.map((p) => signedUrls[p]).filter((u): u is string => !!u)
   }, [lightbox, medicalRecords, signedUrls])
 
-  const [form, setForm] = useState({
-    complaint: '',
-    conduct: '',
-    observations: '',
-  })
+  const DRAFT_KEY = `atendimento_draft_${appointmentId}`
 
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [autoSaving, setAutoSaving] = useState(false)
-  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [form, setForm] = useState(() => {
+    if (typeof window === 'undefined') return { complaint: '', conduct: '', observations: '' }
+    try {
+      const saved = window.localStorage.getItem(`atendimento_draft_${appointmentId}`)
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return { complaint: '', conduct: '', observations: '' }
+  })
+  const [autoSaved, setAutoSaved] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -167,47 +169,6 @@ export default function MedicalRecordSection({
     return urls
   }
 
-  const autoSave = useCallback(async (formData: typeof form) => {
-    if (!formData.complaint && !formData.conduct && !formData.observations) return
-    setAutoSaving(true)
-    try {
-      const { data: existing } = await supabase
-        .from('medical_records')
-        .select('id')
-        .eq('appointment_id', appointmentId)
-        .maybeSingle()
-
-      if (existing?.id) {
-        await supabase.from('medical_records').update({
-          complaint: formData.complaint,
-          conduct: formData.conduct,
-          observations: formData.observations,
-          updated_at: new Date().toISOString(),
-        }).eq('id', existing.id)
-      } else {
-        await supabase.from('medical_records').insert({
-          appointment_id: appointmentId,
-          clinic_id: clinicId,
-          professional_id: professionalId,
-          patient_id: patient.id,
-          complaint: formData.complaint,
-          conduct: formData.conduct,
-          observations: formData.observations,
-        })
-      }
-      setLastSaved(new Date())
-    } catch (e) {
-      console.error('autosave error:', e)
-    } finally {
-      setAutoSaving(false)
-    }
-  }, [appointmentId, clinicId, professionalId, supabase])
-
-  const scheduleAutoSave = useCallback((formData: typeof form) => {
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
-    autosaveTimer.current = setTimeout(() => autoSave(formData), 2000)
-  }, [autoSave])
-
   const saveMedicalRecord = async () => {
     if (!form.complaint && !form.conduct && !form.observations && photos.length === 0) {
       alert('Preencha algum campo do prontuário ou anexe pelo menos uma foto')
@@ -251,6 +212,8 @@ export default function MedicalRecordSection({
       photos.forEach((p) => URL.revokeObjectURL(p.previewUrl))
       setPhotos([])
       setForm({ complaint: '', conduct: '', observations: '' })
+      try { window.localStorage.removeItem(DRAFT_KEY) } catch {}
+      setAutoSaved(false)
 
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -304,7 +267,7 @@ export default function MedicalRecordSection({
               </label>
               <AutoTextarea
                 value={form.complaint}
-                onChange={e => { const f = { ...form, complaint: e.target.value }; setForm(f); scheduleAutoSave(f) }}
+                onChange={e => { const f = { ...form, complaint: e.target.value }; setForm(f); try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(f)); setAutoSaved(true) } catch {} }}
                 placeholder="O que trouxe a paciente hoje..."
                 minRows={3}
                 maxRows={10}
@@ -318,7 +281,7 @@ export default function MedicalRecordSection({
               </label>
               <AutoTextarea
                 value={form.conduct}
-                onChange={e => { const f = { ...form, conduct: e.target.value }; setForm(f); scheduleAutoSave(f) }}
+                onChange={e => { const f = { ...form, conduct: e.target.value }; setForm(f); try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(f)); setAutoSaved(true) } catch {} }}
                 placeholder="Descreva o procedimento realizado..."
                 minRows={4}
                 maxRows={14}
@@ -332,7 +295,7 @@ export default function MedicalRecordSection({
               </label>
               <AutoTextarea
                 value={form.observations}
-                onChange={e => { const f = { ...form, observations: e.target.value }; setForm(f); scheduleAutoSave(f) }}
+                onChange={e => { const f = { ...form, observations: e.target.value }; setForm(f); try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(f)); setAutoSaved(true) } catch {} }}
                 placeholder="Notas adicionais, recomendações..."
                 minRows={3}
                 maxRows={10}
@@ -419,15 +382,8 @@ export default function MedicalRecordSection({
               )}
             </button>
             
-            {autoSaving && (
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <span className="animate-spin inline-block">⟳</span> Salvando...
-              </span>
-            )}
-            {!autoSaving && lastSaved && !saved && (
-              <span className="text-xs text-slate-400">
-                ✓ Salvo às {lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
+            {autoSaved && !saved && (
+              <span className="text-xs text-slate-400">📝 Rascunho salvo</span>
             )}
             {saved && (
               <p className="text-center text-sm text-emerald-600 mt-2">
