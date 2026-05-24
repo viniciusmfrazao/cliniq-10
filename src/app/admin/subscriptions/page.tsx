@@ -24,7 +24,7 @@ export default async function AdminSubscriptionsPage() {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) console.error('[ADMIN] SUPABASE_SERVICE_ROLE_KEY ausente!')
   const { data } = await svc
     .from('clinics')
-    .select('id, name, slug, plan, trial_ends_at, created_at, active')
+    .select('id, name, slug, plan, trial_ends_at, created_at')
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
