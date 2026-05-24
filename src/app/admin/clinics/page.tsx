@@ -27,31 +27,34 @@ export default async function ClinicsPage() {
     return <ClinicsAdminClient clinics={[]} />
   }
 
-  const [
-    { data: admins },
-    { data: waList },
-    { data: allUsers },
-    { data: allPatients },
-  ] = await Promise.all([
-    svc.from('users').select('clinic_id, name, email').in('clinic_id', clinicIds).eq('role', 'admin'),
-    svc.from('clinic_whatsapp').select('clinic_id, status, instance_name, is_default').in('clinic_id', clinicIds),
-    svc.from('users').select('clinic_id, id').in('clinic_id', clinicIds).eq('active', true),
-    svc.from('patients').select('clinic_id, id').in('clinic_id', clinicIds),
-  ])
-
-  // Contar por clínica
+  // Buscar contagens por clínica individualmente (evitar truncamento do limite de 1000)
   const userCountMap: Record<string, number> = {}
   const patientCountMap: Record<string, number> = {}
-  for (const u of (allUsers || [])) userCountMap[u.clinic_id] = (userCountMap[u.clinic_id] || 0) + 1
-  for (const p of (allPatients || [])) patientCountMap[p.clinic_id] = (patientCountMap[p.clinic_id] || 0) + 1
+
+  const [adminsRes, waListRes, ...countResults] = await Promise.all([
+    svc.from('users').select('clinic_id, name, email').in('clinic_id', clinicIds).eq('role', 'admin'),
+    svc.from('clinic_whatsapp').select('clinic_id, status, instance_name, is_default').in('clinic_id', clinicIds),
+    ...clinicIds.flatMap(id => [
+      svc.from('users').select('id', { count: 'exact', head: true }).eq('clinic_id', id).eq('active', true),
+      svc.from('patients').select('id', { count: 'exact', head: true }).eq('clinic_id', id),
+    ])
+  ])
+
+  const admins = adminsRes.data
+  const waList = waListRes.data
+
+  clinicIds.forEach((id, i) => {
+    userCountMap[id] = countResults[i * 2]?.count ?? 0
+    patientCountMap[id] = countResults[i * 2 + 1]?.count ?? 0
+  })
 
   const adminMap: Record<string, { name: string; email: string }> = {}
-  for (const a of (admins || [])) {
+  for (const a of (admins || [] as any[])) {
     if (!adminMap[a.clinic_id]) adminMap[a.clinic_id] = { name: a.name, email: a.email }
   }
 
   const waMap: Record<string, { status: string; instance: string }> = {}
-  for (const w of (waList || [])) {
+  for (const w of (waList || [] as any[])) {
     if (!waMap[w.clinic_id] || w.is_default) {
       waMap[w.clinic_id] = { status: w.status, instance: w.instance_name }
     }

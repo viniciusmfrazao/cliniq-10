@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   const svc = createServiceClient()
   const { error } = await svc
     .from('clinics')
-    .update({ plan_expires_at: plan_expires_at || null, active: true })
+    .update({ plan_expires_at: plan_expires_at || null })
     .eq('id', clinic_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
