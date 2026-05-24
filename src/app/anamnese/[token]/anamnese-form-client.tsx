@@ -37,9 +37,29 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   const [showSignature, setShowSignature] = useState(false)
 
   // Form state
-  const [responses, setResponses] = useState<Record<string, any>>({})
+  const DRAFT_KEY = `anamnese_draft_${token}`
+  const [responses, setResponses] = useState<Record<string, any>>(() => {
+    // Restaurar rascunho do localStorage ao carregar
+    try {
+      const saved = localStorage.getItem(`anamnese_draft_${token}`)
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return {}
+  })
+  const [hasDraft, setHasDraft] = useState(() => {
+    try { return !!localStorage.getItem(`anamnese_draft_${token}`) } catch { return false }
+  })
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
+
+  // Autosave: salvar no localStorage a cada mudança
+  useEffect(() => {
+    if (Object.keys(responses).length === 0) return
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(responses))
+      setHasDraft(true)
+    } catch {}
+  }, [responses])
 
   useEffect(() => {
     fetchAnamnese()
@@ -156,12 +176,21 @@ export default function AnamneseFormClient({ token }: { token: string }) {
         throw new Error(data.error || 'Erro ao enviar')
       }
 
+      // Limpar rascunho após envio com sucesso
+      try { localStorage.removeItem(DRAFT_KEY) } catch {}
+      setHasDraft(false)
       setSuccess(true)
     } catch (err: any) {
       alert(err.message || 'Erro ao enviar ficha')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY) } catch {}
+    setHasDraft(false)
+    setResponses({})
   }
 
   if (loading) {
