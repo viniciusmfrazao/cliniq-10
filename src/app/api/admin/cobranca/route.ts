@@ -3,9 +3,7 @@ import { isSuperAdmin } from '@/lib/super-admin'
 import { createServiceClient } from '@/lib/supabase/server'
 import { gerarPixEMV, pixParaWhatsApp } from '@/lib/pix'
 
-const PIX_CHAVE = '09561895633'
-const PIX_NOME = 'Clinike'
-const PIX_CIDADE = 'Uberlandia'
+// Chave Pix carregada do banco (app_settings)
 
 export async function POST(req: NextRequest) {
   const ok = await isSuperAdmin()
@@ -34,7 +32,7 @@ export async function POST(req: NextRequest) {
   const { data: settings } = await svc
     .from('app_settings')
     .select('key, value')
-    .in('key', ['clinike_billing_instance', 'clinike_billing_from_number', 'evolution_master_key', 'evolution_url'])
+    .in('key', ['clinike_billing_instance', 'clinike_billing_from_number', 'evolution_master_key', 'evolution_url', 'clinike_pix_key', 'clinike_pix_name', 'clinike_pix_city', 'clinike_pix_key', 'clinike_pix_name', 'clinike_pix_city'])
 
   const cfg: Record<string, string> = {}
   for (const s of (settings || [])) cfg[s.key] = s.value
@@ -62,7 +60,9 @@ export async function POST(req: NextRequest) {
 
   const txid = `CLK${clinic_id.slice(0, 10).replace(/-/g, '').toUpperCase()}`
   const pixPayload = gerarPixEMV({
-    chave: PIX_CHAVE, nome: PIX_NOME, cidade: PIX_CIDADE,
+    chave: cfg['clinike_pix_key'] || '09561895633',
+    nome: cfg['clinike_pix_name'] || 'Clinike',
+    cidade: cfg['clinike_pix_city'] || 'Uberlandia',
     valor: clinic.plan_price, txid,
     descricao: `Clinike - ${clinic.name.slice(0, 30)}`,
   })

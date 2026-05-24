@@ -71,11 +71,9 @@ Segue a cobrança do Clinike referente ao plano mensal.
 💰 *Valor:* ${valorFmt}
 📅 *Vencimento:* ${vencimento}
 
-Pague via Pix copiando o código abaixo:
+Copie o código Pix abaixo e cole no app do seu banco:
 
 \`${pixPayload}\`
-
-Ou escaneie o QR Code que segue em anexo.
 
 Em caso de dúvidas, estamos à disposição! 😊
 *Equipe Clinike*`
