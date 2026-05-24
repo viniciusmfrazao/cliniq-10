@@ -120,9 +120,9 @@ function hasRealName(name: string): boolean {
 }
 
 function askedPriceExplicitly(text: string | null | undefined): boolean {
-  const t = (text || '').toLowerCase();
+  const t = (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (!t.trim()) return false;
-  return /\b(preco|valor|quanto custa|quanto fica|qual o valor|me passa o valor|orcamento)\b/i.test(t);
+  return /(preco|valor|quanto custa|quanto fica|qual o valor|me passa|orcamento|preciso saber|sem o valor|qual seria|me fala o|me diz o|investimento|mensalidade|parcela|12x|quanto e)/i.test(t);
 }
 
 export function buildSystemPrompt(
@@ -134,7 +134,9 @@ export function buildSystemPrompt(
   const customerName = payload.customerName || patient?.name || lead?.name || 'cliente';
   const firstName = String(customerName).split(/\s+/)[0] || '';
   const knowsRealName = hasRealName(customerName);
-  const userAskedPriceNow = askedPriceExplicitly(payload.userText);
+  // Verificar sinal de preco na msg atual E nas ultimas msgs do historico
+  const recentUserTexts = [payload.userText, ...ctx.history.slice(-6).filter(m => m.role === 'user').map(m => m.content)].join(' ');
+  const userAskedPriceNow = askedPriceExplicitly(recentUserTexts);
 
   const evaCfg = (clinic.settings?.eva ?? null) as {
     personalidade?: string | null;
@@ -226,6 +228,7 @@ EVITE A TODO CUSTO:
 === REGRA CRITICA 3 — PRECO: SO EM PARCELA, NUNCA O VALOR TOTAL:
 - IMPORTANTE: so informe preco se a paciente perguntar EXPLICITAMENTE. Nao traga valor proativamente.
 - TRAVA DURA: se o SINAL DE PRECO no contexto = NAO, e PROIBIDO citar qualquer valor/parcela.
+- EXCECAO DA TRAVA: se a paciente insistir em pedir valor (2a ou 3a vez), passe a parcela mesmo sem sinal SIM — nao a deixe sem resposta.
 - NUNCA passe o valor total/a vista. Diga SOMENTE o valor quando perguntado.${discountPolicy ? `
 - Sobre desconto/condicao a vista: SÓ mencione se a paciente perguntar explicitamente. Use APENAS o que esta em [POLITICA DE DESCONTO]. NUNCA invente percentual nem condicao.` : `
 - Se ela perguntar valor a vista ou desconto: informe o valor normal.`}
