@@ -86,6 +86,19 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
     return matchSearch && matchStatus
   })
 
+  async function handleActivate(clinic: Clinic) {
+    // Ativar clínica: zera trial e coloca plan_expires_at para 30 dias
+    const expires = new Date()
+    expires.setDate(expires.getDate() + 30)
+    const resp = await fetch('/api/admin/clinics/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clinic_id: clinic.id, plan_expires_at: expires.toISOString() }),
+    })
+    if (resp.ok) window.location.reload()
+    else alert('Erro ao ativar clínica')
+  }
+
   async function handleCharge(clinic: Clinic) {
     if (!clinic.billing_whatsapp) {
       setChargeResult(r => ({ ...r, [clinic.id]: '❌ Configure o WhatsApp de cobrança primeiro' }))
@@ -219,6 +232,15 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
                   </div>
                 )}
                 <div className="flex gap-2">
+                  {/* Botão Ativar — aparece em trial ou sem data de vencimento */}
+                  {(getDaysLeft(clinic.trial_ends_at) !== null && (getDaysLeft(clinic.trial_ends_at) ?? 999) > 0 && !clinic.plan_expires_at) && (
+                    <button
+                      onClick={() => handleActivate(clinic)}
+                      className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium transition"
+                    >
+                      ✅ Ativar
+                    </button>
+                  )}
                   <button
                     onClick={() => handleCharge(clinic)}
                     disabled={charging === clinic.id}
