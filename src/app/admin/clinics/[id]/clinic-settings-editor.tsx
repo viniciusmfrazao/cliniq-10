@@ -22,6 +22,10 @@ type Props = {
     cnpj?: string | null
     plan_id?: string | null
     trial_ends_at?: string | null
+    plan_price?: number | null
+    plan_expires_at?: string | null
+    billing_whatsapp?: string | null
+    billing_notes?: string | null
     settings?: Record<string, unknown> | null
   }
   users: User[]
@@ -47,6 +51,10 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
     cnpj: clinic.cnpj || '',
     plan_id: clinic.plan_id || '',
     trial_ends_at: clinic.trial_ends_at ? clinic.trial_ends_at.slice(0, 10) : '',
+    plan_price: clinic.plan_price ? String(clinic.plan_price) : '',
+    plan_expires_at: clinic.plan_expires_at ? clinic.plan_expires_at.slice(0, 10) : '',
+    billing_whatsapp: clinic.billing_whatsapp || '',
+    billing_notes: clinic.billing_notes || '',
     max_whatsapp_numbers_override: initialOverride,
     admin_id: initialAdmin?.id || '',
     admin_name: initialAdmin?.name || '',
@@ -65,6 +73,10 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
         cnpj: form.cnpj.trim() || null,
         plan_id: form.plan_id || null,
         trial_ends_at: form.trial_ends_at || null,
+        plan_price: form.plan_price ? parseFloat(form.plan_price) : null,
+        plan_expires_at: form.plan_expires_at || null,
+        billing_whatsapp: form.billing_whatsapp.trim() || null,
+        billing_notes: form.billing_notes.trim() || null,
         max_whatsapp_numbers_override: form.max_whatsapp_numbers_override
           ? Math.max(1, parseInt(form.max_whatsapp_numbers_override, 10))
           : null,
@@ -130,6 +142,53 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
             type="date"
             value={form.trial_ends_at}
             onChange={(e) => setForm((prev) => ({ ...prev, trial_ends_at: e.target.value }))}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+          />
+        </div>
+      </div>
+
+      {/* Cobrança */}
+      <div className="border border-emerald-100 bg-emerald-50 dark:bg-emerald-900/10 dark:border-emerald-800 rounded-xl p-4 space-y-4">
+        <h3 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">💰 Cobrança & Plano</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Valor mensal (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Ex: 297.00"
+              value={form.plan_price}
+              onChange={(e) => setForm((prev) => ({ ...prev, plan_price: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Plano vence em</label>
+            <input
+              type="date"
+              value={form.plan_expires_at}
+              onChange={(e) => setForm((prev) => ({ ...prev, plan_expires_at: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">WhatsApp para cobrança</label>
+            <input
+              type="text"
+              placeholder="Ex: 5534999990000"
+              value={form.billing_whatsapp}
+              onChange={(e) => setForm((prev) => ({ ...prev, billing_whatsapp: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notas de cobrança (interno)</label>
+          <input
+            type="text"
+            placeholder="Ex: paga sempre dia 5, parcelado, etc."
+            value={form.billing_notes}
+            onChange={(e) => setForm((prev) => ({ ...prev, billing_notes: e.target.value }))}
             className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           />
         </div>
