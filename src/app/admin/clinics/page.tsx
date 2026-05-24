@@ -31,9 +31,10 @@ export default async function ClinicsPage() {
   const userCountMap: Record<string, number> = {}
   const patientCountMap: Record<string, number> = {}
 
-  const [adminsRes, waListRes, ...countResults] = await Promise.all([
+  const [adminsRes, waListRes, usersRes, ...countResults] = await Promise.all([
     svc.from('users').select('clinic_id, name, email').in('clinic_id', clinicIds).eq('role', 'admin'),
     svc.from('clinic_whatsapp').select('clinic_id, status, instance_name, is_default').in('clinic_id', clinicIds),
+    svc.from('users').select('clinic_id, name, email, role').in('clinic_id', clinicIds).eq('active', true).order('name'),
     ...clinicIds.flatMap(id => [
       svc.from('users').select('id', { count: 'exact', head: true }).eq('clinic_id', id).eq('active', true),
       svc.from('patients').select('id', { count: 'exact', head: true }).eq('clinic_id', id),
@@ -42,6 +43,7 @@ export default async function ClinicsPage() {
 
   const admins = adminsRes.data
   const waList = waListRes.data
+  const allClinicUsers = usersRes.data || []
 
   clinicIds.forEach((id, i) => {
     userCountMap[id] = countResults[i * 2]?.count ?? 0
@@ -51,6 +53,12 @@ export default async function ClinicsPage() {
   const adminMap: Record<string, { name: string; email: string }> = {}
   for (const a of (admins || [] as any[])) {
     if (!adminMap[a.clinic_id]) adminMap[a.clinic_id] = { name: a.name, email: a.email }
+  }
+
+  const usersMap: Record<string, Array<{ name: string; email: string; role: string }>> = {}
+  for (const u of allClinicUsers) {
+    if (!usersMap[u.clinic_id]) usersMap[u.clinic_id] = []
+    usersMap[u.clinic_id].push({ name: u.name, email: u.email, role: u.role })
   }
 
   const waMap: Record<string, { status: string; instance: string }> = {}
@@ -65,6 +73,7 @@ export default async function ClinicsPage() {
     admin: adminMap[c.id] || null,
     whatsapp: waMap[c.id] || null,
     users_count: userCountMap[c.id] || 0,
+    users: usersMap[c.id] || [],
     patients_count: patientCountMap[c.id] || 0,
     appointments_count: 0,
     active_modules: c.settings?.active_modules || [],

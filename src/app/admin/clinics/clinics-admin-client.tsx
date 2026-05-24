@@ -21,6 +21,7 @@ type Clinic = {
   active_modules: string[]
   admin: { name: string; email: string } | null
   whatsapp: { status: string; instance: string } | null
+  users: Array<{ name: string; email: string; role: string }>
 }
 
 function getDaysLeft(dateStr: string | null): number | null {
@@ -287,6 +288,41 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
                 ))}
               </div>
             )}
+
+            {/* Usuários da clínica */}
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Usuários ({clinic.users_count})</p>
+              </div>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {clinic.users.slice(0, 5).map((u, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        u.role === 'admin' ? 'bg-blue-100 text-blue-700' :
+                        u.role === 'doctor' || u.role === 'biomedic' ? 'bg-purple-100 text-purple-700' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>{u.role}</span>
+                      <span className="text-slate-700 font-medium">{u.name}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditingWa(clinic.id)
+                        // Pré-preencher com número do usuário (extraído do email/nome)
+                        setWaInputs(prev => ({ ...prev, [clinic.id]: clinic.billing_whatsapp || '' }))
+                      }}
+                      className="text-[10px] text-slate-400 hover:text-violet-600 ml-2"
+                      title="Usar este usuário para cobrança"
+                    >
+                      📱
+                    </button>
+                  </div>
+                ))}
+                {clinic.users.length === 0 && (
+                  <p className="text-xs text-slate-400 italic">Nenhum usuário</p>
+                )}
+              </div>
+            </div>
 
             {/* Resultado da cobrança */}
             {chargeResult[clinic.id] && (
