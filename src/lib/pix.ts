@@ -32,8 +32,7 @@ export function gerarPixEMV({
   descricao?: string
 }): string {
   const merchantAccountInfo = emvField('00', 'BR.GOV.BCB.PIX') +
-    emvField('01', chave) +
-    (descricao ? emvField('02', descricao.slice(0, 72)) : '')
+    emvField('01', chave)
 
   const valorStr = valor.toFixed(2)
 

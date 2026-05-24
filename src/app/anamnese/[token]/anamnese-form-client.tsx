@@ -36,38 +36,29 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   const [success, setSuccess] = useState(false)
   const [showSignature, setShowSignature] = useState(false)
 
-  // Form state
+  // Form state — autosave no localStorage
   const DRAFT_KEY = `anamnese_draft_${token}`
   const [responses, setResponses] = useState<Record<string, any>>({})
   const [hasDraft, setHasDraft] = useState(false)
-  const [draftLoaded, setDraftLoaded] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
 
-  // Restaurar rascunho do localStorage após montar no cliente (evita erro SSR)
+  // Restaurar rascunho ao montar (client-side only)
   useEffect(() => {
+    if (typeof window === 'undefined') return
     try {
-      const saved = localStorage.getItem(DRAFT_KEY)
+      const saved = window.localStorage.getItem(DRAFT_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (Object.keys(parsed).length > 0) {
+        if (parsed && Object.keys(parsed).length > 0) {
           setResponses(parsed)
           setHasDraft(true)
         }
       }
-    } catch {}
-    setDraftLoaded(true)
-  }, [DRAFT_KEY])
-
-  // Autosave: salvar no localStorage a cada mudança (só após draft ter sido carregado)
-  useEffect(() => {
-    if (!draftLoaded) return
-    if (Object.keys(responses).length === 0) return
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(responses))
-      setHasDraft(true)
-    } catch {}
-  }, [responses, draftLoaded, DRAFT_KEY])
+    } catch (e) {
+      console.warn('autosave restore error:', e)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchAnamnese()
@@ -90,21 +81,34 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   }
 
   const selectSingle = (group: string, value: string) => {
-    setResponses(prev => ({ ...prev, [group]: value }))
+    setResponses(prev => {
+      const next = { ...prev, [group]: value }
+      try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  const saveToStorage = (data: Record<string, any>) => {
+    try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(data)) } catch {}
   }
 
   const selectMulti = (group: string, value: string) => {
     setResponses(prev => {
       const current = prev[group] || []
-      if (current.includes(value)) {
-        return { ...prev, [group]: current.filter((v: string) => v !== value) }
-      }
-      return { ...prev, [group]: [...current, value] }
+      const next = current.includes(value)
+        ? { ...prev, [group]: current.filter((v: string) => v !== value) }
+        : { ...prev, [group]: [...current, value] }
+      saveToStorage(next)
+      return next
     })
   }
 
   const setTextValue = (field: string, value: string) => {
-    setResponses(prev => ({ ...prev, [field]: value }))
+    setResponses(prev => {
+      const next = { ...prev, [field]: value }
+      saveToStorage(next)
+      return next
+    })
   }
 
   // Signature canvas handlers
