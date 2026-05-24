@@ -71,6 +71,9 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [charging, setCharging] = useState<string | null>(null)
+  const [editingWa, setEditingWa] = useState<string | null>(null)
+  const [waInputs, setWaInputs] = useState<Record<string, string>>({})
+  const [savingWa, setSavingWa] = useState<string | null>(null)
   const [chargeResult, setChargeResult] = useState<Record<string, string>>({})
 
   const filtered = clinics.filter(c => {
@@ -85,6 +88,24 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
     if (filterStatus === 'alert') matchStatus = (days !== null && days <= 7 && days > 0) || (expDays !== null && expDays <= 7 && expDays >= 0)
     return matchSearch && matchStatus
   })
+
+  async function handleSaveWa(clinic: Clinic) {
+    const wa = waInputs[clinic.id] || ''
+    if (!wa) return
+    setSavingWa(clinic.id)
+    const resp = await fetch('/api/admin/clinics/update-billing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clinic_id: clinic.id, billing_whatsapp: wa }),
+    })
+    if (resp.ok) {
+      setEditingWa(null)
+      window.location.reload()
+    } else {
+      alert('Erro ao salvar')
+    }
+    setSavingWa(null)
+  }
 
   async function handleActivate(clinic: Clinic) {
     // Ativar clínica: zera trial e coloca plan_expires_at para 30 dias
@@ -232,15 +253,15 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  {/* Botão Ativar — aparece em trial ou sem data de vencimento */}
-                  {(getDaysLeft(clinic.trial_ends_at) !== null && (getDaysLeft(clinic.trial_ends_at) ?? 999) > 0 && !clinic.plan_expires_at) && (
+                  {/* Botão Ativar — aparece em qualquer situação sem plan_expires_at ativo */}
+                  {!clinic.plan_expires_at || (getDaysLeft(clinic.plan_expires_at) !== null && (getDaysLeft(clinic.plan_expires_at) ?? 1) < 0) ? (
                     <button
                       onClick={() => handleActivate(clinic)}
                       className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium transition"
                     >
                       ✅ Ativar
                     </button>
-                  )}
+                  ) : null}
                   <button
                     onClick={() => handleCharge(clinic)}
                     disabled={charging === clinic.id}
