@@ -11,6 +11,7 @@ type Clinic = {
   plan_price: number | null
   plan_expires_at: string | null
   trial_ends_at: string | null
+  clinic_phone: string | null
   billing_whatsapp: string | null
   billing_notes: string | null
   last_charge_sent_at: string | null
@@ -122,8 +123,8 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
   }
 
   async function handleCharge(clinic: Clinic) {
-    if (!clinic.billing_whatsapp) {
-      setChargeResult(r => ({ ...r, [clinic.id]: '❌ Configure o WhatsApp de cobrança primeiro' }))
+    if (!clinic.clinic_phone && !clinic.billing_whatsapp) {
+      setChargeResult(r => ({ ...r, [clinic.id]: '❌ Configure o Telefone da Clínica primeiro (clique em ⚙️ Editar)' }))
       return
     }
     if (!clinic.plan_price) {
@@ -211,8 +212,8 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
                     👤 {clinic.admin.name} • {clinic.admin.email}
                   </p>
                 )}
-                {clinic.billing_whatsapp && (
-                  <p className="text-xs text-slate-400">📱 Cobrança: {clinic.billing_whatsapp}</p>
+                {(clinic.clinic_phone || clinic.billing_whatsapp) && (
+                  <p className="text-xs text-slate-400">📱 {clinic.clinic_phone || clinic.billing_whatsapp}</p>
                 )}
               </div>
 

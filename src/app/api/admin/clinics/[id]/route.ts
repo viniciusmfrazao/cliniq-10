@@ -9,6 +9,11 @@ type PatchBody = {
   plan_id?: string | null
   trial_ends_at?: string | null
   max_whatsapp_numbers_override?: number | null
+  clinic_phone?: string | null
+  billing_whatsapp?: string | null
+  plan_price?: number | null
+  plan_expires_at?: string | null
+  billing_notes?: string | null
   primary_admin?: {
     id: string
     name?: string
@@ -94,6 +99,21 @@ export async function PATCH(
     }
     if (Object.prototype.hasOwnProperty.call(body, 'trial_ends_at')) {
       clinicUpdate.trial_ends_at = body.trial_ends_at || null
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'clinic_phone')) {
+      clinicUpdate.clinic_phone = body.clinic_phone?.trim() || null
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'billing_whatsapp')) {
+      clinicUpdate.billing_whatsapp = body.billing_whatsapp?.trim() || null
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'plan_price')) {
+      clinicUpdate.plan_price = body.plan_price || null
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'plan_expires_at')) {
+      clinicUpdate.plan_expires_at = body.plan_expires_at || null
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'billing_notes')) {
+      clinicUpdate.billing_notes = body.billing_notes?.trim() || null
     }
 
     const { error: clinicUpdateError } = await svc.from('clinics').update(clinicUpdate).eq('id', clinicId)

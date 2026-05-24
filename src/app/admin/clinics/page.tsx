@@ -13,7 +13,7 @@ export default async function ClinicsPage() {
 
   const { data: rawClinics, error: clinicsError } = await svc
     .from('clinics')
-    .select('id, name, slug, plan, plan_price, plan_expires_at, trial_ends_at, billing_whatsapp, billing_notes, last_charge_sent_at, created_at, settings')
+    .select('id, name, slug, plan, plan_price, plan_expires_at, trial_ends_at, clinic_phone, billing_whatsapp, billing_notes, last_charge_sent_at, created_at, settings')
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
