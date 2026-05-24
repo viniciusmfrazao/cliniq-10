@@ -697,7 +697,8 @@ export async function POST(
             | 'nps_anti_eco'
             | 'pause_until'
             | 'human_review'
-            | 'media_escalated' = false
+            | 'media_escalated'
+            | 'anti_dup_30s' = false
           // Janela do anti-eco do NPS: 5 min depois da nota, Eva fica calada
           const NPS_COOLDOWN_MS = 5 * 60 * 1000
           let npsCooldownUntil: string | null = null
@@ -999,6 +1000,26 @@ export async function POST(
           //   - midia recebida (audio/foto sem caption) — escalado pra humano
           if (evaShouldSkip) {
             debugTrace.push(`forward Donna SKIPPED (${evaShouldSkip})`)
+          } else {
+            // Anti-duplicata: checar se Eva ja respondeu nos ultimos 30s para este phone
+            // (evita duplo disparo quando Evolution envia o webhook duas vezes)
+            const { data: recentEvaReply } = await svc
+              .from('eva_conversations')
+              .select('id')
+              .eq('clinic_id', clinicId)
+              .eq('phone', phone)
+              .eq('role', 'assistant')
+              .gte('created_at', new Date(Date.now() - 30_000).toISOString())
+              .limit(1)
+              .maybeSingle()
+            if (recentEvaReply) {
+              debugTrace.push('eva skip: anti-duplicata — resposta recente nos ultimos 30s')
+              evaShouldSkip = 'anti_dup_30s'
+            }
+          }
+
+          if (evaShouldSkip) {
+            debugTrace.push(`forward Donna SKIPPED pos-antidup (${evaShouldSkip})`)
           } else {
             // Donna só recebe texto/caption — pra mídia pura, sem caption,
             // mandamos um placeholder pra que ela saiba que rolou algo.
