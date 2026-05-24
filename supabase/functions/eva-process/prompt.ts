@@ -134,13 +134,7 @@ export function buildSystemPrompt(
   const customerName = payload.customerName || patient?.name || lead?.name || 'cliente';
   const firstName = String(customerName).split(/\s+/)[0] || '';
   const knowsRealName = hasRealName(customerName);
-  // Verificar sinal de preco na mensagem atual E nas ultimas msgs do historico
-  // (paciente pode ter perguntado preco numa msg e a Eva processou outra por debounce)
-  const recentUserTexts = [
-    payload.userText,
-    ...history.slice(-4).filter(m => m.role === 'user').map(m => m.content),
-  ].join(' ');
-  const userAskedPriceNow = askedPriceExplicitly(recentUserTexts);
+  const userAskedPriceNow = askedPriceExplicitly(payload.userText);
 
   const evaCfg = (clinic.settings?.eva ?? null) as {
     personalidade?: string | null;
