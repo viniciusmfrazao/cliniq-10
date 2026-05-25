@@ -82,6 +82,31 @@ export default function MedicalRecordSection({
   })
   const [autoSaved, setAutoSaved] = useState(false)
 
+  // IA — Resumo e sugestão de conduta
+  const [iaResumo, setIaResumo] = useState<string | null>(null)
+  const [iaResumoLoading, setIaResumoLoading] = useState(false)
+  const [iaSugestao, setIaSugestao] = useState<string | null>(null)
+  const [iaSugestaoLoading, setIaSugestaoLoading] = useState(false)
+
+  async function fetchResumoIA() {
+    setIaResumoLoading(true); setIaResumo(null)
+    try {
+      const resp = await fetch('/api/ia/prontuario', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resumo', patientId: patient.id, clinicId, appointmentId }) })
+      const data = await resp.json()
+      setIaResumo(data.ok ? data.result : 'N\u00e3o foi poss\u00edvel gerar o resumo.')
+    } catch { setIaResumo('Erro ao conectar com a IA.') } finally { setIaResumoLoading(false) }
+  }
+
+  async function fetchSugestaoIA() {
+    if (!form.complaint.trim()) return
+    setIaSugestaoLoading(true); setIaSugestao(null)
+    try {
+      const resp = await fetch('/api/ia/prontuario', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sugestao_conduta', patientId: patient.id, clinicId, appointmentId, queixa: form.complaint }) })
+      const data = await resp.json()
+      setIaSugestao(data.ok ? data.result : 'N\u00e3o foi poss\u00edvel gerar sugest\u00e3o.')
+    } catch { setIaSugestao('Erro ao conectar com a IA.') } finally { setIaSugestaoLoading(false) }
+  }
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -260,6 +285,33 @@ export default function MedicalRecordSection({
       <div className="p-6">
         {activeTab === 'current' ? (
           <div className="space-y-4">
+
+            {/* IA — Resumo do histórico */}
+            <div className="rounded-xl border border-violet-100 bg-violet-50 dark:bg-violet-900/10 dark:border-violet-800 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🤖</span>
+                  <span className="text-sm font-semibold text-violet-800 dark:text-violet-300">Resumo do histórico — IA</span>
+                </div>
+                <button
+                  onClick={fetchResumoIA}
+                  disabled={iaResumoLoading}
+                  className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg font-medium transition flex items-center gap-1.5"
+                >
+                  {iaResumoLoading ? (
+                    <><span className="animate-spin">⟳</span> Analisando...</>
+                  ) : (
+                    <>{iaResumo ? '↺ Atualizar' : '✨ Gerar resumo'}</>
+                  )}
+                </button>
+              </div>
+              {iaResumo ? (
+                <p className="text-sm text-violet-900 dark:text-violet-200 leading-relaxed whitespace-pre-wrap">{iaResumo}</p>
+              ) : (
+                <p className="text-xs text-violet-400 italic">Clique em "Gerar resumo" para a IA analisar o histórico desta paciente.</p>
+              )}
+            </div>
+
             {/* Queixa */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -276,9 +328,32 @@ export default function MedicalRecordSection({
 
             {/* Conduta */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Conduta / Procedimento realizado
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  Conduta / Procedimento realizado
+                </label>
+                <button
+                  onClick={fetchSugestaoIA}
+                  disabled={iaSugestaoLoading || !form.complaint.trim()}
+                  title={!form.complaint.trim() ? 'Preencha a queixa primeiro' : 'Sugerir conduta com IA'}
+                  className="text-xs px-2.5 py-1 bg-violet-100 hover:bg-violet-200 disabled:opacity-40 text-violet-700 rounded-lg font-medium transition flex items-center gap-1"
+                >
+                  {iaSugestaoLoading ? <><span className="animate-spin">⟳</span> Sugerindo...</> : '✨ Sugerir conduta'}
+                </button>
+              </div>
+              {iaSugestao && (
+                <div className="mb-2 p-3 bg-violet-50 border border-violet-200 rounded-lg">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs text-violet-800 leading-relaxed whitespace-pre-wrap flex-1">{iaSugestao}</p>
+                    <button
+                      onClick={() => { const f = { ...form, conduct: iaSugestao }; setForm(f); try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(f)) } catch {}; setIaSugestao(null) }}
+                      className="text-xs px-2 py-1 bg-violet-600 text-white rounded-lg whitespace-nowrap hover:bg-violet-700"
+                    >
+                      Usar esta
+                    </button>
+                  </div>
+                </div>
+              )}
               <AutoTextarea
                 value={form.conduct}
                 onChange={e => { const f = { ...form, conduct: e.target.value }; setForm(f); try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(f)); setAutoSaved(true) } catch {} }}
