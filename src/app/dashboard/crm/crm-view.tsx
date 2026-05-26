@@ -154,6 +154,18 @@ const STAGE_COLORS: Record<string, string> = {
   cyan: 'bg-cyan-100 text-cyan-700',
 }
 
+// Calcular temperatura por regras quando não há Eva
+function calcTemperatura(lead: Lead): 'hot' | 'warm' | 'cold' | null {
+  if (lead.ai_priority) return lead.ai_priority as 'hot' | 'warm' | 'cold'
+  // Regras automáticas por dias sem contato
+  const ref = lead.last_whatsapp_at || lead.last_contact_at || lead.created_at
+  if (!ref) return null
+  const days = Math.floor((Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24))
+  if (days <= 2) return 'hot'
+  if (days <= 7) return 'warm'
+  return 'cold'
+}
+
 const AI_PRIORITY_CONFIG = {
   hot: { label: '🔥 Quente', color: 'bg-red-100 text-red-700' },
   warm: { label: '☀️ Morno', color: 'bg-amber-100 text-amber-700' },
@@ -695,7 +707,9 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
               >
                 {leadsByStage[stage.id]?.map(lead => {
                   const source = SOURCES.find(s => s.id === lead.source)
-                  const aiPriority = lead.ai_priority ? AI_PRIORITY_CONFIG[lead.ai_priority as keyof typeof AI_PRIORITY_CONFIG] : null
+                  const tempKey = calcTemperatura(lead)
+                  const aiPriority = tempKey ? AI_PRIORITY_CONFIG[tempKey as keyof typeof AI_PRIORITY_CONFIG] : null
+                  const tempIsManual = !lead.ai_priority && !!tempKey
                   const needsContact = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
                   const followup = getFollowupBadge(lead)
                   const followupClass =
@@ -740,8 +754,8 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                         <div className="flex items-center gap-2 min-w-0">
                           <p className="font-semibold text-slate-900 truncate">{lead.name}</p>
                           {aiPriority && (
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${aiPriority.color}`} title="Classificação Eva IA">
-                              {lead.ai_priority === 'hot' ? '🔥' : lead.ai_priority === 'warm' ? '☀️' : '❄️'}
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${aiPriority.color}`} title={tempIsManual ? 'Temperatura automática (por atividade)' : 'Classificação Eva IA'}>
+                              {tempKey === 'hot' ? '🔥' : tempKey === 'warm' ? '☀️' : '❄️'}
                             </span>
                           )}
                         </div>
@@ -1283,11 +1297,10 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
             <div>
               <h2 className="font-bold text-slate-900 flex items-center gap-2">
                 {lead.name}
-                {lead.ai_priority && (
-                  <span className="text-sm">
-                    {lead.ai_priority === 'hot' ? '🔥' : lead.ai_priority === 'warm' ? '☀️' : '❄️'}
-                  </span>
-                )}
+                {(() => {
+                  const tp = calcTemperatura(lead)
+                  return tp ? <span className="text-sm" title={lead.ai_priority ? 'Definido manualmente' : 'Automático por atividade'}>{tp === 'hot' ? '🔥' : tp === 'warm' ? '☀️' : '❄️'}</span> : null
+                })()}
               </h2>
               <p className="text-sm text-slate-500">{source?.icon} {source?.label} • {new Date(lead.created_at).toLocaleDateString('pt-BR')}</p>
             </div>
@@ -1311,6 +1324,31 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
           )}
         </div>
 
+        {/* Temperatura manual */}
+        <div className="mx-4 mt-3 p-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl border border-slate-200 dark:border-slate-600">
+          <p className="text-xs text-slate-500 mb-2 font-medium">🌡️ Temperatura:</p>
+          <div className="flex gap-2">
+            {(['hot', 'warm', 'cold'] as const).map(t => {
+              const cfg = AI_PRIORITY_CONFIG[t]
+              const isActive = lead.ai_priority === t
+              return (
+                <button key={t}
+                  onClick={async () => {
+                    const newPriority = isActive ? null : t
+                    await supabase.from('leads').update({ ai_priority: newPriority }).eq('id', lead.id)
+                    onUpdate()
+                  }}
+                  className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition border ${isActive ? cfg.color + ' border-transparent ring-2 ring-offset-1 ' + (t === 'hot' ? 'ring-red-400' : t === 'warm' ? 'ring-amber-400' : 'ring-blue-400') : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}>
+                  {t === 'hot' ? '🔥 Quente' : t === 'warm' ? '☀️ Morno' : '❄️ Frio'}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[10px] text-slate-400 mt-1.5">
+            {lead.ai_priority ? '✏️ Definido manualmente · clique para remover' : `ℹ️ Automático — ${calcTemperatura(lead) === 'hot' ? 'ativo recentemente' : calcTemperatura(lead) === 'warm' ? 'algum tempo sem contato' : 'muito tempo sem contato'}`}
+          </p>
+        </div>
+
         {/* Follow-ups e Histórico de Contatos */}
         <LeadFollowupPanel leadId={lead.id} leadName={lead.name} />
 
@@ -1326,7 +1364,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
             onClick={() => setTab('history')}
             className={`flex-1 py-2 text-sm font-medium ${tab === 'history' ? 'text-violet-600 border-b-2 border-violet-600' : 'text-slate-500'}`}
           >
-            Histórico Eva
+            Histórico
           </button>
         </div>
         
@@ -1568,6 +1606,7 @@ function LegendModal({ onClose }: { onClose: () => void }) {
             <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
               🌡️ Temperatura do lead
             </h3>
+
             <p className="text-xs text-slate-500 mb-3">
               A Eva analisa cada conversa e classifica o lead em 1 dos 3 níveis de intenção de compra.
               Use esse sinal pra <strong>priorizar quem ligar/atender primeiro</strong>.
