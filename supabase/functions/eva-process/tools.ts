@@ -53,6 +53,7 @@ export async function consultarAgenda(args: {
   procedimento?: string;
 }, ctx: DonnaContext, payload: IncomingPayload, env: ToolEnv): Promise<string> {
   const { dataAlvo, periodoAlvo } = parseData(args.periodo || 'amanha');
+  const dataLabel = formatarDataBR(dataAlvo); // declarar aqui para evitar 'Cannot access before initialization'
 
   // Tenta resolver o procedimento pelo nome — usado pra
   // (a) duração e (b) filtrar profs que fazem aquilo (via p_procedure_id)
@@ -146,7 +147,6 @@ export async function consultarAgenda(args: {
     usouFallback = true;
   }
 
-  const dataLabel = formatarDataBR(dataAlvo);
   const periodoLabel = periodoAlvo ? ` (${periodoAlvo})` : '';
 
   if (!resp.ok || !Array.isArray(resp.data) || resp.data.length === 0) {
