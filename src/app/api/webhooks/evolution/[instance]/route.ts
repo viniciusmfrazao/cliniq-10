@@ -1028,32 +1028,30 @@ export async function POST(
           if (evaShouldSkip) {
             debugTrace.push(`forward Donna SKIPPED pos-antidup (${evaShouldSkip})`)
           } else {
-            // Donna só recebe texto/caption — pra mídia pura, sem caption,
-            // mandamos um placeholder pra que ela saiba que rolou algo.
+            // Enfileirar na eva_queue em vez de chamar diretamente.
+            // O worker (pg_cron a cada 10s) processa a fila.
+            // Upsert por (clinic_id, phone) reinicia o timer se já existe entrada —
+            // isso garante que múltiplas msgs rápidas geram UMA resposta com contexto completo.
             try {
-              const fwd = await forwardToDonna({
-                clinicId,
-                instance,
-                phone,
-                remoteJid: key?.remoteJid ?? `${phone}@s.whatsapp.net`,
-                messageId: messageId ?? null,
-                message: content, // usa content — já tem transcrição se áudio foi transcrito
-                pushName,
-                kind: parsed.kind,
-                mediaUrl,
-              })
-              if (fwd.ok) {
-                debugTrace.push(
-                  `forward Donna ok (engine=${fwd.engine}, status=${fwd.status}${fwd.silentFail ? ', silentFail=' + fwd.silentFail : ''}${fwd.sent === false ? ', NOT_SENT' : ''})`,
-                )
+              const { error: queueError } = await svc
+                .from('eva_queue')
+                .upsert({
+                  clinic_id: clinicId,
+                  phone,
+                  instance,
+                  customer_name: pushName ?? null,
+                  process_after: new Date(Date.now() + 15_000).toISOString(),
+                  updated_at: new Date().toISOString(),
+                }, { onConflict: 'clinic_id,phone' })
+
+              if (queueError) {
+                internalErrors.push(`eva_queue upsert error: ${queueError.message}`)
               } else {
-                internalErrors.push(
-                  `forward Donna FAIL (engine=${fwd.engine}, status=${fwd.status}): ${fwd.error?.slice(0, 400) ?? 'sem detalhes'}`,
-                )
+                debugTrace.push('eva_queue: enfileirado (process_after +15s)')
               }
             } catch (err) {
               internalErrors.push(
-                `forward Donna threw: ${err instanceof Error ? err.message : String(err)}`,
+                `eva_queue threw: ${err instanceof Error ? err.message : String(err)}`,
               )
             }
           }
