@@ -117,6 +117,7 @@ function validatePayload(input: unknown): { ok: true; payload: IncomingPayload }
 async function debounceWaitAndCheck(payload: IncomingPayload): Promise<{
   proceed: boolean;
   reason?: string;
+  useText?: string; // texto mais recente se houver msg nova
 }> {
   if (EVA_DEBOUNCE_MS <= 0) return { proceed: true, reason: 'disabled' };
   if (payload.isFollowup) return { proceed: true, reason: 'followup_skip' };
@@ -124,30 +125,23 @@ async function debounceWaitAndCheck(payload: IncomingPayload): Promise<{
 
   await new Promise((r) => setTimeout(r, EVA_DEBOUNCE_MS));
 
-  // Busca a última mensagem do paciente após a espera.
-  // Filtramos por role=user e ordenamos por created_at desc (com fallback no
-  // próprio metadata->>evolution_message_id que o webhook salva).
   const url = new URL(`${SUPABASE_URL}/rest/v1/eva_conversations`);
   url.searchParams.set('clinic_id', `eq.${payload.clinicId}`);
   url.searchParams.set('phone', `eq.${payload.phone}`);
   url.searchParams.set('role', 'eq.user');
   url.searchParams.set('order', 'created_at.desc');
   url.searchParams.set('limit', '1');
-  url.searchParams.set('select', 'id,metadata,created_at');
+  url.searchParams.set('select', 'id,content,metadata,created_at');
 
   try {
     const r = await fetch(url.toString(), {
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      },
+      headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
     });
-    if (!r.ok) {
-      // Se a verificação falhar, prossegue (modo seguro: pelo menos responde).
-      return { proceed: true, reason: `check_failed_status_${r.status}` };
-    }
+    if (!r.ok) return { proceed: true, reason: `check_failed_status_${r.status}` };
+
     const rows = (await r.json()) as Array<{
       id: string;
+      content?: string;
       metadata?: { evolution_message_id?: string } | null;
       created_at: string;
     }>;
@@ -155,7 +149,13 @@ async function debounceWaitAndCheck(payload: IncomingPayload): Promise<{
     const latestMessageId = latest?.metadata?.evolution_message_id ?? null;
 
     if (latestMessageId && latestMessageId !== payload.messageId) {
-      return { proceed: false, reason: `newer_message_${latestMessageId}` };
+      // Há mensagem mais nova — processar com o conteúdo mais recente
+      // em vez de descartar silenciosamente
+      const newerText = latest?.content?.trim();
+      if (newerText) {
+        return { proceed: true, reason: `using_newer_message`, useText: newerText };
+      }
+      return { proceed: false, reason: `newer_message_no_content_${latestMessageId}` };
     }
     return { proceed: true, reason: 'is_latest' };
   } catch (e) {
