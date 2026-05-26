@@ -291,7 +291,7 @@ export async function POST(
 
   const { data: row } = await svc
     .from('clinic_whatsapp')
-    .select('clinic_id, webhook_token, instance_name, auto_reply_enabled, role_inbound')
+    .select('clinic_id, webhook_token, instance_name, auto_reply_enabled, role_inbound, role_outbound_automation')
     .eq('instance_name', instance)
     .maybeSingle()
 
@@ -307,6 +307,13 @@ export async function POST(
       query: querySnapshot,
     })
     return NextResponse.json({ error: 'não autorizado' }, { status: 401 })
+  }
+
+  // Instância de saída pura (role_outbound_automation=true, role_inbound=false)
+  // Mensagens vindas dessas instâncias são automações enviadas pelo sistema
+  // Não devem criar leads, aparecer no CRM nem no WhatsApp
+  if (row.role_outbound_automation === true && row.role_inbound === false) {
+    return NextResponse.json({ ok: true, skipped: 'outbound_only_instance' })
   }
 
   if (parseError) {
