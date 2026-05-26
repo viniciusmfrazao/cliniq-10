@@ -108,7 +108,7 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
         user_id: apt.professional_id,
         type: 'check_in',
         title: `${apt.patients?.name || 'Paciente'} chegou!`,
-        message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${apt.procedures?.name || 'Atendimento'}`,
+        message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })} - ${apt.procedures?.name || 'Atendimento'}`,
         link: `/dashboard/atendimento/${appointmentId}`
       })
       
@@ -170,7 +170,7 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
   }
 
   const now = new Date()
-  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 
   return (
     <div>
@@ -300,7 +300,7 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
             {filteredAppointments.map(apt => {
               const statusInfo = STATUS_LABELS[apt.status] || STATUS_LABELS.scheduled
               const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.birth_date)
-              const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+              const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
               const isLoading = loadingId === apt.id
               const waitTime = apt.checked_in_at ? getWaitTime(apt.checked_in_at) : null
               const isLate = apt.checked_in_at ? isLateWait(apt.checked_in_at) : false
@@ -443,7 +443,7 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
           <div className="card overflow-hidden opacity-75">
             <div className="divide-y divide-slate-100">
               {appointments.filter(a => a.status === 'completed').map(apt => {
-                const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
                 return (
                   <div key={apt.id} className="p-3 flex items-center gap-4 bg-slate-50">
                     <span className="text-sm font-medium text-slate-500 w-12">{aptTime}</span>

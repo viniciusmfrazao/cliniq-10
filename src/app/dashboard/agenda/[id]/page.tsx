@@ -85,7 +85,7 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
         <div>
           <h1 className="text-xl font-bold text-slate-900">Detalhes do agendamento</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {new Date(appointment.start_time).toLocaleDateString('pt-BR', {
+            {new Date(appointment.start_time).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo',
               weekday: 'long',
               day: 'numeric',
               month: 'long',
@@ -150,9 +150,9 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
           <div>
             <p className="text-xs text-slate-400 mb-1">Horario</p>
             <p className="text-sm font-medium text-slate-900">
-              {new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
               {' - '}
-              {new Date(appointment.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(appointment.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
             </p>
           </div>
 

@@ -455,7 +455,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                   >
                     <div className="w-12 md:w-16 text-center flex-shrink-0">
                       <p className="text-base md:text-lg font-black text-slate-900">
-                        {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </p>
                     </div>
                     <div className={`w-1 h-10 md:h-12 rounded-full flex-shrink-0 ${
@@ -580,7 +580,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                           )}
                         </p>
                         <p className="text-[10px] md:text-xs text-slate-400">
-                          {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                         </p>
                       </div>
                     </div>

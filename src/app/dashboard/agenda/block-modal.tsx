@@ -58,8 +58,8 @@ export default function BlockModal({ isOpen, onClose, professionals, clinicId, s
   const [form, setForm] = useState({
     title: editBlock?.title || '',
     date: editBlock ? editBlock.start_time.split('T')[0] : selectedDate,
-    startTime: editBlock ? new Date(editBlock.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : defaultStart,
-    endTime: editBlock ? new Date(editBlock.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : defaultEnd,
+    startTime: editBlock ? new Date(editBlock.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : defaultStart,
+    endTime: editBlock ? new Date(editBlock.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : defaultEnd,
     notes: editBlock?.notes || '',
     color: editBlock?.color || 'slate',
     professionalId: editBlock?.professional_id || selectedProfessionalId || professionals[0]?.id || '',

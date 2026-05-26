@@ -176,21 +176,21 @@ const AppointmentCard = React.memo(function AppointmentCard({
       setShowPreview(false)
     }, 150)
   }
-  const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.phone)
   const isConfirmed = apt.status === 'confirmed'
   const isCancelled = apt.status === 'cancelled' || apt.status === 'no_show'
   const canCheckIn = ['scheduled', 'confirmed', 'pending_confirmation'].includes(apt.status) && !apt.checked_in_at
   const isCheckedIn = !!apt.checked_in_at
   const checkedInTime = apt.checked_in_at 
-    ? new Date(apt.checked_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    ? new Date(apt.checked_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
     : null
 
   // URL para agendar no mesmo horário/profissional do cancelado
   const rescheduleUrl = (() => {
     const d = new Date(apt.start_time)
     const date = d.toISOString().split('T')[0]
-    const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
     const prof = apt.professional_id || ''
     return `/dashboard/agenda/novo?date=${date}&time=${time}&professional=${prof}`
   })()
@@ -650,7 +650,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
           user_id: apt.professional_id,
           type: 'check_in',
           title: `${apt.patients?.name || 'Paciente'} chegou!`,
-          message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${apt.procedures?.name || 'Atendimento'}`,
+          message: `Agendamento das ${new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })} - ${apt.procedures?.name || 'Atendimento'}`,
           link: `/dashboard/atendimento/${appointmentId}`
         })
       }
@@ -1153,7 +1153,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                         key={apt.id}
                         className={`px-1.5 py-0.5 rounded text-xs truncate ${status.bg} ${status.text}`}
                       >
-                        {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} {apt.patients?.name?.split(' ')[0]}
+                        {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })} {apt.patients?.name?.split(' ')[0]}
                       </div>
                     )
                   })}
