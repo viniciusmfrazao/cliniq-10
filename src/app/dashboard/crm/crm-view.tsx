@@ -6,6 +6,8 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import CrmReport from './crm-report'
+import FollowupAlertBadge from '@/components/crm/FollowupAlertBadge'
+import LeadFollowupPanel from '@/components/crm/LeadFollowupPanel'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import CRMSettingsModal from './crm-settings-modal'
 import { useWaLine } from '@/contexts/WaLineContext'
@@ -44,6 +46,10 @@ type Lead = {
   human_review_reason: string | null
   human_review_details: string | null
   human_review_at: string | null
+  // Pausa manual da Eva
+  eva_pause_until: string | null
+  whatsapp_instance: string | null
+  whatsapp_name: string | null
   created_at: string
   updated_at: string
 }
@@ -267,7 +273,24 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
               ? leadsForLine.filter(isInFollowup)
               : isFollowupFilter(filter)
                 ? leadsForLine.filter(l => followupBucket(l) === filter)
-                : leadsForLine.filter(l => l.status === filter)
+                : filter === 'no_contact_7'
+                ? leadsForLine.filter(l => {
+                    if (!l.last_contact_at) return true
+                    return (Date.now() - new Date(l.last_contact_at).getTime()) > 7 * 24 * 60 * 60 * 1000
+                  })
+                : filter === 'no_contact_14'
+                  ? leadsForLine.filter(l => {
+                      if (!l.last_contact_at) return true
+                      return (Date.now() - new Date(l.last_contact_at).getTime()) > 14 * 24 * 60 * 60 * 1000
+                    })
+                  : filter === 'no_contact_30'
+                    ? leadsForLine.filter(l => {
+                        if (!l.last_contact_at) return true
+                        return (Date.now() - new Date(l.last_contact_at).getTime()) > 30 * 24 * 60 * 60 * 1000
+                      })
+                    : filter === 'eva_paused'
+                      ? leadsForLine.filter(l => l.eva_pause_until && new Date(l.eva_pause_until) > new Date())
+                      : leadsForLine.filter(l => l.status === filter)
 
   // Agrupar por stage para Kanban (respeita os filtros especiais)
   const leadsForKanban =
@@ -281,7 +304,15 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
             ? leadsForLine.filter(isInFollowup)
             : isFollowupFilter(filter)
               ? leadsForLine.filter(l => followupBucket(l) === filter)
-              : leadsForLine
+              : filter === 'no_contact_7'
+                ? leadsForLine.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 7 * 24 * 60 * 60 * 1000 })
+                : filter === 'no_contact_14'
+                  ? leadsForLine.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 14 * 24 * 60 * 60 * 1000 })
+                  : filter === 'no_contact_30'
+                    ? leadsForLine.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 30 * 24 * 60 * 60 * 1000 })
+                    : filter === 'eva_paused'
+                      ? leadsForLine.filter(l => l.eva_pause_until && new Date(l.eva_pause_until) > new Date())
+                      : leadsForLine
   const leadsByStage = STAGES.reduce((acc, stage) => {
     acc[stage.id] = leadsForKanban.filter(l => l.status === stage.id)
     return acc
@@ -483,6 +514,23 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           </button>
         )}
         
+        {/* Filtros sem contato + modo manual */}
+        <div className="col-span-full flex items-center gap-2 flex-wrap pt-1 border-t border-slate-100">
+          <span className="text-xs text-slate-400 font-medium whitespace-nowrap">Sem contato há:</span>
+          {([['no_contact_7','7 dias'],['no_contact_14','14 dias'],['no_contact_30','30 dias']] as [string,string][]).map(([key, label]) => (
+            <button key={key}
+              onClick={() => setFilter(filter === key ? 'all' : key)}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition border ${filter === key ? 'bg-orange-500 text-white border-orange-500' : 'border-slate-200 text-slate-600 hover:bg-orange-50 hover:border-orange-300'}`}>
+              +{label}
+            </button>
+          ))}
+          <button
+            onClick={() => setFilter(filter === 'eva_paused' ? 'all' : 'eva_paused')}
+            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition border ${filter === 'eva_paused' ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600 hover:bg-violet-50 hover:border-violet-300'}`}>
+            🙋 Modo manual
+          </button>
+        </div>
+
         <button
           onClick={() => setFilter(filter === 'new' ? 'all' : 'new')}
           className={`card p-3 text-left transition-all ${filter === 'new' ? 'ring-2 ring-violet-400' : 'hover:bg-slate-50'}`}
@@ -1263,6 +1311,9 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
           )}
         </div>
 
+        {/* Follow-ups e Histórico de Contatos */}
+        <LeadFollowupPanel leadId={lead.id} leadName={lead.name} />
+
         {/* Tabs */}
         <div className="flex border-b border-slate-100">
           <button
@@ -1275,7 +1326,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
             onClick={() => setTab('history')}
             className={`flex-1 py-2 text-sm font-medium ${tab === 'history' ? 'text-violet-600 border-b-2 border-violet-600' : 'text-slate-500'}`}
           >
-            Histórico
+            Histórico Eva
           </button>
         </div>
         
