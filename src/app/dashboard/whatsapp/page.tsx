@@ -356,6 +356,15 @@ export default function WhatsAppPage() {
         setConfigured(true)
         setClinicId(userData.clinic_id)
 
+        // Verificar se clínica tem módulo Eva IA ativo
+        const { data: clinicData } = await supabase
+          .from('clinics')
+          .select('settings')
+          .eq('id', userData.clinic_id)
+          .single()
+        const activeModules: string[] = clinicData?.settings?.active_modules ?? []
+        setHasEvaModule(activeModules.includes('eva_ia'))
+
         const inboundLines = inboundConnected.map((i) => ({
           instance_name: i.instance_name,
           auto_reply_enabled: i.auto_reply_enabled !== false,
