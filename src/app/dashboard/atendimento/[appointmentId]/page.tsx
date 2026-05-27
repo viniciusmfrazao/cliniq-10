@@ -155,6 +155,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               medicalRecords={medicalRecords || []}
               clinicId={userData?.clinic_id || ''}
               professionalId={user.id}
+              hasIaModule={enabledModules.includes('ia_prontuario')}
             />
 
             {/* Pacotes ativos — alerta para usar sessão */}

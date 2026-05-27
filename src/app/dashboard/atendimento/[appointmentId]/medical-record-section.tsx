@@ -27,6 +27,7 @@ type Props = {
   }>
   clinicId: string
   professionalId: string
+  hasIaModule?: boolean
 }
 
 type LocalPhoto = {
@@ -51,6 +52,7 @@ export default function MedicalRecordSection({
   medicalRecords,
   clinicId,
   professionalId,
+  hasIaModule = false,
 }: Props) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current')
@@ -286,8 +288,8 @@ export default function MedicalRecordSection({
         {activeTab === 'current' ? (
           <div className="space-y-4">
 
-            {/* IA — Resumo do histórico */}
-            <div className="rounded-xl border border-violet-100 bg-violet-50 dark:bg-violet-900/10 dark:border-violet-800 p-4">
+            {/* IA — Resumo do histórico — só aparece se módulo ativo */}
+            {hasIaModule && <div className="rounded-xl border border-violet-100 bg-violet-50 dark:bg-violet-900/10 dark:border-violet-800 p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🤖</span>
@@ -310,7 +312,7 @@ export default function MedicalRecordSection({
               ) : (
                 <p className="text-xs text-violet-400 italic">Clique em "Gerar resumo" para a IA analisar o histórico desta paciente.</p>
               )}
-            </div>
+            </div>}
 
             {/* Queixa */}
             <div>
@@ -332,14 +334,14 @@ export default function MedicalRecordSection({
                 <label className="block text-sm font-medium text-slate-700">
                   Conduta / Procedimento realizado
                 </label>
-                <button
+                {hasIaModule && <button
                   onClick={fetchSugestaoIA}
                   disabled={iaSugestaoLoading || !form.complaint.trim()}
                   title={!form.complaint.trim() ? 'Preencha a queixa primeiro' : 'Sugerir conduta com IA'}
                   className="text-xs px-2.5 py-1 bg-violet-100 hover:bg-violet-200 disabled:opacity-40 text-violet-700 rounded-lg font-medium transition flex items-center gap-1"
                 >
                   {iaSugestaoLoading ? <><span className="animate-spin">⟳</span> Sugerindo...</> : '✨ Sugerir conduta'}
-                </button>
+                </button>}
               </div>
               {iaSugestao && (
                 <div className="mb-2 p-3 bg-violet-50 border border-violet-200 rounded-lg">

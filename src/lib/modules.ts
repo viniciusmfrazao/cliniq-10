@@ -15,6 +15,7 @@ export type ModuleId =
   | 'financeiro'
   | 'equipe'
   | 'auditoria'
+  | 'ia_prontuario'
 
 export type Module = {
   id: ModuleId
@@ -127,6 +128,14 @@ export const AVAILABLE_MODULES: Module[] = [
     category: 'commercial',
     defaultEnabled: false
   },
+  {
+    id: 'ia_prontuario',
+    name: 'IA no Prontuário',
+    description: 'Resumo do histórico e sugestão de conduta com IA no atendimento',
+    icon: '🤖',
+    category: 'clinical',
+    defaultEnabled: false
+  },
   { 
     id: 'eva_ia', 
     name: 'Eva IA', 
@@ -205,6 +214,7 @@ export const MODULE_ROUTES: Record<ModuleId, string[]> = {
   equipe: ['/dashboard/equipe'],
   auditoria: ['/dashboard/auditoria'],
   odontograma: [],  // tab dentro da ficha do paciente, sem rota própria
+  ia_prontuario: [], // feature dentro do atendimento, sem rota própria
 }
 
 // Verifica se uma rota está habilitada para os módulos ativos
