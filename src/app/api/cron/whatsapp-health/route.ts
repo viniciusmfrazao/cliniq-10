@@ -26,6 +26,8 @@ type Row = {
   status: string
   last_event_at: string | null
   health_warning: boolean | null
+  role_inbound: boolean | null
+  role_outbound_automation: boolean | null
 }
 
 const STALE_HOURS = 24
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
   // So checa quem ja foi configurado (status diferente de pending e tem instance_name)
   const { data: rows, error } = await svc
     .from('clinic_whatsapp')
-    .select('id, clinic_id, instance_name, webhook_token, status, last_event_at, health_warning')
+    .select('id, clinic_id, instance_name, webhook_token, status, last_event_at, health_warning, role_inbound, role_outbound_automation')
     .not('instance_name', 'is', null)
     .in('status', ['connected', 'qr_pending', 'disconnected', 'error'])
 
@@ -143,6 +145,13 @@ export async function GET(req: NextRequest) {
       } else if (evoState === 'open') {
         if (r.status !== 'connected') {
           nextStatus = 'connected'
+        }
+
+        
+        // Instancia outbound-only: nao recebe msgs, nao verificar stale
+        if (r.role_inbound === false || (r.role_outbound_automation === true && !r.role_inbound)) {
+          summary.healthy++
+          continue
         }
 
         const lastMs = r.last_event_at ? new Date(r.last_event_at).getTime() : 0

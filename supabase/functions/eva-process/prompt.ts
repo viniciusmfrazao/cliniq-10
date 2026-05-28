@@ -393,7 +393,9 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
   } else if (lead && knowsRealName && !isNewConversation) {
     identificacaoPart = `- ${firstName} e um LEAD em acompanhamento (status: ${lead.status})${lead.interest ? `, interesse anterior: ${lead.interest}` : ''}. Continue o relacionamento naturalmente.`;
   } else if (knowsRealName && isNewConversation) {
-    identificacaoPart = `- PRIMEIRA APROXIMACAO. Voce sabe que o nome dela e ${firstName} (veio do WhatsApp).\n!! ORDEM OBRIGATORIA:\n  1) Se apresente como Eva da ${clinic.name}\n  2) Acolha com calor (1 frase curta)\n  3) Pergunte se pode confirmar: 'Posso te chamar de ${firstName}?'\n  4) SÓ DEPOIS que ela confirmar o nome, continue a conversa\n- NUNCA va direto ao procedimento sem se apresentar e confirmar o nome.`;
+    // Nova conversa: ignora pushName — sempre perguntar o nome de forma genuina
+    // O pushName do WhatsApp pode ser apelido, nome de empresa, etc — nao confiar
+    identificacaoPart = `- PRIMEIRA APROXIMACAO E NAO SABEMOS O NOME AINDA.\n!! ORDEM OBRIGATORIA — NAO PODE PULAR ETAPAS:\n  1) Se apresente como Eva da ${clinic.name}\n  2) Acolha com calor (1 frase curta sobre o interesse dela, NO MAXIMO)\n  3) Pergunte como prefere ser chamada — SEMPRE, SEM EXCECAO\n  4) NAO explique procedimento, NAO mostre horarios, NAO fale de valores ANTES de saber o nome\n- Quando ela responder com o nome, CHAME 'atualizar_nome_lead' ANTES de continuar.`;
   } else if (!knowsRealName) {
     identificacaoPart = `- PRIMEIRA APROXIMACAO E NAO SABEMOS O NOME AINDA.\n!! ORDEM OBRIGATORIA — NAO PODE PULAR ETAPAS:\n  1) Se apresente como Eva da ${clinic.name}\n  2) Acolha com calor (1 frase curta sobre o interesse dela, NO MAXIMO)\n  3) Pergunte como prefere ser chamada — SEMPRE, SEM EXCECAO\n  4) NAO explique procedimento, NAO mostre horarios, NAO fale de valores ANTES de saber o nome\n- Quando ela responder com o nome, CHAME 'atualizar_nome_lead' ANTES de continuar.`;
   } else {
