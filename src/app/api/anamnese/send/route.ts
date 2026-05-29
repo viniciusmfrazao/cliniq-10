@@ -192,6 +192,12 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // Registra horário exato do envio via WhatsApp
+  void svc
+    .from('anamneses')
+    .update({ whatsapp_sent_at: new Date().toISOString() })
+    .eq('token', token)
+
   // Se tem appointmentId, deixa o link de anamnese vinculado nas notes
   // do agendamento (nice-to-have, ignora erro).
   if (appointmentId) {

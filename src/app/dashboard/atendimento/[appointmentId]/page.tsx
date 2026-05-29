@@ -14,6 +14,8 @@ import PackageSessionAlert from './package-session-alert'
 import OdontogramMapToggle from './odontogram-map-toggle'
 import DocumentosAtendimento from './documentos-atendimento'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
+import SendAnamneseButton from '@/app/dashboard/agenda/send-anamnese-button'
+import AnamneseHistorico from './anamnese-historico'
 
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
   const { appointmentId } = params
@@ -114,7 +116,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
   // popular os chips de alerta (gestante, alergias, fumante, ...).
   const { data: latestCompletedAnamnese } = await supabase
     .from('anamneses')
-    .select('id, status, responses, completed_at, created_at')
+    .select('id, status, responses, completed_at, created_at, viewed_at, whatsapp_sent_at')
     .eq('patient_id', patient.id)
     .eq('status', 'completed')
     .order('completed_at', { ascending: false })
@@ -125,7 +127,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
   if (!latestAnamnese) {
     const { data: pending } = await supabase
       .from('anamneses')
-      .select('id, status, responses, completed_at, created_at')
+      .select('id, status, responses, completed_at, created_at, viewed_at, whatsapp_sent_at')
       .eq('patient_id', patient.id)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -186,18 +188,24 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
                       <p className="text-xs text-slate-500">Esse paciente ainda não tem ficha.</p>
                     </div>
                   </div>
-                  <Link
-                    href={`/dashboard/anamnese/enviar?patient=${patient.id}`}
-                    className="text-xs font-medium text-violet-700 hover:text-violet-800 flex items-center gap-1"
-                  >
-                    Enviar agora
-                    <Icon name="chevronRight" className="w-3 h-3" />
-                  </Link>
+                  <SendAnamneseButton
+                    patientId={patient.id}
+                    patientName={patient.name || ''}
+                    patientPhone={patient.phone || null}
+                    appointmentId={params.appointmentId}
+                    variant="compact"
+                  />
                 </div>
               </div>
             )}
 
-            {/* Orçamentos do paciente */}
+            {/* Histórico de envios da anamnese */}
+            <AnamneseHistorico
+              patientId={patient.id}
+              latestAnamnese={latestAnamnese}
+            />
+
+            {/* Orçamentos do paciente */}}
             {userData?.clinic_id && (
               <Suspense fallback={<div className="card p-4 animate-pulse h-24" />}>
                 <OrcamentosAtendimentoServer
