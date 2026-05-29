@@ -117,6 +117,42 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [savingSinal, setSavingSinal] = useState(false)
   const [sinalSalvo, setSinalSalvo] = useState(!!apt.valor_sinal)
 
+  // Procedimento inline
+  const [editingProc, setEditingProc] = useState(false)
+  const [procList, setProcList] = useState<{ id: string; name: string; duration_minutes: number }[]>([])
+  const [procListLoaded, setProcListLoaded] = useState(false)
+  const [selectedProcId, setSelectedProcId] = useState(apt.procedure_id || '')
+  const [savingProc, setSavingProc] = useState(false)
+  const [currentProcName, setCurrentProcName] = useState(apt.procedures?.name || '')
+
+  async function openProcEdit(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!procListLoaded) {
+      const { data } = await supabaseCard
+        .from('procedures')
+        .select('id, name, duration_minutes')
+        .eq('active', true)
+        .order('name')
+      setProcList(data || [])
+      setProcListLoaded(true)
+    }
+    setEditingProc(true)
+  }
+
+  async function saveProc() {
+    if (!selectedProcId) return
+    setSavingProc(true)
+    const proc = procList.find(p => p.id === selectedProcId)
+    await supabaseCard.from('appointments').update({
+      procedure_id: selectedProcId,
+      ...(proc ? { notes: apt.notes || null } : {}),
+    }).eq('id', apt.id)
+    setCurrentProcName(proc?.name || currentProcName)
+    setSavingProc(false)
+    setEditingProc(false)
+    router.refresh()
+  }
+
   async function saveNotes() {
     setSavingNotes(true)
     await supabaseCard.from('appointments').update({ notes: notes.trim() || null }).eq('id', apt.id)
@@ -287,10 +323,48 @@ const AppointmentCard = React.memo(function AppointmentCard({
           </div>
           
           <div className="space-y-2 text-xs mb-3">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-slate-500">Procedimento:</span>
-              <span className="font-medium text-slate-700">{apt.procedures?.name || 'Atendimento'}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-slate-700">{currentProcName || 'Atendimento'}</span>
+                <button
+                  onClick={openProcEdit}
+                  className="text-[10px] text-violet-600 hover:text-violet-800 font-medium"
+                >
+                  Alterar
+                </button>
+              </div>
             </div>
+            {editingProc && (
+              <div className="space-y-1.5 pt-1" onClick={e => e.stopPropagation()}>
+                <select
+                  className="w-full text-xs border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-violet-300"
+                  value={selectedProcId}
+                  onChange={e => setSelectedProcId(e.target.value)}
+                  autoFocus
+                >
+                  <option value="">— Sem procedimento —</option>
+                  {procList.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={saveProc}
+                    disabled={savingProc}
+                    className="flex-1 py-1 text-xs bg-violet-500 text-white rounded-lg font-medium hover:bg-violet-600 disabled:opacity-50"
+                  >
+                    {savingProc ? 'Salvando...' : 'Salvar'}
+                  </button>
+                  <button
+                    onClick={() => { setEditingProc(false); setSelectedProcId(apt.procedure_id || '') }}
+                    className="flex-1 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-slate-500">Profissional:</span>
               <span className="font-medium text-slate-700">{apt.professional?.name || '-'}</span>
