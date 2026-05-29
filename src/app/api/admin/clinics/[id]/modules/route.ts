@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { isSuperAdmin } from '@/lib/super-admin'
 
 export async function PATCH(
@@ -20,7 +20,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Módulos inválidos' }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     // Get current clinic settings
     const { data: clinic } = await supabase
