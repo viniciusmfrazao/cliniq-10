@@ -205,7 +205,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               latestAnamnese={latestAnamnese}
             />
 
-            {/* Orçamentos do paciente */}}
+            {/* Orçamentos do paciente */}
             {userData?.clinic_id && (
               <Suspense fallback={<div className="card p-4 animate-pulse h-24" />}>
                 <OrcamentosAtendimentoServer

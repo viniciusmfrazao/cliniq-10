@@ -24,10 +24,10 @@ export default async function ConfirmarPage({ params }: { params: { slug: string
 
   if (!apt) return notFound()
 
-  const clinic = apt.clinics as { name: string; settings?: { logo_url?: string } } | null
-  const patient = apt.patients as { name: string } | null
-  const procedure = apt.procedures as { name: string } | null
-  const professional = apt.professionals as { name: string } | null
+  const clinic = apt.clinics as unknown as { name: string; settings?: { logo_url?: string } } | null
+  const patient = apt.patients as unknown as { name: string } | null
+  const procedure = apt.procedures as unknown as { name: string } | null
+  const professional = apt.professionals as unknown as { name: string } | null
 
   const dt = new Date(apt.start_time)
   const dateLabel = dt.toLocaleDateString('pt-BR', {
@@ -44,7 +44,7 @@ export default async function ConfirmarPage({ params }: { params: { slug: string
 
   return (
     <ConfirmarClient
-      token={params.slug}
+      slug={params.slug}
       alreadyConfirmed={apt.status === 'confirmed' || !!apt.confirmed_at}
       isCancelled={apt.status === 'cancelled' || apt.status === 'no_show'}
       patientName={patient?.name || ''}

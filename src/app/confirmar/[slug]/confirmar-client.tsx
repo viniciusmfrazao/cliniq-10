@@ -15,7 +15,7 @@ type Props = {
 }
 
 export default function ConfirmarClient({
-  token,
+  slug,
   alreadyConfirmed,
   isCancelled,
   patientName,
@@ -35,7 +35,7 @@ export default function ConfirmarClient({
     setLoading(true)
     setError('')
     try {
-      const r = await fetch(`/api/confirmar/${token}`, { method: 'POST' })
+      const r = await fetch(`/api/confirmar/${slug}`, { method: 'POST' })
       if (r.ok) {
         setConfirmed(true)
       } else {
