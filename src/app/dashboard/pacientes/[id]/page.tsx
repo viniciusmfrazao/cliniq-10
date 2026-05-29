@@ -508,11 +508,13 @@ async function ConsultasTab({ patientId }: { patientId: string }) {
                       day: '2-digit',
                       month: 'short',
                       year: 'numeric',
+                      timeZone: 'America/Sao_Paulo',
                     })}{' '}
                     às{' '}
                     {new Date(apt.start_time).toLocaleTimeString('pt-BR', {
                       hour: '2-digit',
                       minute: '2-digit',
+                      timeZone: 'America/Sao_Paulo',
                     })}
                     {profName && ` • ${profName}`}
                   </p>
@@ -565,11 +567,11 @@ async function AnamnesesTab({ patientId }: { patientId: string }) {
             >
               <div>
                 <p className="text-sm font-medium text-slate-900">
-                  Enviada em {new Date(a.created_at).toLocaleDateString('pt-BR')}
+                  Enviada em {new Date(a.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                 </p>
                 {a.completed_at && (
                   <p className="text-xs text-slate-500">
-                    Preenchida em {new Date(a.completed_at).toLocaleDateString('pt-BR')}
+                    Preenchida em {new Date(a.completed_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                   </p>
                 )}
               </div>
@@ -640,7 +642,7 @@ async function InjetaveisTab({ patientId }: { patientId: string }) {
                     {app.product_name || typeLabel}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {new Date(app.application_date).toLocaleDateString('pt-BR')}
+                    {new Date(app.application_date).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                     {profName && ` • ${profName}`}
                     {app.total_units ? ` • ${app.total_units}U` : ''}
                   </p>
