@@ -93,6 +93,26 @@ export function addDaysBR(base: string | Date, days: number): string {
 }
 
 /**
+ * Converte uma string `YYYY-MM-DD` (data pura, sem hora) para exibição
+ * no formato `DD/MM/YYYY` SEM passar por `new Date()`, evitando o bug
+ * de timezone onde datas ISO são interpretadas como UTC meia-noite e
+ * acabam aparecendo um dia antes no Brasil (UTC-3).
+ *
+ * ❌ ERRADO:  new Date('1990-05-15').toLocaleDateString('pt-BR') → '14/05/1990'
+ * ✅ CORRETO: parseDateBR('1990-05-15') → '15/05/1990'
+ *
+ * Aceita null/undefined — retorna '' nesses casos.
+ */
+export function parseDateBR(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+  // Suporta "YYYY-MM-DD" e "YYYY-MM-DDTHH:mm:ss..." (pega só os primeiros 10 chars)
+  const iso = dateStr.slice(0, 10)
+  const [y, m, d] = iso.split('-')
+  if (!y || !m || !d) return dateStr
+  return `${d}/${m}/${y}`
+}
+
+/**
  * Se receber uma string ja em formato YYYY-MM-DD usa direto;
  * se for Date converte pro dia BR; se for undefined usa hoje BR.
  */

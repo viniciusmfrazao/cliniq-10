@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { parseDateBR } from '@/lib/datetime'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
@@ -212,8 +213,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const todayDate = new Date()
   const birthdaysThisWeek = birthdays?.filter(p => {
     if (!p.birth_date) return false
-    const bd = new Date(p.birth_date)
-    const thisYearBd = new Date(todayDate.getFullYear(), bd.getMonth(), bd.getDate())
+    const [_y, bdM, bdD] = p.birth_date.split('-').map(Number)
+    const thisYearBd = new Date(todayDate.getFullYear(), bdM - 1, bdD)
     const diff = (thisYearBd.getTime() - todayDate.getTime()) / 86400000
     return diff >= 0 && diff <= 7
   }) || []
@@ -532,8 +533,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
               </div>
               <div className="space-y-2">
                 {birthdaysThisWeek.slice(0, 3).map(p => {
-                  const bd = new Date(p.birth_date)
-                  const thisYearBd = new Date(todayDate.getFullYear(), bd.getMonth(), bd.getDate())
+                  const [, bdMo, bdDa] = p.birth_date.split('-').map(Number)
+                  const thisYearBd = new Date(todayDate.getFullYear(), bdMo - 1, bdDa)
                   const daysUntil = Math.round((thisYearBd.getTime() - todayDate.getTime()) / 86400000)
                   return (
                     <Link 

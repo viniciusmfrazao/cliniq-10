@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { parseDateBR } from '@/lib/datetime'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -346,7 +347,7 @@ function OverviewTab({
               <p className="text-xs text-slate-400">Nascimento</p>
               <p className="text-slate-900">
                 {patient.birth_date
-                  ? new Date(patient.birth_date).toLocaleDateString('pt-BR')
+                  ? parseDateBR(patient.birth_date)
                   : '-'}
               </p>
             </div>

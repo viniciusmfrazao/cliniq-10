@@ -201,7 +201,7 @@ export default async function PacientesPage({
                 <div className="flex items-center gap-2">
                   {patient.birth_date && (
                     <span className="text-xs text-slate-400">
-                      {new Date().getFullYear() - new Date(patient.birth_date).getFullYear()} anos
+                      {new Date().getFullYear() - Number(patient.birth_date.slice(0, 4))} anos
                     </span>
                   )}
                   <Icon name="chevronRight" className="w-4 h-4 text-slate-300" />

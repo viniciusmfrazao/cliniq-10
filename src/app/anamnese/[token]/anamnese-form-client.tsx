@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { parseDateBR } from '@/lib/datetime'
 
 type AnamneseConfig = {
   titulo?: string
@@ -415,7 +416,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 {anamnese.patients.birth_date && (
                   <p className="text-sm" style={{ color: 'var(--light-text)' }}>
                     Data de nascimento: <strong style={{ color: 'var(--dark)' }}>
-                      {new Date(anamnese.patients.birth_date).toLocaleDateString('pt-BR')}
+                      {parseDateBR(anamnese.patients.birth_date)}
                     </strong>
                   </p>
                 )}
