@@ -96,6 +96,7 @@ function renderTemplate(
     data: string
     hora: string
     dia_semana: string
+    link_confirmacao: string
   },
 ): string {
   return template
@@ -107,6 +108,7 @@ function renderTemplate(
     .replace(/\{\{\s*data\s*\}\}/g, vars.data)
     .replace(/\{\{\s*hora\s*\}\}/g, vars.hora)
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
+    .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao)
 }
 
 type AutomationRow = {
@@ -122,6 +124,7 @@ type AppointmentRow = {
   start_time: string
   status: string
   confirmation_sent_at: string | null
+  confirmation_token: string | null
   patient_id: string | null
   professional_id: string | null
   procedure_id: string | null
@@ -216,7 +219,7 @@ export async function GET(req: NextRequest) {
   const { data: appsRaw, error: errApps } = await svc
     .from('appointments')
     .select(
-      'id, clinic_id, start_time, status, confirmation_sent_at, patient_id, professional_id, procedure_id',
+      'id, clinic_id, start_time, status, confirmation_sent_at, confirmation_token, patient_id, professional_id, procedure_id',
     )
     .in('clinic_id', clinicIds)
     .gte('start_time', startISO)
@@ -316,6 +319,8 @@ export async function GET(req: NextRequest) {
     const clinicName = clinicNameById.get(app.clinic_id) || 'Clínica'
 
     const dt = formatBrazilDateTime(app.start_time)
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://app.clinike.com.br'
+    const linkConfirmacao = `${siteUrl}/confirmar/${app.confirmation_token}`
     const text = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
@@ -325,6 +330,7 @@ export async function GET(req: NextRequest) {
       data: dt.date,
       hora: dt.time,
       dia_semana: dt.weekday,
+      link_confirmacao: linkConfirmacao,
     })
 
     if (dryRun) {
