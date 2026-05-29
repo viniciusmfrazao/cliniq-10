@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
-export async function POST(_req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(_req: NextRequest, { params }: { params: { slug: string } }) {
   const svc = createServiceClient()
 
   const { data: apt } = await svc
     .from('appointments')
     .select('id, status, confirmed_at')
-    .eq('confirmation_token', params.token)
+    .eq('confirmation_slug', params.slug)
     .maybeSingle()
 
   if (!apt) {

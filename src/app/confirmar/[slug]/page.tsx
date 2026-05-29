@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import ConfirmarClient from './confirmar-client'
 
-export default async function ConfirmarPage({ params }: { params: { token: string } }) {
+export default async function ConfirmarPage({ params }: { params: { slug: string } }) {
   const svc = createServiceClient()
 
   const { data: apt } = await svc
@@ -19,7 +19,7 @@ export default async function ConfirmarPage({ params }: { params: { token: strin
       professionals:users!appointments_professional_id_fkey(name),
       clinics(name, settings)
     `)
-    .eq('confirmation_token', params.token)
+    .eq('confirmation_slug', params.slug)
     .maybeSingle()
 
   if (!apt) return notFound()
@@ -44,7 +44,7 @@ export default async function ConfirmarPage({ params }: { params: { token: strin
 
   return (
     <ConfirmarClient
-      token={params.token}
+      token={params.slug}
       alreadyConfirmed={apt.status === 'confirmed' || !!apt.confirmed_at}
       isCancelled={apt.status === 'cancelled' || apt.status === 'no_show'}
       patientName={patient?.name || ''}

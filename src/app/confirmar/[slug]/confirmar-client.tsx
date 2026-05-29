@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 type Props = {
-  token: string
+  slug: string
   alreadyConfirmed: boolean
   isCancelled: boolean
   patientName: string
