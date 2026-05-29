@@ -215,7 +215,7 @@ export default function ChatWidget({ currentUserId, clinicId, users }: Props) {
   }
 
   function formatTime(date: string): string {
-    return new Date(date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    return new Date(date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
   }
 
   function formatDate(date: string): string {

@@ -91,7 +91,7 @@ export default function FollowupAlertBadge() {
                       </div>
                       {f.note && <p className="text-xs text-slate-500 truncate">{f.note}</p>}
                       <p className="text-xs text-slate-400 mt-0.5">
-                        {new Date(f.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(f.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </p>
                     </div>
                     <button

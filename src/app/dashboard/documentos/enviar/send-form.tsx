@@ -77,7 +77,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
       .replace(/\{\{PACIENTE_EMAIL\}\}/g, selectedPatient?.email || '')
       .replace(/\{\{PACIENTE_TELEFONE\}\}/g, selectedPatient?.phone || '')
       .replace(/\{\{DATA\}\}/g, now.toLocaleDateString('pt-BR'))
-      .replace(/\{\{HORA\}\}/g, now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))
+      .replace(/\{\{HORA\}\}/g, now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }))
       .replace(/\{\{CLINICA_NOME\}\}/g, clinicName)
     setContent(processedContent)
     setStep(3)

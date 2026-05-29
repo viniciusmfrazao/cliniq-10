@@ -241,6 +241,7 @@ export default function EvolutionTimeline({
                         {new Date(evo.created_at).toLocaleTimeString('pt-BR', {
                           hour: '2-digit',
                           minute: '2-digit',
+                          timeZone: 'America/Sao_Paulo',
                         })}
                       </p>
                     </div>

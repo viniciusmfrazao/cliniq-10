@@ -1015,7 +1015,7 @@ export default function WhatsAppPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
                       <span className="text-xs text-slate-400">
-                        {new Date(conv.lastMessageTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(conv.lastMessageTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </span>
                       {conv.unread > 0 && (
                         <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
@@ -1187,6 +1187,7 @@ function MessageBubble({ msg }: { msg: Message }) {
   const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
   })
   const timeCls = isMine ? 'text-emerald-100' : 'text-slate-400'
 

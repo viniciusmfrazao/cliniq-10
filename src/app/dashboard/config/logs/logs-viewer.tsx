@@ -219,7 +219,7 @@ export default function LogsViewer({ initialLogs }: { initialLogs: LogEntry[] })
                         {log.level}
                       </span>
                       <span className="text-xs text-slate-400 font-mono">
-                        {new Date(log.timestamp).toLocaleTimeString('pt-BR')}
+                        {new Date(log.timestamp).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                       </span>
                     </div>
                     <p className="mt-1 text-slate-700 font-mono text-xs break-all">
