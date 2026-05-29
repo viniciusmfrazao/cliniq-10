@@ -704,25 +704,6 @@ Deno.serve(async (req) => {
   // 5) Salvar resposta
   await saveTurn(payload, ctx, finalText, conv.errors, conv.totalUsage).catch((e) => errors.push(`saveTurn: ${e?.message ?? e}`));
 
-  // Fix CRM: avanca new → contacted logo apos a EVA responder pela primeira vez
-  // Antes so avancava na proxima msg do user (apos a Eva ja ter respondido)
-  if (!payload.isFollowup && ctx.lead?.id && ctx.lead.status === 'new' && finalText) {
-    fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
-      method: 'PATCH',
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        status: 'contacted',
-        last_whatsapp_at: new Date().toISOString(),
-        last_contact_at: new Date().toISOString(),
-      }),
-    }).catch(() => {});
-    ctx.lead.status = 'contacted';
-  }
-
   // 6) Enviar pela Evolution (skipSend pula — útil em smoke tests via SQL)
   const send = payload.skipSend
     ? { ok: true, error: 'skipSend=true' as string | undefined }
