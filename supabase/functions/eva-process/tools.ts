@@ -185,15 +185,11 @@ export async function consultarAgenda(args: {
     linhas.push(`${nome} (id: ${id}): ${horas.slice(0, 6).join(', ')}`);
   }
 
-  const debugLine = `[debug procedureId=${procedureId ?? 'null'} duration=${durationMin ?? 30} fallback=${usouFallback}]`;
-
   return [
     `Horarios REAIS disponiveis para ${dataLabel}${periodoLabel}:`,
     ...linhas,
     '',
-    'Quando a paciente confirmar um horario, chame criar_agendamento com o professional_id correto (acima entre parênteses).',
-    'Apresente apenas 2-3 horarios pra ela escolher (nao a lista toda). Mantenha o tom elegante.',
-    debugLine,
+    'Quando a paciente confirmar um horario, chame criar_agendamento com o professional_id correto (acima entre parênteses). Apresente apenas 2-3 horarios pra ela escolher.',
   ].join('\n');
 }
 
@@ -397,7 +393,6 @@ export async function criarAgendamento(args: {
       `Data: ${d}/${m}/${y} as ${args.horario}`,
       procPart.trim(),
       'Confirme com a paciente, mencione que ela recebera lembrete D-1 e seja calorosa. NAO repita o nome dela mais de uma vez.',
-      `[debug profSource=${profSource} nameSource=${payload.customerName ? 'pushName' : (patient?.name ? 'patient' : 'claude')}]`,
     ].filter(Boolean).join('\n'),
     appointmentCreated: true,
     leadConvertedId,
@@ -555,6 +550,54 @@ export async function registrarInteresse(
   return `Interesse em "${procedimento}" registrado no CRM (prioridade: ${prioridade}). Continue a conversa naturalmente, sem mencionar registro/CRM. Conduza pra avaliacao se fizer sentido.`;
 }
 
+// ─── informar_valor_avista ─────────────────────────────────────────────────
+
+/**
+ * Retorna o valor A VISTA real cadastrado do procedimento. A Eva so chama
+ * quando a paciente pergunta o valor a vista/Pix/dinheiro/desconto a vista.
+ * O valor a vista NAO esta no prompt (blindagem) — so esta aqui, lido direto
+ * de procedures.price. Assim e impossivel a Eva vazar o valor cheio antes da
+ * paciente pedir explicitamente.
+ */
+export async function informarValorAvista(
+  args: { procedimento: string },
+  ctx: DonnaContext,
+  _payload: IncomingPayload,
+  _env: ToolEnv,
+): Promise<string> {
+  const needle = norm(args.procedimento || '');
+  if (!needle) {
+    return 'Procedimento nao informado. Pergunte com elegancia qual procedimento ela quer saber o valor.';
+  }
+
+  // Match pelo nome — mesma logica de fuzzy match usada nas outras tools
+  const proc = ctx.procedures.find((p) => {
+    const hay = norm(p.name);
+    return hay.includes(needle) || needle.includes(hay);
+  });
+
+  if (!proc) {
+    return `Nao encontrei "${args.procedimento}" na lista de procedimentos. Confirme com a paciente qual procedimento ela quer ou ofereca os disponiveis.`;
+  }
+
+  if (!proc.price || proc.price <= 0) {
+    return `O procedimento "${proc.name}" nao tem valor a vista cadastrado. Informe o valor parcelado (12x) que voce ja conhece, ou diga que vai confirmar o valor a vista com a clinica.`;
+  }
+
+  const aVista = formatBRL(proc.price);
+  const inst = proc.installments && proc.installments > 0 ? proc.installments : 12;
+  const parcela = proc.installment_price ? proc.installment_price : proc.price / inst;
+  const parcelaFmt = formatBRL(parcela);
+
+  return [
+    `VALOR DO PROCEDIMENTO "${proc.name}":`,
+    `- A vista (Pix ou dinheiro): R$ ${aVista}`,
+    `- Parcelado no cartao: 12x R$ ${parcelaFmt} sem juros`,
+    '',
+    'Informe o valor a vista pra paciente de forma natural e calorosa, ja que ela pediu. Voce pode mencionar as duas formas (a vista e parcelado) pra ela escolher. Depois conduza pra avaliacao/agendamento se fizer sentido.',
+  ].join('\n');
+}
+
 // ─── Dispatcher ────────────────────────────────────────────────────────────
 
 export interface ToolExecutionResult {
@@ -589,6 +632,10 @@ export async function executeToolByName(
     }
     case 'registrar_interesse': {
       const r = await registrarInteresse(input as any, ctx, payload, env);
+      return { resultStr: r };
+    }
+    case 'informar_valor_avista': {
+      const r = await informarValorAvista(input as any, ctx, payload, env);
       return { resultStr: r };
     }
     default:

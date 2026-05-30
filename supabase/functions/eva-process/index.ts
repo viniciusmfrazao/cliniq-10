@@ -32,10 +32,11 @@
 // deno-lint-ignore-file no-explicit-any
 
 import type { DonnaContext, IncomingPayload, ClaudeMessage } from './types.ts';
-import { sanitizeWhatsapp, fetchJson } from './utils.ts';
+import { sanitizeWhatsapp, fetchJson, parseData } from './utils.ts';
 import { buildSystemPrompt, TOOLS } from './prompt.ts';
 import { runConversation } from './claude.ts';
-import { executeToolByName } from './tools.ts';
+import type { ConversationStepLog } from './claude.ts';
+import { executeToolByName, criarAgendamento } from './tools.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -409,7 +410,12 @@ async function markLeadForHumanReview(
 }
 
 // ─── Salvar turno (user + assistant) em eva_conversations ──────────────────
-async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: string, errors: string[], usage?: unknown): Promise<void> {
+async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: string, errors: string[], usage?: unknown, metrics?: {
+  tools_used?: string[];
+  steps_count?: number;
+  booking_recovered?: boolean;
+  forced_escalation?: boolean;
+}): Promise<void> {
   // Salva como 2 rows separadas (role/content) — modelo atual da tabela
   const url = `${SUPABASE_URL}/rest/v1/eva_conversations`;
   const headers = {
@@ -425,6 +431,11 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
     patient_id: ctx.patient?.id ?? null,
     whatsapp_instance: payload.instance?.trim() || null,
     errors: errors.length ? errors : undefined,
+    // Observabilidade: persiste o que antes so ia pro log volatil
+    tools_used: metrics?.tools_used ?? undefined,
+    steps_count: metrics?.steps_count ?? undefined,
+    booking_recovered: metrics?.booking_recovered ?? undefined,
+    forced_escalation: metrics?.forced_escalation ?? undefined,
   };
   // assistant first (user já foi inserido pelo webhook)
   await fetchJson(url, {
@@ -470,6 +481,133 @@ async function sendViaEvolution(payload: IncomingPayload, ctx: DonnaContext, tex
   if (!r.ok) return { ok: false, error: r.error || `status=${r.status}` };
   return { ok: true };
 }
+
+// ─── Pós-processamento: cortar repetição de nome em mensagens consecutivas ──
+//
+// O Haiku as vezes repete o nome da paciente em toda mensagem (robotico). A
+// regra (decisao do cliente): pode repetir, mas NAO em mensagens consecutivas.
+// Se a ultima mensagem da Eva ja comecou com o nome, removemos o nome do
+// inicio desta. Excecoes (confirmacao de agendamento/D-1/follow-up) sao
+// tratadas pelo caller que passa allowName=true.
+function stripRepeatedName(
+  text: string,
+  firstName: string,
+  lastAssistantMsg: string | null,
+  allowName: boolean,
+): string {
+  if (allowName || !firstName || firstName.length < 2) return text;
+  if (!lastAssistantMsg) return text;
+
+  const nameNorm = firstName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const lastNorm = lastAssistantMsg.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // A ultima mensagem da Eva mencionou o nome? (em qualquer posicao das ~6 primeiras palavras)
+  const lastMentionedName = lastNorm.split(/\s+/).slice(0, 6).some(w => w.replace(/[^a-z]/g, '') === nameNorm);
+  if (!lastMentionedName) return text; // nao repetiu -> deixa como esta
+
+  // Remove o nome no INICIO desta mensagem: "Marcia, qual dia..." -> "Qual dia..."
+  const re = new RegExp(`^\\s*${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s,!.:-]+`, 'i');
+  let out = text.replace(re, '');
+  if (out !== text && out.length > 0) {
+    // Capitaliza a primeira letra apos remover o nome
+    out = out.charAt(0).toUpperCase() + out.slice(1);
+    return out;
+  }
+  return text;
+}
+
+// ─── Pós-processamento: forçar escalonamento se prometeu "vou confirmar" ─────
+//
+// Se o texto promete retorno ("vou confirmar com a Dra", "te retorno") mas a
+// Eva NAO chamou escalar_humano, marcamos o lead pra revisao humana mesmo
+// assim — pra equipe de fato dar o retorno prometido. Retorna true se escalou.
+function promisedFollowupWithoutEscalating(text: string, toolsUsed: string[]): boolean {
+  if (toolsUsed.includes('escalar_humano')) return false;
+  return /(vou confirmar|deixa eu confirmar|deixa eu verificar|vou verificar|te retorno|j[aá] passei sua d[uú]vida|vou passar (pra|para) a dra|confirmar com a dra|confirmo com a dra|confirmar isso com)/i.test(text);
+}
+
+// ─── Recuperação automática de agendamento ──────────────────────────────────
+//
+// Chamada pelo loop quando a Eva confirma horario no texto mas nao chamou
+// criar_agendamento. Pega o ultimo consultar_agenda (data + slots + profs) e
+// o horario que a paciente escolheu (extraido do texto de confirmacao), e
+// cria o agendamento direto. Retorna { created } pro loop decidir.
+async function recoverBookingFromSteps(
+  steps: ConversationStepLog[],
+  confirmText: string,
+  ctx: DonnaContext,
+  payload: IncomingPayload,
+  env: { supabaseUrl: string; serviceKey: string },
+): Promise<{ created: boolean; detail?: string }> {
+  // Acha o ultimo consultar_agenda com resultado de horarios reais
+  const lastAgenda = [...steps].reverse().find(
+    s => s.toolName === 'consultar_agenda' &&
+         s.toolResult?.includes('Horarios REAIS disponiveis'),
+  );
+  if (!lastAgenda?.toolResult) {
+    return { created: false, detail: 'sem consultar_agenda previo com horarios' };
+  }
+
+  // O input do consultar_agenda tem a data (periodo) e procedimento
+  const agendaInput = lastAgenda.toolInput as { periodo?: string; procedimento?: string } | undefined;
+
+  // Extrai os professional_ids e horarios do resultado da tool
+  // Formato: "Nome (id: UUID): 09:00, 10:00, 14:00"
+  const profLines = lastAgenda.toolResult.split('\n').filter(l => /\(id:\s*[0-9a-f-]+\)/i.test(l));
+  if (profLines.length === 0) {
+    return { created: false, detail: 'nao consegui parsear profs/horarios da agenda' };
+  }
+
+  // Procura no texto de confirmacao um horario HH:MM ou HHh
+  const horaMatch = confirmText.match(/\b(\d{1,2})[:h](\d{2})\b/) || confirmText.match(/\b(\d{1,2})\s*h(?:oras)?\b/i);
+  let horarioEscolhido: string | null = null;
+  if (horaMatch) {
+    const hh = String(horaMatch[1]).padStart(2, '0');
+    const min = horaMatch[2] ? horaMatch[2] : '00';
+    horarioEscolhido = `${hh}:${min}`;
+  } else {
+    // Sem horario explicito no texto — pega o primeiro horario do primeiro prof
+    const firstHora = profLines[0].match(/(\d{2}:\d{2})/);
+    if (firstHora) horarioEscolhido = firstHora[1];
+  }
+  if (!horarioEscolhido) {
+    return { created: false, detail: 'nao identifiquei o horario escolhido' };
+  }
+
+  // Acha o professional_id do prof que tem esse horario (ou o primeiro)
+  let professionalId: string | null = null;
+  for (const line of profLines) {
+    const idM = line.match(/\(id:\s*([0-9a-f-]+)\)/i);
+    if (!idM) continue;
+    if (line.includes(horarioEscolhido)) { professionalId = idM[1]; break; }
+    if (!professionalId) professionalId = idM[1]; // fallback: primeiro prof
+  }
+  if (!professionalId) {
+    return { created: false, detail: 'nao identifiquei o profissional' };
+  }
+
+  // Resolve a data a partir do input do consultar_agenda
+  const periodo = agendaInput?.periodo || 'amanha';
+  const { dataAlvo } = parseData(periodo);
+
+  const nome = payload.customerName?.trim() || ctx.patient?.name || ctx.lead?.name || 'Paciente';
+
+  const result = await criarAgendamento(
+    {
+      professional_id: professionalId,
+      data: dataAlvo,
+      horario: horarioEscolhido,
+      nome_paciente: nome,
+      procedimento: agendaInput?.procedimento,
+    },
+    ctx,
+    payload,
+    env,
+  );
+
+  return { created: result.appointmentCreated, detail: result.appointmentCreated ? 'ok' : result.toolResultStr.slice(0, 150) };
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Handler
@@ -614,6 +752,7 @@ Deno.serve(async (req) => {
 
   // 4) Loop Claude — captura se houve criar_agendamento bem sucedido
   let appointmentCreated = false;
+  let bookingRecovered = false;
   const conv = await runConversation({
     apiKey: ANTHROPIC_API_KEY,
     systemPrompt: built.staticPrompt,
@@ -629,6 +768,17 @@ Deno.serve(async (req) => {
         appointmentCreated = true;
       }
       return r.resultStr;
+    },
+    recoverBooking: async (steps, confirmText) => {
+      const rec = await recoverBookingFromSteps(steps, confirmText, ctx, payload, {
+        supabaseUrl: SUPABASE_URL,
+        serviceKey: SERVICE_ROLE_KEY,
+      });
+      if (rec.created) {
+        appointmentCreated = true;
+        bookingRecovered = true;
+      }
+      return rec;
     },
   });
 
@@ -665,29 +815,52 @@ Deno.serve(async (req) => {
     });
   }
 
-  const finalText = sanitizeWhatsapp(conv.finalText)
+  let finalText = sanitizeWhatsapp(conv.finalText)
 
-  // LOG DE SAÍDA — resposta que será enviada ao paciente
   const toolsUsed = conv.steps.filter(s => s.toolName).map(s => s.toolName);
-  const agendamentoCriado = toolsUsed.includes('criar_agendamento');
-  const skippedTool = !agendamentoCriado &&
-    /(reservado|horario marcado|agendamento confirmado)/i.test(finalText);
-  if (skippedTool) {
-    console.error(JSON.stringify({
-      evt: 'eva_skipped_tool',
-      alert: 'CRITICO: Eva confirmou agendamento sem chamar criar_agendamento!',
-      clinic: payload.clinicId,
-      phone: payload.phone?.slice(-8),
-      reply_preview: finalText?.slice(0, 120),
-      steps: conv.steps,
-    }));
+  const agendamentoCriado = toolsUsed.includes('criar_agendamento') || appointmentCreated;
+
+  // ─── PÓS-PROCESSAMENTO 1: cortar repetição de nome em msgs consecutivas ───
+  // Excecoes onde o nome PODE repetir: confirmacao de agendamento, follow-up,
+  // confirmacao D-1. Nesses casos allowName=true.
+  const firstNamePost = String(payload.customerName || ctx.patient?.name || ctx.lead?.name || '').trim().split(/\s+/)[0] || '';
+  const lastAssistantMsg = [...ctx.history].reverse().find(m => m.role === 'assistant')?.content ?? null;
+  const allowName = agendamentoCriado || payload.isFollowup === true;
+  finalText = stripRepeatedName(finalText, firstNamePost, lastAssistantMsg, allowName);
+
+  // ─── PÓS-PROCESSAMENTO 2: forçar escalonamento se prometeu retorno ────────
+  // Se a Eva prometeu "vou confirmar com a Dra" mas nao chamou escalar_humano,
+  // marcamos o lead pra revisao humana mesmo assim — pra equipe dar o retorno.
+  let forcedEscalation = false;
+  if (!payload.isFollowup && promisedFollowupWithoutEscalating(finalText, toolsUsed)) {
+    forcedEscalation = true;
+    if (ctx.lead?.id) {
+      fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          needs_human_review: true,
+          human_review_reason: 'duvida_complexa',
+          human_review_details: `Eva prometeu retorno ("vou confirmar") mas nao escalou sozinha. Pergunta da paciente precisa de resposta da equipe. Resposta da Eva: ${finalText.slice(0, 200)}`,
+          human_review_at: new Date().toISOString(),
+          ai_priority: 'hot',
+        }),
+      }).catch(() => {});
+    }
   }
+
   console.log(JSON.stringify({
     evt: 'eva_reply',
     clinic: payload.clinicId,
     phone: payload.phone?.slice(-8),
     is_followup: payload.isFollowup ?? false,
     tools_used: toolsUsed,
+    booking_recovered: bookingRecovered,
+    forced_escalation: forcedEscalation,
     steps_count: conv.steps.length,
     reply_preview: finalText?.slice(0, 80) ?? null,
     reply_len: finalText?.length ?? 0,
@@ -701,8 +874,13 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, silentFail: true, reason: 'empty_final_text', errors })
   }
 
-  // 5) Salvar resposta
-  await saveTurn(payload, ctx, finalText, conv.errors, conv.totalUsage).catch((e) => errors.push(`saveTurn: ${e?.message ?? e}`));
+  // 5) Salvar resposta (com métricas de observabilidade no metadata)
+  await saveTurn(payload, ctx, finalText, conv.errors, conv.totalUsage, {
+    tools_used: toolsUsed,
+    steps_count: conv.steps.length,
+    booking_recovered: bookingRecovered,
+    forced_escalation: forcedEscalation,
+  }).catch((e) => errors.push(`saveTurn: ${e?.message ?? e}`));
 
   // 6) Enviar pela Evolution (skipSend pula — útil em smoke tests via SQL)
   const send = payload.skipSend
@@ -725,6 +903,7 @@ Deno.serve(async (req) => {
     elapsedMs,
     steps: conv.steps,
     usage: conv.totalUsage,
+    booking_recovered: bookingRecovered,
     errors,
   });
 });

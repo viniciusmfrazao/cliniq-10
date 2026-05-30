@@ -8,19 +8,19 @@ import type { ClaudeContentBlock, ClaudeMessage, ClaudeResponse, ToolDef } from 
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-haiku-4-5-20251001';
-const MAX_TOKENS = 400;
-const MAX_TOOL_ITERATIONS = 4;
+const MAX_TOKENS = 600;
+const MAX_TOOL_ITERATIONS = 8;
 
-// Retry config — só tenta novamente em erros de rede transitórios.
-// 529 (overload) e 429 (rate limit) NÃO retentamos — cada tentativa
-// consome tokens de cache write mesmo sem entregar resposta, dobrando
-// o custo sem benefício real. Melhor fazer silentFail imediatamente
-// e o humano cuida da conversa.
-const RETRY_MAX_ATTEMPTS = 2; // 1 tentativa inicial + 1 retry (era 3)
-const RETRY_BASE_MS = 500;
-const RETRY_MAX_DELAY_MS = 2000;
-// 429 e 529 removidos — não retentar em rate limit / overload da Anthropic
-const RETRYABLE_STATUS = new Set([0, 408, 500, 502, 503, 504]);
+// Retry config — tenta novamente em erros transitorios E em sobrecarga da
+// Anthropic (429 rate limit, 529 overload). O custo de um cache-write extra
+// e irrelevante perto de perder o lead por uma falha momentanea. So depois
+// de 3 tentativas reais e que cai em silentFail.
+const RETRY_MAX_ATTEMPTS = 3; // 1 inicial + 2 retries
+const RETRY_BASE_MS = 800;
+const RETRY_MAX_DELAY_MS = 4000;
+// 429 e 529 REINCLUIDOS — sobrecarga momentanea deve ser retentada, nao
+// transformada em lead perdido.
+const RETRYABLE_STATUS = new Set([0, 408, 429, 500, 502, 503, 504, 529]);
 
 interface CallOpts {
   apiKey: string;
@@ -145,6 +145,15 @@ export interface ConversationStepLog {
 export interface RunConvOpts extends CallOpts {
   /** Implementação da tool — recebe nome+input e retorna string. */
   executeTool: (name: string, input: Record<string, unknown>) => Promise<string>;
+  /**
+   * Recuperacao automatica de agendamento. Chamada quando a Eva CONFIRMA um
+   * horario no texto mas NAO chamou criar_agendamento. Recebe o historico de
+   * tool calls desta conversa (pra achar o ultimo consultar_agenda) e o texto
+   * de confirmacao. Deve tentar criar o agendamento e retornar se conseguiu.
+   * Se conseguir, o loop usa o texto de confirmacao normalmente. Se nao,
+   * cai em silentFail/escalonamento.
+   */
+  recoverBooking?: (steps: ConversationStepLog[], confirmText: string) => Promise<{ created: boolean; detail?: string }>;
 }
 
 export interface RunConvResult {
@@ -237,31 +246,69 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
       steps.push(stepLog);
 
       // Log para debug — captura stop_reason inesperado sem tool call
-      if (r.stop_reason !== 'end_turn') {
+      if (r.stop_reason !== 'end_turn' && r.stop_reason !== 'max_tokens') {
         errors.push(`[iter#${i}] stop_reason inesperado: ${r.stop_reason}`);
       }
 
-      // Extrair texto — se vazio, silentFail em vez de mandar fallback genérico
+      // Extrair texto
       const text = textBlock?.text?.trim() ||
         content.filter(b => b.type === 'text').map(b => b.text || '').join(' ').trim();
 
       if (!text) {
-        // Output vazio apos tool_use -- forcar resposta
-        errors.push(`[iter#${i}] output vazio -- forcando nova tentativa`);
-        messages.push({ role: 'user', content: '[SISTEMA: voce precisa enviar uma mensagem de texto para a paciente agora.]' });
-        continue;
+        // Output vazio apos tool. Em vez de empurrar uma instrucao generica
+        // (que gera mensagem duplicada/desconexa), tratamos de forma inteligente:
+        const lastToolStep = [...steps].reverse().find(s => s.toolName);
+
+        // Se a ultima tool foi criar_agendamento com sucesso, montamos a
+        // confirmacao a partir dos dados da tool — nao dependemos do modelo.
+        if (lastToolStep?.toolName === 'criar_agendamento' &&
+            lastToolStep.toolResult?.includes('AGENDAMENTO CRIADO COM SUCESSO')) {
+          const ti = lastToolStep.toolInput as Record<string, unknown> | undefined;
+          const nome = String(ti?.nome_paciente ?? '').split(/\s+/)[0] || '';
+          const data = String(ti?.data ?? '');
+          const hora = String(ti?.horario ?? '');
+          const [yy, mm, dd] = data.split('-');
+          const dataFmt = dd && mm && yy ? `${dd}/${mm}/${yy}` : data;
+          const recovered = `${nome ? nome + ', ' : ''}já deixei seu horário reservado para ${dataFmt} às ${hora}. Qualquer imprevisto, é só me avisar com antecedência. Vai ser um prazer te receber! *`;
+          errors.push(`[iter#${i}] output vazio apos criar_agendamento — confirmacao reconstruida dos dados da tool`);
+          return { finalText: recovered, steps, totalUsage, errors };
+        }
+
+        // Caso geral: uma unica re-tentativa controlada pedindo so o texto.
+        // Se ja tentamos isso antes nesta conversa, paramos pra nao duplicar.
+        const jaForcou = errors.some(e => e.includes('output vazio'));
+        if (!jaForcou) {
+          errors.push(`[iter#${i}] output vazio -- pedindo texto de fechamento (1x)`);
+          messages.push({ role: 'assistant', content });
+          messages.push({ role: 'user', content: 'Responda a paciente agora em uma unica mensagem curta de WhatsApp, em texto corrido. Nao chame nenhuma tool.' });
+          continue;
+        }
+
+        // Ja forcou uma vez e continua vazio — escala em vez de insistir.
+        errors.push(`[iter#${i}] output vazio persistente apos re-tentativa`);
+        return { finalText: '', steps, totalUsage, errors, silentFail: true, silentFailReason: 'claude_error' };
       }
 
-      // Guard crítica: se o texto confirma agendamento mas criar_agendamento
-      // nunca foi chamado COM SUCESSO, é um falso positivo do Haiku.
+      // Detecta se o texto confirma agendamento sem a tool ter sido chamada
       const toolsCalledSoFar = steps.filter(s => s.toolName).map(s => s.toolName);
       const agendamentoCriado = toolsCalledSoFar.includes('criar_agendamento');
-      const fakeBooking =
-        !agendamentoCriado &&
-        /(j[aá] deixei|horario reservado|agendamento confirmado|horario marcado)/i.test(text);
+      const confirmouNoTexto =
+        /(j[aá] deixei|horario reservado|horário reservado|agendamento confirmado|horario marcado|horário marcado|deixei seu hor)/i.test(text);
 
-      if (fakeBooking) {
-        errors.push(`[iter#${i}] Eva confirmou agendamento sem chamar criar_agendamento — bloqueado`);
+      if (!agendamentoCriado && confirmouNoTexto) {
+        // RECUPERACAO AUTOMATICA (decisao do cliente): em vez de descartar e
+        // mandar pra humano, tentamos criar o agendamento sozinhos a partir do
+        // ultimo consultar_agenda + horario que a paciente escolheu.
+        if (opts.recoverBooking) {
+          const rec = await opts.recoverBooking(steps, text);
+          if (rec.created) {
+            errors.push(`[iter#${i}] agendamento recuperado automaticamente (Eva confirmou no texto sem chamar a tool)`);
+            return { finalText: text, steps, totalUsage, errors };
+          }
+          errors.push(`[iter#${i}] recuperacao de agendamento falhou: ${rec.detail ?? 'sem detalhe'}`);
+        }
+        // Nao conseguiu recuperar — aí sim escala (slot ocupado, dados faltando)
+        errors.push(`[iter#${i}] Eva confirmou agendamento sem criar_agendamento e recuperacao falhou — escalando`);
         return {
           finalText: '',
           steps,

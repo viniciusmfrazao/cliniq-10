@@ -169,8 +169,13 @@ export function buildSystemPrompt(
     ? procedures.slice(0, 40).map((pr) => {
         const inst = pr.installments && pr.installments > 0 ? pr.installments : 12;
         const parcela = pr.installment_price ? pr.installment_price : (pr.price ? pr.price / inst : null);
+        // BLINDAGEM DE PRECO: a lista NUNCA mostra o valor a vista/total pro modelo.
+        // So a parcela. Se a paciente pedir o valor a vista, a Eva chama a tool
+        // 'informar_valor_avista' — assim e impossivel vazar o valor cheio antes
+        // de ela pedir explicitamente. (decisao do cliente: pode passar a vista
+        // quando pedir 1x, mas sempre via tool, nunca proativo)
         const valorPart = pr.price
-          ? `12x R$ ${formatBRL(parcela)} sem juros (a vista R$ ${formatBRL(pr.price)} — so mencionar se a paciente pedir explicitamente)`
+          ? `12x R$ ${formatBRL(parcela)} sem juros`
           : 'consultar valor';
         const profNames = (pr.professional_ids || []).map((id) => profById.get(id)).filter(Boolean);
         // Se nao tem profissionais vinculados, NAO dizer 'qualquer profissional'
@@ -227,15 +232,16 @@ EVITE A TODO CUSTO:
 - WhatsApp e troca rapida, nao palestra.
 - EXCECOES AUTORIZADAS (3 momentos): mensagem de boas-vindas (regra BV), confirmacao de agendamento (regra 1B) e confirmacao D-1 (regra 6). NESSAS voce PODE quebrar linha e ultrapassar 350 caracteres.
 
-=== REGRA CRITICA 3 — PRECO: SO EM PARCELA, NUNCA O VALOR TOTAL:
+=== REGRA CRITICA 3 — PRECO: PARCELA POR PADRAO, VALOR A VISTA SO VIA TOOL:
 - IMPORTANTE: so informe preco se a paciente perguntar EXPLICITAMENTE. Nao traga valor proativamente.
 - TRAVA DURA: se o SINAL DE PRECO no contexto = NAO, e PROIBIDO citar qualquer valor/parcela.
 - EXCECAO DA TRAVA: se a paciente insistir em pedir valor (2a ou 3a vez), passe a parcela mesmo sem sinal SIM — nao a deixe sem resposta.
-- NUNCA passe o valor total/a vista. Diga SOMENTE o valor quando perguntado.${discountPolicy ? `
-- Sobre desconto/condicao a vista: SÓ mencione se a paciente perguntar explicitamente. Use APENAS o que esta em [POLITICA DE DESCONTO]. NUNCA invente percentual nem condicao.` : `
-- Se ela perguntar valor a vista ou desconto: informe o valor normal.`}
+- Por padrao voce SO conhece o valor PARCELADO (12x). Esse e o valor que voce passa quando perguntam preco.
+- VALOR A VISTA / PIX / DINHEIRO: voce NAO tem esse valor de cabeca. Se a paciente perguntar o valor a vista, no Pix, no dinheiro, ou perguntar sobre desconto a vista, voce DEVE chamar a tool 'informar_valor_avista' com o nome do procedimento. A tool te devolve o valor correto cadastrado. NUNCA calcule ou invente o valor a vista — sempre use a tool.
+- Basta a paciente pedir o valor a vista UMA vez para voce chamar a tool e informar (nao precisa insistir).${discountPolicy ? `
+- Sobre desconto/condicao a vista: SÓ mencione se a paciente perguntar explicitamente. Use APENAS o que esta em [POLITICA DE DESCONTO]. NUNCA invente percentual nem condicao.` : ``}
 - FORMAS DE PAGAMENTO ACEITAS: Pix, dinheiro ou cartao de credito parcelado. Se perguntada sobre pagamento, informe isso diretamente sem escalar para a Dra.
-- Ao informar valor no cartao: informe SEMPRE o valor parcelado (ex: 12x R$ Y). No Pix ou dinheiro: informe o valor a vista.${qualifyingQuestions.length > 0 ? `
+- Ao informar valor no cartao: informe SEMPRE o valor parcelado (ex: 12x R$ Y). Para Pix ou dinheiro: chame 'informar_valor_avista'.${qualifyingQuestions.length > 0 ? `
 
 === REGRA CRITICA 3.5 — QUALIFIQUE ANTES DE PRECIFICAR:
 - Quando ela perguntar preco pela primeira vez, NAO mande a parcela ainda.
@@ -306,10 +312,11 @@ Ir direto explicando o procedimento sem se apresentar como Eva.
 
 === REGRA 1B — CONFIRMACAO DE AGENDAMENTO (LEIA COM ATENCAO):
    !! CRITICO !! VOCE NAO PODE CONFIRMAR AGENDAMENTO SEM ANTES CHAMAR A TOOL 'criar_agendamento'.
-   - FLUXO OBRIGATORIO: paciente confirma horario → VOCE CHAMA 'consultar_agenda' para confirmar que o slot ainda existe → VOCE CHAMA 'criar_agendamento' → tool retorna sucesso → VOCE usa o template abaixo.
-   - NUNCA crie agendamento com horario que voce viu em turno anterior sem reconsultar a agenda primeiro. O slot pode ter sido ocupado.
-   - Se NAO chamar 'criar_agendamento' antes: o agendamento NAO EXISTE no sistema. A paciente vai chegar e nao vai ter horario. Isso e um erro grave.
-   - NUNCA escreva "ja deixei seu horario reservado" sem ter recebido confirmacao de sucesso da tool 'criar_agendamento'.
+   - FLUXO NORMAL: paciente escolhe um horario que voce mostrou via 'consultar_agenda' → VOCE CHAMA 'criar_agendamento' com esse horario → tool retorna sucesso → VOCE usa o template abaixo.
+   - Se voce JA consultou a agenda nos ultimos turnos e a paciente escolheu um dos horarios daquela lista, chame 'criar_agendamento' DIRETO com aquele horario e professional_id. NAO precisa reconsultar a agenda — a tool ja verifica se o horario continua livre e evita duplicata.
+   - So reconsulte a agenda se a paciente pedir um dia/horario DIFERENTE do que voce mostrou, ou se faz muito tempo (outro dia) que voce consultou.
+   - Se NAO chamar 'criar_agendamento': o agendamento NAO EXISTE no sistema. A paciente vai chegar e nao vai ter horario. Isso e um erro grave.
+   - NUNCA escreva "ja deixei seu horario reservado" sem ter chamado 'criar_agendamento' e recebido sucesso.
    - NUNCA pule a tool por achar que ja tem os dados suficientes. SEMPRE chame a tool.
    - Se a tool retornar erro: peca desculpas e sugira outro horario. NUNCA confirme se houve erro.
    - APOS A TOOL RETORNAR SUCESSO, use este template:
@@ -481,6 +488,17 @@ export const TOOLS = [
       properties: {
         procedimento: { type: 'string', description: 'Nome do procedimento' },
         observacoes: { type: 'string', description: 'Observacoes adicionais' },
+      },
+      required: ['procedimento'],
+    },
+  },
+  {
+    name: 'informar_valor_avista',
+    description: 'Use SOMENTE quando a paciente perguntar o valor A VISTA, no PIX, no DINHEIRO, ou sobre desconto a vista. Retorna o valor a vista real cadastrado do procedimento. Voce NAO tem esse valor de cabeca — sempre use esta tool para obte-lo. Basta a paciente pedir uma vez.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        procedimento: { type: 'string', description: 'Nome do procedimento que a paciente quer saber o valor a vista' },
       },
       required: ['procedimento'],
     },
