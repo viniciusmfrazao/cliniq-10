@@ -34,7 +34,7 @@
 import type { DonnaContext, IncomingPayload, ClaudeMessage } from './types.ts';
 import { sanitizeWhatsapp, fetchJson, parseData } from './utils.ts';
 import { buildSystemPrompt, TOOLS } from './prompt.ts';
-import { runConversation } from './claude.ts';
+import { runConversation, MODEL_PREMIUM } from './claude.ts';
 import type { ConversationStepLog } from './claude.ts';
 import { executeToolByName, criarAgendamento } from './tools.ts';
 
@@ -706,6 +706,68 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ─── CAMADA 1 + 3: detecção de intenção e escalonamento de modelo ────────
+  //
+  // O Haiku falha em chamar consultar_agenda quando deveria (dado real: 17/17
+  // promessas de "vou conferir" sem chamar a tool). A estrategia: detectar que
+  // a conversa entrou em territorio de AGENDAMENTO e (a) escalar pro modelo
+  // premium SO nesse turno, (b) deixar o loop saber que tool e obrigatoria.
+  const lowerUserText = (payload.userText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const lowerHistory = history.map(m => (m.content || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')).join(' ');
+
+  // Sinais de que a paciente esta falando de HORARIO/AGENDA
+  const falaDeHorario = /\b(manha|tarde|noite|hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|dia \d|dia especifico|que dia|qual dia|que horas|qual horario|horario|agenda|marcar|agendar|disponibilidade|disponivel|vaga|encaixe)\b/.test(lowerUserText);
+
+  // Ja existe um procedimento de interesse na conversa? (pra saber se faz sentido agendar)
+  const temProcedimentoNaConversa = ctx.procedures.some(p => {
+    const n = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return lowerHistory.includes(n) || lowerUserText.includes(n);
+  });
+
+  // A Eva ja ofereceu horarios recentemente? (entao a paciente pode estar escolhendo)
+  const evaOfereceuHorario = /\d{1,2}:\d{2}|\bhorarios? (disponiveis|abaixo)|qual (desses|horario)/.test(lowerHistory);
+
+  // Momento de agendamento = paciente fala de horario E (tem procedimento OU Eva ja ofereceu)
+  const momentoAgendamento = !payload.isFollowup && falaDeHorario && (temProcedimentoNaConversa || evaOfereceuHorario);
+
+  // Escala pro modelo premium SO nesse momento critico (Camada 3 hibrida)
+  const modeloParaEsteTurno = momentoAgendamento ? MODEL_PREMIUM : undefined;
+
+  // ─── CAMADA 1.2: pré-consulta forçada da agenda ──────────────────────────
+  //
+  // Se a paciente esta perguntando sobre horario e ainda nao temos horarios
+  // frescos no contexto, consultamos a agenda PROATIVAMENTE e injetamos o
+  // resultado — assim o Haiku/Sonnet so precisa APRESENTAR, nao decidir buscar.
+  let preConsultaAgenda: string | null = null;
+  if (momentoAgendamento && !evaOfereceuHorario) {
+    try {
+      // Detecta periodo da fala da paciente
+      let periodo = 'amanha';
+      if (/\bhoje\b/.test(lowerUserText)) periodo = 'hoje';
+      else if (/\bsegunda\b/.test(lowerUserText)) periodo = 'segunda';
+      else if (/\bterca\b/.test(lowerUserText)) periodo = 'terca';
+      else if (/\bquarta\b/.test(lowerUserText)) periodo = 'quarta';
+      else if (/\bquinta\b/.test(lowerUserText)) periodo = 'quinta';
+      else if (/\bsexta\b/.test(lowerUserText)) periodo = 'sexta';
+      else if (/\bsabado\b/.test(lowerUserText)) periodo = 'sabado';
+
+      // Detecta procedimento mencionado
+      const procMencionado = ctx.procedures.find(p => {
+        const n = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return lowerHistory.includes(n) || lowerUserText.includes(n);
+      });
+
+      const r = await executeToolByName('consultar_agenda', {
+        periodo,
+        ...(procMencionado ? { procedimento: procMencionado.name } : {}),
+      }, ctx, payload, { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY });
+      preConsultaAgenda = r.resultStr;
+    } catch (_e) {
+      // Se falhar, segue sem — o loop ainda pode chamar a tool normalmente
+      preConsultaAgenda = null;
+    }
+  }
+
   // 3) Build prompt + messages
   // historia ja vem em ordem cronologica do RPC (asc). Limita a 20 ultimas
   // pra economizar tokens (cache do system fica bem mais barato).
@@ -750,6 +812,17 @@ Deno.serve(async (req) => {
     ...messages,
   ];
 
+  // CAMADA 1.2: se consultamos a agenda proativamente, injeta os horarios reais
+  // como contexto ANTES da ultima fala da paciente. Assim a Eva ja tem os dados
+  // na mao e nao precisa (nem pode) prometer "vou conferir" sem entregar.
+  if (preConsultaAgenda) {
+    // Insere logo apos o dynamicPrompt, antes do historico, pra ficar fresco
+    messagesWithContext.splice(2, 0,
+      { role: 'user', content: `[SISTEMA - dados de agenda recem-consultados pra esta conversa, use-os pra responder com horarios REAIS agora, NAO prometa "vou conferir":]\n${preConsultaAgenda}` },
+      { role: 'assistant', content: 'Recebi os horarios reais. Vou apresenta-los pra paciente agora.' },
+    );
+  }
+
   // 4) Loop Claude — captura se houve criar_agendamento bem sucedido
   let appointmentCreated = false;
   let bookingRecovered = false;
@@ -758,6 +831,7 @@ Deno.serve(async (req) => {
     systemPrompt: built.staticPrompt,
     messages: messagesWithContext,
     tools: TOOLS,
+    model: modeloParaEsteTurno,
     useCache: true,
     executeTool: async (name, input) => {
       const r = await executeToolByName(name, input, ctx, payload, {
@@ -817,8 +891,76 @@ Deno.serve(async (req) => {
 
   let finalText = sanitizeWhatsapp(conv.finalText)
 
-  const toolsUsed = conv.steps.filter(s => s.toolName).map(s => s.toolName);
-  const agendamentoCriado = toolsUsed.includes('criar_agendamento') || appointmentCreated;
+  let toolsUsed = conv.steps.filter(s => s.toolName).map(s => s.toolName);
+  let agendamentoCriado = toolsUsed.includes('criar_agendamento') || appointmentCreated;
+
+  // ─── CAMADA 1.1: guard anti-"frase de fuga" sobre agenda ─────────────────
+  //
+  // Dado real: 17/17 vezes a Eva disse "vou conferir os horarios" e NUNCA
+  // chamou consultar_agenda. Aqui interceptamos: se o texto final promete
+  // conferir/verificar horarios MAS consultar_agenda nao foi chamada neste
+  // turno, nos consultamos a agenda automaticamente e REFAZEMOS a resposta
+  // com os horarios reais — a Eva nunca mais promete sem entregar.
+  const prometeuConferirAgenda = /\b(vou conferir|deixa eu (conferir|ver|verificar)|em instantes (retorno|volto)|ja (te )?retorno|vou verificar|deixa eu checar|vou checar|conferir os horarios|verificar a (agenda|disponibilidade)|retorno com (as )?opcoes)\b/i
+    .test(finalText.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  const consultouAgenda = toolsUsed.includes('consultar_agenda');
+
+  if (!payload.isFollowup && prometeuConferirAgenda && !consultouAgenda && !agendamentoCriado) {
+    try {
+      // Detecta periodo/procedimento do que a paciente disse (reusa heuristica)
+      let periodo = 'amanha';
+      if (/\bhoje\b/.test(lowerUserText)) periodo = 'hoje';
+      else if (/\bsegunda\b/.test(lowerUserText)) periodo = 'segunda';
+      else if (/\bterca\b/.test(lowerUserText)) periodo = 'terca';
+      else if (/\bquarta\b/.test(lowerUserText)) periodo = 'quarta';
+      else if (/\bquinta\b/.test(lowerUserText)) periodo = 'quinta';
+      else if (/\bsexta\b/.test(lowerUserText)) periodo = 'sexta';
+      else if (/\bsabado\b/.test(lowerUserText)) periodo = 'sabado';
+
+      const procMencionado = ctx.procedures.find(p => {
+        const n = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return lowerHistory.includes(n) || lowerUserText.includes(n);
+      });
+
+      const agendaRes = await executeToolByName('consultar_agenda', {
+        periodo,
+        ...(procMencionado ? { procedimento: procMencionado.name } : {}),
+      }, ctx, payload, { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY });
+
+      // Refaz a resposta com os horarios reais na mao, forçando modelo premium
+      const retryMessages: ClaudeMessage[] = [
+        ...messagesWithContext,
+        { role: 'assistant', content: finalText },
+        { role: 'user', content: `[SISTEMA: voce prometeu conferir os horarios mas nao deve prometer — deve ENTREGAR. Aqui estao os horarios REAIS:\n${agendaRes.resultStr}\n\nResponda a paciente AGORA apresentando 2-3 desses horarios de forma calorosa e natural, em uma unica mensagem de WhatsApp. NAO diga que vai conferir — os dados ja estao acima.]` },
+      ];
+
+      const retry = await runConversation({
+        apiKey: ANTHROPIC_API_KEY,
+        systemPrompt: built.staticPrompt,
+        messages: retryMessages,
+        tools: TOOLS,
+        model: MODEL_PREMIUM,
+        useCache: true,
+        executeTool: async (name, input) => {
+          const r = await executeToolByName(name, input, ctx, payload, {
+            supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY,
+          });
+          if (name === 'criar_agendamento' && r.meta?.appointmentCreated === true) appointmentCreated = true;
+          return r.resultStr;
+        },
+      });
+
+      const retryText = sanitizeWhatsapp(retry.finalText);
+      if (retryText && retryText.trim().length > 0) {
+        finalText = retryText;
+        toolsUsed = [...toolsUsed, 'consultar_agenda', ...retry.steps.filter(s => s.toolName).map(s => s.toolName)];
+        agendamentoCriado = toolsUsed.includes('criar_agendamento') || appointmentCreated;
+        conv.errors.push('[camada1.1] frase de fuga interceptada — agenda consultada e resposta refeita com horarios reais');
+      }
+    } catch (e) {
+      conv.errors.push(`[camada1.1] falha ao interceptar frase de fuga: ${(e as Error).message}`);
+    }
+  }
 
   // ─── PÓS-PROCESSAMENTO 1: cortar repetição de nome em msgs consecutivas ───
   // Excecoes onde o nome PODE repetir: confirmacao de agendamento, follow-up,

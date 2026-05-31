@@ -8,6 +8,11 @@ import type { ClaudeContentBlock, ClaudeMessage, ClaudeResponse, ToolDef } from 
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-haiku-4-5-20251001';
+// Modelo premium usado SO no turno critico de agendamento (Camada 3 — hibrido).
+// Sonnet segue tool calls com altissima fidelidade; usado em poucos turnos por
+// conversa, mantem o custo baixo e a confiabilidade do agendamento no teto.
+const MODEL_PREMIUM = 'claude-sonnet-4-5-20250929';
+export { MODEL_PREMIUM };
 const MAX_TOKENS = 600;
 const MAX_TOOL_ITERATIONS = 8;
 
@@ -29,6 +34,12 @@ interface CallOpts {
   tools: ToolDef[];
   /** Quando true, o system prompt é enviado como bloco com cache_control. */
   useCache?: boolean;
+  /**
+   * Modelo a usar nesta chamada. Default = Haiku 4.5 (barato). No momento
+   * critico de agendar, o index escala pra Sonnet SO nesse turno (Camada 3 —
+   * modelo hibrido). Custo sobe so nos poucos turnos que decidem o agendamento.
+   */
+  model?: string;
 }
 
 interface CallResult {
@@ -51,7 +62,7 @@ async function callClaudeOnce(opts: CallOpts): Promise<CallResult> {
     : opts.systemPrompt;
 
   const body: Record<string, unknown> = {
-    model: MODEL,
+    model: opts.model || MODEL,
     max_tokens: MAX_TOKENS,
     system: systemPayload,
     messages: opts.messages,
@@ -198,6 +209,7 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
       messages,
       tools: opts.tools,
       useCache: opts.useCache,
+      model: opts.model,
     });
 
     if (!callRes.ok || !callRes.raw) {

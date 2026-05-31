@@ -31,6 +31,42 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'env vars ausentes' }), { status: 500 })
   }
 
+  // ─── CAMADA 2: WATCHDOG de conversas paradas ─────────────────────────────
+  //
+  // ~1x por minuto (quando o segundo do relogio < 10, pra rodar so 1 dos ~6
+  // ciclos por minuto), busca conversas onde a ULTIMA msg e do paciente, foi
+  // ha >3min, e nao ha resposta nem entrada na fila. Reenfileira pra Eva
+  // responder — assim NENHUM paciente fica no vacuo, mesmo se algo falhar.
+  if (new Date().getSeconds() < 10) {
+    try {
+      const stuckResp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/eva_stuck_conversations`, {
+        method: 'POST', headers, body: '{}',
+      })
+      if (stuckResp.ok) {
+        const stuck = await stuckResp.json() as Array<{ clinic_id: string; phone: string; instance: string | null }>
+        if (stuck && stuck.length > 0) {
+          console.log(JSON.stringify({ evt: 'eva_watchdog', stuck: stuck.length }))
+          // Reenfileira cada conversa parada (process_after = agora)
+          for (const s of stuck) {
+            await fetch(`${SUPABASE_URL}/rest/v1/eva_queue`, {
+              method: 'POST',
+              headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
+              body: JSON.stringify({
+                clinic_id: s.clinic_id,
+                phone: s.phone,
+                instance: s.instance ?? 'cliniq',
+                process_after: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }),
+            }).catch(() => {})
+          }
+        }
+      }
+    } catch (_e) {
+      // watchdog é best-effort; nunca derruba o worker
+    }
+  }
+
   // 1) Reivindicar itens atomicamente (claim_eva_queue trava com SKIP LOCKED).
   //    Lock de 90s: tempo de sobra pro debounce (15s) + Claude + tools.
   const claimResp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/claim_eva_queue`, {
