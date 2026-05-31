@@ -103,7 +103,16 @@ export async function PATCH(
 
     const { professional_role } = await request.json()
 
-    const { error } = await supabase
+    // Usa service role para o update — o cliente do usuário logado é barrado
+    // pela RLS da tabela users e o update falha silenciosamente (afeta 0 linhas
+    // sem retornar erro), fazendo o professional_role nunca ser salvo.
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const { error } = await supabaseAdmin
       .from('users')
       .update({ professional_role: professional_role || null })
       .eq('id', params.id)
