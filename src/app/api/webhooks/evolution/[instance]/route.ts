@@ -1008,30 +1008,19 @@ export async function POST(
           if (evaShouldSkip) {
             debugTrace.push(`forward Donna SKIPPED (${evaShouldSkip})`)
           } else {
-            // Anti-duplicata: checar se Eva ja respondeu nos ultimos 30s para este phone
-            // (evita duplo disparo quando Evolution envia o webhook duas vezes)
-            const { data: recentEvaReply } = await svc
-              .from('eva_conversations')
-              .select('id')
-              .eq('clinic_id', clinicId)
-              .eq('phone', phone)
-              .eq('role', 'assistant')
-              .gte('created_at', new Date(Date.now() - 30_000).toISOString())
-              .limit(1)
-              .maybeSingle()
-            if (recentEvaReply) {
-              debugTrace.push('eva skip: anti-duplicata — resposta recente nos ultimos 30s')
-              evaShouldSkip = 'anti_dup_30s'
-            }
-          }
-
-          if (evaShouldSkip) {
-            debugTrace.push(`forward Donna SKIPPED pos-antidup (${evaShouldSkip})`)
-          } else {
-            // Enfileirar na eva_queue em vez de chamar diretamente.
-            // O worker (pg_cron a cada 10s) processa a fila.
+            // NOTA: a antiga regra "anti-duplicata 30s" foi REMOVIDA. Ela pulava
+            // o disparo da Eva se houvesse QUALQUER resposta nos ultimos 30s —
+            // mas isso engolia mensagens legitimas do paciente que respondia
+            // rapido (ex: Eva pergunta "como prefere ser chamada?" e o paciente
+            // responde o nome em 15s -> mensagem era descartada e a Eva travava).
+            //
+            // A duplicata TECNICA do Evolution (mesmo evento enviado 2x) ja e
+            // barrada de forma precisa pelo dedup por evolution_message_id (acima,
+            // ~linha 618) e pelo UNIQUE(clinic_id, phone) + upsert da eva_queue.
+            //
+            // Enfileirar na eva_queue. O worker (pg_cron a cada 10s) processa.
             // Upsert por (clinic_id, phone) reinicia o timer se já existe entrada —
-            // isso garante que múltiplas msgs rápidas geram UMA resposta com contexto completo.
+            // garante que múltiplas msgs rápidas geram UMA resposta com contexto completo.
             try {
               const { error: queueError } = await svc
                 .from('eva_queue')
