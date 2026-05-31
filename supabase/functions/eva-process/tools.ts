@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { DonnaContext, IncomingPayload, ProcedureRow, ProfessionalRow } from './types.ts';
-import { fetchJson, formatarDataBR, norm, parseData } from './utils.ts';
+import { fetchJson, formatarDataBR, norm, parseData, formatBRL } from './utils.ts';
 
 interface ToolEnv {
   supabaseUrl: string;
@@ -584,10 +584,10 @@ export async function informarValorAvista(
     return `O procedimento "${proc.name}" nao tem valor a vista cadastrado. Informe o valor parcelado (12x) que voce ja conhece, ou diga que vai confirmar o valor a vista com a clinica.`;
   }
 
-  const aVista = formatBRL(proc.price);
+  const aVista = formatBRL(proc.price) ?? '—';
   const inst = proc.installments && proc.installments > 0 ? proc.installments : 12;
   const parcela = proc.installment_price ? proc.installment_price : proc.price / inst;
-  const parcelaFmt = formatBRL(parcela);
+  const parcelaFmt = formatBRL(parcela) ?? '—';
 
   return [
     `VALOR DO PROCEDIMENTO "${proc.name}":`,

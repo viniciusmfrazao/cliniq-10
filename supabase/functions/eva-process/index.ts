@@ -706,6 +706,11 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 3) Build prompt + messages
+  // historia ja vem em ordem cronologica do RPC (asc). Limita a 20 ultimas
+  // pra economizar tokens (cache do system fica bem mais barato).
+  const history = ctx.history.slice(-20);
+
   // ─── CAMADA 1 + 3: detecção de intenção e escalonamento de modelo ────────
   //
   // O Haiku falha em chamar consultar_agenda quando deveria (dado real: 17/17
@@ -741,7 +746,6 @@ Deno.serve(async (req) => {
   let preConsultaAgenda: string | null = null;
   if (momentoAgendamento && !evaOfereceuHorario) {
     try {
-      // Detecta periodo da fala da paciente
       let periodo = 'amanha';
       if (/\bhoje\b/.test(lowerUserText)) periodo = 'hoje';
       else if (/\bsegunda\b/.test(lowerUserText)) periodo = 'segunda';
@@ -751,7 +755,6 @@ Deno.serve(async (req) => {
       else if (/\bsexta\b/.test(lowerUserText)) periodo = 'sexta';
       else if (/\bsabado\b/.test(lowerUserText)) periodo = 'sabado';
 
-      // Detecta procedimento mencionado
       const procMencionado = ctx.procedures.find(p => {
         const n = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         return lowerHistory.includes(n) || lowerUserText.includes(n);
@@ -763,15 +766,10 @@ Deno.serve(async (req) => {
       }, ctx, payload, { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY });
       preConsultaAgenda = r.resultStr;
     } catch (_e) {
-      // Se falhar, segue sem — o loop ainda pode chamar a tool normalmente
       preConsultaAgenda = null;
     }
   }
 
-  // 3) Build prompt + messages
-  // historia ja vem em ordem cronologica do RPC (asc). Limita a 20 ultimas
-  // pra economizar tokens (cache do system fica bem mais barato).
-  const history = ctx.history.slice(-20);
   const messages: ClaudeMessage[] = [
     ...history.map((m) => ({ role: m.role, content: m.content })),
   ];
