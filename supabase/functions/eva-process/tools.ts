@@ -282,6 +282,32 @@ export async function criarAgendamento(args: {
 
   let patientId: string | null = patient?.id ?? null;
 
+  // Anti-duplicata: antes de criar, procura paciente existente cujo telefone
+  // bate pela chave canônica (ignora 55, 9 extra e máscara). Evita criar um
+  // segundo cadastro pro mesmo número em formato diferente.
+  if (!patientId && payload.phone) {
+    const canon = (raw: string | null | undefined): string => {
+      if (!raw) return '';
+      let p = raw.replace(/\D/g, '');
+      if (p.length >= 12 && p.startsWith('55')) p = p.slice(2);
+      if (p.length === 11 && p[2] === '9') p = p.slice(0, 2) + p.slice(3);
+      return p;
+    };
+    const alvo = canon(payload.phone);
+    if (alvo) {
+      try {
+        const listUrl = `${env.supabaseUrl}/rest/v1/patients?clinic_id=eq.${payload.clinicId}&phone=not.is.null&select=id,phone`;
+        const lr = await fetchJson<Array<{ id: string; phone: string }>>(listUrl, { headers: sbHeaders(env) });
+        if (lr.ok && Array.isArray(lr.data)) {
+          const match = lr.data.find((p) => canon(p.phone) === alvo);
+          if (match) patientId = match.id;
+        }
+      } catch (_e) {
+        // se a busca falhar, segue o fluxo normal de criar (nao bloqueia agendamento)
+      }
+    }
+  }
+
   if (!patientId) {
     const url = `${env.supabaseUrl}/rest/v1/patients`;
     const headers = { ...sbHeaders(env), Prefer: 'return=representation' };

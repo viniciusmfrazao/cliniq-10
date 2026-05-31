@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { maskPhone, maskCPF, maskCEP, unmask, validateCPF } from '@/lib/masks'
+import { maskPhone, maskCPF, maskCEP, unmask, validateCPF, phoneCanonical } from '@/lib/masks'
 
 type Patient = {
   id?: string
@@ -142,6 +142,33 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
         .update(patientData)
         .eq('id', patient.id)
     } else {
+      // Anti-duplicata por telefone: o mesmo número pode estar gravado em
+      // formatos diferentes (com/sem 55, com/sem 9, com máscara). Comparamos
+      // pela chave canônica pra bloquear cadastro repetido.
+      if (form.phone) {
+        const alvo = phoneCanonical(form.phone)
+        if (alvo) {
+          const { data: existentes } = await supabase
+            .from('patients')
+            .select('id, name, phone')
+            .eq('clinic_id', userData?.clinic_id)
+            .not('phone', 'is', null)
+          const jaExiste = (existentes || []).find(
+            (p) => phoneCanonical(p.phone) === alvo,
+          )
+          if (jaExiste) {
+            setError(
+              `Já existe um paciente com este telefone: ${jaExiste.name}. Abrindo o cadastro existente...`,
+            )
+            setLoading(false)
+            setTimeout(() => {
+              router.push(`/dashboard/pacientes/${jaExiste.id}`)
+            }, 1800)
+            return
+          }
+        }
+      }
+
       result = await supabase
         .from('patients')
         .insert(patientData)
