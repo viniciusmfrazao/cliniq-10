@@ -64,6 +64,17 @@ export default function DocumentosTab({ patientId, patientName, patientPhone, cl
     loadTemplates()
   }, [patientId])
 
+  // Realtime — atualiza quando um documento é enviado ou assinado (ex: pelo atendimento)
+  useEffect(() => {
+    const channel = supabase.channel(`docs-patient-${patientId}`)
+      .on('postgres_changes' as any, {
+        event: '*', schema: 'public', table: 'documents_sent',
+        filter: `patient_id=eq.${patientId}`,
+      }, () => loadDocs())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [patientId])
+
   async function loadDocs() {
     setLoading(true)
     const { data } = await supabase
