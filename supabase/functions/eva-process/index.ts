@@ -738,13 +738,14 @@ Deno.serve(async (req) => {
   // Escala pro modelo premium SO nesse momento critico (Camada 3 hibrida)
   const modeloParaEsteTurno = momentoAgendamento ? MODEL_PREMIUM : undefined;
 
+  // Detecta se a mensagem atual é sobre PREÇO — se for, não pré-consulta agenda
+  // (são intenções diferentes; injetar horários quando ele quer preço confunde o modelo)
+  const pedindoPreco = /(preco|precos|valor|quanto custa|quanto fica|qual o valor|investimento|parcela|quanto e|pago|pagamento)/i
+    .test(lowerUserText);
+
   // ─── CAMADA 1.2: pré-consulta forçada da agenda ──────────────────────────
-  //
-  // Se a paciente esta perguntando sobre horario e ainda nao temos horarios
-  // frescos no contexto, consultamos a agenda PROATIVAMENTE e injetamos o
-  // resultado — assim o Haiku/Sonnet so precisa APRESENTAR, nao decidir buscar.
   let preConsultaAgenda: string | null = null;
-  if (momentoAgendamento && !evaOfereceuHorario) {
+  if (momentoAgendamento && !evaOfereceuHorario && !pedindoPreco) {
     try {
       let periodo = 'amanha';
       if (/\bhoje\b/.test(lowerUserText)) periodo = 'hoje';
