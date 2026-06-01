@@ -1011,6 +1011,11 @@ Deno.serve(async (req) => {
   // Proteção: se finalText ficou vazio após sanitize, não salvar nem enviar
   if (!finalText || finalText.trim().length === 0) {
     errors.push('finalText vazio após sanitize — resposta descartada')
+    fetchJson(`${SUPABASE_URL}/rest/v1/rpc/insert_eva_log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ p_clinic_id: payload.clinicId, p_phone: payload.phone?.replace(/\D/g,'').slice(-11)??null, p_source: 'eva-process', p_event: 'error', p_status: 'error', p_duration_ms: Date.now()-t0, p_error_message: 'empty_final_text', p_details: { errors } }),
+    }).catch(()=>{});
     return jsonResponse({ ok: true, silentFail: true, reason: 'empty_final_text', errors })
   }
 
@@ -1035,6 +1040,38 @@ Deno.serve(async (req) => {
   }).catch((e) => errors.push(`scheduleNextFollowup: ${e?.message ?? e}`));
 
   const elapsedMs = Date.now() - t0;
+
+  // 8) Log na eva_logs — persiste tudo pra o painel de admin ver em tempo real
+  const logStatus = errors.length > 0 ? (send.ok ? 'partial' : 'error') : 'ok';
+  fetchJson(`${SUPABASE_URL}/rest/v1/rpc/insert_eva_log`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({
+      p_clinic_id: payload.clinicId,
+      p_phone: payload.phone?.replace(/\D/g, '').slice(-11) ?? null,
+      p_source: payload.isFollowup ? 'cron-followup' : 'eva-process',
+      p_event: appointmentCreated ? 'booking' : (payload.isFollowup ? 'followup' : 'processed'),
+      p_status: logStatus,
+      p_details: {
+        tools_used: toolsUsed,
+        steps_count: conv.steps.length,
+        model: modeloParaEsteTurno ?? 'claude-haiku-4-5-20251001',
+        tokens: conv.totalUsage,
+        booking_recovered: bookingRecovered,
+        forced_escalation: forcedEscalation,
+        sent: send.ok,
+        skip_send: payload.skipSend ?? false,
+        reply_len: finalText.length,
+        errors: conv.errors.length > 0 ? conv.errors : undefined,
+      },
+      p_duration_ms: elapsedMs,
+      p_error_message: errors.length > 0 ? errors.slice(0, 3).join(' | ') : null,
+    }),
+  }).catch(() => {}); // fire-and-forget, nunca bloqueia
 
   return jsonResponse({
     ok: true,

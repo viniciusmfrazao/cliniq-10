@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getSettings } from '@/lib/app-settings'
+import { logEva } from '@/lib/eva-logger'
 
 /**
  * GET /api/cron/eva-followup
@@ -403,6 +404,7 @@ export async function GET(req: NextRequest) {
         sent: r.ok,
         httpStatus: r.status,
       })
+      void logEva({ clinic_id: lead.clinic_id, phone: lead.phone, source: 'cron-followup', event: 'followup', status: r.ok ? 'ok' : 'error', details: { lead_id: lead.id, stage, http_status: r.status, dry_run: dryRun }, error_message: r.ok ? null : `eva-process retornou ${r.status}` })
     } catch (err) {
       results.push({
         lead_id: lead.id,
@@ -411,6 +413,7 @@ export async function GET(req: NextRequest) {
         stage,
         skipped: `exception:${err instanceof Error ? err.message : String(err)}`,
       })
+      void logEva({ clinic_id: lead.clinic_id, phone: lead.phone, source: 'cron-followup', event: 'followup', status: 'error', details: { lead_id: lead.id, stage }, error_message: err instanceof Error ? err.message : String(err) })
     }
   }
 

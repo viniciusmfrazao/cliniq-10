@@ -6,17 +6,18 @@ import { useRouter } from 'next/navigation'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-type Vars = { nome: string; primeiro_nome: string; clinica: string; profissional: string; procedimento: string; data: string; hora: string; dia_semana: string }
+type Vars = { nome: string; primeiro_nome: string; clinica: string; profissional: string; procedimento: string; data: string; hora: string; dia_semana: string; link_confirmacao: string }
 
 const TAGS = [
-  { tag: '{{primeiro_nome}}', desc: 'Primeiro nome do paciente' },
-  { tag: '{{nome}}',          desc: 'Nome completo' },
-  { tag: '{{clinica}}',       desc: 'Nome da clínica' },
-  { tag: '{{profissional}}',  desc: 'Nome do profissional' },
-  { tag: '{{procedimento}}',  desc: 'Nome do procedimento' },
-  { tag: '{{data}}',          desc: 'Data da consulta (dd/mm/aaaa)' },
-  { tag: '{{hora}}',          desc: 'Hora da consulta (hh:mm)' },
-  { tag: '{{dia_semana}}',    desc: 'Dia da semana por extenso' },
+  { tag: '{{primeiro_nome}}',    desc: 'Primeiro nome do paciente' },
+  { tag: '{{nome}}',             desc: 'Nome completo' },
+  { tag: '{{clinica}}',          desc: 'Nome da clínica' },
+  { tag: '{{profissional}}',     desc: 'Nome do profissional' },
+  { tag: '{{procedimento}}',     desc: 'Nome do procedimento' },
+  { tag: '{{data}}',             desc: 'Data da consulta (dd/mm/aaaa)' },
+  { tag: '{{hora}}',             desc: 'Hora da consulta (hh:mm)' },
+  { tag: '{{dia_semana}}',       desc: 'Dia da semana por extenso' },
+  { tag: '{{link_confirmacao}}', desc: '🔗 Link de confirmação de presença' },
 ]
 
 const SUGGESTIONS_24H = [
@@ -34,6 +35,11 @@ const SUGGESTIONS_24H = [
     id: 'confirme',
     label: 'Pede confirmação',
     text: `Oi {{primeiro_nome}}, tudo bem? Amanhã é o seu dia aqui na {{clinica}}! 🗓\n\n{{procedimento}} às {{hora}} com {{profissional}}.\n\nVai conseguir comparecer? Responda SIM ou NOS AVISE se precisar remarcar. 💕`,
+  },
+  {
+    id: 'link_confirmacao',
+    label: '🔗 Com link de confirmação',
+    text: `Oi {{primeiro_nome}}! Passando pra lembrar que amanhã você tem {{procedimento}} às {{hora}} aqui na {{clinica}}. 💕\n\nPra garantir seu horário, confirme sua presença aqui: {{link_confirmacao}}`,
   },
 ]
 
@@ -60,6 +66,7 @@ function renderPreview(template: string, vars: Vars): string {
     .replace(/\{\{\s*data\s*\}\}/g, vars.data)
     .replace(/\{\{\s*hora\s*\}\}/g, vars.hora)
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
+    .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao)
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -98,6 +105,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     data: new Date(Date.now() + 86400000).toLocaleDateString('pt-BR'),
     hora: '14:30',
     dia_semana: 'terça-feira',
+    link_confirmacao: 'app.clinike.com.br/confirmar/abc12345',
   }
 
   const preview24h = useMemo(() => renderPreview(template24h, previewVars), [template24h])

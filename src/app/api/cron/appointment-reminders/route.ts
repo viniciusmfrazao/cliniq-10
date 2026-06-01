@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { logEva } from '@/lib/eva-logger'
 
 /**
  * GET /api/cron/appointment-reminders
@@ -365,15 +366,14 @@ export async function GET(req: NextRequest) {
 
     if (result.ok) {
       summary.sent++
+      void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'ok', details: { appointment_id: app.id, has_link: text.includes('confirmar/') } })
     } else {
-      // NÃO reverte confirmation_sent_at — evita reenvio duplicado em caso de
-      // falha de WhatsApp. O campo fica marcado com o timestamp do attempt,
-      // impedindo que o cron tente de novo na próxima hora.
       summary.errors.push({
         clinic_id: app.clinic_id,
         appointment_id: app.id,
         error: result.error,
       })
+      void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'error', error_message: result.error ?? 'unknown', details: { appointment_id: app.id } })
     }
   }
 

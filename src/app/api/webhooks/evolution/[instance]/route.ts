@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { mapEvolutionStateToStatus } from '@/lib/evolution'
 import { getSettings } from '@/lib/app-settings'
+import { logEva } from '@/lib/eva-logger'
 import {
   fetchEvolutionMediaBase64,
   cleanMimeType,
@@ -1007,6 +1008,7 @@ export async function POST(
           //   - midia recebida (audio/foto sem caption) — escalado pra humano
           if (evaShouldSkip) {
             debugTrace.push(`forward Donna SKIPPED (${evaShouldSkip})`)
+            void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'skipped', status: 'skipped', details: { reason: evaShouldSkip, pushName } })
           } else {
             // NOTA: a antiga regra "anti-duplicata 30s" foi REMOVIDA. Ela pulava
             // o disparo da Eva se houvesse QUALQUER resposta nos ultimos 30s —
@@ -1035,8 +1037,10 @@ export async function POST(
 
               if (queueError) {
                 internalErrors.push(`eva_queue upsert error: ${queueError.message}`)
+                void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'received', status: 'error', error_message: queueError.message, details: { pushName, messageKind: parsed?.kind } })
               } else {
                 debugTrace.push('eva_queue: enfileirado (process_after +15s)')
+                void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'received', status: 'ok', details: { pushName, messageKind: parsed?.kind, debounce_ms: 15000 } })
               }
             } catch (err) {
               internalErrors.push(
