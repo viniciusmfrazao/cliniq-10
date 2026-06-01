@@ -11,7 +11,7 @@ const MODEL = 'claude-haiku-4-5-20251001';
 // Modelo premium usado SO no turno critico de agendamento (Camada 3 — hibrido).
 // Sonnet segue tool calls com altissima fidelidade; usado em poucos turnos por
 // conversa, mantem o custo baixo e a confiabilidade do agendamento no teto.
-const MODEL_PREMIUM = 'claude-sonnet-4-5-20250929';
+const MODEL_PREMIUM = 'claude-sonnet-4-6';
 export { MODEL_PREMIUM };
 const MAX_TOKENS = 600;
 const MAX_TOOL_ITERATIONS = 8;
