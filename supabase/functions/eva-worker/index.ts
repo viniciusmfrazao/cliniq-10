@@ -46,15 +46,38 @@ Deno.serve(async (req) => {
         const stuck = await stuckResp.json() as Array<{ clinic_id: string; phone: string; instance: string | null }>
         if (stuck && stuck.length > 0) {
           console.log(JSON.stringify({ evt: 'eva_watchdog', stuck: stuck.length }))
-          // Reenfileira cada conversa parada (process_after = agora)
+
+          // Pré-carrega a instância padrão de cada clínica envolvida
+          // (evita usar o fallback inválido 'cliniq' quando instance=null)
+          const clinicIds = [...new Set(stuck.map(s => s.clinic_id))]
+          const instanceMap = new Map<string, string>()
+          for (const cid of clinicIds) {
+            try {
+              const r = await fetch(
+                `${SUPABASE_URL}/rest/v1/clinic_whatsapp?clinic_id=eq.${cid}&status=eq.connected&select=instance_name&order=is_default.desc&limit=1`,
+                { headers },
+              )
+              if (r.ok) {
+                const rows = await r.json() as Array<{ instance_name: string }>
+                if (rows?.[0]?.instance_name) instanceMap.set(cid, rows[0].instance_name)
+              }
+            } catch { /* segue */ }
+          }
+
           for (const s of stuck) {
+            // Usa a instância da conversa, senão busca a da clínica, senão pula
+            const instance = s.instance || instanceMap.get(s.clinic_id)
+            if (!instance) {
+              console.log(JSON.stringify({ evt: 'eva_watchdog_skip', reason: 'no_instance', clinic: s.clinic_id }))
+              continue
+            }
             await fetch(`${SUPABASE_URL}/rest/v1/eva_queue`, {
               method: 'POST',
               headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
               body: JSON.stringify({
                 clinic_id: s.clinic_id,
                 phone: s.phone,
-                instance: s.instance ?? 'cliniq',
+                instance,
                 process_after: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               }),

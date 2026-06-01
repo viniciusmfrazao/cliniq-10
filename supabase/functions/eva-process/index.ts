@@ -892,6 +892,49 @@ Deno.serve(async (req) => {
   let toolsUsed = conv.steps.filter(s => s.toolName).map(s => s.toolName);
   let agendamentoCriado = toolsUsed.includes('criar_agendamento') || appointmentCreated;
 
+  // Variáveis de pós-processamento — declaradas aqui pra estarem disponíveis
+  // nas Camadas 1.0 e 1.1 que vêm a seguir
+  const consultouAgenda = toolsUsed.includes('consultar_agenda');
+  const firstNamePost = String(payload.customerName || ctx.patient?.name || ctx.lead?.name || '').trim().split(/\s+/)[0] || '';
+
+  // ─── CAMADA 1.0: agendamento direto quando paciente escolheu horário ────────
+  //
+  // Caso real (Eliney): Eva ofereceu 13:30, 14:20, 16:50 → paciente disse "16:50"
+  // → Eva respondeu "vou confirmar com a Dra" em vez de criar. A Camada 1.1
+  // intercepta a fuga, mas pede pro modelo reapresentar a agenda (errado nesse
+  // caso — o horario ja foi escolhido). Esta camada resolve antes: se o texto
+  // do usuario e um horario isolado (HH:MM ou "as X horas") E a Eva tinha
+  // apresentado horarios recentemente, tenta criar o agendamento direto.
+  const horaEscolhidaMatch = (payload.userText || '').match(/^\s*(\d{1,2})[:h](\d{2})\s*$/) ||
+    (payload.userText || '').match(/^\s*(\d{1,2})\s*h(?:oras?)?\s*$/i);
+
+  if (!agendamentoCriado && !consultouAgenda && horaEscolhidaMatch && evaOfereceuHorario) {
+    try {
+      const hh = String(horaEscolhidaMatch[1]).padStart(2, '0');
+      const min = horaEscolhidaMatch[2] ? horaEscolhidaMatch[2] : '00';
+      const horarioEscolhido = `${hh}:${min}`;
+
+      // recoverBookingFromSteps já tem a logica completa de pegar o prof e data
+      const rec = await recoverBookingFromSteps(conv.steps, `confirmado ${horarioEscolhido}`, ctx, payload, {
+        supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY,
+      });
+
+      if (rec.created) {
+        appointmentCreated = true;
+        agendamentoCriado = true;
+        // Montar confirmação com os dados reais
+        const [yy, mm, dd] = (conv.steps.find(s => s.toolName === 'consultar_agenda')?.toolInput as any)?.periodo
+          ? ['', '', ''] : ['', '', ''];
+        finalText = sanitizeWhatsapp(
+          `${firstNamePost ? firstNamePost + ', ' : ''}já deixei seu horário reservado para ${horarioEscolhido}! Qualquer imprevisto, é só me avisar com antecedência. Vai ser um prazer te receber! *`
+        );
+        conv.errors.push(`[camada1.0] horario escolhido detectado (${horarioEscolhido}) → agendamento criado direto`);
+      }
+    } catch (_e) {
+      // se falhar, segue pro fluxo normal (Camada 1.1 vai tentar)
+    }
+  }
+
   // ─── CAMADA 1.1: guard anti-"frase de fuga" sobre agenda ─────────────────
   //
   // Dado real: 17/17 vezes a Eva disse "vou conferir os horarios" e NUNCA
@@ -901,7 +944,6 @@ Deno.serve(async (req) => {
   // com os horarios reais — a Eva nunca mais promete sem entregar.
   const prometeuConferirAgenda = /\b(vou conferir|deixa eu (conferir|ver|verificar)|em instantes (retorno|volto)|ja (te )?retorno|vou verificar|deixa eu checar|vou checar|conferir os horarios|verificar a (agenda|disponibilidade)|retorno com (as )?opcoes)\b/i
     .test(finalText.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-  const consultouAgenda = toolsUsed.includes('consultar_agenda');
 
   if (!payload.isFollowup && prometeuConferirAgenda && !consultouAgenda && !agendamentoCriado) {
     try {
@@ -963,7 +1005,6 @@ Deno.serve(async (req) => {
   // ─── PÓS-PROCESSAMENTO 1: cortar repetição de nome em msgs consecutivas ───
   // Excecoes onde o nome PODE repetir: confirmacao de agendamento, follow-up,
   // confirmacao D-1. Nesses casos allowName=true.
-  const firstNamePost = String(payload.customerName || ctx.patient?.name || ctx.lead?.name || '').trim().split(/\s+/)[0] || '';
   const lastAssistantMsg = [...ctx.history].reverse().find(m => m.role === 'assistant')?.content ?? null;
   const allowName = agendamentoCriado || payload.isFollowup === true;
   finalText = stripRepeatedName(finalText, firstNamePost, lastAssistantMsg, allowName);
