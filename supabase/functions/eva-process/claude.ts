@@ -286,6 +286,19 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
           return { finalText: recovered, steps, totalUsage, errors };
         }
 
+        // Se a ultima tool foi atualizar_nome_lead, a Eva so registrou o nome —
+        // precisa continuar o fluxo normalmente (ex: perguntar procedimento, oferecer horarios).
+        // Forcamos uma instrucao mais rica para nao gerar resposta desconexa.
+        if (lastToolStep?.toolName === 'atualizar_nome_lead') {
+          const jaForcouNome = errors.some(e => e.includes('output vazio'));
+          if (!jaForcouNome) {
+            errors.push(`[iter#${i}] output vazio -- pedindo texto de fechamento (1x)`);
+            messages.push({ role: 'assistant', content });
+            messages.push({ role: 'user', content: 'Nome registrado. Agora responda a paciente de forma natural em uma unica mensagem curta de WhatsApp, dando continuidade a conversa (ex: perguntar o procedimento ou oferecer horarios). Nao chame nenhuma tool.' });
+            continue;
+          }
+        }
+
         // Caso geral: uma unica re-tentativa controlada pedindo so o texto.
         // Se ja tentamos isso antes nesta conversa, paramos pra nao duplicar.
         const jaForcou = errors.some(e => e.includes('output vazio'));
