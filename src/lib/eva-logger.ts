@@ -10,7 +10,7 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 export interface EvaLogPayload {
   clinic_id?: string | null
   phone?: string | null
-  source: 'webhook' | 'cron-followup' | 'cron-reminder' | 'cron-reminder-2h' | 'cron-reminders' | 'cron-nps' | 'cron-birthdays' | 'cron-recall'
+  source: 'webhook' | 'cron-followup' | 'cron-reminder' | 'cron-reminder-2h' | 'cron-reminders' | 'cron-nps' | 'cron-birthdays' | 'cron-recall' | 'cron-contato-pos'
   event: string
   status: 'ok' | 'error' | 'skipped' | 'partial'
   details?: Record<string, unknown> | null
