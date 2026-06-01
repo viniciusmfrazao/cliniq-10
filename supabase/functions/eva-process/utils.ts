@@ -139,3 +139,4 @@ export async function fetchJson<T = unknown>(
   }
   return { ok: false, status: 0, data: null, error: lastErr ?? 'fetch failed' };
 }
+// deploy trigger Mon Jun  1 07:02:01 UTC 2026
