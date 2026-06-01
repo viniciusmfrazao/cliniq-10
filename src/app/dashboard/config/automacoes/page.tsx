@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -10,6 +10,7 @@ import RecallForm from './recall-form'
 import RecallHistory from './recall-history'
 import NpsForm from './nps-form'
 import NpsHistory from './nps-history'
+import ContatoPosForm from './contato-pos-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,15 @@ export default async function AutomacoesPage() {
   }
 
   const clinicId = userRow.clinic_id
+
+  // Guard: verifica se módulo automacoes está ativo (se lista não estiver vazia)
+  const svc = createServiceClient()
+  const { data: clinicData } = await svc
+    .from('clinics').select('settings').eq('id', clinicId).maybeSingle()
+  const activeModules: string[] = (clinicData as any)?.settings?.active_modules || []
+  if (activeModules.length > 0 && !activeModules.includes('automacoes')) {
+    redirect('/dashboard/config')
+  }
 
   // Usamos select('*') pra ser tolerante a schemas que ainda não rodaram
   // os SQLs opcionais (supabase-birthday-automation.sql, etc).
@@ -228,6 +238,30 @@ export default async function AutomacoesPage() {
 
       {/* Histórico de NPS */}
       <NpsHistory clinicId={clinicId} />
+
+      {/* Contato pós-procedimento */}
+      <div className="card overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center shadow-md">
+            <span className="text-2xl">💜</span>
+          </div>
+          <div className="flex-1">
+            <h2 className="font-semibold text-slate-900">Contato pós-procedimento</h2>
+            <p className="text-sm text-slate-500">
+              Mensagem automática de acompanhamento enviada após o atendimento ser finalizado
+            </p>
+          </div>
+        </div>
+        <ContatoPosForm
+          clinicId={clinicId}
+          clinicName={clinic?.name || 'Clínica'}
+          initial={{
+            enabled: auto?.contato_pos_procedimento ?? false,
+            delayHoras: auto?.contato_pos_delay_horas ?? 2,
+            template: auto?.template_contato_pos || '',
+          }}
+        />
+      </div>
 
       {/* Outras automações (placeholder) */}
       <div className="card p-6 bg-slate-50 border-dashed border-2 border-slate-200">

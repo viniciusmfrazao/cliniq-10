@@ -16,6 +16,7 @@ export type ModuleId =
   | 'equipe'
   | 'auditoria'
   | 'ia_prontuario'
+  | 'automacoes'
 
 export type Module = {
   id: ModuleId
@@ -215,6 +216,7 @@ export const MODULE_ROUTES: Record<ModuleId, string[]> = {
   auditoria: ['/dashboard/auditoria'],
   odontograma: [],  // tab dentro da ficha do paciente, sem rota própria
   ia_prontuario: [], // feature dentro do atendimento, sem rota própria
+  automacoes: ['/dashboard/config/automacoes'],
 }
 
 // Verifica se uma rota está habilitada para os módulos ativos

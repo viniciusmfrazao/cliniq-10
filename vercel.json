@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/billing-alert",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/contato-pos",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
