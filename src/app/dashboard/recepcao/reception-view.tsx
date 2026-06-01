@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -46,6 +46,13 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [incompleteModal, setIncompleteModal] = useState<{ show: boolean; apt: Appointment | null }>({ show: false, apt: null })
   const [notesModal, setNotesModal] = useState<{ show: boolean; apt: Appointment | null; notes: string }>({ show: false, apt: null, notes: '' })
+
+  // Tick de 30s — atualiza o tempo de espera ("15 min", "1h 2min") sem reload
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 30_000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Realtime: check-in, status, novo agendamento do dia, tudo aparece ao vivo
   useRealtimeRefresh({

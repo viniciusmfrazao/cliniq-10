@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
     `${link}\n\n` +
     `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
 
-  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
+  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'manual' })
 
   // Marcar como enviado
   await svc.from('documents_sent').update({

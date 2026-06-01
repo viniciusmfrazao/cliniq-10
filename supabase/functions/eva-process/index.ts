@@ -779,10 +779,24 @@ Deno.serve(async (req) => {
   // gerar a próxima mensagem com base no estágio. Mandamos isso como user
   // turn pra Claude saber o que fazer.
   if (payload.isFollowup) {
+    // Follow-up: injeta instrucao de sistema + prefill do assistente.
+    // O prefill forca a Eva a comecar a resposta diretamente com o texto
+    // da mensagem, sem "pensar em voz alta" antes (bug: raciocinio interno
+    // aparecia no WhatsApp do paciente).
+    const firstName = (ctx.lead?.name || ctx.patient?.name || '').split(/\s+/)[0] || '';
     messages.push({
       role: 'user',
-      content: '[SISTEMA — não responda essa frase: gere agora a mensagem de follow-up apropriada pro estágio descrito no system prompt. Curta, calorosa, sem repetir o que já foi dito.]',
+      content: `[SISTEMA — gere AGORA a mensagem de follow-up do estagio ${payload.followupStage ?? 1}. ` +
+        `Escreva SOMENTE o texto final que sera enviado ao WhatsApp — sem explicacoes, sem raciocinio, ` +
+        `sem numeracao, sem planos. Comece diretamente com a saudacao ao paciente.]`,
     });
+    // Prefill: forca a Eva a comecar com "Oi [Nome]" sem introducao
+    if (firstName) {
+      messages.push({
+        role: 'assistant',
+        content: `Oi ${firstName}`,
+      });
+    }
   } else {
     messages.push({ role: 'user', content: payload.userText });
   }
@@ -888,7 +902,17 @@ Deno.serve(async (req) => {
     });
   }
 
-  let finalText = sanitizeWhatsapp(conv.finalText)
+  // Se foi follow-up com prefill do assistente, concatenar o prefill ao texto gerado.
+  // A API da Anthropic retorna apenas a *continuacao* apos o prefill — o prefill
+  // nao vem no content. Precisamos juntar: "Oi [Nome]" + continuacao gerada.
+  let rawFinalText = conv.finalText;
+  if (payload.isFollowup) {
+    const firstName = (ctx.lead?.name || ctx.patient?.name || '').split(/\s+/)[0] || '';
+    if (firstName && rawFinalText && !rawFinalText.startsWith('Oi ') && !rawFinalText.startsWith('oi ')) {
+      rawFinalText = `Oi ${firstName} ${rawFinalText}`;
+    }
+  }
+  let finalText = sanitizeWhatsapp(rawFinalText)
 
   let toolsUsed = conv.steps.filter(s => s.toolName).map(s => s.toolName);
   let agendamentoCriado = toolsUsed.includes('criar_agendamento') || appointmentCreated;
