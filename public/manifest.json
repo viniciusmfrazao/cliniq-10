@@ -5,16 +5,46 @@
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#F8FAFC",
   "theme_color": "#7C3AED",
   "orientation": "any",
-  "categories": ["medical", "business", "productivity"],
+  "categories": [
+    "medical",
+    "business",
+    "productivity"
+  ],
   "lang": "pt-BR",
   "dir": "ltr",
   "icons": [
-    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ],
   "shortcuts": [
     {
@@ -22,21 +52,39 @@
       "short_name": "Agenda",
       "description": "Ver agenda do dia",
       "url": "/dashboard/agenda",
-      "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [
+        {
+          "src": "/logo.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
     },
     {
       "name": "Pacientes",
       "short_name": "Pacientes",
       "description": "Lista de pacientes",
       "url": "/dashboard/pacientes",
-      "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [
+        {
+          "src": "/logo.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
     },
     {
       "name": "Novo agendamento",
       "short_name": "Novo",
       "description": "Criar novo agendamento",
       "url": "/dashboard/agenda/novo",
-      "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [
+        {
+          "src": "/logo.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
     }
   ],
   "prefer_related_applications": false
