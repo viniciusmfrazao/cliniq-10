@@ -38,7 +38,7 @@
     },
     {
       "path": "/api/cron/contato-pos",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

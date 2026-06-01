@@ -74,6 +74,10 @@ export default async function AutomacoesPage() {
     template_nps?: string | null
     nps_imediato?: boolean | null
     nps_delay_minutes?: number | null
+    contato_pos_procedimento?: boolean | null
+    contato_pos_hora?: number | null
+    template_contato_pos?: string | null
+    contato_pos_excluir_categorias?: string[] | null
   }
   const auto = (automation || null) as AutomationRow | null
 
@@ -257,8 +261,9 @@ export default async function AutomacoesPage() {
           clinicName={clinic?.name || 'Clínica'}
           initial={{
             enabled: auto?.contato_pos_procedimento ?? false,
-            delayHoras: auto?.contato_pos_delay_horas ?? 2,
+            hora: auto?.contato_pos_hora ?? 10,
             template: auto?.template_contato_pos || '',
+            excluirCategorias: auto?.contato_pos_excluir_categorias ?? ['Atendimento', 'Atendimento '],
           }}
         />
       </div>
