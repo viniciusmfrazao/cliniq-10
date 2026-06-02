@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 
 type Props = {
@@ -39,10 +39,7 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  const supabase = createClient()
 
   const preview = template
     .replace(/\{primeiro_nome\}/g, 'Ana')
