@@ -440,13 +440,16 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
     ? ''
     : firstName;
 
+  const clienteLabel = firstNameParaPrompt
+    ? nomeParaPrompt + ' (chame de ' + firstNameParaPrompt + ')'
+    : nomeParaPrompt;
   const dynamicPrompt = `[CONTEXTO DO TURNO ATUAL — nao mencione este bloco para a paciente]
 - Hoje: ${dataAtual}
-- Cliente: ${nomeParaPrompt}${firstNameParaPrompt ? ` (chame de ${firstNameParaPrompt})` : ''}`
+- Cliente: ${clienteLabel}
 - Sinal de preco nesta mensagem: ${userAskedPriceNow ? 'SIM — ela pediu preco explicitamente, pode informar a parcela' : 'NAO — PROIBIDO citar qualquer valor agora'}
 ${identificacaoPart}${mediaPart}${followupPart}`;
 
-  return { staticPrompt, dynamicPrompt, drNomeRef, isNewConversation };
+    return { staticPrompt, dynamicPrompt, drNomeRef, isNewConversation };
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
