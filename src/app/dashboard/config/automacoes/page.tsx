@@ -1,4 +1,4 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -31,15 +31,6 @@ export default async function AutomacoesPage() {
   }
 
   const clinicId = userRow.clinic_id
-
-  // Guard: verifica se módulo automacoes está ativo (se lista não estiver vazia)
-  const svc = createServiceClient()
-  const { data: clinicData } = await svc
-    .from('clinics').select('settings').eq('id', clinicId).maybeSingle()
-  const activeModules: string[] = (clinicData as any)?.settings?.active_modules || []
-  if (activeModules.length > 0 && !activeModules.includes('automacoes')) {
-    redirect('/dashboard/config')
-  }
 
   // Usamos select('*') pra ser tolerante a schemas que ainda não rodaram
   // os SQLs opcionais (supabase-birthday-automation.sql, etc).
