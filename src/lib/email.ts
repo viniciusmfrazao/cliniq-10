@@ -2,9 +2,7 @@ import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-// Enquanto o domínio clinike.com.br não estiver verificado no Resend,
-// usar o domínio padrão deles. Trocar para noreply@clinike.com.br após verificar.
-const FROM = 'Clinike <onboarding@resend.dev>'
+const FROM = 'Clinike <noreply@clinike.com.br>'
 const APP_URL = 'https://app.clinike.com.br'
 
 export async function sendWelcomeEmail({
