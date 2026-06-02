@@ -94,7 +94,7 @@ export async function sendWelcomeEmail({
             <td style="padding:0 40px 32px;">
               <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:14px 16px;">
                 <p style="margin:0;font-size:12px;color:#92400e;line-height:1.5;">
-                  🔒 <strong>Importante:</strong> Recomendamos alterar sua senha no primeiro acesso em <strong>Configurações → Minha Conta</strong>.
+                  🔒 <strong>Importante:</strong> Recomendamos alterar sua senha no primeiro acesso usando <strong>"Esqueci minha senha"</strong> na tela de login.
                 </p>
               </div>
             </td>
