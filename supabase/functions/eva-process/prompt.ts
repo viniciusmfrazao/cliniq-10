@@ -429,9 +429,20 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
     followupPart = `\n${buildContextLine(payload, isNewConversation, historyLength, evaCfg, leadInterest)}`;
   }
 
+  // Em nova conversa com lead/desconhecido, NAO revelar o pushName do WhatsApp ao Claude.
+  // Se ele souber o nome, vai usá-lo diretamente ao invés de perguntar.
+  // Só revelamos o nome quando ele veio de uma confirmação real (paciente cadastrado
+  // ou lead com nome já atualizado via atualizar_nome_lead).
+  const nomeParaPrompt = (isNewConversation && !patient && !(lead && hasRealName(lead?.name || '')))
+    ? 'desconhecido — pergunte o nome'
+    : customerName;
+  const firstNameParaPrompt = (isNewConversation && !patient && !(lead && hasRealName(lead?.name || '')))
+    ? ''
+    : firstName;
+
   const dynamicPrompt = `[CONTEXTO DO TURNO ATUAL — nao mencione este bloco para a paciente]
 - Hoje: ${dataAtual}
-- Cliente: ${customerName}${firstName ? ` (chame de ${firstName})` : ''}
+- Cliente: ${nomeParaPrompt}${firstNameParaPrompt ? ` (chame de ${firstNameParaPrompt})` : ''}`
 - Sinal de preco nesta mensagem: ${userAskedPriceNow ? 'SIM — ela pediu preco explicitamente, pode informar a parcela' : 'NAO — PROIBIDO citar qualquer valor agora'}
 ${identificacaoPart}${mediaPart}${followupPart}`;
 

@@ -276,9 +276,10 @@ export async function criarAgendamento(args: {
   }
 
   // 3) Resolver/criar paciente
-  // Nome a usar: prioridade pro customerName real do WhatsApp (pushName),
-  // depois o nome que veio no contexto (lead/patient), depois o que Claude inventou.
-  const trustedName = (payload.customerName?.trim() || patient?.name || ctx.lead?.name || args.nome_paciente || '').trim();
+  // Nome a usar: prioridade para o nome confirmado (lead/patient cadastrado),
+  // depois o que Claude passou (que veio da conversa), e só como último fallback
+  // o pushName do WhatsApp (pode ser apelido, nome de empresa, etc).
+  const trustedName = (patient?.name?.trim() || ctx.lead?.name?.trim() || args.nome_paciente?.trim() || payload.customerName?.trim() || '').trim();
 
   let patientId: string | null = patient?.id ?? null;
 
