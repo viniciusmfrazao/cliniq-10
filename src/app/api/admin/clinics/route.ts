@@ -106,6 +106,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Erro ao criar usuário' }, { status: 500 })
     }
 
+    // Enviar email de boas-vindas
+    try {
+      const emailResult = await sendWelcomeEmail({
+        to: adminEmail,
+        adminName,
+        clinicName: name,
+        email: adminEmail,
+        password: adminPassword,
+      })
+      console.log('Email enviado:', JSON.stringify(emailResult))
+    } catch (emailErr) {
+      console.error('Erro ao enviar email de boas-vindas:', emailErr)
+    }
+
     return NextResponse.json(clinic)
   } catch (error) {
     console.error('Error:', error)
