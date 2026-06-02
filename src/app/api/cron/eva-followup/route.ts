@@ -310,23 +310,37 @@ export async function GET(req: NextRequest) {
     }
 
     // Proteção anti follow-up em cascata:
-    // Só dispara se o cliente mandou PELO MENOS 1 mensagem DEPOIS da última
-    // mensagem da Eva. Isso evita:
-    //   - follow-up 1 → follow-up 2 sem o cliente ter respondido nada
-    // Mas permite:
-    //   - cliente sumiu após Eva responder pela primeira vez → dispara
-    //   - cliente respondeu → Eva respondeu → cliente sumiu → dispara
+    // Para QUALQUER estágio (incluindo o primeiro), verifica se a conversa
+    // ainda está ativa. Uma conversa está ativa se:
+    //   - O cliente mandou mensagem há menos de 3h (janela de conversa em andamento)
+    //   - OU o cliente respondeu DEPOIS da última mensagem da Eva (no estágio > 0)
     //
-    // Lógica: busca a última mensagem do assistant e verifica se existe
-    // alguma mensagem do user DEPOIS dela. Se não existe → pula.
-    // Exceção: se o lead nunca recebeu follow-up (count=0), significa que
-    // é a primeira tentativa — deixa passar mesmo que Eva falou por último,
-    // pois o cliente pode ter sumido após a apresentação inicial.
+    // Isso evita o caso: cliente fala → Eva responde → cron dispara follow-up
+    // 2h depois mesmo com a conversa em andamento no mesmo dia.
     const followupCount = lead.eva_followup_count ?? 0
+    const lastAssistantMsg = lastAssistantMap.get(`${lead.clinic_id}:${lead.phone}`)
+    const lastUserMsg = lastUserMap.get(`${lead.clinic_id}:${lead.phone}`)
+
+    // Se o cliente enviou mensagem há menos de 3h → conversa ativa, não disparar
+    const CONVERSA_ATIVA_MS = 3 * 60 * 60 * 1000
+    if (lastUserMsg && (Date.now() - new Date(lastUserMsg).getTime()) < CONVERSA_ATIVA_MS) {
+      // Reagenda o follow-up para daqui a 2h a partir da última mensagem do cliente
+      if (!dryRun) {
+        const novoNextAt = new Date(new Date(lastUserMsg).getTime() + CONVERSA_ATIVA_MS).toISOString()
+        await svc.from('leads').update({ eva_next_followup_at: novoNextAt }).eq('id', lead.id)
+      }
+      results.push({
+        lead_id: lead.id,
+        clinic_id: lead.clinic_id,
+        phone: lead.phone,
+        stage: followupCount + 1,
+        skipped: 'conversa_ativa_menos_3h',
+      })
+      continue
+    }
+
+    // Para estágios > 0: se Eva falou depois do cliente → cliente não respondeu o follow-up anterior
     if (followupCount > 0) {
-      const lastAssistantMsg = lastAssistantMap.get(`${lead.clinic_id}:${lead.phone}`)
-      const lastUserMsg = lastUserMap.get(`${lead.clinic_id}:${lead.phone}`)
-      // Se Eva falou depois do cliente pela última vez → cliente não respondeu o follow-up anterior
       if (
         lastAssistantMsg &&
         (!lastUserMsg || lastUserMsg <= lastAssistantMsg)
