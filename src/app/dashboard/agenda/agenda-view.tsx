@@ -333,7 +333,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 <p className="font-semibold text-slate-900 dark:text-white">{apt.patients?.name}</p>
                 <p className="text-xs text-slate-500">{apt.patients?.phone || 'Sem telefone'}</p>
               </div>
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${status.badgeCls}`}>{status.label}</span>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${status.bg} ${status.text}`}>{status.label}</span>
             </div>
 
             <div className="text-sm text-slate-600 dark:text-slate-300 space-y-1">
