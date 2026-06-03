@@ -717,9 +717,13 @@ a[role="button"],
    ========================================================== */
 
 /* 1. WARM WHITE BACKGROUND */
-body,
 html {
   background-color: #fafaf8;
+}
+
+body {
+  background-color: #fafaf8;
+  overflow-x: hidden;
 }
 
 /* 2. CARDS COM MICROINTERAÇÕES */

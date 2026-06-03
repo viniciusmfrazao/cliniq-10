@@ -223,7 +223,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const weekTotal = weekData.reduce((sum, d) => sum + d.count, 0)
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="max-w-full overflow-x-hidden">
+      <div className="space-y-4 md:space-y-6 max-w-7xl mx-auto px-3 sm:px-4 md:px-6">
       {/* Card de boas-vindas com guia por papel (some quando o usuario dispensa) */}
       <WelcomeCard userRole={userData?.role} userName={firstName} />
 
@@ -611,6 +612,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   )
