@@ -11,7 +11,7 @@ const ALL_PROFESSIONALS = ['doctor','dentist','biomedic','nurse','esthetician','
 const RECEPTION = ['receptionist', 'assistant']
 const MANAGEMENT = ['admin', 'super_admin', 'manager']
 const FINANCIAL = ['admin', 'super_admin', 'manager', 'financial']
-const ALL_STAFF = [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer']
+const ALL_STAFF = [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial']
 const ADMIN_ONLY = ['admin', 'super_admin']
 
 export const NAV_ITEMS: NavItem[] = [
@@ -30,7 +30,7 @@ export const NAV_ITEMS: NavItem[] = [
   // ── Comercial / IA ──────────────────────────────────────────────────────
   { label: 'WhatsApp',        href: '/dashboard/whatsapp',      icon: 'message',   roles: [...MANAGEMENT, ...RECEPTION] },
   { label: 'Eva IA',          href: '/dashboard/eva',           icon: 'sparkles',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
-  { label: 'CRM',             href: '/dashboard/crm',           icon: 'target',    roles: [...MANAGEMENT, ...RECEPTION] },
+  { label: 'CRM',             href: '/dashboard/crm',           icon: 'target',    roles: [...MANAGEMENT, ...RECEPTION, 'comercial'] },
 
   // ── Gestão ──────────────────────────────────────────────────────────────
   { label: 'Estoque',         href: '/dashboard/estoque',       icon: 'box',       roles: [...MANAGEMENT, ...ALL_PROFESSIONALS] },
