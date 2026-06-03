@@ -101,8 +101,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [debitosLoaded, setDebitosLoaded] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
-  const [popupDir, setPopupDir] = useState<'up' | 'down'>('down')
-  const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
+  const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -188,15 +187,30 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
-    // Detectar espaço disponível
+    // Calcular posição fixed baseada no espaço disponível na viewport
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
-      const spaceBelow = window.innerHeight - rect.bottom
-      setPopupDir(spaceBelow < 420 ? 'up' : 'down')
-      // Popup tem 288px (w-72). Verifica se cabe à direita, senão abre à esquerda
-      const spaceRight = window.innerWidth - rect.right
-      const spaceLeft = rect.left
-      setPopupSide(spaceRight >= 296 || spaceRight >= spaceLeft ? 'right' : 'left')
+      const POPUP_W = 288  // w-72
+      const POPUP_H = 420
+      const GAP = 4
+
+      // Horizontal: prefere abrir à direita, senão abre à esquerda
+      let left: number
+      if (rect.right + POPUP_W + GAP <= window.innerWidth) {
+        left = rect.right + GAP  // abre à direita
+      } else {
+        left = rect.left - POPUP_W - GAP  // abre à esquerda
+      }
+      // Garante que não sai pela esquerda
+      left = Math.max(8, left)
+
+      // Vertical: prefere alinhar com o topo do card, ajusta se sair pela base
+      let top = rect.top
+      if (top + POPUP_H > window.innerHeight) {
+        top = Math.max(8, window.innerHeight - POPUP_H - 8)
+      }
+
+      setPopupPos({ top, left })
     }
     setShowPreview(true)
     // Buscar débitos do paciente ao abrir o popup (só uma vez)
@@ -301,13 +315,10 @@ const AppointmentCard = React.memo(function AppointmentCard({
       </Link>
 
       {/* Preview ao passar o mouse */}
-      {showPreview && (
+      {showPreview && popupPos && (
         <div 
-          className={`absolute z-[60] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[85vh] ${
-            popupSide === 'left' ? 'right-full mr-1' : 'left-full ml-1'
-          } ${
-            popupDir === 'up' ? 'bottom-0' : 'top-0'
-          }`}
+          className="fixed z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[85vh]"
+          style={{ top: popupPos.top, left: popupPos.left }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
