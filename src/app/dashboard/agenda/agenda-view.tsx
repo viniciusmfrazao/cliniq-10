@@ -86,7 +86,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
   onCheckIn,
   onDragStart,
   compact = false,
-  isRightColumn = false
+  isRightColumn = false,
+  columnIndex = 0,
+  totalColumns = 1
 }: { 
   apt: Appointment
   onStatusChange: (id: string, status: string) => void
@@ -94,6 +96,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
   onDragStart?: (e: React.DragEvent, apt: Appointment) => void
   compact?: boolean
   isRightColumn?: boolean
+  columnIndex?: number
+  totalColumns?: number
   canDrag?: boolean
 }) {
   const [showPreview, setShowPreview] = useState(false)
@@ -192,12 +196,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
-    // Detectar espaço disponível para posicionar o popup
+    // Popup: profissional na metade esquerda → abre à direita, e vice-versa
+    const isLeftHalf = totalColumns <= 1
+      ? (cardRef.current ? cardRef.current.getBoundingClientRect().left < window.innerWidth / 2 : true)
+      : columnIndex < Math.ceil(totalColumns / 2)
+    setPopupSide(isLeftHalf ? 'right' : 'left')
+    // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
-      // Horizontal: se tem 296px à direita, abre à direita. Senão, à esquerda.
-      setPopupSide(window.innerWidth - rect.right >= 296 ? 'right' : 'left')
-      // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
       setPopupTop(window.innerHeight - rect.bottom >= 420)
     }
     setShowPreview(true)
@@ -997,22 +1003,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     }
     const label = labels[newStatus] || 'Status atualizado'
 
-    if (previousStatus && previousStatus !== newStatus) {
-      toast.undo({
-        title: label,
-        description: apt?.patients?.name || undefined,
-        duration: 5000,
-        onUndo: async () => {
-          await supabase
-            .from('appointments')
-            .update({ status: previousStatus })
-            .eq('id', appointmentId)
-          router.refresh()
-        },
-      })
-    } else {
-      toast.success(label)
-    }
+    toast.success(label)
   }, [supabase, router, toast, allAppointments])
 
   // Registrar check-in do paciente
@@ -1243,6 +1234,8 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                                   onCheckIn={handleCheckIn}
                                   onDragStart={handleDragStart}
                                   isRightColumn={isLastColumn}
+                                  columnIndex={profIdx}
+                                  totalColumns={displayProfessionals.length}
                                   canDrag={true}
                                 />
                               </div>
