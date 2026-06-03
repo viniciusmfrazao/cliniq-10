@@ -81,7 +81,7 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Detalhes do agendamento</h1>
           <p className="text-sm text-slate-500 mt-0.5">

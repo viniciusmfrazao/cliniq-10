@@ -111,7 +111,7 @@ export default async function InjetaveisPage({
 
       {/* Recent Applications */}
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-sm font-semibold text-slate-900">Ultimas aplicacoes</h2>
         </div>
         

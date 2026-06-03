@@ -559,3 +559,146 @@ body {
   animation: cmd-in 0.18s ease-out both;
 }
 
+
+/* ==========================================================
+   RESPONSIVIDADE GLOBAL — Mobile-First (não remover)
+   Corrige padrões sistemáticos sem alterar componentes individuais
+   ========================================================== */
+
+/* 1. Impede overflow horizontal na raiz do dashboard */
+#__next,
+body {
+  overflow-x: hidden;
+}
+
+/* 2. Page containers — padding menor em mobile */
+@media (max-width: 640px) {
+  .page-container,
+  .max-w-\[1600px\],
+  .max-w-4xl,
+  .max-w-3xl,
+  .max-w-2xl,
+  .max-w-xl {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+/* 3. Cards — sem overflow que corta botões */
+.card {
+  min-width: 0;
+}
+
+/* 4. Padrão flex justify-between — previne corte em mobile */
+@media (max-width: 640px) {
+  .section-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .section-header > * {
+    min-width: 0;
+  }
+}
+
+/* 5. Botões em linha — touch targets mínimos de 44px */
+button,
+a[role="button"],
+[type="button"],
+[type="submit"] {
+  min-height: 36px;
+  touch-action: manipulation;
+}
+
+/* 6. Tabelas — scroll horizontal em mobile sem quebrar layout */
+@media (max-width: 768px) {
+  .table-container,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Tabelas dentro de cards ganham scroll horizontal automático */
+  .card table {
+    min-width: 500px;
+  }
+  .card > .overflow-x-auto,
+  .card > div > .overflow-x-auto {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 7. Headers de seção (título + botão) — padrão universal */
+@media (max-width: 640px) {
+  /* Qualquer flex justify-between com gap dentro de card */
+  .card .flex.items-center.justify-between,
+  .card .flex.items-start.justify-between {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  /* Garante que título não empurre botão pra fora */
+  .card .flex.items-center.justify-between > div:first-child,
+  .card .flex.items-start.justify-between > div:first-child {
+    min-width: 0;
+    flex: 1 1 0%;
+  }
+  
+  /* Botões no header de seção não encolhem */
+  .card .flex.items-center.justify-between > button,
+  .card .flex.items-start.justify-between > button,
+  .card .flex.items-center.justify-between > a,
+  .card .flex.items-start.justify-between > a {
+    flex-shrink: 0;
+  }
+}
+
+/* 8. Textos longos — truncar com ellipsis onde necessário */
+@media (max-width: 640px) {
+  .card h1,
+  .card h2,
+  .card h3 {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+}
+
+/* 9. Inputs e selects — width total em mobile */
+@media (max-width: 640px) {
+  .card input[type="text"],
+  .card input[type="email"],
+  .card input[type="tel"],
+  .card input[type="number"],
+  .card input[type="date"],
+  .card input[type="time"],
+  .card select,
+  .card textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* 10. Grids de formulário — 1 coluna em mobile */
+@media (max-width: 640px) {
+  .grid.grid-cols-2:not(.keep-cols),
+  .grid.sm\:grid-cols-2:not(.keep-cols) {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 11. Bottom nav offset — conteúdo não fica atrás da nav */
+@media (max-width: 768px) {
+  .dashboard-content {
+    padding-bottom: 5rem;
+  }
+}
+
+/* 12. Attendance header — nome do paciente trunca, não empurra botões */
+@media (max-width: 640px) {
+  .attendance-title {
+    max-width: calc(100vw - 140px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

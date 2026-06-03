@@ -96,7 +96,7 @@ export default function FaceMapView({ points, type, gender = 'female' }: { point
 
       {/* Resumo */}
       <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div>
             <p className="font-semibold text-slate-900">{points.length} pontos</p>
             <p className="text-xs text-slate-500">aplicados nesta sessão</p>
