@@ -545,13 +545,16 @@ async function AnamnesesTab({ patientId }: { patientId: string }) {
     <div className="card p-5">
       <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <h2 className="text-sm font-semibold text-slate-900">Fichas de anamnese</h2>
-        <Link
-          href={`/dashboard/anamnese/enviar?patient=${patientId}`}
-          className="btn-primary w-auto px-4 py-2 text-sm flex items-center gap-1.5"
-        >
-          <Icon name="plus" className="w-4 h-4" />
-          Enviar nova
-        </Link>
+        <div className="flex items-center gap-2">
+          <AnamnesePresencialButton patientId={patientId} />
+          <Link
+            href={`/dashboard/anamnese/enviar?patient=${patientId}`}
+            className="btn-primary w-auto px-4 py-2 text-sm flex items-center gap-1.5"
+          >
+            <Icon name="plus" className="w-4 h-4" />
+            Enviar nova
+          </Link>
+        </div>
       </div>
       {!anamneses || anamneses.length === 0 ? (
         <p className="text-sm text-slate-500 text-center py-8">
