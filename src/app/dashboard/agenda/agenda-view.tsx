@@ -342,6 +342,24 @@ const AppointmentCard = React.memo(function AppointmentCard({
               <p><span className="text-slate-400">Horário:</span> {aptTime} — {apt.procedures?.duration_minutes || 30}min</p>
             </div>
 
+            {/* Observações */}
+            {apt.notes && (
+              <div className="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg">
+                <p className="text-xs font-semibold text-slate-500 mb-1">Observações</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{apt.notes}</p>
+              </div>
+            )}
+
+            {/* Sinal */}
+            {apt.valor_sinal && apt.valor_sinal > 0 && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200">
+                <p className="text-xs font-semibold text-emerald-700">
+                  Sinal: R$ {Number(apt.valor_sinal).toFixed(2)}
+                  {apt.forma_pagamento_sinal ? ` — ${apt.forma_pagamento_sinal}` : ''}
+                </p>
+              </div>
+            )}
+
             {/* Débitos */}
             {debitos.length > 0 && (
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200">
@@ -351,6 +369,34 @@ const AppointmentCard = React.memo(function AppointmentCard({
                     {d.descricao} — R$ {Number(d.valor).toFixed(2)}
                   </p>
                 ))}
+              </div>
+            )}
+
+            {/* Mudar status */}
+            {!isCancelled && apt.status !== 'completed' && (
+              <div className="flex flex-wrap gap-2">
+                {apt.status !== 'confirmed' && (
+                  <button
+                    onClick={() => { onStatusChange(apt.id, 'confirmed'); setShowPreview(false) }}
+                    className="flex-1 py-2 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                  >
+                    ✓ Confirmar
+                  </button>
+                )}
+                {apt.status !== 'in_progress' && (
+                  <button
+                    onClick={() => { onStatusChange(apt.id, 'in_progress'); setShowPreview(false) }}
+                    className="flex-1 py-2 text-xs font-semibold bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
+                  >
+                    ▶ Em atendimento
+                  </button>
+                )}
+                <button
+                  onClick={() => { onStatusChange(apt.id, 'no_show'); setShowPreview(false) }}
+                  className="flex-1 py-2 text-xs font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                >
+                  ✕ Não compareceu
+                </button>
               </div>
             )}
 
