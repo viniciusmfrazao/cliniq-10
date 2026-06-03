@@ -711,3 +711,259 @@ a[role="button"],
 .animate-bottom-sheet-in {
   animation: bottom-sheet-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
+
+/* ==========================================================
+   TIER 1 DESIGN — Warm White + Microinterações + Pastéis
+   ========================================================== */
+
+/* 1. WARM WHITE BACKGROUND */
+body,
+html {
+  background-color: #fafaf8;
+}
+
+/* 2. CARDS COM MICROINTERAÇÕES */
+.card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+/* 3. BOTÕES COM MICROINTERAÇÕES */
+button,
+[role="button"],
+.btn {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Primary button */
+.btn-primary,
+button.bg-violet-600,
+button.bg-violet-500,
+.bg-violet-600:hover {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary:hover,
+button.bg-violet-600:hover,
+button.bg-violet-500:hover {
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
+  transform: translateY(-2px);
+}
+
+.btn-primary:active,
+button.bg-violet-600:active,
+button.bg-violet-500:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+}
+
+/* Secondary button */
+.btn-secondary,
+button.bg-slate-100,
+button.bg-gray-100 {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-secondary:hover,
+button.bg-slate-100:hover,
+button.bg-gray-100:hover {
+  background-color: #e2e8f0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* 4. BADGES COM PASTÉIS SOFTES */
+.badge-success {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.badge-error {
+  background-color: #fee2e2;
+  color: #7f1d1d;
+}
+
+.badge-info {
+  background-color: #ede9fe;
+  color: #5b21b6;
+}
+
+/* Todos os badges ganham transição */
+[class*="badge"] {
+  transition: all 0.2s ease;
+}
+
+[class*="badge"]:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Status badges automáticas */
+span:has(> .text-emerald-700),
+span:has(> .text-green-700),
+span.bg-emerald-100,
+span.bg-green-100 {
+  background-color: #dcfce7 !important;
+  color: #166534 !important;
+}
+
+span:has(> .text-amber-700),
+span:has(> .text-yellow-700),
+span.bg-amber-100,
+span.bg-yellow-100 {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+}
+
+span:has(> .text-red-700),
+span.bg-red-100 {
+  background-color: #fee2e2 !important;
+  color: #7f1d1d !important;
+}
+
+span:has(> .text-violet-700),
+span:has(> .text-purple-700),
+span.bg-violet-100,
+span.bg-purple-100 {
+  background-color: #ede9fe !important;
+  color: #5b21b6 !important;
+}
+
+/* 5. LOADING SPINNER */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+  border: 2px solid #e2e8f0;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* 6. SUCCESS TOAST COM SLIDE-IN */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+}
+
+.toast,
+[role="alert"],
+.notification {
+  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  padding: 16px 20px;
+}
+
+.toast.error,
+[role="alert"].error {
+  border-left: 4px solid #ef4444;
+}
+
+.toast.success,
+[role="alert"].success {
+  border-left: 4px solid #22c55e;
+}
+
+.toast.warning,
+[role="alert"].warning {
+  border-left: 4px solid #eab308;
+}
+
+.toast.info,
+[role="alert"].info {
+  border-left: 4px solid #7c3aed;
+}
+
+/* 7. INPUTS COM FOCUS MELHORADO */
+input,
+textarea,
+select {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: white;
+  border: 1px solid #e2e8f0;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+  outline: none;
+}
+
+/* 8. LINKS COM TRANSIÇÃO */
+a {
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #7c3aed;
+}
+
+/* 9. MODAL/DIALOG BACKDROP */
+[role="dialog"],
+.modal,
+.dialog {
+  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 10. CHECKMARK ANIMADO */
+.checkmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: #22c55e;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* 11. SECTION HEADERS COM FLEX-WRAP AUTOMÁTICO */
+.section-header,
+[class*="header"]:has(> button) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
