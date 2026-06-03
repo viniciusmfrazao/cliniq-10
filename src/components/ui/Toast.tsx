@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Icon } from './Icon'
+import Icon from './Icon'
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
