@@ -166,7 +166,6 @@ export const FACTORY_DEFAULTS: Record<string, PermissionId[]> = {
   financial: ['agenda_view', 'patients_view', 'financial_view', 'financial_edit', 'reports_view'],
   manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view', 'reports_view', 'crm_view', 'crm_edit'],
   comercial: ['crm_view', 'crm_edit', 'patients_view', 'agenda_view'],
-  comercial: ['crm_view', 'crm_edit', 'patients_view', 'agenda_view'],
   assistant: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit'],
   viewer: ['agenda_view', 'patients_view'],
 }
