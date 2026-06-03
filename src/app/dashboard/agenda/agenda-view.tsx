@@ -135,7 +135,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [editTime, setEditTime] = useState('')
   const [editProcIds, setEditProcIds] = useState<string[]>([])
   const [savingSchedule, setSavingSchedule] = useState(false)
-  const [procList, setProcList] = useState<{ id: string; name: string; duration_minutes: number }[]>([])
+  const [procList, setProcList] = useState<{ id: string; name: string; duration_minutes: number; price: number }[]>([])
   const [procListLoaded, setProcListLoaded] = useState(false)
   const [selectedProcId, setSelectedProcId] = useState(apt.procedure_id || '')
   const [savingProc, setSavingProc] = useState(false)
@@ -146,7 +146,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
     if (!procListLoaded) {
       const { data } = await supabaseCard
         .from('procedures')
-        .select('id, name, duration_minutes')
+        .select('id, name, duration_minutes, price')
         .eq('active', true)
         .order('name')
       setProcList(data || [])
@@ -522,7 +522,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
                   onClick={async () => {
                     // Carregar lista de procedimentos se necessário
                     if (!procListLoaded) {
-                      const { data } = await supabaseCard.from('procedures').select('id, name, duration_minutes').eq('active', true).order('name')
+                      const { data } = await supabaseCard.from('procedures').select('id, name, duration_minutes, price').eq('active', true).order('name')
                       setProcList(data || [])
                       setProcListLoaded(true)
                     }
