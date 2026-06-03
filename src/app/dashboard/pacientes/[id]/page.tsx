@@ -14,6 +14,7 @@ import PackagesTab from './packages-tab'
 import OdontogramTab from './odontogram-tab'
 import DocumentosTab from './documentos-tab'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
+import AnamnesePresencialButton from './anamnese-presencial-button'
 
 /**
  * Central do Paciente.
