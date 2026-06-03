@@ -982,7 +982,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
       .eq('id', appointmentId)
 
     if (error) {
-      toast.error('Nao foi possivel atualizar', { description: error.message })
+      toast.error(`Nao foi possivel atualizar: ${error.message}`)
       return
     }
 
@@ -1122,10 +1122,9 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     if (slot) {
       router.push(`/dashboard/agenda/novo?date=${slot.date}&time=${slot.time}&professional=${slot.professionalId}`)
     } else {
-      toast.error('Sem horarios livres', {
-        description: 'Nao encontramos horarios nos proximos 30 dias. Confira em Equipe se os profissionais tem horario cadastrado.',
+      toast.error(`Sem horarios livres: ${'Nao encontramos horarios nos proximos 30 dias. Confira em Equipe se os profissionais tem horario cadastrado.',
         duration: 7000,
-      })
+      }`)
     }
   }
 
