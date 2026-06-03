@@ -150,15 +150,16 @@ export default function OrcamentosTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
+      <div className="flex justify-between items-center gap-3 flex-wrap">
+        <div className="min-w-0">
           <h3 className="font-semibold text-slate-900 dark:text-white">Orçamentos</h3>
           <p className="text-sm text-slate-500">{orcamentos.length} orçamento{orcamentos.length !== 1 ? 's' : ''}</p>
         </div>
         <button onClick={() => setShowForm(p => !p)}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-colors">
+          className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-colors flex-shrink-0">
           <Icon name="plus" className="w-4 h-4" />
-          Novo orçamento
+          <span className="hidden sm:inline">Novo orçamento</span>
+          <span className="sm:hidden">Novo</span>
         </button>
       </div>
 

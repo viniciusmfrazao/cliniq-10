@@ -178,12 +178,12 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               />
             ) : (
               <div className="card p-5 border-dashed">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
                       <Icon name="file" className="w-5 h-5 text-violet-500" />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <h2 className="text-sm font-semibold text-slate-900">Anamnese</h2>
                       <p className="text-xs text-slate-500">Esse paciente ainda não tem ficha.</p>
                     </div>
