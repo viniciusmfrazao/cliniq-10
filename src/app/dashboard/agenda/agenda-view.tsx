@@ -128,6 +128,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
   // Procedimento inline
   const [editingProc, setEditingProc] = useState(false)
+  // Edição rápida no bottom sheet (mobile)
+  const [editingSchedule, setEditingSchedule] = useState(false)
+  const [editDate, setEditDate] = useState('')
+  const [editTime, setEditTime] = useState('')
+  const [editProcId, setEditProcId] = useState('')
+  const [savingSchedule, setSavingSchedule] = useState(false)
   const [procList, setProcList] = useState<{ id: string; name: string; duration_minutes: number }[]>([])
   const [procListLoaded, setProcListLoaded] = useState(false)
   const [selectedProcId, setSelectedProcId] = useState(apt.procedure_id || '')
@@ -159,6 +165,25 @@ const AppointmentCard = React.memo(function AppointmentCard({
     setCurrentProcName(proc?.name || currentProcName)
     setSavingProc(false)
     setEditingProc(false)
+    router.refresh()
+  }
+
+  async function saveSchedule() {
+    if (!editDate || !editTime) return
+    setSavingSchedule(true)
+    const [h, m] = editTime.split(':').map(Number)
+    const start = new Date(`${editDate}T${editTime}:00`)
+    const proc = (editProcId ? procList.find(p => p.id === editProcId) : apt.procedures) 
+    const dur = proc?.duration_minutes ?? 30
+    const end = new Date(start.getTime() + dur * 60000)
+    await supabaseCard.from('appointments').update({
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      ...(editProcId ? { procedure_id: editProcId } : {}),
+    }).eq('id', apt.id)
+    setSavingSchedule(false)
+    setEditingSchedule(false)
+    setShowPreview(false)
     router.refresh()
   }
 
@@ -402,6 +427,83 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
             {/* Ações */}
             <div className="space-y-2 pt-2">
+              {/* Painel de edição */}
+              {editingSchedule ? (
+                <div className="space-y-3 p-3 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600">
+                  <p className="text-xs font-semibold text-slate-500 uppercase">Reagendar</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-slate-500">Data</label>
+                      <input
+                        type="date"
+                        value={editDate}
+                        onChange={e => setEditDate(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">Horário</label>
+                      <input
+                        type="time"
+                        value={editTime}
+                        onChange={e => setEditTime(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-600"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500">Procedimento</label>
+                    <select
+                      value={editProcId}
+                      onChange={e => setEditProcId(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-600"
+                    >
+                      <option value="">Manter atual ({apt.procedures?.name || 'Sem procedimento'})</option>
+                      {procList.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditingSchedule(false)}
+                      className="flex-1 py-2 text-sm font-semibold bg-slate-200 text-slate-700 rounded-lg"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={saveSchedule}
+                      disabled={savingSchedule || !editDate || !editTime}
+                      className="flex-1 py-2 text-sm font-semibold bg-violet-600 text-white rounded-lg disabled:opacity-50"
+                    >
+                      {savingSchedule ? 'Salvando...' : 'Salvar'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={async () => {
+                    // Carregar lista de procedimentos se necessário
+                    if (!procListLoaded) {
+                      const { data } = await supabaseCard.from('procedures').select('id, name, duration_minutes').eq('active', true).order('name')
+                      setProcList(data || [])
+                      setProcListLoaded(true)
+                    }
+                    // Pré-preencher com valores atuais
+                    const d = new Date(apt.start_time)
+                    const tz = 'America/Sao_Paulo'
+                    setEditDate(d.toLocaleDateString('sv-SE', { timeZone: tz }))
+                    setEditTime(d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: tz }))
+                    setEditProcId(apt.procedure_id || '')
+                    setEditingSchedule(true)
+                  }}
+                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-sm transition-colors hover:bg-slate-200"
+                >
+                  <Icon name="calendar" className="w-4 h-4" />
+                  Reagendar / Trocar procedimento
+                </button>
+              )}
+
               <Link
                 href={`/dashboard/atendimento/${apt.id}`}
                 className="flex items-center justify-center gap-2 w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold text-sm transition-colors"
