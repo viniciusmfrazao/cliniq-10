@@ -1,96 +1,254 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Icon from './Icon'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import Icon from '@/components/ui/Icon'
 
-export type ToastType = 'success' | 'error' | 'warning' | 'info'
+type ToastVariant = 'success' | 'error' | 'info' | 'loading'
 
-export interface ToastOptions {
+export type ToastAction = {
+  label: string
+  onClick: () => void
+}
+
+export type ToastInput = {
+  title: string
   description?: string
-  duration?: number
+  variant?: ToastVariant
+  duration?: number // ms; 0 = nao fecha sozinho
+  action?: ToastAction
 }
 
-interface ToastProps {
-  message: string
-  type?: ToastType
-  duration?: number
-  description?: string
-  onClose?: () => void
+type Toast = ToastInput & {
+  id: string
+  createdAt: number
 }
 
-const icons: Record<ToastType, string> = {
-  success: 'check',
-  error: 'alertTriangle',
-  warning: 'alertTriangle',
-  info: 'info',
+type ToastContextValue = {
+  show: (t: ToastInput) => string
+  dismiss: (id: string) => void
+  success: (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) => string
+  error: (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) => string
+  info: (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) => string
+  warning: (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) => string
+  /**
+   * Helper "undo": executa a acao, mostra toast com botao Desfazer.
+   * Se o usuario clicar Desfazer dentro de `duration`, chama `onUndo`.
+   */
+  undo: (opts: {
+    title: string
+    description?: string
+    duration?: number
+    onUndo: () => void | Promise<void>
+  }) => string
 }
 
-const styles: Record<ToastType, { border: string; icon: string }> = {
-  success: { border: 'border-l-green-500',  icon: 'text-green-600' },
-  error:   { border: 'border-l-red-500',    icon: 'text-red-600' },
-  warning: { border: 'border-l-yellow-500', icon: 'text-yellow-600' },
-  info:    { border: 'border-l-violet-500', icon: 'text-violet-600' },
+const ToastContext = createContext<ToastContextValue | null>(null)
+
+export function useToast() {
+  const ctx = useContext(ToastContext)
+  if (!ctx) throw new Error('useToast must be used inside <ToastProvider>')
+  return ctx
 }
 
-export function Toast({ message, type = 'info', duration = 3500, description, onClose }: ToastProps) {
-  const [visible, setVisible] = useState(true)
+function makeId() {
+  return `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
 
+export default function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  const dismiss = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+    const tm = timers.current.get(id)
+    if (tm) {
+      clearTimeout(tm)
+      timers.current.delete(id)
+    }
+  }, [])
+
+  const show = useCallback(
+    (t: ToastInput) => {
+      const id = makeId()
+      const toast: Toast = {
+        id,
+        createdAt: Date.now(),
+        variant: t.variant ?? 'info',
+        duration: t.duration ?? 4000,
+        ...t,
+      }
+      setToasts((prev) => [...prev, toast])
+      const dur = toast.duration ?? 4000
+      if (dur > 0) {
+        const tm = setTimeout(() => dismiss(id), dur)
+        timers.current.set(id, tm)
+      }
+      return id
+    },
+    [dismiss],
+  )
+
+  const success = useCallback(
+    (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) =>
+      show({ title, variant: 'success', ...opts }),
+    [show],
+  )
+  const error = useCallback(
+    (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) =>
+      show({ title, variant: 'error', duration: 6000, ...opts }),
+    [show],
+  )
+  const info = useCallback(
+    (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) =>
+      show({ title, variant: 'info', ...opts }),
+    [show],
+  )
+  const warning = useCallback(
+    (title: string, opts?: Omit<ToastInput, 'title' | 'variant'>) =>
+      show({ title, variant: 'info', ...opts }),
+    [show],
+  )
+
+  const undo = useCallback<ToastContextValue['undo']>(
+    ({ title, description, duration = 5000, onUndo }) => {
+      let undone = false
+      const id = show({
+        title,
+        description,
+        variant: 'info',
+        duration,
+        action: {
+          label: 'Desfazer',
+          onClick: async () => {
+            if (undone) return
+            undone = true
+            await onUndo()
+            dismiss(id)
+          },
+        },
+      })
+      return id
+    },
+    [show, dismiss],
+  )
+
+  // Limpa timers quando o componente sai
   useEffect(() => {
-    if (duration <= 0) return
-    const t = setTimeout(() => { setVisible(false); onClose?.() }, duration)
-    return () => clearTimeout(t)
-  }, [duration, onClose])
+    return () => {
+      timers.current.forEach((tm) => clearTimeout(tm))
+      timers.current.clear()
+    }
+  }, [])
 
-  if (!visible) return null
-  const s = styles[type]
+  const value = useMemo<ToastContextValue>(
+    () => ({ show, dismiss, success, error, info, warning, undo }),
+    [show, dismiss, success, error, info, warning, undo],
+  )
 
   return (
-    <div className={`fixed bottom-6 right-6 z-[9999] bg-white border border-slate-200 border-l-4 ${s.border} rounded-lg shadow-xl px-5 py-4 flex items-start gap-3 animate-slideInRight max-w-sm`}>
-      <Icon name={icons[type]} className={`w-5 h-5 flex-shrink-0 mt-0.5 ${s.icon}`} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-slate-900">{message}</p>
-        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
-      </div>
-      <button onClick={() => { setVisible(false); onClose?.() }} className="text-slate-400 hover:text-slate-600 flex-shrink-0 text-lg leading-none">✕</button>
+    <ToastContext.Provider value={value}>
+      {children}
+      <ToastViewport toasts={toasts} onClose={dismiss} />
+    </ToastContext.Provider>
+  )
+}
+
+function ToastViewport({ toasts, onClose }: { toasts: Toast[]; onClose: (id: string) => void }) {
+  if (toasts.length === 0) return null
+  return (
+    <div
+      role="region"
+      aria-label="Notificacoes"
+      className="fixed z-[100] right-3 left-3 bottom-3 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[380px] flex flex-col gap-2 pointer-events-none"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      {toasts.map((t) => (
+        <ToastItem key={t.id} toast={t} onClose={() => onClose(t.id)} />
+      ))}
     </div>
   )
 }
 
-/**
- * useToast — hook para toasts programáticos.
- * Aceita (message) ou (message, options) com description e duration.
- */
-export function useToast() {
-  const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: ToastType; description?: string; duration?: number }>>([])
+function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+  const { variant = 'info' } = toast
+  const [enter, setEnter] = useState(false)
 
-  function show(message: string, typeOrOptions?: ToastType | ToastOptions, durationOrOptions?: number | ToastOptions) {
-    const id = Math.random().toString(36).slice(2, 8)
-    let type: ToastType = 'info'
-    let description: string | undefined
-    let duration = 3500
+  useEffect(() => {
+    const r = requestAnimationFrame(() => setEnter(true))
+    return () => cancelAnimationFrame(r)
+  }, [])
 
-    if (typeof typeOrOptions === 'string') {
-      type = typeOrOptions
-      if (typeof durationOrOptions === 'number') duration = durationOrOptions
-      if (typeof durationOrOptions === 'object' && durationOrOptions) {
-        description = durationOrOptions.description
-        if (durationOrOptions.duration) duration = durationOrOptions.duration
-      }
-    } else if (typeof typeOrOptions === 'object' && typeOrOptions) {
-      description = typeOrOptions.description
-      if (typeOrOptions.duration) duration = typeOrOptions.duration
-    }
+  const accent =
+    variant === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : variant === 'error'
+        ? 'border-rose-200 bg-rose-50 text-rose-900'
+        : variant === 'loading'
+          ? 'border-violet-200 bg-violet-50 text-violet-900'
+          : 'border-slate-200 bg-white text-slate-900'
 
-    setToasts(prev => [...prev, { id, message, type, description, duration }])
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration + 300)
-  }
+  const iconName =
+    variant === 'success'
+      ? 'check'
+      : variant === 'error'
+        ? 'alertCircle'
+        : variant === 'loading'
+          ? 'sparkles'
+          : 'info'
 
-  return {
-    show,
-    success: (msg: string, opts?: ToastOptions) => show(msg, 'success', opts),
-    error:   (msg: string, opts?: ToastOptions) => show(msg, 'error',   opts),
-    warning: (msg: string, opts?: ToastOptions) => show(msg, 'warning', opts),
-    info:    (msg: string, opts?: ToastOptions) => show(msg, 'info',    opts),
-    toasts,
-  }
+  const iconColor =
+    variant === 'success'
+      ? 'text-emerald-600'
+      : variant === 'error'
+        ? 'text-rose-600'
+        : variant === 'loading'
+          ? 'text-violet-600'
+          : 'text-slate-500'
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`pointer-events-auto rounded-2xl border shadow-lg backdrop-blur-md px-4 py-3 transition-all duration-200 ${accent} ${
+        enter ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div className={`shrink-0 mt-0.5 ${iconColor}`}>
+          <Icon name={iconName as any} className={`w-5 h-5 ${variant === 'loading' ? 'animate-spin' : ''}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold leading-tight truncate">{toast.title}</p>
+          {toast.description ? (
+            <p className="text-xs text-slate-600 mt-0.5 leading-snug">{toast.description}</p>
+          ) : null}
+        </div>
+        {toast.action ? (
+          <button
+            type="button"
+            onClick={toast.action.onClick}
+            className="shrink-0 text-xs font-bold uppercase tracking-wide text-violet-600 hover:text-violet-800 px-2 py-1 rounded-md hover:bg-violet-100/60 transition-colors"
+          >
+            {toast.action.label}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar"
+          className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          <Icon name="x" className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  )
 }
