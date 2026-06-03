@@ -339,7 +339,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
             <div className="text-sm text-slate-600 dark:text-slate-300 space-y-1">
               <p><span className="text-slate-400">Procedimento:</span> {apt.procedures?.name || '-'}</p>
               <p><span className="text-slate-400">Profissional:</span> {apt.professional?.name || '-'}</p>
-              <p><span className="text-slate-400">Horário:</span> {aptTime} — {apt.duration_minutes || 30}min</p>
+              <p><span className="text-slate-400">Horário:</span> {aptTime} — {apt.procedures?.duration_minutes || 30}min</p>
             </div>
 
             {/* Débitos */}
