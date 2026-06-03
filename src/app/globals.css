@@ -702,3 +702,12 @@ a[role="button"],
     white-space: nowrap;
   }
 }
+
+/* Bottom Sheet animation */
+@keyframes bottom-sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.animate-bottom-sheet-in {
+  animation: bottom-sheet-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
