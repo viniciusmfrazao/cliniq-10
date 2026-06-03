@@ -101,11 +101,16 @@ export async function PATCH(
     if (!['admin', 'super_admin', 'manager'].includes(currentUser?.role || ''))
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
-    const { professional_role } = await request.json()
+    const { professional_role, permissions } = await request.json()
 
-    // Usa service role para o update — o cliente do usuário logado é barrado
-    // pela RLS da tabela users e o update falha silenciosamente (afeta 0 linhas
-    // sem retornar erro), fazendo o professional_role nunca ser salvo.
+    const updateData: Record<string, unknown> = {}
+    if (professional_role !== undefined) updateData.professional_role = professional_role || null
+    if (permissions !== undefined) updateData.permissions = permissions
+
+    if (Object.keys(updateData).length === 0)
+      return NextResponse.json({ error: 'Nada para atualizar' }, { status: 400 })
+
+    // Usa service role — RLS bloqueia update de outros usuários
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -114,7 +119,7 @@ export async function PATCH(
 
     const { error } = await supabaseAdmin
       .from('users')
-      .update({ professional_role: professional_role || null })
+      .update(updateData)
       .eq('id', params.id)
       .eq('clinic_id', currentUser!.clinic_id)
 

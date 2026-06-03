@@ -220,13 +220,15 @@ export default function PermissionsForm({ member, activeModules = [] }: Props) {
     setError(null)
     setSavedAt(null)
 
-    const { error: err } = await supabase
-      .from('users')
-      .update({ permissions })
-      .eq('id', member.id)
+    const res = await fetch(`/api/team/${member.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permissions }),
+    })
+    const data = await res.json()
 
-    if (err) {
-      setError(err.message)
+    if (!res.ok) {
+      setError(data.error || 'Erro ao salvar permissões')
     } else {
       setSavedAt(new Date())
       router.refresh()
