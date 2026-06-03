@@ -16,6 +16,7 @@ const ROLES = [
   { value: 'receptionist', label: 'Recepcionista' },
   { value: 'financial', label: 'Financeiro' },
   { value: 'manager', label: 'Gerente' },
+  { value: 'comercial', label: 'Comercial' },
   { value: 'assistant', label: 'Assistente' },
   { value: 'viewer', label: 'Visualizador' },
   { value: 'custom', label: '+ Outro (digite abaixo)' },

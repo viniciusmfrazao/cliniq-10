@@ -43,6 +43,7 @@ const ROLE_LABELS: Record<string, string> = {
   receptionist: 'Recepcionista',
   financial: 'Financeiro',
   manager: 'Gerente',
+  comercial: 'Comercial',
   assistant: 'Assistente',
   viewer: 'Visualizador',
 }
@@ -60,6 +61,7 @@ const ROLE_COLORS: Record<string, string> = {
   receptionist: 'bg-green-100 text-green-700',
   financial: 'bg-amber-100 text-amber-700',
   manager: 'bg-rose-100 text-rose-700',
+  comercial: 'bg-orange-100 text-orange-700',
   assistant: 'bg-sky-100 text-sky-700',
   viewer: 'bg-slate-100 text-slate-700',
 }

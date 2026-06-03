@@ -125,6 +125,7 @@ export const ROLE_LABELS: Record<string, string> = {
   receptionist: 'Recepcionista',
   financial: 'Financeiro',
   manager: 'Gerente',
+  comercial: 'Comercial',
   assistant: 'Assistente',
   viewer: 'Visualizador',
 }
@@ -148,7 +149,7 @@ export const ROLE_DESCRIPTIONS: Record<string, string> = {
 export const EDITABLE_ROLES: string[] = [
   'doctor', 'biomedic', 'nurse', 'esthetician',
   'physiotherapist', 'nutritionist', 'psychologist',
-  'receptionist', 'financial', 'manager', 'assistant', 'viewer',
+  'receptionist', 'financial', 'manager', 'comercial', 'assistant', 'viewer',
 ]
 
 /** Permissoes padrao "de fabrica" por papel — usado como fallback. */
@@ -164,6 +165,8 @@ export const FACTORY_DEFAULTS: Record<string, PermissionId[]> = {
   receptionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'crm_view', 'crm_edit'],
   financial: ['agenda_view', 'patients_view', 'financial_view', 'financial_edit', 'reports_view'],
   manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view', 'reports_view', 'crm_view', 'crm_edit'],
+  comercial: ['crm_view', 'crm_edit', 'patients_view', 'agenda_view'],
+  comercial: ['crm_view', 'crm_edit', 'patients_view', 'agenda_view'],
   assistant: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit'],
   viewer: ['agenda_view', 'patients_view'],
 }
