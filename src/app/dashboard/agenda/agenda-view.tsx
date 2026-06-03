@@ -101,7 +101,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [debitosLoaded, setDebitosLoaded] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
-  const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null)
+  const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
+  const [popupTop, setPopupTop] = useState(true)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -187,30 +188,13 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
-    // Calcular posição fixed baseada no espaço disponível na viewport
+    // Detectar espaço disponível para posicionar o popup
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
-      const POPUP_W = 288  // w-72
-      const POPUP_H = 420
-      const GAP = 4
-
-      // Horizontal: prefere abrir à direita, senão abre à esquerda
-      let left: number
-      if (rect.right + POPUP_W + GAP <= window.innerWidth) {
-        left = rect.right + GAP  // abre à direita
-      } else {
-        left = rect.left - POPUP_W - GAP  // abre à esquerda
-      }
-      // Garante que não sai pela esquerda
-      left = Math.max(8, left)
-
-      // Vertical: prefere alinhar com o topo do card, ajusta se sair pela base
-      let top = rect.top
-      if (top + POPUP_H > window.innerHeight) {
-        top = Math.max(8, window.innerHeight - POPUP_H - 8)
-      }
-
-      setPopupPos({ top, left })
+      // Horizontal: se tem 296px à direita, abre à direita. Senão, à esquerda.
+      setPopupSide(window.innerWidth - rect.right >= 296 ? 'right' : 'left')
+      // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
+      setPopupTop(window.innerHeight - rect.bottom >= 420)
     }
     setShowPreview(true)
     // Buscar débitos do paciente ao abrir o popup (só uma vez)
@@ -315,10 +299,13 @@ const AppointmentCard = React.memo(function AppointmentCard({
       </Link>
 
       {/* Preview ao passar o mouse */}
-      {showPreview && popupPos && (
+      {showPreview && (
         <div 
-          className="fixed z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[85vh]"
-          style={{ top: popupPos.top, left: popupPos.left }}
+          className={`absolute z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
+            popupSide === 'right' ? 'left-full ml-1' : 'right-full mr-1'
+          } ${
+            popupTop ? 'top-0' : 'bottom-0'
+          }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -945,7 +932,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                         {hasContent ? (
                           <div className="space-y-1">
                             {hourAppointments.map(apt => (
-                              <div key={apt.id} className="relative">
+                              <div key={apt.id} className="relative" style={{overflow: "visible"}}>
                                 <AppointmentCard
                                   apt={apt}
                                   onStatusChange={handleStatusChange}
