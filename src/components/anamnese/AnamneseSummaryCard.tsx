@@ -187,20 +187,20 @@ export default function AnamneseSummaryCard({
     <div
       className={`card p-5 ${highlightRecent ? 'ring-2 ring-violet-200 border-violet-200' : ''}`}
     >
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2">
-          <span className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
+      <div className="flex items-start justify-between gap-2 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
             <Icon name="file" className="w-5 h-5 text-violet-700" />
           </span>
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-slate-900 truncate">
               {highlightRecent ? 'Anamnese mais recente' : 'Anamnese'}
             </h2>
             <p className="text-xs text-slate-500">{dateLabel}</p>
           </div>
         </div>
         <span
-          className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${statusBadge.cls}`}
+          className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap flex-shrink-0 ${statusBadge.cls}`}
         >
           {statusBadge.label}
         </span>

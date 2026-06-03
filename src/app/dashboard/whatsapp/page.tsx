@@ -852,7 +852,7 @@ export default function WhatsAppPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-200px)] md:h-[calc(100dvh-140px)] flex flex-col overflow-hidden">
+    <div className="h-[calc(100dvh-200px)] md:h-[calc(100dvh-140px)] flex flex-col">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
           <div className="flex items-center gap-2">
@@ -1042,7 +1042,7 @@ export default function WhatsAppPage() {
                   onClick={() => setSelectedConversation(null)}
                   className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex-shrink-0"
                 >
-                  <Icon name="chevron-left" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                  <Icon name="arrowLeft" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
                 </button>
                 <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
                   <span className="text-emerald-700 dark:text-emerald-400 font-semibold">

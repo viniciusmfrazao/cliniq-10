@@ -257,7 +257,7 @@ export default function MedicalRecordSection({
   }
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card">
       {/* Tabs */}
       <div className="flex border-b border-slate-100">
         <button

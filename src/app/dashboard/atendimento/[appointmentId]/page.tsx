@@ -146,7 +146,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
         clinicId={userData?.clinic_id || ''}
       />
 
-      <div className="max-w-[1600px] mx-auto px-4 pt-4 md:px-8 md:pt-6 pb-28 md:pb-12 overflow-x-hidden">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-4 pt-4 md:px-8 md:pt-6 pb-28 md:pb-12">
         <div className="grid lg:grid-cols-2 gap-4 md:gap-6">
           {/* Coluna Esquerda - Prontuario + Anamnese mais recente */}
           <div className="space-y-4 md:space-y-6">
