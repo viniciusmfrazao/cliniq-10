@@ -387,6 +387,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
                     patientId={apt.patients.id}
                     patientName={apt.patients.name || ''}
                     patientPhone={apt.patients.phone || null}
+                    appointmentId={apt.id}
                     procedureName={apt.procedures?.name}
                     clinicId={apt.clinic_id}
                   />
