@@ -383,8 +383,8 @@ export default function MedicalRecordSection({
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Fotos antes/depois
-                <span className="ml-2 text-xs text-slate-400">
-                  (até 20MB cada — JPG, PNG, WEBP)
+                <span className="ml-1 text-xs text-slate-400 hidden sm:inline">
+                  (até 20MB — JPG, PNG, WEBP)
                 </span>
               </label>
               <div className="flex flex-wrap gap-3">

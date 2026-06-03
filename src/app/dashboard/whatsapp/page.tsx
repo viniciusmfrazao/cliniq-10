@@ -852,7 +852,7 @@ export default function WhatsAppPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-180px)] md:h-[calc(100dvh-140px)] flex flex-col">
+    <div className="h-[calc(100dvh-200px)] md:h-[calc(100dvh-140px)] flex flex-col overflow-hidden">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
           <div className="flex items-center gap-2">
@@ -883,9 +883,9 @@ export default function WhatsAppPage() {
         </div>
       </div>
 
-      <div className="flex-1 card overflow-hidden flex">
+      <div className="flex-1 card overflow-hidden flex min-w-0">
         {/* Lista de conversas — esconde no mobile quando tem chat aberto */}
-        <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-slate-200 dark:border-slate-700 flex-col flex-shrink-0`}>
+        <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 border-r border-slate-200 dark:border-slate-700 flex-col flex-shrink-0 min-w-0 md:min-w-[320px]`}>
           <div className="p-3 border-b border-slate-100 dark:border-slate-700 space-y-2">
             <div className="relative">
               <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1032,7 +1032,7 @@ export default function WhatsAppPage() {
 
         {/* Chat */}
         {/* Painel do chat — ocupa tela toda no mobile */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className={`${selectedConversation ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0`}>
           {selectedConversation ? (
             <>
               {/* Header do chat */}
