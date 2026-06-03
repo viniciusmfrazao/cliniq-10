@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast'
 import SendAnamneseButton from './send-anamnese-button'
 import SendTermoButton from './send-termo-button'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import BottomSheet from '@/components/ui/BottomSheet'
 import BlockModal from './block-modal'
 import PaymentModal from '@/components/agenda/payment-modal'
 
@@ -109,6 +110,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
   const [popupTop, setPopupTop] = useState(true)
   const isMobile = useIsMobile()
+  const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -204,8 +206,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
       const rect = cardRef.current.getBoundingClientRect()
       setPopupTop(window.innerHeight - rect.bottom >= 420)
     }
-    if (isMobile) return  // Mobile: sem popup, Link navega direto
     setShowPreview(true)
+    setUseSheet(isMobile)
     // Buscar débitos do paciente ao abrir o popup (só uma vez)
     if (!debitosLoaded && apt.patients?.id) {
       setDebitosLoaded(true)
@@ -263,6 +265,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
         href={`/dashboard/atendimento/${apt.id}`}
         draggable={!!onDragStart}
         onDragStart={onDragStart ? (e) => onDragStart(e, apt) : undefined}
+        onClick={(e) => {
+          if (isMobile) {
+            e.preventDefault()
+            handleMouseEnter()
+          }
+        }}
         className={`block p-2 rounded-lg ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-40' : ''}`}
       >
         {/* Botão rápido de agendar no mesmo slot — só para cancelados */}
@@ -308,7 +316,89 @@ const AppointmentCard = React.memo(function AppointmentCard({
       </Link>
 
       {/* Preview — só desktop (mobile: Link navega direto pro atendimento) */}
-      {showPreview && (
+      {/* Bottom Sheet — mobile */}
+      {showPreview && useSheet && (
+        <BottomSheet
+          open={true}
+          onClose={() => setShowPreview(false)}
+          title={apt.patients?.name || 'Agendamento'}
+        >
+          {/* Info resumida */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${isCheckedIn ? 'bg-emerald-500' : 'bg-violet-500'}`}>
+                {apt.patients?.name?.charAt(0) || '?'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-slate-900 dark:text-white">{apt.patients?.name}</p>
+                <p className="text-xs text-slate-500">{apt.patients?.phone || 'Sem telefone'}</p>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${status.badgeCls}`}>{status.label}</span>
+            </div>
+
+            <div className="text-sm text-slate-600 dark:text-slate-300 space-y-1">
+              <p><span className="text-slate-400">Procedimento:</span> {apt.procedures?.name || '-'}</p>
+              <p><span className="text-slate-400">Profissional:</span> {apt.professionals?.name || '-'}</p>
+              <p><span className="text-slate-400">Horário:</span> {aptTime} — {apt.duration_minutes || 30}min</p>
+            </div>
+
+            {/* Débitos */}
+            {debitos.length > 0 && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200">
+                <p className="text-xs font-semibold text-amber-700">Débito pendente</p>
+                {debitos.map((d, i) => (
+                  <p key={i} className="text-xs text-amber-600">
+                    {d.descricao} — R$ {Number(d.valor).toFixed(2)}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {/* Ações */}
+            <div className="space-y-2 pt-2">
+              <Link
+                href={`/dashboard/atendimento/${apt.id}`}
+                className="flex items-center justify-center gap-2 w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold text-sm transition-colors"
+              >
+                <Icon name="arrowRight" className="w-4 h-4" />
+                Ir para atendimento
+              </Link>
+
+              {!isCheckedIn && !isCancelled && apt.status !== 'completed' && (
+                <button
+                  onClick={() => { onCheckIn(apt.id); setShowPreview(false) }}
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold text-sm transition-colors"
+                >
+                  <Icon name="check" className="w-4 h-4" />
+                  Registrar Chegada
+                </button>
+              )}
+
+              {apt.patients?.id && (
+                <div className="flex gap-2">
+                  <SendAnamneseButton
+                    patientId={apt.patients.id}
+                    patientName={apt.patients.name || ''}
+                    patientPhone={apt.patients.phone || null}
+                    appointmentId={apt.id}
+                    variant="compact"
+                  />
+                  <SendTermoButton
+                    patientId={apt.patients.id}
+                    patientName={apt.patients.name || ''}
+                    patientPhone={apt.patients.phone || null}
+                    procedureName={apt.procedures?.name}
+                    clinicId={apt.clinic_id}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Popup lateral — só desktop */}
+      {showPreview && !useSheet && (
         <div
           className={`absolute z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
             popupSide === 'right' ? 'left-full ml-1' : 'right-full mr-1'
