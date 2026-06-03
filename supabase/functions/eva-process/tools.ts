@@ -518,17 +518,43 @@ export async function escalarHumano(
  * Sinais de "alto interesse" pra classificar lead como warm/hot.
  * Usado pra dar prioridade no CRM sem atrapalhar o fluxo conversacional.
  */
-function detectarPrioridade(observacoes: string | undefined, procedimento: string): 'cold' | 'warm' | 'hot' {
+/**
+ * Calcula a temperatura do lead baseada no ENGAJAMENTO ao longo da conversa,
+ * não na primeira mensagem.
+ *
+ * Problema anterior: tráfego pago chega com mensagem pré-pronta ("Olá, tenho
+ * interesse em...") que disparava 'warm' ou 'hot' imediatamente, sem nenhuma
+ * interação real.
+ *
+ * Nova lógica:
+ * - cold: menos de 2 trocas reais (só chegou, não engajou)
+ * - warm: engajamento real (perguntou algo, respondeu perguntas da Eva)
+ * - hot: sinais claros de intenção de agendar (pediu horário, preço, urgência)
+ *
+ * @param observacoes texto das observações registradas pela Eva
+ * @param procedimento nome do procedimento de interesse
+ * @param historyLength número de mensagens já trocadas (ida+volta)
+ */
+function detectarPrioridade(
+  observacoes: string | undefined,
+  procedimento: string,
+  historyLength: number = 0,
+): 'cold' | 'warm' | 'hot' {
+  // Menos de 4 mensagens = ainda não houve engajamento real
+  // (1ª msg do tráfego + resposta da Eva = 2 mensagens; esperamos pelo menos mais 1 resposta real)
+  if (historyLength < 4) {
+    return 'cold';
+  }
+
   const txt = norm(`${observacoes ?? ''} ${procedimento}`);
-  // Hot: querendo agendar agora, perguntando preco, urgencia, cliente recorrente com interesse claro
-  if (/agendar|marcar|preco|valor|quanto|hoje|amanha|essa semana|urgente|ja fez|experiente|recorrente|quero fazer|quero agendar|tem hoje|tem amanha|disponibilidade|horario/.test(txt)) {
+
+  // Hot: intenção clara de agendar, pediu preço, urgência
+  if (/agendar|marcar|preco|valor|quanto|hoje|amanha|essa semana|urgente|quero fazer|quero agendar|tem hoje|tem amanha|disponibilidade|horario|quando tem|qual horario/.test(txt)) {
     return 'hot';
   }
-  // Warm: interesse claro, mas sem urgencia
-  if (/quero|gostaria|tenho interesse|me interesso|gostei|fazer|saber mais|informacao|pergunta|perguntou/.test(txt)) {
-    return 'warm';
-  }
-  return 'cold';
+
+  // Warm: engajamento real (chegou a esse ponto = pelo menos 4 mensagens)
+  return 'warm';
 }
 
 export async function registrarInteresse(
@@ -539,7 +565,8 @@ export async function registrarInteresse(
 ): Promise<string> {
   const procedimento = args.procedimento;
   const proc = ctx.procedures.find((p) => norm(p.name).includes(norm(procedimento)));
-  const prioridade = detectarPrioridade(args.observacoes, procedimento);
+  const historyLength = ctx.history?.length ?? 0;
+  const prioridade = detectarPrioridade(args.observacoes, procedimento, historyLength);
 
   if (!ctx.lead?.id) {
     return `Interesse em "${procedimento}" anotado, mas sem lead vinculado no CRM. Continue a conversa naturalmente.`;
