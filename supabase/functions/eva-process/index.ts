@@ -657,6 +657,26 @@ Deno.serve(async (req) => {
     });
   }
 
+  // 0.5) Verificar se Eva está ativa para essa instância
+  //      Se auto_reply_enabled = false, abortar silenciosamente.
+  if (!payload.isFollowup && payload.instance) {
+    try {
+      const waUrl = `${SUPABASE_URL}/rest/v1/clinic_whatsapp?select=auto_reply_enabled&instance_name=eq.${encodeURIComponent(payload.instance)}&limit=1`;
+      const waRes = await fetch(waUrl, {
+        headers: { 'apikey': SERVICE_ROLE_KEY, 'Authorization': `Bearer ${SERVICE_ROLE_KEY}` },
+      });
+      const waData = await waRes.json();
+      const autoReply = Array.isArray(waData) && waData.length > 0 ? waData[0].auto_reply_enabled : null;
+      if (autoReply === false) {
+        console.log(JSON.stringify({ evt: 'eva_blocked', reason: 'auto_reply_disabled', instance: payload.instance, clinic: payload.clinicId }));
+        return jsonResponse({ ok: true, skipped: true, reason: 'auto_reply_disabled' });
+      }
+    } catch (e) {
+      // Em caso de erro na verificação, deixa prosseguir (fail-open)
+      console.error('Erro ao verificar auto_reply_enabled:', e);
+    }
+  }
+
   // 1) Contexto
   const ctxResp = await loadContext(payload);
   if (!ctxResp.ok || !ctxResp.ctx) return bad(`falha contexto: ${ctxResp.error}`, 500);
