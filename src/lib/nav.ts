@@ -17,7 +17,7 @@ const ADMIN_ONLY = ['admin', 'super_admin']
 export const NAV_ITEMS: NavItem[] = [
   // ── Operacional diário ──────────────────────────────────────────────────
   { label: 'Início',          href: '/dashboard',               icon: 'home',      roles: ALL_STAFF },
-  { label: 'Agenda',          href: '/dashboard/agenda',        icon: 'calendar',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
+  { label: 'Agenda',          href: '/dashboard/agenda',        icon: 'calendar',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'] },
   { label: 'Recepção',        href: '/dashboard/recepcao',      icon: 'userCheck', roles: [...MANAGEMENT, ...RECEPTION] },
   { label: 'Lista de Espera', href: '/dashboard/lista-espera',  icon: 'clock',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
   { label: 'Pacientes',       href: '/dashboard/pacientes',     icon: 'users',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
@@ -28,7 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Documentos',      href: '/dashboard/documentos',    icon: 'file',      roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
 
   // ── Comercial / IA ──────────────────────────────────────────────────────
-  { label: 'WhatsApp',        href: '/dashboard/whatsapp',      icon: 'message',   roles: [...MANAGEMENT, ...RECEPTION] },
+  { label: 'WhatsApp',        href: '/dashboard/whatsapp',      icon: 'message',   roles: [...MANAGEMENT, ...RECEPTION, 'comercial'] },
   { label: 'Eva IA',          href: '/dashboard/eva',           icon: 'sparkles',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
   { label: 'CRM',             href: '/dashboard/crm',           icon: 'target',    roles: [...MANAGEMENT, ...RECEPTION, 'comercial'] },
 
@@ -53,7 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const BOTTOM_NAV: NavItem[] = [
   { label: 'Início',    href: '/dashboard',           icon: 'home',     roles: ALL_STAFF },
-  { label: 'Agenda',    href: '/dashboard/agenda',    icon: 'calendar', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
+  { label: 'Agenda',    href: '/dashboard/agenda',    icon: 'calendar', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'] },
   { label: 'Pacientes', href: '/dashboard/pacientes', icon: 'users',    roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
   { label: 'WhatsApp',  href: '/dashboard/whatsapp',  icon: 'message',  roles: [...MANAGEMENT, ...RECEPTION] },
   { label: 'Eva',       href: '/dashboard/eva',       icon: 'sparkles', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
