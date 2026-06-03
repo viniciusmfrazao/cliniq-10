@@ -41,6 +41,7 @@ type Appointment = {
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
   professional: { id: string; name: string } | null
+  appointment_procedures?: { id: string; procedure_id: string | null; procedure_name: string; duration_minutes: number; price: number }[]
 }
 
 type Professional = {
@@ -132,7 +133,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [editingSchedule, setEditingSchedule] = useState(false)
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
-  const [editProcId, setEditProcId] = useState('')
+  const [editProcIds, setEditProcIds] = useState<string[]>([])
   const [savingSchedule, setSavingSchedule] = useState(false)
   const [procList, setProcList] = useState<{ id: string; name: string; duration_minutes: number }[]>([])
   const [procListLoaded, setProcListLoaded] = useState(false)
@@ -171,16 +172,31 @@ const AppointmentCard = React.memo(function AppointmentCard({
   async function saveSchedule() {
     if (!editDate || !editTime) return
     setSavingSchedule(true)
-    const [h, m] = editTime.split(':').map(Number)
     const start = new Date(`${editDate}T${editTime}:00`)
-    const proc = (editProcId ? procList.find(p => p.id === editProcId) : apt.procedures) 
-    const dur = proc?.duration_minutes ?? 30
-    const end = new Date(start.getTime() + dur * 60000)
+    // Duração total = soma de todos os procedimentos selecionados
+    const selectedProcs = procList.filter(p => editProcIds.includes(p.id))
+    const totalDur = selectedProcs.reduce((sum, p) => sum + (p.duration_minutes || 30), 0) || 30
+    const end = new Date(start.getTime() + totalDur * 60000)
+    const mainProcId = editProcIds[0] || apt.procedure_id || null
+    // Atualizar appointment
     await supabaseCard.from('appointments').update({
       start_time: start.toISOString(),
       end_time: end.toISOString(),
-      ...(editProcId ? { procedure_id: editProcId } : {}),
+      procedure_id: mainProcId,
     }).eq('id', apt.id)
+    // Sincronizar appointment_procedures
+    if (editProcIds.length > 0) {
+      await supabaseCard.from('appointment_procedures').delete().eq('appointment_id', apt.id)
+      const rows = selectedProcs.map((p, i) => ({
+        appointment_id: apt.id,
+        clinic_id: apt.clinic_id,
+        procedure_id: p.id,
+        procedure_name: p.name,
+        duration_minutes: p.duration_minutes,
+        price: p.price ?? 0,
+      }))
+      if (rows.length > 0) await supabaseCard.from('appointment_procedures').insert(rows)
+    }
     setSavingSchedule(false)
     setEditingSchedule(false)
     setShowPreview(false)
@@ -362,7 +378,11 @@ const AppointmentCard = React.memo(function AppointmentCard({
             </div>
 
             <div className="text-sm text-slate-600 dark:text-slate-300 space-y-1">
-              <p><span className="text-slate-400">Procedimento:</span> {apt.procedures?.name || '-'}</p>
+              <p><span className="text-slate-400">Procedimento{apt.appointment_procedures && apt.appointment_procedures.length > 1 ? 's' : ''}:</span>{' '}
+                {apt.appointment_procedures && apt.appointment_procedures.length > 0
+                  ? apt.appointment_procedures.map(p => p.procedure_name).join(', ')
+                  : apt.procedures?.name || '-'}
+              </p>
               <p><span className="text-slate-400">Profissional:</span> {apt.professional?.name || '-'}</p>
               <p><span className="text-slate-400">Horário:</span> {aptTime} — {apt.procedures?.duration_minutes || 30}min</p>
             </div>
@@ -452,17 +472,34 @@ const AppointmentCard = React.memo(function AppointmentCard({
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-500">Procedimento</label>
-                    <select
-                      value={editProcId}
-                      onChange={e => setEditProcId(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-600"
-                    >
-                      <option value="">Manter atual ({apt.procedures?.name || 'Sem procedimento'})</option>
+                    <label className="text-xs text-slate-500 block mb-1">
+                      Procedimentos {editProcIds.length > 0 && <span className="text-violet-600">({editProcIds.length} selecionado{editProcIds.length > 1 ? 's' : ''})</span>}
+                    </label>
+                    <div className="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800">
                       {procList.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                        <label key={p.id} className="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={editProcIds.includes(p.id)}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setEditProcIds(prev => [...prev, p.id])
+                              } else {
+                                setEditProcIds(prev => prev.filter(id => id !== p.id))
+                              }
+                            }}
+                            className="w-4 h-4 rounded text-violet-600"
+                          />
+                          <span className="text-sm text-slate-700 dark:text-slate-200 flex-1">{p.name}</span>
+                          <span className="text-xs text-slate-400">{p.duration_minutes}min</span>
+                        </label>
                       ))}
-                    </select>
+                    </div>
+                    {editProcIds.length > 1 && (
+                      <p className="text-xs text-violet-600 mt-1">
+                        Duração total: {procList.filter(p => editProcIds.includes(p.id)).reduce((s,p) => s + p.duration_minutes, 0)}min
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -494,7 +531,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
                     const tz = 'America/Sao_Paulo'
                     setEditDate(d.toLocaleDateString('sv-SE', { timeZone: tz }))
                     setEditTime(d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: tz }))
-                    setEditProcId(apt.procedure_id || '')
+                    // Pré-preencher com procedimentos existentes
+                    const existing = apt.appointment_procedures?.map(p => p.procedure_id || '').filter(Boolean) || []
+                    setEditProcIds(existing.length > 0 ? existing : (apt.procedure_id ? [apt.procedure_id] : []))
                     setEditingSchedule(true)
                   }}
                   className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-sm transition-colors hover:bg-slate-200"
