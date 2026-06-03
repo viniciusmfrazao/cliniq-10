@@ -101,7 +101,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [debitosLoaded, setDebitosLoaded] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
-  const [popupDir, setPopupDir] = useState<'up' | 'down'>('up')
+  const [popupDir, setPopupDir] = useState<'up' | 'down'>('down')
+  const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -192,6 +193,10 @@ const AppointmentCard = React.memo(function AppointmentCard({
       const rect = cardRef.current.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
       setPopupDir(spaceBelow < 420 ? 'up' : 'down')
+      // Popup tem 288px (w-72). Verifica se cabe à direita, senão abre à esquerda
+      const spaceRight = window.innerWidth - rect.right
+      const spaceLeft = rect.left
+      setPopupSide(spaceRight >= 296 || spaceRight >= spaceLeft ? 'right' : 'left')
     }
     setShowPreview(true)
     // Buscar débitos do paciente ao abrir o popup (só uma vez)
@@ -299,11 +304,10 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {showPreview && (
         <div 
           className={`absolute z-[60] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[85vh] ${
-            isRightColumn ? 'right-full' : 'left-full'
+            popupSide === 'left' ? 'right-full mr-1' : 'left-full ml-1'
           } ${
             popupDir === 'up' ? 'bottom-0' : 'top-0'
           }`}
-          style={isRightColumn ? { marginRight: '-12px' } : { marginLeft: '-12px' }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
