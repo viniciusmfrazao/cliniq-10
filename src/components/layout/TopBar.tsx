@@ -21,6 +21,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
   const pathname = usePathname()
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const current = NAV_ITEMS.find(i => i.href === '/dashboard' ? pathname === i.href : pathname.startsWith(i.href))
   const supabase = createClient()
   const nav = NAV_ITEMS.filter(i => i.roles.includes(userRole))
@@ -70,12 +71,37 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
             <Icon name="info" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
           </Link>
           {userId && <NotificationBell userId={userId} />}
-          <Link 
-            href="/dashboard/config" 
-            className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20 active:scale-95 transition-transform"
-          >
-            <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
-          </Link>
+          <div className="relative">
+            <button
+              onClick={() => setUserMenuOpen(p => !p)}
+              className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20 active:scale-95 transition-transform"
+            >
+              <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
+            </button>
+            {userMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                <div className="absolute right-0 top-12 z-50 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1 w-44">
+                  <Link
+                    href="/dashboard/config"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <Icon name="settings" className="w-4 h-4" />
+                    Configurações
+                  </Link>
+                  <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                  <button
+                    onClick={() => { setUserMenuOpen(false); logout() }}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                  >
+                    <Icon name="logout" className="w-4 h-4" />
+                    Sair da conta
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
