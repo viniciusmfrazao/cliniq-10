@@ -21,13 +21,13 @@ export default async function AdminDashboard() {
 
       {/* Alertas */}
       {metrics.trial_expiring_soon.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 overflow-hidden">
           <p className="text-sm font-semibold text-amber-800 mb-2">
             ⚠️ {metrics.trial_expiring_soon.length} clínica{metrics.trial_expiring_soon.length > 1 ? 's' : ''} com trial expirando em 7 dias
           </p>
           <div className="space-y-1">
             {metrics.trial_expiring_soon.map((c: any) => (
-              <div key={c.id} className="flex items-center justify-between text-xs text-amber-700">
+              <div key={c.id} className="flex items-center justify-between gap-2 text-xs text-amber-700 flex-wrap">
                 <Link href={`/admin/clinics/${c.id}`} className="font-medium hover:underline">{c.name}</Link>
                 <span>Expira {new Date(c.trial_ends_at).toLocaleDateString('pt-BR')}</span>
               </div>
