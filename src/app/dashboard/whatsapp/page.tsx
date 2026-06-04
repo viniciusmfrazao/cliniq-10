@@ -179,6 +179,7 @@ export default function WhatsAppPage() {
   // false = Eva fica calada e secretária responde pelo painel.
   const [evaEnabled, setEvaEnabled] = useState<boolean>(true)
   const [hasEvaModule, setHasEvaModule] = useState<boolean>(false)
+  const [hasCrmModule, setHasCrmModule] = useState<boolean>(false)
   const [evaToggling, setEvaToggling] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const selectedThreadIdRef = useRef<string | null>(null)
@@ -371,6 +372,7 @@ export default function WhatsAppPage() {
           .single()
         const activeModules: string[] = clinicData?.settings?.active_modules ?? []
         setHasEvaModule(activeModules.includes('eva_ia'))
+        setHasCrmModule(activeModules.includes('crm'))
 
         const inboundLines = inboundConnected.map((i) => ({
           instance_name: i.instance_name,
