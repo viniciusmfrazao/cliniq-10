@@ -59,6 +59,21 @@ export default function TemplateForm({ clinicId, template }: Props) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  async function handleImageUpload(file: File) {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowed.includes(file.type)) { alert('Apenas JPG, PNG ou WEBP'); return }
+    if (file.size > 5 * 1024 * 1024) { alert('Imagem deve ter no máximo 5MB'); return }
+    setUploadingImage(true)
+    const ext = file.name.split('.').pop()
+    const path = `templates/${clinicId}/${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('documents').upload(path, file, { upsert: true })
+    if (error) { alert('Erro ao fazer upload: ' + error.message); setUploadingImage(false); return }
+    const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path)
+    setForm(f => ({ ...f, image_url: publicUrl }))
+    setImagePreview(publicUrl)
+    setUploadingImage(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
