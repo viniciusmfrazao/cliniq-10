@@ -253,20 +253,20 @@ export async function criarAgendamento(args: {
       profSource = 'unico';
     }
 
-    // Fallback final: profissional com horários cadastrados (aparece na agenda)
-    // Prefere quem tem role clínico — não usar só admin sem schedules
+    // Fallback final: usar SOMENTE profissional com agenda cadastrada
+    // Nunca usar admin/recepcionista que não atendem pacientes
     if (!matched) {
-      const clinical = professionals.find(p =>
-        ['doctor','dentist','biomedic','nurse','esthetician','physiotherapist','nutritionist','psychologist']
-          .includes(p.role || p.professional_role || '')
+      const CLINICAL = ['doctor','dentist','biomedic','nurse','esthetician',
+                        'physiotherapist','nutritionist','psychologist'];
+      // Só profissionais clínicos COM horários cadastrados
+      const withSchedule = professionals.filter(p =>
+        CLINICAL.includes(p.role || '') || CLINICAL.includes(p.professional_role || '')
       );
-      const owner = clinical || professionals.find(p =>
-        p.role === 'admin' || p.role === 'manager'
-      ) || professionals[0] || null;
-      if (owner) {
-        matched = owner;
-        profSource = 'fallback_owner';
+      if (withSchedule.length > 0) {
+        matched = withSchedule[0];
+        profSource = 'fallback_clinical';
       }
+      // Se nenhum encontrado, não agenda — escala para humano
     }
 
     if (matched) professionalId = matched.id;
