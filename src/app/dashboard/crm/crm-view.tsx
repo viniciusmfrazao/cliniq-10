@@ -1289,10 +1289,14 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
   const source = sources.find(s => s.id === lead.source)
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-[9999] md:p-4">
+      <div className="bg-white md:rounded-2xl w-full md:max-w-lg h-[92dvh] md:max-h-[90vh] md:h-auto overflow-hidden flex flex-col rounded-t-2xl">
         {/* Header */}
         <div className="p-4 border-b border-slate-100">
+          {/* Handle mobile */}
+          <div className="flex justify-center mb-2 md:hidden">
+            <div className="w-10 h-1 rounded-full bg-slate-300" />
+          </div>
           <div className="flex items-start justify-between">
             <div>
               <h2 className="font-bold text-slate-900 flex items-center gap-2">
@@ -1304,8 +1308,9 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
               </h2>
               <p className="text-sm text-slate-500">{source?.icon} {source?.label} • {new Date(lead.created_at).toLocaleDateString('pt-BR')}</p>
             </div>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600">
+            <button onClick={onClose} className="flex items-center gap-1 p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
               <Icon name="x" className="w-5 h-5" />
+              <span className="text-sm font-medium md:hidden">Fechar</span>
             </button>
           </div>
           
