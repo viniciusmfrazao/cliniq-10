@@ -154,8 +154,10 @@ const STAGE_COLORS: Record<string, string> = {
   cyan: 'bg-cyan-100 text-cyan-700',
 }
 
-// Calcular temperatura por regras quando não há Eva
+// Calcular temperatura — não exibir para clientes/convertidos
 function calcTemperatura(lead: Lead): 'hot' | 'warm' | 'cold' | null {
+  // Cliente ou convertido não tem temperatura — não faz sentido
+  if (lead.status === 'client' || lead.status === 'converted') return null
   if (lead.ai_priority) return lead.ai_priority as 'hot' | 'warm' | 'cold'
   // Regras automáticas por dias sem contato
   const ref = lead.last_whatsapp_at || lead.last_contact_at || lead.created_at
