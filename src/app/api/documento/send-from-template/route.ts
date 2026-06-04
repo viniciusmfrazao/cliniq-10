@@ -18,7 +18,10 @@ function generateToken(): string {
 }
 
 function fillVariables(content: string, vars: Record<string, string>): string {
-  return content.replace(/\{(\w+)\}/g, (_, key) => vars[key] || `{${key}}`)
+  // Suporta {{VARIAVEL}} (duplas chaves) e {variavel} (simples)
+  return content
+    .replace(/\{\{([\w_]+)\}\}/g, (_, key) => vars[key] ?? vars[key.toLowerCase()] ?? `{{${key}}}`)
+    .replace(/\{([\w_]+)\}/g, (_, key) => vars[key] ?? vars[key.toLowerCase()] ?? `{${key}}`)
 }
 
 export async function POST(req: NextRequest) {
@@ -46,7 +49,7 @@ export async function POST(req: NextRequest) {
 
   // Buscar paciente
   const { data: patient } = await svc
-    .from('patients').select('id, name, phone, clinic_id').eq('id', patientId).maybeSingle()
+    .from('patients').select('id, name, phone, cpf, email, clinic_id').eq('id', patientId).maybeSingle()
   if (!patient || patient.clinic_id !== clinicId) {
     return NextResponse.json({ ok: false, error: 'paciente_nao_encontrado' }, { status: 404 })
   }
@@ -73,6 +76,7 @@ export async function POST(req: NextRequest) {
   const today = new Date().toLocaleDateString('pt-BR')
   const firstName = patient.name.split(' ')[0]
   const vars: Record<string, string> = {
+    // Formato minúsculo {var}
     nome_paciente: patient.name,
     nome: patient.name,
     primeiro_nome: firstName,
@@ -81,6 +85,15 @@ export async function POST(req: NextRequest) {
     procedimento: procedureName,
     clinica: clinicName,
     nome_clinica: clinicName,
+    // Formato MAIÚSCULO {{VAR}} — padrão do editor de templates
+    PACIENTE_NOME: patient.name,
+    PACIENTE_CPF: patient.cpf || '',
+    PACIENTE_EMAIL: patient.email || '',
+    PACIENTE_TELEFONE: patient.phone || '',
+    DATA: today,
+    HORA: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+    CLINICA_NOME: clinicName,
+    PROCEDIMENTO: procedureName,
   }
   const filledContent = fillVariables(template.content || '', vars)
 
