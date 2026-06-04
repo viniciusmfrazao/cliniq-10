@@ -4,13 +4,11 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { startOfDayBR, startOfMonthBR } from '@/lib/datetime'
 
-export const metadata = {
-  title: 'Eva IA | Clinike',
-}
+export const dynamic = 'force-dynamic'
+export const metadata = { title: 'Eva IA | Clinike' }
 
 export default async function EvaPage() {
   const supabase = await createClient()
-  
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
@@ -21,185 +19,320 @@ export default async function EvaPage() {
     .single()
 
   if (!userData?.clinic_id) redirect('/login')
+  const clinicId = userData.clinic_id
 
-  // Verificar se módulo eva_ia está ativo para esta clínica
-  const { data: clinicEvaCheck } = await supabase.from('clinics').select('settings').eq('id', userData.clinic_id).single()
-  const activeModulesCheck: string[] = clinicEvaCheck?.settings?.active_modules || []
-  if (activeModulesCheck.length > 0 && !activeModulesCheck.includes('eva_ia')) {
+  // Verificar módulo eva_ia
+  const { data: clinicData } = await supabase
+    .from('clinics')
+    .select('settings, name')
+    .eq('id', clinicId)
+    .single()
+
+  const activeModules: string[] = clinicData?.settings?.active_modules || []
+  if (activeModules.length > 0 && !activeModules.includes('eva_ia')) {
     redirect('/dashboard')
   }
 
-  // Estatisticas: tudo no fuso de Brasilia (servidor roda em UTC)
   const startOfToday = startOfDayBR()
   const startOfMonth = startOfMonthBR()
 
-  const { count: totalConversations } = await supabase
-    .from('eva_conversations')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData.clinic_id)
+  // ── Métricas de ROI ────────────────────────────────────────────
+  const [
+    { count: conversasHoje },
+    { count: conversasMes },
+    { count: conversasTotal },
+    { count: leadsGeradosMes },
+    { count: leadsConvertidos },
+    { count: leadsTotal },
+    agendamentosEvaRes,
+    followupsRes,
+    recentConvRes,
+    evaStatusRes,
+  ] = await Promise.all([
+    // Conversas hoje
+    supabase.from('eva_conversations').select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId).gte('created_at', startOfToday),
+    // Conversas mês
+    supabase.from('eva_conversations').select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId).gte('created_at', startOfMonth),
+    // Conversas total
+    supabase.from('eva_conversations').select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId),
+    // Leads gerados este mês via WhatsApp
+    supabase.from('leads').select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId).eq('source', 'whatsapp')
+      .gte('created_at', startOfMonth),
+    // Leads convertidos (total histórico)
+    supabase.from('leads').select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId).eq('source', 'whatsapp')
+      .in('status', ['scheduled', 'converted', 'client']),
+    // Leads whatsapp total
+    supabase.from('leads').select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId).eq('source', 'whatsapp'),
+    // Agendamentos gerados por leads da Eva este mês
+    supabase.rpc('count_eva_appointments', {
+      p_clinic_id: clinicId,
+      p_since: startOfMonth,
+    }).maybeSingle(),
+    // Follow-ups enviados este mês
+    supabase.from('leads').select('eva_followup_count')
+      .eq('clinic_id', clinicId).eq('source', 'whatsapp')
+      .gte('updated_at', startOfMonth),
+    // Conversas recentes
+    supabase.from('eva_conversations')
+      .select('id, phone, customer_name, updated_at')
+      .eq('clinic_id', clinicId)
+      .order('updated_at', { ascending: false })
+      .limit(8),
+    // Status Eva (auto_reply_enabled)
+    supabase.from('clinic_whatsapp')
+      .select('auto_reply_enabled, instance_name, phone_number, status')
+      .eq('clinic_id', clinicId)
+      .eq('auto_reply_enabled', true)
+      .limit(1),
+  ])
 
-  const { count: todayConversations } = await supabase
-    .from('eva_conversations')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData.clinic_id)
-    .gte('created_at', startOfToday)
+  // Calcular taxa de conversão
+  const taxaConversao = leadsTotal && leadsTotal > 0
+    ? Math.round(((leadsConvertidos || 0) / leadsTotal) * 100)
+    : 0
 
-  const { count: monthConversations } = await supabase
-    .from('eva_conversations')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData.clinic_id)
-    .gte('created_at', startOfMonth)
+  // Follow-ups enviados (soma dos contadores)
+  const followupsSent = (followupsRes.data || [])
+    .reduce((sum: number, l: any) => sum + (l.eva_followup_count || 0), 0)
 
-  // Buscar leads gerados pela Eva
-  const { count: leadsFromEva } = await supabase
-    .from('leads')
-    .select('*', { count: 'exact', head: true })
-    .eq('clinic_id', userData.clinic_id)
-    .eq('source', 'whatsapp')
+  // Agendamentos Eva mês
+  const agendamentosEva = Number((agendamentosEvaRes as any)?.data?.count ?? 0)
 
-  // Buscar últimas conversas
-  const { data: recentConversations } = await supabase
-    .from('eva_conversations')
-    .select('*')
-    .eq('clinic_id', userData.clinic_id)
-    .order('updated_at', { ascending: false })
-    .limit(10)
+  const evaOnline = (evaStatusRes.data?.length ?? 0) > 0
+
+  const recentConversations = recentConvRes.data || []
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-4xl mx-auto space-y-6">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <span className="text-2xl">✨</span> Eva IA
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            ✨ Eva IA
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              evaOnline
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-slate-100 text-slate-500'
+            }`}>
+              {evaOnline ? '● Ativa' : '○ Inativa'}
+            </span>
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">Sua assistente virtual de atendimento</p>
         </div>
-        <Link 
-          href="/dashboard/config/eva" 
-          className="btn-secondary px-4 py-2 flex items-center gap-2"
-        >
+        <Link href="/dashboard/config/eva" className="btn-secondary px-4 py-2 flex items-center gap-2 text-sm">
           <Icon name="settings" className="w-4 h-4" />
           Configurar
         </Link>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="card p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
-              <Icon name="message" className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">{todayConversations || 0}</p>
-          <p className="text-xs text-slate-500">Conversas hoje</p>
-        </div>
-
-        <div className="card p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-              <Icon name="calendar" className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">{monthConversations || 0}</p>
-          <p className="text-xs text-slate-500">Este mês</p>
-        </div>
-
-        <div className="card p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
-              <Icon name="users" className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">{totalConversations || 0}</p>
-          <p className="text-xs text-slate-500">Total conversas</p>
-        </div>
-
-        <div className="card p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
-              <Icon name="target" className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">{leadsFromEva || 0}</p>
-          <p className="text-xs text-slate-500">Leads gerados</p>
+      {/* ROI — Conversão */}
+      <div>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+          Conversas
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard
+            value={conversasHoje || 0}
+            label="Hoje"
+            icon="message"
+            color="violet"
+          />
+          <StatCard
+            value={conversasMes || 0}
+            label="Este mês"
+            icon="calendar"
+            color="blue"
+          />
+          <StatCard
+            value={conversasTotal || 0}
+            label="Total histórico"
+            icon="users"
+            color="slate"
+          />
+          <StatCard
+            value={followupsSent}
+            label="Follow-ups (mês)"
+            icon="bell"
+            color="amber"
+          />
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
-        <Link 
-          href="/dashboard/whatsapp" 
-          className="card p-5 hover:shadow-md transition-shadow flex items-center gap-4"
-        >
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
-            <Icon name="message" className="w-6 h-6 text-white" />
+      {/* ROI — Leads e Agendamentos */}
+      <div>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+          Conversão em negócios
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard
+            value={leadsGeradosMes || 0}
+            label="Leads gerados (mês)"
+            icon="target"
+            color="emerald"
+          />
+          <StatCard
+            value={agendamentosEva}
+            label="Agendamentos (mês)"
+            icon="calendar"
+            color="green"
+          />
+          <StatCard
+            value={leadsConvertidos || 0}
+            label="Convertidos (total)"
+            icon="userCheck"
+            color="teal"
+          />
+          <div className="rounded-xl p-4 bg-violet-50 dark:bg-violet-900/20">
+            <div className="w-8 h-8 rounded-lg bg-violet-500 flex items-center justify-center mb-2">
+              <Icon name="trendingUp" className="w-4 h-4 text-white" />
+            </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{taxaConversao}%</p>
+            <p className="text-xs text-slate-500 mt-0.5">Taxa de conversão</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">leads → clientes</p>
           </div>
-          <div>
-            <h3 className="font-semibold text-slate-900">WhatsApp</h3>
-            <p className="text-sm text-slate-500">Ver conversas e responder</p>
-          </div>
-          <Icon name="chevronRight" className="w-5 h-5 text-slate-300 ml-auto" />
-        </Link>
+        </div>
+      </div>
 
-        <Link 
-          href="/dashboard/crm" 
-          className="card p-5 hover:shadow-md transition-shadow flex items-center gap-4"
-        >
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
-            <Icon name="target" className="w-6 h-6 text-white" />
+      {/* Funil visual */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Funil Eva este mês</h3>
+        <div className="space-y-2">
+          <FunnelBar label="Conversas" value={conversasMes || 0} max={conversasMes || 1} color="bg-violet-500" />
+          <FunnelBar label="Leads gerados" value={leadsGeradosMes || 0} max={conversasMes || 1} color="bg-blue-500" />
+          <FunnelBar label="Agendamentos" value={agendamentosEva} max={conversasMes || 1} color="bg-emerald-500" />
+        </div>
+        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center gap-2 text-xs text-slate-500">
+          <Icon name="info" className="w-3.5 h-3.5 flex-shrink-0" />
+          Agendamentos de pacientes que chegaram via WhatsApp/Eva
+        </div>
+      </div>
+
+      {/* Ações rápidas */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Link href="/dashboard/whatsapp" className="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center flex-shrink-0">
+            <Icon name="message" className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h3 className="font-semibold text-slate-900">CRM</h3>
-            <p className="text-sm text-slate-500">Gerenciar leads e funil</p>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-slate-900 dark:text-white text-sm">WhatsApp</h3>
+            <p className="text-xs text-slate-500 truncate">Ver e responder conversas</p>
           </div>
-          <Icon name="chevronRight" className="w-5 h-5 text-slate-300 ml-auto" />
+          <Icon name="chevronRight" className="w-4 h-4 text-slate-300 ml-auto flex-shrink-0" />
+        </Link>
+        <Link href="/dashboard/crm" className="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+            <Icon name="target" className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-slate-900 dark:text-white text-sm">CRM</h3>
+            <p className="text-xs text-slate-500 truncate">Gerenciar leads e funil</p>
+          </div>
+          <Icon name="chevronRight" className="w-4 h-4 text-slate-300 ml-auto flex-shrink-0" />
         </Link>
       </div>
 
-      {/* Recent Conversations */}
-      <div className="card">
-        <div className="p-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-900">Conversas recentes</h2>
+      {/* Conversas recentes */}
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-900 dark:text-white text-sm">Conversas recentes</h2>
+          <Link href="/dashboard/whatsapp" className="text-xs text-violet-600 hover:underline">Ver todas →</Link>
         </div>
-        
-        {!recentConversations || recentConversations.length === 0 ? (
+        {recentConversations.length === 0 ? (
           <div className="p-8 text-center">
-            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Icon name="message" className="w-6 h-6 text-slate-400" />
-            </div>
             <p className="text-sm text-slate-500">Nenhuma conversa ainda</p>
-            <p className="text-xs text-slate-400 mt-1">As conversas da Eva aparecerão aqui</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-slate-50 dark:divide-slate-700">
             {recentConversations.map((conv: any) => (
               <Link
                 key={conv.id}
                 href={`/dashboard/whatsapp?phone=${encodeURIComponent(conv.phone)}`}
-                className="block p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-violet-400 to-purple-400 rounded-full flex items-center justify-center">
-                      <span className="text-white font-semibold text-sm">
-                        {conv.customer_name?.charAt(0)?.toUpperCase() || '?'}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-900">{conv.customer_name || conv.phone}</p>
-                      <p className="text-xs text-slate-500">{conv.phone}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-slate-400">
-                    {new Date(conv.updated_at).toLocaleDateString('pt-BR')}
+                <div className="w-9 h-9 bg-gradient-to-br from-violet-400 to-purple-400 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-semibold text-sm">
+                    {conv.customer_name?.charAt(0)?.toUpperCase() || '?'}
                   </span>
                 </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                    {conv.customer_name || conv.phone}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">{conv.phone}</p>
+                </div>
+                <span className="text-xs text-slate-400 flex-shrink-0">
+                  {new Date(conv.updated_at).toLocaleDateString('pt-BR')}
+                </span>
               </Link>
             ))}
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function StatCard({ value, label, icon, color }: {
+  value: number
+  label: string
+  icon: string
+  color: string
+}) {
+  const colors: Record<string, string> = {
+    violet: 'bg-violet-500',
+    blue:   'bg-blue-500',
+    slate:  'bg-slate-500',
+    amber:  'bg-amber-500',
+    emerald:'bg-emerald-500',
+    green:  'bg-green-500',
+    teal:   'bg-teal-500',
+  }
+  const bgs: Record<string, string> = {
+    violet: 'bg-violet-50 dark:bg-violet-900/20',
+    blue:   'bg-blue-50 dark:bg-blue-900/20',
+    slate:  'bg-slate-50 dark:bg-slate-800',
+    amber:  'bg-amber-50 dark:bg-amber-900/20',
+    emerald:'bg-emerald-50 dark:bg-emerald-900/20',
+    green:  'bg-green-50 dark:bg-green-900/20',
+    teal:   'bg-teal-50 dark:bg-teal-900/20',
+  }
+  return (
+    <div className={`rounded-xl p-4 ${bgs[color] || bgs.slate}`}>
+      <div className={`w-8 h-8 rounded-lg ${colors[color] || colors.slate} flex items-center justify-center mb-2`}>
+        <Icon name={icon} className="w-4 h-4 text-white" />
+      </div>
+      <p className="text-2xl font-bold text-slate-900 dark:text-white">{value.toLocaleString('pt-BR')}</p>
+      <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+    </div>
+  )
+}
+
+function FunnelBar({ label, value, max, color }: {
+  label: string
+  value: number
+  max: number
+  color: string
+}) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-slate-500 w-28 flex-shrink-0">{label}</span>
+      <div className="flex-1 h-6 bg-slate-100 dark:bg-slate-700 rounded-lg overflow-hidden">
+        <div
+          className={`h-full ${color} rounded-lg transition-all flex items-center justify-end pr-2`}
+          style={{ width: `${Math.max(pct, 4)}%` }}
+        >
+          <span className="text-[10px] text-white font-bold">{value}</span>
+        </div>
+      </div>
+      <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
     </div>
   )
 }
