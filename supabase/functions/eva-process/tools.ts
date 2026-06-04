@@ -253,10 +253,15 @@ export async function criarAgendamento(args: {
       profSource = 'unico';
     }
 
-    // Fallback final: usar o dono/admin da clínica (primeiro role=admin ou doctor)
+    // Fallback final: profissional com horários cadastrados (aparece na agenda)
+    // Prefere quem tem role clínico — não usar só admin sem schedules
     if (!matched) {
-      const owner = professionals.find(p =>
-        p.role === 'admin' || p.role === 'doctor' || p.role === 'dentist' || p.role === 'biomedic'
+      const clinical = professionals.find(p =>
+        ['doctor','dentist','biomedic','nurse','esthetician','physiotherapist','nutritionist','psychologist']
+          .includes(p.role || p.professional_role || '')
+      );
+      const owner = clinical || professionals.find(p =>
+        p.role === 'admin' || p.role === 'manager'
       ) || professionals[0] || null;
       if (owner) {
         matched = owner;
