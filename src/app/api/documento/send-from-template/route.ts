@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
       `Qualquer dúvida é só chamar! 🤍`
 
   // 1. Enviar TEXTO primeiro
-  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'manual' })
+  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'any' })
 
   // 2. Enviar imagem depois (se existir)
   if (template.image_url) {

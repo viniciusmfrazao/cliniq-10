@@ -109,15 +109,19 @@ export default function DocumentosTab({ patientId, patientName, patientPhone, cl
       const data = await res.json()
       if (data.ok) {
         toast.success(`Documento enviado para ${patientName.split(' ')[0]}!`, {
-          description: 'Mensagem enviada via WhatsApp da clínica.',
+          description: 'Mensagem enviada via WhatsApp.',
         })
         loadDocs()
       } else if (data.link) {
+        // Documento criado mas WhatsApp com falha — copia link e avisa
         await navigator.clipboard.writeText(data.link).catch(() => {})
-        toast.success('Link copiado', { description: 'WhatsApp indisponível. Cole e envie manualmente.' })
+        toast.success('Documento criado! Link copiado.', {
+          description: 'Cole o link no WhatsApp para enviar manualmente.',
+          duration: 8000,
+        })
         loadDocs()
       } else {
-        toast.error('Erro ao enviar', { description: data.error })
+        toast.error('Erro ao criar documento', { description: data.error })
       }
     } catch {
       toast.error('Erro de rede, tente novamente')
