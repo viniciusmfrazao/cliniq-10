@@ -160,29 +160,29 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Clínicas</h1>
-          <p className="text-slate-500 dark:text-slate-400">{clinics.length} cadastradas{alertCount > 0 && <span className="ml-2 text-red-600 font-semibold animate-pulse">⚠️ {alertCount} com vencimento próximo</span>}</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white">Clínicas</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{clinics.length} cadastradas{alertCount > 0 && <span className="ml-2 text-red-600 font-semibold animate-pulse">⚠️ {alertCount} vencendo</span>}</p>
         </div>
-        <Link href="/admin/clinics/new" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm">
-          + Nova Clínica
+        <Link href="/admin/clinics/new" className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium transition flex items-center gap-1.5 text-sm">
+          + <span className="hidden sm:inline">Nova</span> Clínica
         </Link>
       </div>
 
       {/* Filtros */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row gap-2">
         <input
           type="text"
           placeholder="Buscar clínica ou email..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none"
+          className="w-full sm:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none"
         >
           <option value="">Todos os status</option>
           <option value="trial">Em trial</option>
@@ -201,7 +201,7 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
           <div key={clinic.id} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               {/* Coluna principal */}
-              <div className="flex-1 min-w-[200px]">
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-bold text-slate-900 dark:text-white">{clinic.name}</h3>
                   <StatusBadge clinic={clinic} />
