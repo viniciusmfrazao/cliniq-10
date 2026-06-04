@@ -14,6 +14,7 @@ type Props = {
     content: string
     category: string
     theme_color?: string
+    image_url?: string | null
   }
 }
 
@@ -39,11 +40,14 @@ const COLOR_PRESETS = [
 
 export default function TemplateForm({ clinicId, template }: Props) {
   const router = useRouter()
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [imagePreview, setImagePreview] = useState<string>(template?.image_url || '')
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     name: template?.name || '',
     description: template?.description || '',
     content: template?.content || '',
+    image_url: template?.image_url || '' as string,
     category: template?.category || 'termo',
     theme_color: template?.theme_color || '#b89a6a',
   })
@@ -72,6 +76,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
       const dataToSave = {
         ...form,
         content: form.category === 'anamnese' ? 'ANAMNESE_FORM' : form.content,
+        image_url: form.image_url || null,
       }
       
       if (template) {
@@ -213,6 +218,47 @@ export default function TemplateForm({ clinicId, template }: Props) {
               placeholder="Digite o conteudo do documento aqui..."
               required
             />
+
+            {/* Upload de imagem */}
+            <div className="mt-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Imagem do documento <span className="text-xs text-slate-400 font-normal">(opcional — enviada junto com o texto)</span>
+              </label>
+              {imagePreview ? (
+                <div className="relative inline-block">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="h-32 rounded-xl border border-slate-200 object-contain bg-slate-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setImagePreview(''); setForm(f => ({ ...f, image_url: '' })) }}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-3 px-4 py-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-violet-400 hover:bg-violet-50 transition-colors">
+                  {uploadingImage ? (
+                    <span className="text-sm text-slate-500">Enviando...</span>
+                  ) : (
+                    <>
+                      <Icon name="image" className="w-5 h-5 text-slate-400" />
+                      <span className="text-sm text-slate-500">Clique para adicionar uma imagem (JPG, PNG, WEBP — máx. 5MB)</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={uploadingImage}
+                    onChange={e => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0]) }}
+                  />
+                </label>
+              )}
+            </div>
           </div>
         ) : (
           <div className="rounded-xl p-6 border-2 border-dashed" style={{ borderColor: form.theme_color, background: `${form.theme_color}10` }}>

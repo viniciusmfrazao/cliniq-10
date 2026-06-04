@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
   // Buscar template
   const { data: template } = await svc
-    .from('document_templates').select('*').eq('id', templateId).eq('clinic_id', clinicId).maybeSingle()
+    .from('document_templates').select('*, image_url').eq('id', templateId).eq('clinic_id', clinicId).maybeSingle()
   if (!template) {
     return NextResponse.json({ ok: false, error: 'template_nao_encontrado' }, { status: 404 })
   }
@@ -123,6 +123,43 @@ export async function POST(req: NextRequest) {
     `Antes do seu atendimento na ${clinicName}, por favor leia e assine o documento *"${template.name}"*:\n\n` +
     `${link}\n\n` +
     `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
+
+  // Enviar imagem primeiro se o template tiver
+  if (template.image_url) {
+    try {
+      const { data: waData } = await svc
+        .from('clinic_whatsapp')
+        .select('instance_name')
+        .eq('clinic_id', clinicId)
+        .eq('status', 'connected')
+        .limit(1)
+        .maybeSingle()
+
+      const { data: evSettings } = await svc
+        .from('app_settings')
+        .select('key, value')
+        .in('key', ['evolution_url', 'evolution_master_key'])
+
+      const evUrl = evSettings?.find((s: any) => s.key === 'evolution_url')?.value
+      const evKey = evSettings?.find((s: any) => s.key === 'evolution_master_key')?.value
+      const instance = waData?.instance_name
+
+      if (evUrl && evKey && instance) {
+        await fetch(`${evUrl}/message/sendMedia/${instance}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': evKey },
+          body: JSON.stringify({
+            number: phone,
+            mediatype: 'image',
+            media: template.image_url,
+            caption: template.name,
+          }),
+        })
+      }
+    } catch (e) {
+      console.error('Erro ao enviar imagem do template:', e)
+    }
+  }
 
   const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'manual' })
 
