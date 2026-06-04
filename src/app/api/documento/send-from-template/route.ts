@@ -133,15 +133,17 @@ export async function POST(req: NextRequest) {
 
   // Mensagem: com link de assinatura ou simples
   const requiresSignature = template.requires_signature !== false
+  const hasImage = !!(template as any).image_url
   const message = requiresSignature
     ? `Olá ${firstName}! 👋\n\n` +
       `Antes do seu atendimento na ${clinicName}, por favor leia e assine o documento *"${template.name}"*:\n\n` +
       `${link}\n\n` +
       `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
-    : `Olá ${firstName}! 👋\n\n` +
-      `Segue o documento *"${template.name}"* da ${clinicName}:\n\n` +
-      `${filledContent}\n\n` +
-      `Qualquer dúvida é só chamar! 🤍`
+    : hasImage
+      // Se tem imagem: mensagem curta, conteúdo vai na imagem
+      ? `Olá ${firstName}! 👋\n\nSegue o *${template.name}* da ${clinicName}. Qualquer dúvida é só chamar! 🤍`
+      // Sem imagem: manda o conteúdo como texto
+      : `Olá ${firstName}! 👋\n\n*${template.name}*\n\n${filledContent}\n\nQualquer dúvida é só chamar! 🤍`
 
   // 1. Enviar TEXTO primeiro
   const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'any' })
@@ -171,7 +173,7 @@ export async function POST(req: NextRequest) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': evKey },
           body: JSON.stringify({
-            number: phone,
+            number: phone.replace(/\D/g, '').replace(/^(?!55)/, '55'),
             mediatype: 'image',
             media: template.image_url,
             caption: template.name,
