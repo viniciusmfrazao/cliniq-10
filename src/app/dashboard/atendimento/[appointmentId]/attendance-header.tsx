@@ -247,10 +247,10 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
     <div className="sticky top-0 z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-slate-200 shadow-sm">
       {/* Banner — atendimento não iniciado */}
       {showStartBanner && (
-        <div className="w-full bg-amber-400 px-4 py-2 flex items-center justify-between gap-3">
+        <div className="w-full bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-amber-900 text-sm">⚡</span>
-            <p className="text-amber-900 text-sm font-medium truncate">
+            <span className="text-violet-500 text-sm">⚡</span>
+            <p className="text-violet-700 text-sm font-medium truncate">
               <span className="hidden sm:inline">Atendimento ainda não iniciado — </span>
               <span className="sm:hidden">Não iniciado — </span>
             </p>
@@ -258,7 +258,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
           <button
             onClick={startAttendance}
             disabled={loading}
-            className="flex-shrink-0 bg-amber-900 hover:bg-amber-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap disabled:opacity-60"
+            className="flex-shrink-0 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap disabled:opacity-60"
           >
             {loading ? 'Iniciando...' : 'Iniciar agora'}
           </button>
