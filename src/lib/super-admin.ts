@@ -69,31 +69,52 @@ export async function getSuperAdminData() {
 }
 
 export async function getAdminMetrics() {
-  const serviceSupabase = createServiceClient()
-  
-  // Get metrics directly since admin_metrics view might not exist
-  const [clinicsResult, usersResult, patientsResult, appointmentsResult, leadsResult] = await Promise.all([
-    serviceSupabase.from('clinics').select('id, trial_ends_at', { count: 'exact', head: true }).is('deleted_at', null),
-    serviceSupabase.from('users').select('id', { count: 'exact', head: true }).eq('active', true),
-    serviceSupabase.from('patients').select('id', { count: 'exact', head: true }),
-    serviceSupabase.from('appointments').select('id', { count: 'exact', head: true }).gte('start_time', new Date().toISOString().split('T')[0]),
-    serviceSupabase.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+  const svc = createServiceClient()
+
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  const todayStr = now.toISOString().split('T')[0]
+  const in7days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+
+  const [
+    clinicsRes, usersRes, patientsRes,
+    apptTodayRes, apptMonthRes, leadsMonthRes,
+    evaConvMonthRes, trialRes, trialSoonRes,
+    waActiveRes, evaActiveRes, newClinicsRes,
+  ] = await Promise.all([
+    svc.from('clinics').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+    svc.from('users').select('id', { count: 'exact', head: true }).eq('active', true),
+    svc.from('patients').select('id', { count: 'exact', head: true }),
+    svc.from('appointments').select('id', { count: 'exact', head: true }).gte('start_time', todayStr),
+    svc.from('appointments').select('id', { count: 'exact', head: true }).gte('start_time', startOfMonth),
+    svc.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', startOfMonth),
+    svc.from('eva_conversations').select('id', { count: 'exact', head: true }).gte('created_at', startOfMonth),
+    // Trial ativo
+    svc.from('clinics').select('id', { count: 'exact', head: true }).is('deleted_at', null).gt('trial_ends_at', now.toISOString()),
+    // Trial expirando em 7 dias
+    svc.from('clinics').select('id, name, trial_ends_at').is('deleted_at', null)
+      .gt('trial_ends_at', now.toISOString()).lt('trial_ends_at', in7days),
+    // WhatsApp conectado
+    svc.from('clinic_whatsapp').select('clinic_id', { count: 'exact', head: true }).eq('status', 'connected'),
+    // Eva ativa
+    svc.from('clinic_whatsapp').select('clinic_id', { count: 'exact', head: true }).eq('auto_reply_enabled', true),
+    // Novas clínicas este mês
+    svc.from('clinics').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', startOfMonth),
   ])
 
-  // Count clinics on trial
-  const { data: trialClinics } = await serviceSupabase
-    .from('clinics')
-    .select('id')
-    .is('deleted_at', null)
-    .gt('trial_ends_at', new Date().toISOString())
-
   return {
-    total_clinics: clinicsResult.count || 0,
-    clinics_on_trial: trialClinics?.length || 0,
-    total_users: usersResult.count || 0,
-    total_patients: patientsResult.count || 0,
-    appointments_today: appointmentsResult.count || 0,
-    leads_this_month: leadsResult.count || 0
+    total_clinics: clinicsRes.count || 0,
+    total_users: usersRes.count || 0,
+    total_patients: patientsRes.count || 0,
+    appointments_today: apptTodayRes.count || 0,
+    appointments_month: apptMonthRes.count || 0,
+    leads_this_month: leadsMonthRes.count || 0,
+    eva_conversations_month: evaConvMonthRes.count || 0,
+    clinics_on_trial: trialRes.count || 0,
+    trial_expiring_soon: trialSoonRes.data || [],
+    whatsapp_connected: waActiveRes.count || 0,
+    eva_active: evaActiveRes.count || 0,
+    new_clinics_month: newClinicsRes.count || 0,
   }
 }
 
