@@ -118,13 +118,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: 'link_only', link, document_id: doc.id })
   }
 
-  const message =
-    `Olá ${firstName}! 👋\n\n` +
-    `Antes do seu atendimento na ${clinicName}, por favor leia e assine o documento *"${template.name}"*:\n\n` +
-    `${link}\n\n` +
-    `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
+  // Mensagem: com link de assinatura ou simples
+  const requiresSignature = template.requires_signature !== false
+  const message = requiresSignature
+    ? `Olá ${firstName}! 👋\n\n` +
+      `Antes do seu atendimento na ${clinicName}, por favor leia e assine o documento *"${template.name}"*:\n\n` +
+      `${link}\n\n` +
+      `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
+    : `Olá ${firstName}! 👋\n\n` +
+      `Segue o documento *"${template.name}"* da ${clinicName}:\n\n` +
+      `${filledContent}\n\n` +
+      `Qualquer dúvida é só chamar! 🤍`
 
-  // Enviar imagem primeiro se o template tiver
+  // 1. Enviar TEXTO primeiro
+  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'manual' })
+
+  // 2. Enviar imagem depois (se existir)
   if (template.image_url) {
     try {
       const { data: waData } = await svc
@@ -161,8 +170,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'manual' })
-
   // Marcar como enviado
   await svc.from('documents_sent').update({
     whatsapp_sent_at: new Date().toISOString(),
@@ -173,5 +180,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, link, document_id: doc.id, error: result.error })
   }
 
-  return NextResponse.json({ ok: true, sent: 'whatsapp', link, document_id: doc.id })
+  return NextResponse.json({ ok: true, sent: 'whatsapp', link: requiresSignature ? link : null, document_id: doc.id })
 }

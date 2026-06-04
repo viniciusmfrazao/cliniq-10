@@ -15,6 +15,7 @@ type Props = {
     category: string
     theme_color?: string
     image_url?: string | null
+    requires_signature?: boolean
   }
 }
 
@@ -48,6 +49,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
     description: template?.description || '',
     content: template?.content || '',
     image_url: template?.image_url || '' as string,
+    requires_signature: template?.requires_signature !== false,
     category: template?.category || 'termo',
     theme_color: template?.theme_color || '#b89a6a',
   })
@@ -77,6 +79,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
         ...form,
         content: form.category === 'anamnese' ? 'ANAMNESE_FORM' : form.content,
         image_url: form.image_url || null,
+        requires_signature: form.requires_signature,
       }
       
       if (template) {
@@ -218,6 +221,29 @@ export default function TemplateForm({ clinicId, template }: Props) {
               placeholder="Digite o conteudo do documento aqui..."
               required
             />
+
+            {/* Toggle — pedir assinatura */}
+            <div className="mt-4 flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">Pedir assinatura</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {form.requires_signature
+                    ? 'Paciente receberá um link para assinar digitalmente'
+                    : 'Documento enviado como mensagem simples, sem assinatura'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, requires_signature: !f.requires_signature }))}
+                className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${
+                  form.requires_signature ? 'bg-violet-600' : 'bg-slate-300'
+                }`}
+              >
+                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  form.requires_signature ? 'translate-x-6' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
 
             {/* Upload de imagem */}
             <div className="mt-4">
