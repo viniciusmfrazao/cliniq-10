@@ -47,6 +47,8 @@ export default async function EvaPage() {
     agendamentosEvaRes,
     followupsRes,
     recentConvRes,
+    mensagensProcessadasRes,
+    bookingsTotalRes,
     evaStatusRes,
   ] = await Promise.all([
     // Conversas hoje
@@ -69,21 +71,42 @@ export default async function EvaPage() {
     // Leads whatsapp total
     supabase.from('leads').select('*', { count: 'exact', head: true })
       .eq('clinic_id', clinicId).eq('source', 'whatsapp'),
-    // Agendamentos gerados por leads da Eva este mês
-    supabase.rpc('count_eva_appointments', {
-      p_clinic_id: clinicId,
-      p_since: startOfMonth,
-    }).maybeSingle(),
-    // Follow-ups enviados este mês
-    supabase.from('leads').select('eva_followup_count')
-      .eq('clinic_id', clinicId).eq('source', 'whatsapp')
-      .gte('updated_at', startOfMonth),
+    // Agendamentos feitos PELA EVA no chat este mês (mais preciso)
+    supabase.from('eva_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .eq('event', 'booking')
+      .eq('status', 'ok')
+      .gte('created_at', startOfMonth),
+    // Follow-ups enviados este mês — via eva_logs (preciso)
+    supabase.from('eva_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .eq('source', 'cron-followup')
+      .eq('event', 'followup')
+      .eq('status', 'ok')
+      .gte('created_at', startOfMonth),
     // Conversas recentes
     supabase.from('eva_conversations')
       .select('id, phone, customer_name, updated_at')
       .eq('clinic_id', clinicId)
       .order('updated_at', { ascending: false })
       .limit(8),
+    // Mensagens processadas este mês
+    supabase.from('eva_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .eq('source', 'eva-process')
+      .eq('event', 'processed')
+      .eq('status', 'ok')
+      .gte('created_at', startOfMonth),
+    // Agendamentos realizados (completed) de pacientes Eva este mês
+    supabase.from('eva_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .eq('event', 'booking')
+      .gte('created_at', startOfMonth),
+
     // Status Eva (auto_reply_enabled)
     supabase.from('clinic_whatsapp')
       .select('auto_reply_enabled, instance_name, phone_number, status')
@@ -97,13 +120,16 @@ export default async function EvaPage() {
     ? Math.round(((leadsConvertidos || 0) / leadsTotal) * 100)
     : 0
 
-  // Follow-ups enviados (soma dos contadores)
-  const followupsSent = (followupsRes.data || [])
-    .reduce((sum: number, l: any) => sum + (l.eva_followup_count || 0), 0)
+  // Follow-ups enviados este mês (via eva_logs — preciso)
+  const followupsSent = followupsRes.count || 0
 
   // Agendamentos Eva mês
-  const agendamentosEva = Number((agendamentosEvaRes as any)?.data?.count ?? 0)
+  const agendamentosEva = agendamentosEvaRes.count || 0
 
+  const mensagensProcessadas = mensagensProcessadasRes.count || 0
+  const taxaBookingChat = mensagensProcessadas > 0
+    ? Math.round((agendamentosEva / mensagensProcessadas) * 100)
+    : 0
   const evaOnline = (evaStatusRes.data?.length ?? 0) > 0
 
   const recentConversations = recentConvRes.data || []
@@ -162,6 +188,12 @@ export default async function EvaPage() {
             icon="bell"
             color="amber"
           />
+          <StatCard
+            value={mensagensProcessadas}
+            label="Msgs processadas"
+            icon="zap"
+            color="teal"
+          />
         </div>
       </div>
 
@@ -210,7 +242,7 @@ export default async function EvaPage() {
         </div>
         <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center gap-2 text-xs text-slate-500">
           <Icon name="info" className="w-3.5 h-3.5 flex-shrink-0" />
-          Agendamentos de pacientes que chegaram via WhatsApp/Eva
+          Agendamentos criados pela Eva no chat · Taxa de booking: {taxaBookingChat}% das msgs processadas
         </div>
       </div>
 
