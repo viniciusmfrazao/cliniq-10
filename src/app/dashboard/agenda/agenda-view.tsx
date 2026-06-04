@@ -543,6 +543,21 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 </button>
               )}
 
+              {/* Registrar Pagamento */}
+              {!isCancelled && (
+                <button
+                  onClick={() => { setShowPreview(false); setShowPayment(true) }}
+                  className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold text-sm transition-colors ${
+                    apt.payment_registered_at
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                  }`}
+                >
+                  <Icon name="dollarSign" className="w-4 h-4" />
+                  {apt.payment_registered_at ? 'Pagamento registrado ✓' : 'Registrar Pagamento'}
+                </button>
+              )}
+
               <Link
                 href={`/dashboard/atendimento/${apt.id}`}
                 className="flex items-center justify-center gap-2 w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold text-sm transition-colors"
@@ -848,8 +863,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
               </Link>
             </div>
 
-            {/* Botão Registrar Pagamento — só para atendimentos realizados */}
-            {apt.status === 'completed' && !isCancelled && (
+            {/* Botão Registrar Pagamento */}
+            {!isCancelled && (
               <button
                 onClick={(e) => {
                   e.preventDefault()
