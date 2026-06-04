@@ -32,6 +32,7 @@ type Lead = {
   // WhatsApp
   whatsapp_chat_id: string | null
   last_whatsapp_at: string | null
+  patient_replied_at: string | null
   whatsapp_opt_in: boolean
   // Eva IA
   ai_score: number | null
@@ -155,24 +156,24 @@ const STAGE_COLORS: Record<string, string> = {
 }
 
 // Calcular temperatura do lead
-// Regra: primeira interação SEMPRE fria (tráfego pago chega com msg pré-pronta)
-// A temperatura só sobe com engajamento real confirmado pela Eva
+// ❄️ Frio:  lead chegou mas ainda não respondeu à Eva
+// ☀️ Morno: lead respondeu à Eva (patient_replied_at preenchido)
+// 🔥 Quente: lead perguntou preço/horário/disponibilidade (ai_priority='hot')
 function calcTemperatura(lead: Lead): 'hot' | 'warm' | 'cold' | null {
   // Cliente ou convertido não tem temperatura
   if (lead.status === 'client' || lead.status === 'converted') return null
 
-  // Novo lead = sempre frio, independente de quando chegou
-  // (tráfego pago chega com mensagem pré-pronta do marketing)
-  if (lead.status === 'new') return 'cold'
-
-  // ai_priority definida pela Eva após engajamento real (>= 4 mensagens)
-  if (lead.ai_priority) return lead.ai_priority as 'hot' | 'warm' | 'cold'
-
-  // Agendado = quente (interesse confirmado)
+  // Agendado = sempre quente (interesse máximo confirmado)
   if (lead.status === 'scheduled') return 'hot'
 
-  // Contacted = morno (Eva interagiu mas sem confirmação de interesse)
-  return 'warm'
+  // ai_priority='hot' definida pela Eva = perguntou preço/horário
+  if (lead.ai_priority === 'hot') return 'hot'
+
+  // Lead respondeu à Eva = morno
+  if (lead.patient_replied_at) return 'warm'
+
+  // Lead chegou mas ainda não respondeu = frio
+  return 'cold'
 }
 
 const AI_PRIORITY_CONFIG = {

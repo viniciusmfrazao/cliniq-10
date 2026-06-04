@@ -720,6 +720,11 @@ Deno.serve(async (req) => {
           status: 'contacted',
           last_whatsapp_at: new Date().toISOString(),
           last_contact_at: new Date().toISOString(),
+          // Setar patient_replied_at se o lead tem histórico (Eva já respondeu antes)
+          // Isso indica que o lead RESPONDEU à Eva, não é só a primeira msg do marketing
+          ...(ctx.history && ctx.history.length > 1 && !ctx.lead?.patient_replied_at
+            ? { patient_replied_at: new Date().toISOString() }
+            : {}),
         }),
       }).catch(() => {});
       ctx.lead.status = 'contacted';
