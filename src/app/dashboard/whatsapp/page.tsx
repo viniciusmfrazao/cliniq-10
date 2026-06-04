@@ -166,6 +166,13 @@ export default function WhatsAppPage() {
     needsReview: boolean
     reviewReason: string | null
   }>({ paused: false, needsReview: false, reviewReason: null })
+
+  const [crmLead, setCrmLead] = useState<{
+    id: string
+    name: string
+    status: string
+  } | null>(null)
+  const [updatingCrm, setUpdatingCrm] = useState(false)
   const [resumingEva, setResumingEva] = useState(false)
   const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle')
   // Toggle Eva auto/manual: true = Eva responde automaticamente,
@@ -601,7 +608,7 @@ export default function WhatsAppPage() {
     // Status do lead — Eva pausada / em revisão humana?
     const { data: leadData } = await supabase
       .from('leads')
-      .select('eva_pause_until, needs_human_review, human_review_reason')
+      .select('id, name, status, eva_pause_until, needs_human_review, human_review_reason')
       .eq('clinic_id', clinicId)
       .eq('phone', phone)
       .order('created_at', { ascending: false })
@@ -615,6 +622,57 @@ export default function WhatsAppPage() {
       needsReview: leadData?.needs_human_review === true,
       reviewReason: leadData?.human_review_reason ?? null,
     })
+    setCrmLead(leadData?.id ? {
+      id: leadData.id,
+      name: leadData.name || 'Lead',
+      status: leadData.status || 'new',
+    } : null)
+  }
+
+  // ── CRM: atualizar status do lead diretamente do WhatsApp ──
+  const CRM_STAGES = [
+    { value: 'new',       label: 'Novo Lead',    color: 'bg-slate-100 text-slate-600' },
+    { value: 'contacted', label: 'Contactado',   color: 'bg-blue-100 text-blue-700' },
+    { value: 'waiting',   label: 'Aguardando',   color: 'bg-yellow-100 text-yellow-700' },
+    { value: 'scheduled', label: 'Agendado',     color: 'bg-violet-100 text-violet-700' },
+    { value: 'converted', label: 'Convertido',   color: 'bg-emerald-100 text-emerald-700' },
+    { value: 'lost',      label: 'Perdido',      color: 'bg-red-100 text-red-700' },
+  ]
+
+  async function updateCrmStatus(newStatus: string) {
+    if (!crmLead || !clinicId) return
+    setUpdatingCrm(true)
+    const { error } = await supabase
+      .from('leads')
+      .update({ status: newStatus, last_contact_at: new Date().toISOString() })
+      .eq('id', crmLead.id)
+      .eq('clinic_id', clinicId)
+    if (!error) {
+      setCrmLead(prev => prev ? { ...prev, status: newStatus } : null)
+    }
+    setUpdatingCrm(false)
+  }
+
+  async function createLead() {
+    if (!selectedConversation || !clinicId) return
+    setUpdatingCrm(true)
+    const name = selectedConversation.name || selectedConversation.phone
+    const { data, error } = await supabase
+      .from('leads')
+      .insert({
+        clinic_id: clinicId,
+        name,
+        phone: selectedConversation.phone,
+        source: 'whatsapp',
+        status: 'new',
+        whatsapp_chat_id: selectedConversation.phone,
+        last_whatsapp_at: new Date().toISOString(),
+        last_contact_at: new Date().toISOString(),
+      })
+      .select('id, name, status')
+      .single()
+    if (data) setCrmLead(data)
+    setUpdatingCrm(false)
   }
 
   async function resumeEva() {
@@ -1085,6 +1143,34 @@ export default function WhatsAppPage() {
                   >
                     Ver ficha
                   </Link>
+                )}
+                {/* CRM — seletor de status do lead */}
+                {hasCrmModule && (
+                  crmLead ? (
+                    <select
+                      value={crmLead.status}
+                      onChange={e => updateCrmStatus(e.target.value)}
+                      disabled={updatingCrm}
+                      className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer disabled:opacity-60 transition-colors ${
+                        CRM_STAGES.find(s => s.value === crmLead.status)?.color || 'bg-slate-100 text-slate-600'
+                      }`}
+                      title="Mover no CRM"
+                    >
+                      {CRM_STAGES.map(s => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <button
+                      onClick={createLead}
+                      disabled={updatingCrm}
+                      className="px-2 py-1 bg-violet-50 text-violet-600 hover:bg-violet-100 rounded-lg text-xs font-medium border border-violet-200 disabled:opacity-60 flex items-center gap-1 transition-colors"
+                      title="Criar lead no CRM"
+                    >
+                      <Icon name="plus" className="w-3 h-3" />
+                      <span className="hidden sm:inline">Lead</span>
+                    </button>
+                  )
                 )}
                 <button
                   onClick={() => {
