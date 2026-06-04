@@ -48,7 +48,6 @@ export default async function EvaPage() {
     followupsRes,
     recentConvRes,
     mensagensProcessadasRes,
-    bookingsTotalRes,
     evaStatusRes,
   ] = await Promise.all([
     // Conversas hoje
@@ -100,13 +99,6 @@ export default async function EvaPage() {
       .eq('event', 'processed')
       .eq('status', 'ok')
       .gte('created_at', startOfMonth),
-    // Agendamentos realizados (completed) de pacientes Eva este mês
-    supabase.from('eva_logs')
-      .select('*', { count: 'exact', head: true })
-      .eq('clinic_id', clinicId)
-      .eq('event', 'booking')
-      .gte('created_at', startOfMonth),
-
     // Status Eva (auto_reply_enabled)
     supabase.from('clinic_whatsapp')
       .select('auto_reply_enabled, instance_name, phone_number, status')
