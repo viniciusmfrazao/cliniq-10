@@ -154,18 +154,25 @@ const STAGE_COLORS: Record<string, string> = {
   cyan: 'bg-cyan-100 text-cyan-700',
 }
 
-// Calcular temperatura — não exibir para clientes/convertidos
+// Calcular temperatura do lead
+// Regra: primeira interação SEMPRE fria (tráfego pago chega com msg pré-pronta)
+// A temperatura só sobe com engajamento real confirmado pela Eva
 function calcTemperatura(lead: Lead): 'hot' | 'warm' | 'cold' | null {
-  // Cliente ou convertido não tem temperatura — não faz sentido
+  // Cliente ou convertido não tem temperatura
   if (lead.status === 'client' || lead.status === 'converted') return null
+
+  // Novo lead = sempre frio, independente de quando chegou
+  // (tráfego pago chega com mensagem pré-pronta do marketing)
+  if (lead.status === 'new') return 'cold'
+
+  // ai_priority definida pela Eva após engajamento real (>= 4 mensagens)
   if (lead.ai_priority) return lead.ai_priority as 'hot' | 'warm' | 'cold'
-  // Regras automáticas por dias sem contato
-  const ref = lead.last_whatsapp_at || lead.last_contact_at || lead.created_at
-  if (!ref) return null
-  const days = Math.floor((Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24))
-  if (days <= 2) return 'hot'
-  if (days <= 7) return 'warm'
-  return 'cold'
+
+  // Agendado = quente (interesse confirmado)
+  if (lead.status === 'scheduled') return 'hot'
+
+  // Contacted = morno (Eva interagiu mas sem confirmação de interesse)
+  return 'warm'
 }
 
 const AI_PRIORITY_CONFIG = {
