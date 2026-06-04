@@ -253,6 +253,17 @@ export async function criarAgendamento(args: {
       profSource = 'unico';
     }
 
+    // Fallback final: usar o dono/admin da clínica (primeiro role=admin ou doctor)
+    if (!matched) {
+      const owner = professionals.find(p =>
+        p.role === 'admin' || p.role === 'doctor' || p.role === 'dentist' || p.role === 'biomedic'
+      ) || professionals[0] || null;
+      if (owner) {
+        matched = owner;
+        profSource = 'fallback_owner';
+      }
+    }
+
     if (matched) professionalId = matched.id;
   }
 
