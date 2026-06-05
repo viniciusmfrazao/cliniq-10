@@ -38,14 +38,14 @@ export default function ClinicSettings({ clinic, automations }: Props) {
   const [successClinic, setSuccessClinic] = useState(false)
 
   const [relAtivo, setRelAtivo]         = useState(automations?.relatorio_semanal ?? false)
-  const [relTelefones, setRelTelefones] = useState(automations?.relatorio_telefones || '')
+  const [relTelefones, setRelTelefones] = useState(String(automations?.relatorio_telefones ?? ''))
   const [relHora, setRelHora]           = useState(automations?.relatorio_hora || '10:00')
   const [relDia, setRelDia]             = useState(automations?.relatorio_dia ?? 1)
   const [savingRel, setSavingRel]       = useState(false)
   const [successRel, setSuccessRel]     = useState(false)
   const [newPhone, setNewPhone]         = useState('')
 
-  const phoneList = relTelefones ? relTelefones.split(',').map(p => p.trim()).filter(Boolean) : []
+  const phoneList = relTelefones ? String(relTelefones).split(',').map(p => p.trim()).filter(Boolean) : []
 
   function toggle(s: string) { setOpenSection(openSection === s ? '' : s) }
 
