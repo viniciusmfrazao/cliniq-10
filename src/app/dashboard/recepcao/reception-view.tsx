@@ -417,7 +417,8 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
                     >
                       <Icon name="eye" className="w-5 h-5" />
                     </Link>
-                  </div>
+                    </div>{/* fim botão ação */}
+                  </div>{/* fim linha 1 */}
 
                   {/* Linha 2: procedimento + badges */}
                   <div className="flex items-center gap-2 mt-1.5 ml-[60px] flex-wrap">
