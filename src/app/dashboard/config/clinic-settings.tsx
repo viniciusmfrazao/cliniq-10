@@ -87,20 +87,28 @@ export default function ClinicSettings({ clinic, automations }: Props) {
 
   async function saveRelatorio() {
     setSavingRel(true)
-    await fetch('/api/config/relatorio-semanal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clinic_id: clinic?.id,
-        relatorio_semanal: relAtivo,
-        relatorio_telefones: relTelefones || null,
-        relatorio_hora: relHora,
-        relatorio_dia: relDia,
-      }),
-    })
+    try {
+      const res = await fetch('/api/config/relatorio-semanal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          relatorio_semanal: relAtivo,
+          relatorio_telefones: relTelefones || '',
+          relatorio_hora: relHora,
+          relatorio_dia: relDia,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert('Erro ao salvar: ' + (data.error || res.status))
+      } else {
+        setSuccessRel(true)
+        setTimeout(() => setSuccessRel(false), 3000)
+      }
+    } catch (e) {
+      alert('Erro de conexão ao salvar relatório')
+    }
     setSavingRel(false)
-    setSuccessRel(true)
-    setTimeout(() => setSuccessRel(false), 3000)
   }
 
   const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
