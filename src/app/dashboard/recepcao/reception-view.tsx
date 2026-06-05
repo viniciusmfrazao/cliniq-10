@@ -315,71 +315,60 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
               return (
                 <div
                   key={apt.id}
-                  className={`p-3 flex items-center gap-3 hover:bg-slate-50 transition-colors ${
+                  className={`px-4 py-3 hover:bg-slate-50 transition-colors ${
                     apt.checked_in_at && apt.status !== 'in_progress' ? 'bg-emerald-50/50' : ''
                   } ${apt.status === 'in_progress' ? 'bg-amber-50/50' : ''}`}
                 >
-                  {/* Horário */}
-                  <div className="w-12 text-center flex-shrink-0">
-                    <p className="text-base font-bold text-slate-900">{aptTime}</p>
-                    {apt.checked_in_at && (
-                      <p className={`text-[10px] font-medium leading-tight ${isLate ? 'text-red-500' : 'text-emerald-600'}`}>
-                        {isLate ? '⚠️' : '✓'} {waitTime}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Avatar */}
-                  <div className="relative flex-shrink-0">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                      apt.checked_in_at 
-                        ? 'bg-gradient-to-br from-emerald-500 to-teal-500' 
-                        : 'bg-gradient-to-br from-slate-400 to-slate-500'
-                    }`}>
-                      {apt.patients?.name?.charAt(0) || '?'}
+                  {/* Linha 1: horário + avatar + nome + botão */}
+                  <div className="flex items-center gap-3">
+                    {/* Horário */}
+                    <div className="w-12 text-center flex-shrink-0">
+                      <p className="text-sm font-bold text-slate-900">{aptTime}</p>
+                      {apt.checked_in_at && (
+                        <p className={`text-[10px] font-medium ${isLate ? 'text-red-500' : 'text-emerald-600'}`}>
+                          {isLate ? '⚠️' : '✓'}{waitTime}
+                        </p>
+                      )}
                     </div>
-                    {apt.checked_in_at && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-white">
-                        <Icon name="check" className="w-2.5 h-2.5 text-white" />
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-semibold text-slate-900 truncate text-sm">{apt.patients?.name || 'Paciente'}</p>
-                      {isPatientIncomplete && (
-                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-medium rounded-full flex-shrink-0">
-                          incompleto
+                    {/* Avatar */}
+                    <div className="relative flex-shrink-0">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                        apt.checked_in_at
+                          ? 'bg-gradient-to-br from-emerald-500 to-teal-500'
+                          : 'bg-gradient-to-br from-slate-400 to-slate-500'
+                      }`}>
+                        {apt.patients?.name?.charAt(0) || '?'}
+                      </div>
+                      {apt.checked_in_at && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-white">
+                          <Icon name="check" className="w-2.5 h-2.5 text-white" />
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 truncate">
-                      {apt.procedures?.name || 'Atendimento'}
-                    </p>
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium mt-0.5 ${statusInfo.color}`}>
-                      {statusInfo.label}
-                    </span>
-                  </div>
 
-                  {/* Ações */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {!apt.checked_in_at && ['scheduled', 'confirmed'].includes(apt.status) && (
-                      <button
-                        onClick={() => tryCheckIn(apt.id)}
-                        disabled={isLoading}
-                        className="px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-semibold rounded-lg hover:from-emerald-600 hover:to-teal-600 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
-                      >
-                        {isLoading ? (
-                          <Icon name="loader" className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Icon name="userCheck" className="w-3.5 h-3.5" />
-                        )}
-                        <span className="hidden sm:inline">Check-in</span>
-                        <span className="sm:hidden">Check</span>
-                      </button>
-                    )}
+                    {/* Nome */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-900 truncate text-sm">
+                        {apt.patients?.name || 'Paciente'}
+                      </p>
+                    </div>
+
+                    {/* Botão ação */}
+                    <div className="flex-shrink-0">
+                      {!apt.checked_in_at && ['scheduled', 'confirmed'].includes(apt.status) && (
+                        <button
+                          onClick={() => tryCheckIn(apt.id)}
+                          disabled={isLoading}
+                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
+                        >
+                          {isLoading
+                            ? <Icon name="loader" className="w-3.5 h-3.5 animate-spin" />
+                            : <Icon name="userCheck" className="w-3.5 h-3.5" />
+                          }
+                          Check-in
+                        </button>
+                      )}
 
                     {apt.checked_in_at && apt.status === 'confirmed' && (
                       <button
@@ -428,6 +417,21 @@ export default function ReceptionView({ appointments, professionals, clinicId }:
                     >
                       <Icon name="eye" className="w-5 h-5" />
                     </Link>
+                  </div>
+
+                  {/* Linha 2: procedimento + badges */}
+                  <div className="flex items-center gap-2 mt-1.5 ml-[60px] flex-wrap">
+                    <span className="text-xs text-slate-500 truncate">
+                      {apt.procedures?.name || 'Atendimento'}
+                    </span>
+                    {isPatientIncomplete && (
+                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-medium rounded-full flex-shrink-0">
+                        cadastro incompleto
+                      </span>
+                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium flex-shrink-0 ${statusInfo.color}`}>
+                      {statusInfo.label}
+                    </span>
                   </div>
                 </div>
               )
