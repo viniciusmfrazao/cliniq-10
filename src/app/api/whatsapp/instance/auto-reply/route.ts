@@ -25,6 +25,22 @@ export async function PATCH(request: Request) {
 
   const svc = createServiceClient()
 
+  // Bloquear ativação da Eva se clínica não tem módulo eva_ia
+  if (body.enabled) {
+    const { data: clinic } = await svc
+      .from('clinics')
+      .select('settings')
+      .eq('id', ctx.clinicId)
+      .single()
+    const modules: string[] = clinic?.settings?.active_modules || []
+    if (modules.length > 0 && !modules.includes('eva_ia')) {
+      return NextResponse.json(
+        { error: 'Módulo Eva IA não está ativo nesta clínica' },
+        { status: 403 }
+      )
+    }
+  }
+
   let query = svc
     .from('clinic_whatsapp')
     .update({ auto_reply_enabled: body.enabled })
