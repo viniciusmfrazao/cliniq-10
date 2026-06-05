@@ -38,6 +38,12 @@ export default async function ConfigPage() {
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin'
 
   // Buscar dados da clinica
+  const { data: automations } = await supabase
+    .from('clinic_automations')
+    .select('relatorio_semanal, relatorio_telefones, relatorio_hora, relatorio_dia')
+    .eq('clinic_id', currentUser.clinic_id)
+    .maybeSingle()
+
   const { data: clinic } = await supabase
     .from('clinics')
     .select('*')
@@ -66,7 +72,7 @@ export default async function ConfigPage() {
           <>
             <div className="card p-6">
               <h2 className="text-sm font-semibold text-slate-900 mb-4">🏥 Dados da clinica</h2>
-              <ClinicSettings clinic={clinic} />
+              <ClinicSettings clinic={clinic} automations={automations} />
             </div>
 
             <div className="card p-6">

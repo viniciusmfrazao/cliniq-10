@@ -39,6 +39,10 @@
     {
       "path": "/api/cron/contato-pos",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/relatorio-semanal",
+      "schedule": "0 13 * * 1"
     }
   ]
 }
