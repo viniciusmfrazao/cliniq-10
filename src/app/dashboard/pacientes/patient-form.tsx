@@ -230,7 +230,6 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
             value={maskCPF(form.cpf)}
             onChange={e => update('cpf', unmask(e.target.value).slice(0, 11))}
             maxLength={14}
-            required
             aria-invalid={form.cpf.length === 11 && !validateCPF(form.cpf)}
           />
           {form.cpf.length === 11 && !validateCPF(form.cpf) && (
