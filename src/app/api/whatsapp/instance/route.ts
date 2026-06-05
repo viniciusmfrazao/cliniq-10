@@ -170,6 +170,8 @@ export async function POST(req: NextRequest) {
       role_inbound: isFirst,
       role_outbound_automation: isFirst,
       role_outbound_manual: isFirst,
+      // Eva SEMPRE começa desligada — clínica ativa manualmente após configurar
+      auto_reply_enabled: false,
     })
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
