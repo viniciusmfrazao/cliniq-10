@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const { error } = await svc.from('clinic_automations').upsert({
     clinic_id,
     relatorio_semanal: !!relatorio_semanal,
-    relatorio_telefones: relatorio_telefones || null,
+    relatorio_telefones: relatorio_telefones ? relatorio_telefones.split(',').map((p: string) => p.trim()).filter(Boolean) : [],
     relatorio_hora: relatorio_hora || '10:00',
     relatorio_dia: relatorio_dia ?? 1,
   }, { onConflict: 'clinic_id' })

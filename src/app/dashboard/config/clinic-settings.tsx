@@ -38,7 +38,12 @@ export default function ClinicSettings({ clinic, automations }: Props) {
   const [successClinic, setSuccessClinic] = useState(false)
 
   const [relAtivo, setRelAtivo]         = useState(automations?.relatorio_semanal ?? false)
-  const [relTelefones, setRelTelefones] = useState(String(automations?.relatorio_telefones ?? ''))
+  const [relTelefones, setRelTelefones] = useState(() => {
+    const t = automations?.relatorio_telefones
+    if (!t) return ''
+    if (Array.isArray(t)) return t.join(',')
+    return String(t)
+  })
   const [relHora, setRelHora]           = useState(automations?.relatorio_hora || '10:00')
   const [relDia, setRelDia]             = useState(automations?.relatorio_dia ?? 1)
   const [savingRel, setSavingRel]       = useState(false)
