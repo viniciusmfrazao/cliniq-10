@@ -52,9 +52,9 @@ export const NAV_ITEMS: NavItem[] = [
 ]
 
 export const BOTTOM_NAV: NavItem[] = [
-  { label: 'Início',    href: '/dashboard',           icon: 'home',     roles: ALL_STAFF },
-  { label: 'Agenda',    href: '/dashboard/agenda',    icon: 'calendar', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'] },
-  { label: 'Pacientes', href: '/dashboard/pacientes', icon: 'users',    roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
-  { label: 'WhatsApp',  href: '/dashboard/whatsapp',  icon: 'message',  roles: [...MANAGEMENT, ...RECEPTION] },
-  { label: 'Eva',       href: '/dashboard/eva',       icon: 'sparkles', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
+  { label: 'Início',    href: '/dashboard',             icon: 'home',     roles: ALL_STAFF },
+  { label: 'Agenda',    href: '/dashboard/agenda',      icon: 'calendar', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'] },
+  { label: 'Pacientes', href: '/dashboard/pacientes',   icon: 'users',    roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
+  { label: 'Recepção',  href: '/dashboard/recepcao',    icon: 'inbox',    roles: [...MANAGEMENT, ...RECEPTION] },
+  { label: 'Financeiro',href: '/dashboard/financeiro',  icon: 'dollar',   roles: FINANCIAL },
 ]
