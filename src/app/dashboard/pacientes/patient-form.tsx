@@ -95,12 +95,7 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
     const { data: { user } } = await supabase.auth.getUser()
     const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
 
-    // Validar campos obrigatórios
-    if (!form.cpf || form.cpf.length < 11) {
-      setError('CPF é obrigatório')
-      setLoading(false)
-      return
-    }
+    // CPF opcional — validar só se preenchido
     // Valida o dígito verificador. Antes a gente só checava 11 dígitos,
     // o que deixava passar coisas como "11111111111" e gerava
     // duplicatas no banco por erro de digitação.
@@ -223,7 +218,7 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
         </div>
 
         <div>
-          <label className="label">CPF *</label>
+          <label className="label">CPF</label>
           <input
             className={`input ${
               form.cpf.length === 11 && !validateCPF(form.cpf)
