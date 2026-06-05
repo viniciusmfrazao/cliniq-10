@@ -82,13 +82,17 @@ export default function ClinicSettings({ clinic, automations }: Props) {
 
   async function saveRelatorio() {
     setSavingRel(true)
-    await supabase.from('clinic_automations').upsert({
-      clinic_id: clinic?.id,
-      relatorio_semanal: relAtivo,
-      relatorio_telefones: relTelefones || null,
-      relatorio_hora: relHora,
-      relatorio_dia: relDia,
-    }, { onConflict: 'clinic_id' })
+    await fetch('/api/config/relatorio-semanal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clinic_id: clinic?.id,
+        relatorio_semanal: relAtivo,
+        relatorio_telefones: relTelefones || null,
+        relatorio_hora: relHora,
+        relatorio_dia: relDia,
+      }),
+    })
     setSavingRel(false)
     setSuccessRel(true)
     setTimeout(() => setSuccessRel(false), 3000)

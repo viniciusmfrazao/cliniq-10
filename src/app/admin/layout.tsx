@@ -74,7 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </Link>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0">
 
         {/* Mobile overlay sidebar */}
         {menuOpen && (
