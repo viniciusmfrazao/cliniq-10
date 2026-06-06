@@ -3,17 +3,15 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.clinike.app',
   appName: 'Clinike',
-  // Aponta para o app em produção — sem reescrever código
   server: {
     url: 'https://app.clinike.com.br',
     cleartext: false,
     androidScheme: 'https',
   },
-  // Fallback para build local se necessário
   webDir: 'out',
   ios: {
-    contentInset: 'automatic',
-    backgroundColor: '#fafaf8',
+    contentInset: 'never',
+    backgroundColor: '#7c3aed',
   },
   android: {
     backgroundColor: '#fafaf8',
@@ -31,7 +29,7 @@ const config: CapacitorConfig = {
       splashImmersive: true,
     },
     StatusBar: {
-      style: 'DEFAULT',
+      style: 'LIGHT',
       backgroundColor: '#7c3aed',
     },
     PushNotifications: {
