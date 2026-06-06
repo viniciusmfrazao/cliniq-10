@@ -29,7 +29,7 @@ export default function BottomNav({ userRole, activeModules = [], userPermission
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      <div className="flex items-center justify-around px-1 py-1">
+      <div className="flex items-center justify-around px-1 py-0.5">
         {items.map(item => {
           const active = isActive(item.href)
           return (
@@ -62,3 +62,4 @@ export default function BottomNav({ userRole, activeModules = [], userPermission
     </nav>
   )
 }
+
