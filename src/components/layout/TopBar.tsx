@@ -36,19 +36,22 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
   return (
     <>
       <header
-        className="md:hidden flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-700 flex-shrink-0 sticky top-0 z-40"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+        className="md:hidden flex items-center justify-between px-4 py-3 flex-shrink-0 sticky top-0 z-40"
+        style={{
+          background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+          paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)',
+        }}
       >
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMenuOpen(true)}
-            className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+            className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
           >
-            <Icon name="menu" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            <Icon name="menu" className="w-5 h-5 text-white" />
           </button>
           <div>
-            <p className="text-base font-bold text-slate-900 dark:text-white">{current?.label || 'Dashboard'}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{clinicName}</p>
+            <p className="text-base font-bold text-white">{current?.label || 'Dashboard'}</p>
+            <p className="text-xs text-white/70">{clinicName}</p>
           </div>
         </div>
         
@@ -56,25 +59,25 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
           <button
             type="button"
             onClick={cmd.open}
-            className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+            className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
             title="Busca rapida"
             aria-label="Busca rapida"
           >
-            <Icon name="search" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            <Icon name="search" className="w-5 h-5 text-white" />
           </button>
           <Link
             href="/dashboard/como-funciona"
-            className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+            className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
             title="Como funciona"
             aria-label="Como funciona"
           >
-            <Icon name="info" className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            <Icon name="info" className="w-5 h-5 text-white" />
           </Link>
           {userId && <NotificationBell userId={userId} />}
           <div className="relative">
             <button
               onClick={() => setUserMenuOpen(p => !p)}
-              className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20 active:scale-95 transition-transform"
+              className="w-10 h-10 bg-white/25 border border-white/40 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
             >
               <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
             </button>
@@ -108,26 +111,18 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
       {/* Mobile Menu Overlay */}
       {menuOpen && (
         <div className="md:hidden fixed inset-0 z-50">
-          {/* Backdrop */}
           <div 
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setMenuOpen(false)}
           />
           
-          {/* Menu Panel */}
           <div className="absolute left-0 top-0 bottom-0 w-[85%] max-w-xs sidebar-gradient animate-slide-in-left overflow-hidden">
-            {/* Decorative */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-20 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-1/2" />
             
-            {/* Header */}
             <div className="relative px-5 py-6 flex items-center justify-between border-b border-white/10">
               <div className="flex items-center gap-3">
-                <img 
-                  src="/logo.svg" 
-                  alt="Clinike" 
-                  className="w-12 h-12 rounded-xl"
-                />
+                <img src="/logo.svg" alt="Clinike" className="w-12 h-12 rounded-xl" />
                 <div>
                   <p className="text-white font-bold">{clinicName}</p>
                   <p className="text-white/60 text-xs">Clinike</p>
@@ -141,7 +136,6 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
               </button>
             </div>
 
-            {/* Trial Banner */}
             {trialDaysLeft > 0 && trialDaysLeft <= 14 && (
               <div className="mx-4 mt-4 px-4 py-3 bg-white/10 backdrop-blur rounded-xl">
                 <div className="flex items-center gap-2 text-white">
@@ -158,7 +152,6 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
               </div>
             )}
 
-            {/* Navigation */}
             <nav className="relative px-4 py-4 space-y-1 overflow-y-auto max-h-[60vh]">
               {nav.map((item) => {
                 const active = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href)
@@ -194,10 +187,8 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                   </Link>
                 )
               })}
-
             </nav>
 
-            {/* User Section */}
             <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10 bg-black/10">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 bg-gradient-to-br from-violet-400 to-purple-500 rounded-xl flex items-center justify-center">
