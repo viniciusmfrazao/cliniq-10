@@ -24,6 +24,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>O Clinike precisa acessar sua câmera para captura de imagens.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>O Clinike precisa salvar imagens na sua galeria.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O Clinike precisa acessar sua galeria para envio de imagens.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
