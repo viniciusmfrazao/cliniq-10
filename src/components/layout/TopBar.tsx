@@ -36,10 +36,10 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
   return (
     <>
       <header
-        className="md:hidden flex items-center justify-between px-4 py-3 flex-shrink-0 sticky top-0 z-40"
+        className="md:hidden flex items-center justify-between px-4 py-2 flex-shrink-0 sticky top-0 z-40"
         style={{
           background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
-          paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)',
+          paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)',
         }}
       >
         <div className="flex items-center gap-3">
@@ -222,3 +222,4 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
     </>
   )
 }
+
