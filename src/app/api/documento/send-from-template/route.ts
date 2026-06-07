@@ -139,11 +139,11 @@ export async function POST(req: NextRequest) {
       `Antes do seu atendimento na ${clinicName}, por favor leia e assine o documento abaixo:\n\n` +
       `${link}\n\n` +
       `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
-    : hasImage
-      // Se tem imagem: mensagem curta sem nome do template, conteúdo vai na imagem
-      ? `Olá ${firstName}! 👋\n\nSegue o documento da ${clinicName}. Qualquer dúvida é só chamar! 🤍`
-      // Sem imagem: manda o conteúdo como texto sem cabeçalho com nome
-      : `Olá ${firstName}! 👋\n\n${filledContent}\n\nQualquer dúvida é só chamar! 🤍`
+    : filledContent
+      // Com conteúdo de texto: envia o texto do template (com ou sem imagem depois)
+      ? `${filledContent}`
+      // Sem conteúdo: mensagem curta
+      : `Olá ${firstName}! 👋\n\nSegue o documento da ${clinicName}. Qualquer dúvida é só chamar! 🤍`
 
   // 1. Enviar TEXTO primeiro
   const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'any' })
@@ -200,4 +200,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, sent: 'whatsapp', link: requiresSignature ? link : null, document_id: doc.id })
 }
+
 
