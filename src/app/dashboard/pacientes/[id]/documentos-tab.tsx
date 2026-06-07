@@ -23,7 +23,7 @@ type Template = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: 'Pendente',
+  pending: 'Aguard. assinatura',
   sent: 'Enviado',
   viewed: 'Visualizado',
   signed: 'Assinado',
@@ -271,3 +271,4 @@ export default function DocumentosTab({ patientId, patientName, patientPhone, cl
     </div>
   )
 }
+
