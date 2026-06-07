@@ -15,18 +15,18 @@ type Props = {
   }
 }
 
-const DEFAULT_TEMPLATE = `Oi {primeiro_nome}! 💜
+const DEFAULT_TEMPLATE = `Oi {{primeiro_nome}}! 💜
 
 Passando pra saber como você está após o seu atendimento de {procedimento} aqui na {clinica}.
 
 Sentiu algum desconforto? Tem alguma dúvida? É só chamar! Estamos à disposição 🤍`
 
 const VARIABLES = [
-  { key: '{primeiro_nome}', desc: 'Primeiro nome' },
-  { key: '{nome}', desc: 'Nome completo' },
-  { key: '{procedimento}', desc: 'Procedimento realizado' },
-  { key: '{profissional}', desc: 'Nome da profissional' },
-  { key: '{clinica}', desc: 'Nome da clínica' },
+  { key: '{{primeiro_nome}}', desc: 'Primeiro nome' },
+  { key: '{{nome}}', desc: 'Nome completo' },
+  { key: '{{procedimento}}', desc: 'Procedimento realizado' },
+  { key: '{{profissional}}', desc: 'Nome da profissional' },
+  { key: '{{clinica}}', desc: 'Nome da clínica' },
 ]
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -42,11 +42,11 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
   const supabase = createClient()
 
   const preview = template
-    .replace(/\{primeiro_nome\}/g, 'Ana')
-    .replace(/\{nome\}/g, 'Ana Silva')
-    .replace(/\{procedimento\}/g, 'Microvasos')
-    .replace(/\{profissional\}/g, 'Dra. Sarah')
-    .replace(/\{clinica\}/g, clinicName)
+    .replace(/\{\{primeiro_nome\}\}/g, 'Ana')
+    .replace(/\{\{nome\}\}/g, 'Ana Silva')
+    .replace(/\{\{procedimento\}\}/g, 'Microvasos')
+    .replace(/\{\{profissional\}\}/g, 'Dra. Sarah')
+    .replace(/\{\{clinica\}\}/g, clinicName)
 
   const horaLabel = (h: number) => `${String(h).padStart(2, '0')}:00`
 
@@ -180,3 +180,4 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
     </div>
   )
 }
+
