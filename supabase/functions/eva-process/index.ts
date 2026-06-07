@@ -657,23 +657,32 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 0.5) Verificar se Eva está ativa para essa instância
-  //      Se auto_reply_enabled = false, abortar silenciosamente.
-  if (!payload.isFollowup && payload.instance) {
+  // 0.5) Verificar se Eva está ativa para essa instância.
+  //      Roda em TODA invocação (mensagens normais E followups) — fail-closed:
+  //      em caso de erro na leitura, bloqueia por segurança para não responder
+  //      em clínica que desativou a Eva.
+  if (payload.instance) {
     try {
       const waUrl = `${SUPABASE_URL}/rest/v1/clinic_whatsapp?select=auto_reply_enabled&instance_name=eq.${encodeURIComponent(payload.instance)}&limit=1`;
       const waRes = await fetch(waUrl, {
         headers: { 'apikey': SERVICE_ROLE_KEY, 'Authorization': `Bearer ${SERVICE_ROLE_KEY}` },
       });
+      if (!waRes.ok) {
+        // Fail-closed: falha na leitura bloqueia (não responde)
+        console.log(JSON.stringify({ evt: 'eva_blocked', reason: 'auto_reply_check_failed', status: waRes.status, instance: payload.instance }));
+        return jsonResponse({ ok: true, skipped: true, reason: 'auto_reply_check_failed' });
+      }
       const waData = await waRes.json();
       const autoReply = Array.isArray(waData) && waData.length > 0 ? waData[0].auto_reply_enabled : null;
-      if (autoReply === false) {
-        console.log(JSON.stringify({ evt: 'eva_blocked', reason: 'auto_reply_disabled', instance: payload.instance, clinic: payload.clinicId }));
-        return jsonResponse({ ok: true, skipped: true, reason: 'auto_reply_disabled' });
+      if (autoReply !== true) {
+        // null (instância não encontrada) ou false = bloqueia
+        console.log(JSON.stringify({ evt: 'eva_blocked', reason: autoReply === false ? 'auto_reply_disabled' : 'instance_not_found', instance: payload.instance, clinic: payload.clinicId }));
+        return jsonResponse({ ok: true, skipped: true, reason: autoReply === false ? 'auto_reply_disabled' : 'instance_not_found' });
       }
     } catch (e) {
-      // Em caso de erro na verificação, deixa prosseguir (fail-open)
-      console.error('Erro ao verificar auto_reply_enabled:', e);
+      // Fail-closed: exceção na verificação bloqueia por segurança
+      console.error('Erro ao verificar auto_reply_enabled — bloqueando por segurança:', e);
+      return jsonResponse({ ok: true, skipped: true, reason: 'auto_reply_check_exception' });
     }
   }
 
@@ -735,6 +744,37 @@ Deno.serve(async (req) => {
   // historia ja vem em ordem cronologica do RPC (asc). Limita a 20 ultimas
   // pra economizar tokens (cache do system fica bem mais barato).
   const history = ctx.history.slice(-20);
+
+  // ─── CAMADA 0: pré-registro de interesse determinístico ──────────────────
+  //
+  // Dado real: em 110/110 leads que mencionaram procedimento na 1ª mensagem,
+  // o Haiku NÃO chamou registrar_interesse (priorizou saudação + perguntar nome).
+  // Resultado: 90% dos leads ficavam no CRM com interest=NULL.
+  //
+  // Solução: detectar menção de procedimento por match em ctx.procedures
+  // ANTES de chamar o Claude, e chamar registrar_interesse via código.
+  // Roda só quando o lead ainda não tem interest preenchido (não sobrescreve
+  // se já foi registrado em turno anterior).
+  if (!payload.isFollowup && ctx.lead?.id && !ctx.lead.interest) {
+    const lowerTextCamada0 = (payload.userText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const procDetectado = ctx.procedures.find(p => {
+      const procNorm = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      // match exato do nome OU qualquer palavra-chave do procedimento (>=4 chars)
+      if (lowerTextCamada0.includes(procNorm)) return true;
+      return procNorm.split(/\s+/).some(w => w.length >= 4 && lowerTextCamada0.includes(w));
+    });
+    if (procDetectado) {
+      console.log(JSON.stringify({ evt: 'camada0_interesse', proc: procDetectado.name, clinic: payload.clinicId }));
+      await executeToolByName('registrar_interesse', {
+        procedimento: procDetectado.name,
+        observacoes: `Detectado automaticamente na mensagem: "${payload.userText.slice(0, 100)}"`,
+      }, ctx, payload, { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY }).catch(e =>
+        errors.push(`camada0_interesse: ${e?.message ?? e}`)
+      );
+      // Atualiza ctx.lead localmente para o prompt saber que já tem interesse
+      if (ctx.lead) ctx.lead.interest = procDetectado.name;
+    }
+  }
 
   // ─── CAMADA 1 + 3: detecção de intenção e escalonamento de modelo ────────
   //
@@ -1078,10 +1118,15 @@ Deno.serve(async (req) => {
 
   // ─── PÓS-PROCESSAMENTO 2: forçar escalonamento se prometeu retorno ────────
   // Se a Eva prometeu "vou confirmar com a Dra" mas nao chamou escalar_humano,
-  // marcamos o lead pra revisao humana mesmo assim — pra equipe dar o retorno.
+  // (a) substitui o texto por uma mensagem honesta que não faz promessa vazia,
+  // (b) marca o lead pra revisao humana pra equipe dar o retorno prometido.
   let forcedEscalation = false;
   if (!payload.isFollowup && promisedFollowupWithoutEscalating(finalText, toolsUsed)) {
     forcedEscalation = true;
+    // Substitui o texto antes de enviar — paciente não recebe "vou confirmar" falso.
+    // A equipe vai ver o lead no painel e dar a resposta real.
+    const nomeEscalacao = firstNamePost ? `${firstNamePost}, ` : '';
+    finalText = sanitizeWhatsapp(`${nomeEscalacao}vou verificar essa informação com a equipe e te retorno em instantes com tudo certinho! *`);
     if (ctx.lead?.id) {
       fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
         method: 'PATCH',
@@ -1093,7 +1138,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           needs_human_review: true,
           human_review_reason: 'duvida_complexa',
-          human_review_details: `Eva prometeu retorno ("vou confirmar") mas nao escalou sozinha. Pergunta da paciente precisa de resposta da equipe. Resposta da Eva: ${finalText.slice(0, 200)}`,
+          human_review_details: `Eva detectou dúvida que requer equipe. Pergunta da paciente precisa de resposta humana. Resposta original da Eva: ${finalText.slice(0, 200)}`,
           human_review_at: new Date().toISOString(),
           ai_priority: 'hot',
         }),
