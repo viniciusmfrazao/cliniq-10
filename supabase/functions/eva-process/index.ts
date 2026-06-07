@@ -33,7 +33,7 @@
 
 import type { DonnaContext, IncomingPayload, ClaudeMessage } from './types.ts';
 import { sanitizeWhatsapp, fetchJson, parseData } from './utils.ts';
-import { buildSystemPrompt, TOOLS } from './prompt.ts';
+import { buildSystemPrompt, TOOLS, EmotionalMemory } from './prompt.ts';
 import { runConversation, MODEL_PREMIUM } from './claude.ts';
 import type { ConversationStepLog } from './claude.ts';
 import { executeToolByName, criarAgendamento } from './tools.ts';
@@ -838,7 +838,24 @@ Deno.serve(async (req) => {
     messages.pop();
   }
 
-  const built = buildSystemPrompt(ctx, payload, history.length);
+  // Buscar memória emocional do lead
+  let emotionalMemory: EmotionalMemory | null = null;
+  if (ctx.lead?.phone || payload.phone) {
+    try {
+      const emUrl = `${SUPABASE_URL}/rest/v1/lead_emotional_memory?clinic_id=eq.${payload.clinicId}&phone=eq.${payload.phone}&select=interesse_principal,objecao,tom,gatilho_potencial,resumo,procedimentos_mencionados&limit=1`;
+      const emR = await fetch(emUrl, {
+        headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` }
+      });
+      if (emR.ok) {
+        const emData = await emR.json();
+        if (Array.isArray(emData) && emData.length > 0) emotionalMemory = emData[0];
+      }
+    } catch (e) {
+      console.warn('[eva] erro ao buscar emotional memory:', e);
+    }
+  }
+
+  const built = buildSystemPrompt(ctx, payload, history.length, emotionalMemory);
 
   // Injeta o contexto dinamico como primeira mensagem do historico
   // Isso permite que o staticPrompt seja cacheado por 1h pela Anthropic
@@ -1164,6 +1181,13 @@ Deno.serve(async (req) => {
     }),
   }).catch(() => {}); // fire-and-forget, nunca bloqueia
 
+  // Atualizar memória emocional de forma assíncrona (não bloqueia resposta)
+  if (history.length >= 2 && finalText) {
+    updateEmotionalMemory(payload, history, finalText).catch(e =>
+      console.warn('[eva] erro ao atualizar emotional memory:', e)
+    );
+  }
+
   return jsonResponse({
     ok: true,
     finalText,
@@ -1176,3 +1200,79 @@ Deno.serve(async (req) => {
   });
 });
 
+// ─── Atualizar memória emocional do lead ─────────────────────────────────────
+async function updateEmotionalMemory(
+  payload: IncomingPayload,
+  history: Array<{ role: string; content: string }>,
+  lastAssistantText: string
+): Promise<void> {
+  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
+  if (!ANTHROPIC_API_KEY) return;
+
+  // Pegar últimas 10 mensagens para análise
+  const recentHistory = history.slice(-10)
+    .map(h => `${h.role === 'user' ? 'Paciente' : 'Eva'}: ${h.content}`)
+    .join('\n');
+
+  const analysisPrompt = `Analise esta conversa de uma clínica estética e extraia o perfil emocional do lead em JSON.
+
+CONVERSA:
+${recentHistory}
+Eva: ${lastAssistantText}
+
+Responda APENAS com JSON válido, sem markdown:
+{
+  "interesse_principal": "procedimento que mais animou (ex: Botox, Lavieen, Preenchimento) ou null",
+  "objecao": "principal hesitação identificada (ex: preco, tempo, medo, nao_respondeu) ou null",
+  "tom": "estado emocional (ex: animado, hesitante, frio, curioso, empolgado) ou null",
+  "gatilho_potencial": "o que poderia convencer (ex: parcelamento, promocao, resultado_antes_depois, urgencia) ou null",
+  "resumo": "1 frase resumindo o momento do lead (ex: Demonstrou interesse em Botox mas hesitou no preço — perguntar sobre parcelamento) ou null",
+  "procedimentos_mencionados": ["lista", "de", "procedimentos", "citados"] ou []
+}`;
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: analysisPrompt }],
+      }),
+    });
+
+    if (!r.ok) return;
+    const data = await r.json();
+    const text = data.content?.[0]?.text?.trim() || '';
+
+    let parsed: EmotionalMemory;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return;
+    }
+
+    // Upsert na tabela
+    await fetch(`${SUPABASE_URL}/rest/v1/lead_emotional_memory`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({
+        clinic_id: payload.clinicId,
+        phone: payload.phone,
+        ...parsed,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+  } catch (e) {
+    console.warn('[eva] updateEmotionalMemory falhou:', e);
+  }
+}
