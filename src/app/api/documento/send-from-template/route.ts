@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       appointment_id: appointmentId || null,
       name: template.name,
       content: filledContent,
-      status: 'pending',
+      status: template.requires_signature !== false ? 'pending' : 'sent',
       sent_by: userRow.id,
       sign_token: token,
       expires_at: expiresAt,
@@ -136,14 +136,14 @@ export async function POST(req: NextRequest) {
   const hasImage = !!(template as any).image_url
   const message = requiresSignature
     ? `Olá ${firstName}! 👋\n\n` +
-      `Antes do seu atendimento na ${clinicName}, por favor leia e assine o documento *"${template.name}"*:\n\n` +
+      `Antes do seu atendimento na ${clinicName}, por favor leia e assine o documento abaixo:\n\n` +
       `${link}\n\n` +
       `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
     : hasImage
-      // Se tem imagem: mensagem curta, conteúdo vai na imagem
-      ? `Olá ${firstName}! 👋\n\nSegue o *${template.name}* da ${clinicName}. Qualquer dúvida é só chamar! 🤍`
-      // Sem imagem: manda o conteúdo como texto
-      : `Olá ${firstName}! 👋\n\n*${template.name}*\n\n${filledContent}\n\nQualquer dúvida é só chamar! 🤍`
+      // Se tem imagem: mensagem curta sem nome do template, conteúdo vai na imagem
+      ? `Olá ${firstName}! 👋\n\nSegue o documento da ${clinicName}. Qualquer dúvida é só chamar! 🤍`
+      // Sem imagem: manda o conteúdo como texto sem cabeçalho com nome
+      : `Olá ${firstName}! 👋\n\n${filledContent}\n\nQualquer dúvida é só chamar! 🤍`
 
   // 1. Enviar TEXTO primeiro
   const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'any' })
@@ -186,9 +186,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Marcar como enviado
+  // Atualiza whatsapp_sent_at; status fica como foi inserido:
+  // - 'pending' (aguardando assinatura) se requires_signature
+  // - 'sent' se não requer assinatura
   await svc.from('documents_sent').update({
     whatsapp_sent_at: new Date().toISOString(),
-    status: 'sent',
+    ...(requiresSignature ? {} : { status: 'sent' }),
   }).eq('id', doc.id)
 
   if (!result.ok) {
@@ -197,3 +200,4 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, sent: 'whatsapp', link: requiresSignature ? link : null, document_id: doc.id })
 }
+
