@@ -107,7 +107,7 @@ export async function POST() {
       ``,
       `*Financeiro*`,
       `• 💰 Faturamento: ${fmtMoney(faturamento)}`,
-      realizados > 0 ? `• 💳 Ticket médio: ${fmtMedio(ticketMedio)}` : null,
+      realizados > 0 ? `• 💳 Ticket médio: ${fmtMoney(ticketMedio)}` : null,
       ``,
       topProcs.length > 0
         ? `*🏆 Procedimentos realizados:*\n${topProcs.map(([n, c]) => `• ${n} — ${c}x`).join('\n')}`
@@ -131,6 +131,4 @@ export async function POST() {
   }
 }
 
-function fmtMedio(v: number) {
-  return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
+
