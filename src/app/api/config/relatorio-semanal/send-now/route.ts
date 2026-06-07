@@ -96,6 +96,16 @@ export async function POST() {
     }
     const topProcs = Object.entries(procCount).sort((a, b) => b[1] - a[1]).slice(0, 8)
 
+    // Estoque baixo
+    const { data: stockData } = await svc
+      .from('products').select('name, current_stock, min_stock')
+      .eq('clinic_id', clinicId)
+      .eq('is_active', true)
+
+    const lowStock = (stockData || []).filter(
+      (s: any) => s.min_stock !== null && Number(s.current_stock) <= Number(s.min_stock)
+    )
+
     const linhas = [
       `📊 *Relatório — ${clinicName}*`,
       `📅 ${dateLabel}`,
@@ -114,6 +124,10 @@ export async function POST() {
       topProcs.length > 0
         ? `*🏆 Procedimentos realizados:*\n${topProcs.map(([n, c]) => `• ${n} — ${c}x`).join('\n')}`
         : null,
+      ``,
+      lowStock.length > 0
+        ? `*📦 Estoque com baixo nível:*\n${lowStock.map((s: any) => `• ${s.name} — ${s.current_stock} un`).join('\n')}`
+        : `*📦 Estoque:* ✅ Tudo em dia!`,
     ].filter(l => l !== null).join('\n')
 
     let sent = 0
@@ -132,6 +146,7 @@ export async function POST() {
     return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 })
   }
 }
+
 
 
 
