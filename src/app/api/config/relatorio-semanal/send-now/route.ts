@@ -33,8 +33,10 @@ export async function POST() {
       return NextResponse.json({ ok: false, error: 'relatorio_desativado' }, { status: 400 })
     }
 
-    const phones: string[] = (automation.relatorio_telefones || '')
-      .split(',').map((p: string) => p.trim()).filter(Boolean)
+    const telRaw = automation.relatorio_telefones
+    const phones: string[] = Array.isArray(telRaw)
+      ? telRaw.map((p: string) => p.trim()).filter(Boolean)
+      : (typeof telRaw === 'string' ? telRaw : '').split(',').map((p: string) => p.trim()).filter(Boolean)
 
     if (!phones.length) {
       return NextResponse.json({ ok: false, error: 'sem_telefones' }, { status: 400 })
@@ -130,5 +132,6 @@ export async function POST() {
     return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 })
   }
 }
+
 
 
