@@ -478,7 +478,7 @@ export async function atualizarNomeLead(
     return `Nao consegui atualizar o nome no sistema (${r.error || 'erro desconhecido'}), mas continue conversando normalmente.`;
   }
 
-  return `Nome "${novo}" registrado no CRM. Cumprimente-a pelo nome agora e conduza a conversa naturalmente. NAO diga que registrou — a tool eh silenciosa.`;
+  return `NOME_REGISTRADO: "${novo}". Agora escreva IMEDIATAMENTE uma mensagem curta de WhatsApp cumprimentando pelo nome e dando continuidade à conversa (ex: perguntar o procedimento, comentar sobre o interesse dela ou oferecer horários se já souber o interesse). NAO chame nenhuma outra tool. NAO mencione que registrou o nome. Escreva SÓ o texto final da mensagem.`;
 }
 
 // ─── escalar_humano ────────────────────────────────────────────────────────
