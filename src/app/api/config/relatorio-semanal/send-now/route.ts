@@ -17,13 +17,11 @@ export async function POST() {
 
   const svc = createServiceClient()
 
-  // Buscar clínica do usuário
   const { data: userRow } = await svc.from('users').select('clinic_id').eq('id', user.id).maybeSingle()
   if (!userRow?.clinic_id) return NextResponse.json({ ok: false, error: 'sem_clinica' }, { status: 403 })
 
   const clinicId = userRow.clinic_id
 
-  // Buscar configuração do relatório desta clínica
   const { data: automation } = await svc
     .from('clinic_automations')
     .select('relatorio_semanal, relatorio_telefones')
@@ -34,67 +32,109 @@ export async function POST() {
     return NextResponse.json({ ok: false, error: 'relatorio_desativado' }, { status: 400 })
   }
 
-  const phones = (automation.relatorio_telefones || '')
-    .split(/[,\n]/).map((p: string) => p.trim()).filter(Boolean)
+  const phones: string[] = (automation.relatorio_telefones || '')
+    .split(',').map((p: string) => p.trim()).filter(Boolean)
 
-  if (phones.length === 0) {
+  if (!phones.length) {
     return NextResponse.json({ ok: false, error: 'sem_telefones' }, { status: 400 })
   }
 
-  // Buscar dados da semana atual
-  const now = new Date()
-  const startOfWeek = new Date(now)
-  startOfWeek.setDate(now.getDate() - now.getDay())
-  startOfWeek.setHours(0, 0, 0, 0)
+  // Período: semana atual
+  const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+  const endDate = new Date(nowBR)
+  endDate.setHours(23, 59, 59, 999)
+  const startDate = new Date(endDate)
+  startDate.setDate(startDate.getDate() - 7)
 
-  const [
-    { data: appointments },
-    { data: newPatients },
-    { data: revenues },
-    { data: clinicData },
-  ] = await Promise.all([
-    svc.from('appointments')
-      .select('id, status')
-      .eq('clinic_id', clinicId)
-      .gte('start_time', startOfWeek.toISOString()),
-    svc.from('patients')
-      .select('id')
-      .eq('clinic_id', clinicId)
-      .gte('created_at', startOfWeek.toISOString()),
-    svc.from('financial_transactions')
-      .select('amount, type')
-      .eq('clinic_id', clinicId)
-      .gte('created_at', startOfWeek.toISOString()),
-    svc.from('clinics').select('name').eq('id', clinicId).maybeSingle(),
-  ])
+  const dateLabel = `${startDate.toLocaleDateString('pt-BR')} a ${nowBR.toLocaleDateString('pt-BR')}`
 
-  const clinicName = clinicData?.name || 'Clínica'
-  const total = appointments?.length || 0
-  const completed = appointments?.filter((a: any) => a.status === 'completed').length || 0
-  const cancelled = appointments?.filter((a: any) => a.status === 'cancelled').length || 0
-  const novos = newPatients?.length || 0
-  const receita = revenues?.filter((r: any) => r.type === 'income').reduce((s: number, r: any) => s + (r.amount || 0), 0) || 0
-  const despesas = revenues?.filter((r: any) => r.type === 'expense').reduce((s: number, r: any) => s + (r.amount || 0), 0) || 0
+  const { data: clinic } = await svc.from('clinics').select('name').eq('id', clinicId).single()
+  const clinicName = clinic?.name || 'Clínica'
 
-  const dateLabel = startOfWeek.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-  const todayLabel = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  // Agendamentos
+  const { data: appts } = await svc
+    .from('appointments').select('id, status')
+    .eq('clinic_id', clinicId)
+    .gte('start_time', startDate.toISOString())
+    .lt('start_time', endDate.toISOString())
 
-  const message =
-    `📊 *Relatório ${clinicName}*\n` +
-    `📅 ${dateLabel} a ${todayLabel}\n\n` +
-    `🗓️ *Agendamentos:* ${fmt(total)}\n` +
-    `✅ Realizados: ${fmt(completed)}\n` +
-    `❌ Cancelados: ${fmt(cancelled)}\n\n` +
-    `👤 *Novos pacientes:* ${fmt(novos)}\n\n` +
-    `💰 *Financeiro:*\n` +
-    `Receita: ${fmtMoney(receita)}\n` +
-    `Despesas: ${fmtMoney(despesas)}\n` +
-    `Resultado: ${fmtMoney(receita - despesas)}`
+  const total = appts?.length || 0
+  const realizados = appts?.filter(a => a.status === 'completed').length || 0
+  const cancelados = appts?.filter(a => a.status === 'cancelled').length || 0
+  const naoCompareceu = appts?.filter(a => a.status === 'no_show').length || 0
+
+  // Faturamento
+  const { data: entradas } = await svc
+    .from('entradas').select('valor_bruto')
+    .eq('clinic_id', clinicId)
+    .gte('created_at', startDate.toISOString())
+    .lt('created_at', endDate.toISOString())
+
+  const faturamento = (entradas || []).reduce((s, e) => s + Number((e as any).valor_bruto || 0), 0)
+  const ticketMedio = realizados > 0 ? faturamento / realizados : 0
+
+  // Novos pacientes
+  const { count: novos } = await svc
+    .from('patients').select('*', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .gte('created_at', startDate.toISOString())
+    .lt('created_at', endDate.toISOString())
+
+  // Procedimentos realizados
+  const { data: procData } = await svc
+    .from('appointments').select('procedures(name)')
+    .eq('clinic_id', clinicId).eq('status', 'completed')
+    .gte('start_time', startDate.toISOString())
+    .lt('start_time', endDate.toISOString())
+
+  const procCount: Record<string, number> = {}
+  for (const a of procData || []) {
+    const name = (a.procedures as any)?.name
+    if (name) procCount[name] = (procCount[name] || 0) + 1
+  }
+  const topProcs = Object.entries(procCount).sort((a, b) => b[1] - a[1]).slice(0, 8)
+
+  // Estoque baixo
+  const { data: stockItems } = await svc
+    .from('stock_items').select('name, quantity, min_quantity')
+    .eq('clinic_id', clinicId).not('min_quantity', 'is', null)
+
+  const lowStock = (stockItems || []).filter(
+    s => Number(s.quantity) <= Number((s as any).min_quantity)
+  )
+
+  const linhas = [
+    `📊 *Relatório — ${clinicName}*`,
+    `📅 ${dateLabel}`,
+    ``,
+    `*Agendamentos*`,
+    `• Total agendado: ${fmt(total)}`,
+    `• ✅ Realizados: ${fmt(realizados)}`,
+    `• ❌ Cancelamentos: ${fmt(cancelados)}`,
+    `• 👻 Não compareceram: ${fmt(naoCompareceu)}`,
+    `• 🆕 Novos pacientes: ${fmt(novos || 0)}`,
+    ``,
+    `*Financeiro*`,
+    `• 💰 Faturamento: ${fmtMoney(faturamento)}`,
+    realizados > 0 ? `• 💳 Ticket médio: ${fmtMoney(ticketMedio)}` : null,
+    ``,
+    topProcs.length > 0
+      ? `*🏆 Procedimentos realizados:*\n${topProcs.map(([n, c]) => `• ${n} — ${c}x`).join('\n')}`
+      : `*Procedimentos:* Nenhum realizado no período`,
+    ``,
+    lowStock.length > 0
+      ? `*📦 Estoque com baixo nível:*\n${lowStock.map(s => `• ${s.name} — ${s.quantity} un`).join('\n')}`
+      : `*📦 Estoque:* ✅ Tudo em dia!`,
+  ].filter(l => l !== null).join('\n')
 
   let sent = 0
   for (const phone of phones) {
-    const r = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
-    if (r.ok) sent++
+    try {
+      const r = await sendWhatsappMessage({ clinicId, phone, message: linhas, purpose: 'any' })
+      if (r.ok) sent++
+    } catch (e) {
+      console.error('Erro ao enviar relatório para', phone, e)
+    }
   }
 
   return NextResponse.json({ ok: true, sent, total: phones.length })
