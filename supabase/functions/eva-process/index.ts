@@ -1321,3 +1321,5 @@ Responda APENAS com JSON válido, sem markdown:
     console.warn('[eva] updateEmotionalMemory falhou:', e);
   }
 }
+
+// deploy: 2026-06-07T23:09:21Z — verify-jwt fix
