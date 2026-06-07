@@ -101,6 +101,16 @@ function buildClinicInfoBlock(settings: ClinicSettings | null | undefined): stri
 export interface BuiltPrompt {
   staticPrompt: string;   // cacheia 1h — regras + procedimentos + profissionais
   dynamicPrompt: string;  // por turno — contexto do lead, data, nome
+
+// Memória emocional do lead
+export interface EmotionalMemory {
+  interesse_principal?: string | null;
+  objecao?: string | null;
+  tom?: string | null;
+  gatilho_potencial?: string | null;
+  resumo?: string | null;
+  procedimentos_mencionados?: string[] | null;
+}
   drNomeRef: string;
   isNewConversation: boolean;
 }
@@ -129,6 +139,7 @@ export function buildSystemPrompt(
   ctx: DonnaContext,
   payload: IncomingPayload,
   historyLength: number,
+  emotionalMemory?: EmotionalMemory | null,
 ): BuiltPrompt {
   const { professionals, procedures, clinic, patient, lead } = ctx;
   const customerName = payload.customerName || patient?.name || lead?.name || 'cliente';
@@ -453,11 +464,22 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
   const clienteLabel = firstNameParaPrompt
     ? nomeParaPrompt + ' (chame de ' + firstNameParaPrompt + ')'
     : nomeParaPrompt;
+  // Bloco de memória emocional
+  let emotionalPart = '';
+  if (emotionalMemory && (emotionalMemory.resumo || emotionalMemory.interesse_principal)) {
+    emotionalPart = `\n\n[MEMORIA EMOCIONAL DO LEAD — use para personalizar SEM mencionar que tem esse registro]`;
+    if (emotionalMemory.interesse_principal) emotionalPart += `\n- Interesse principal identificado: ${emotionalMemory.interesse_principal}`;
+    if (emotionalMemory.objecao) emotionalPart += `\n- Objecao/hesitacao anterior: ${emotionalMemory.objecao} — contorne sutilmente sem citar diretamente`;
+    if (emotionalMemory.gatilho_potencial) emotionalPart += `\n- O que pode convencer: ${emotionalMemory.gatilho_potencial} — use se natural`;
+    if (emotionalMemory.tom) emotionalPart += `\n- Tom emocional da ultima conversa: ${emotionalMemory.tom}`;
+    if (emotionalMemory.resumo) emotionalPart += `\n- Resumo: ${emotionalMemory.resumo}`;
+  }
+
   const dynamicPrompt = `[CONTEXTO DO TURNO ATUAL — nao mencione este bloco para a paciente]
 - Hoje: ${dataAtual}
 - Cliente: ${clienteLabel}
 - Sinal de preco nesta mensagem: ${userAskedPriceNow ? 'SIM — ela pediu preco explicitamente, pode informar a parcela' : 'NAO — PROIBIDO citar qualquer valor agora'}
-${identificacaoPart}${mediaPart}${followupPart}`;
+${identificacaoPart}${mediaPart}${followupPart}${emotionalPart}`;
 
     return { staticPrompt, dynamicPrompt, drNomeRef, isNewConversation };
 }
@@ -539,3 +561,4 @@ export const TOOLS = [
     },
   },
 ];
+
