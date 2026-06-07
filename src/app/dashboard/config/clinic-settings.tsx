@@ -91,18 +91,15 @@ export default function ClinicSettings({ clinic, automations }: Props) {
     setSendingRelNow(true)
     setSentRelNow(false)
     try {
-      const res = await fetch('/api/cron/relatorio-semanal', {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || ''}` },
-      })
-      // Chama via API route que vai chamar o cron internamente
       const r = await fetch('/api/config/relatorio-semanal/send-now', { method: 'POST' })
       const data = await r.json()
       if (data.ok) {
         setSentRelNow(true)
         setTimeout(() => setSentRelNow(false), 4000)
+      } else {
+        alert(data.error || 'Erro ao enviar relatório')
       }
-    } catch {}
+    } catch { alert('Erro de conexão') }
     finally { setSendingRelNow(false) }
   }
 
@@ -289,9 +286,9 @@ export default function ClinicSettings({ clinic, automations }: Props) {
               </>
             )}
 
-            <div className="flex justify-between items-center pt-1">
+            <div className="flex gap-3 pt-1">
               <button type="button" onClick={sendRelatorioAgora} disabled={sendingRelNow}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-xl border border-violet-300 text-violet-700 hover:bg-violet-50 disabled:opacity-50 transition-colors">
+                className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm">
                 {sendingRelNow
                   ? <><Icon name="loader" className="w-4 h-4 animate-spin" /> Enviando...</>
                   : sentRelNow
@@ -299,7 +296,8 @@ export default function ClinicSettings({ clinic, automations }: Props) {
                   : <><Icon name="send" className="w-4 h-4" /> Enviar agora</>
                 }
               </button>
-              <button type="button" onClick={saveRelatorio} disabled={savingRel} className="btn-primary px-5 py-2 flex items-center gap-2 text-sm">
+              <button type="button" onClick={saveRelatorio} disabled={savingRel}
+                className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm">
                 {savingRel
                   ? <><Icon name="loader" className="w-4 h-4 animate-spin" /> Salvando...</>
                   : successRel
@@ -315,4 +313,5 @@ export default function ClinicSettings({ clinic, automations }: Props) {
     </div>
   )
 }
+
 
