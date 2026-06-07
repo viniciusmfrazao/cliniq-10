@@ -98,10 +98,6 @@ function buildClinicInfoBlock(settings: ClinicSettings | null | undefined): stri
   return lines.join('\n');
 }
 
-export interface BuiltPrompt {
-  staticPrompt: string;   // cacheia 1h — regras + procedimentos + profissionais
-  dynamicPrompt: string;  // por turno — contexto do lead, data, nome
-
 // Memória emocional do lead
 export interface EmotionalMemory {
   interesse_principal?: string | null;
@@ -111,6 +107,10 @@ export interface EmotionalMemory {
   resumo?: string | null;
   procedimentos_mencionados?: string[] | null;
 }
+
+export interface BuiltPrompt {
+  staticPrompt: string;   // cacheia 1h — regras + procedimentos + profissionais
+  dynamicPrompt: string;  // por turno — contexto do lead, data, nome
   drNomeRef: string;
   isNewConversation: boolean;
 }
