@@ -232,6 +232,18 @@ export default async function PatientCentralPage({
           <OverviewTab patient={patient} medicalRecord={medicalRecord} patientId={id} />
           <div className="mt-6">
             <Suspense fallback={<TabSkeleton />}>
+              {userData?.clinic_id && patient && (
+                <DocumentosTab
+                  patientId={id}
+                  patientName={patient.name}
+                  patientPhone={patient.phone}
+                  clinicId={userData.clinic_id}
+                />
+              )}
+            </Suspense>
+          </div>
+          <div className="mt-6">
+            <Suspense fallback={<TabSkeleton />}>
               {userData?.clinic_id && (
                 <OrcamentosTabServer patientId={id} clinicId={userData.clinic_id} patient={patient} />
               )}
@@ -728,3 +740,4 @@ async function PackagesTabServer({
     />
   )
 }
+
