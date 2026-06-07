@@ -510,7 +510,14 @@ export default function WhatsAppPage() {
 
       const inst = rowInstanceName(r)
 
+      // Filtrar mensagens de instâncias que não são inbound (ex: automações)
+      // Se inst é conhecido e não está nas inbound lines → pula
       if (inboundInstances.size > 0 && inst && !inboundInstances.has(inst)) continue
+      // Se inst é null mas metadata.outbound=true → veio de automação sem instance_name → pula
+      if (inboundInstances.size > 0 && !inst) {
+        const meta = r.metadata as Record<string, unknown> | null
+        if (meta && meta.outbound === true && r.role !== 'user') continue
+      }
 
       if (inst) linesFound.add(inst)
 
@@ -1765,4 +1772,5 @@ function EvaToggle({
     </button>
   )
 }
+
 
