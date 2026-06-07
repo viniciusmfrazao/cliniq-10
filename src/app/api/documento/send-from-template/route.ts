@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
             number: phone.replace(/\D/g, '').replace(/^(?!55)/, '55'),
             mediatype: 'image',
             media: template.image_url,
-            caption: template.name,
+            caption: '',
           }),
         })
       }
@@ -200,5 +200,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, sent: 'whatsapp', link: requiresSignature ? link : null, document_id: doc.id })
 }
+
 
 
