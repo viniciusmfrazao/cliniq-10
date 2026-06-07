@@ -38,6 +38,9 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
   const [excluirCat, setExcluirCat] = useState(initial.excluirCategorias.join(', '))
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [testPhone, setTestPhone] = useState('')
+  const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [testing, setTesting] = useState(false)
 
   const supabase = createClient()
 
@@ -165,6 +168,26 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
           </div>
         </>
       )}
+
+      {/* Teste */}
+      <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 mb-4">
+        <p className="font-semibold text-sm text-slate-900 mb-1">Enviar teste pra um número</p>
+        <p className="text-xs text-slate-500 mb-3">Recomendamos testar antes de ativar.</p>
+        <div className="flex gap-2">
+          <input type="tel" value={testPhone} onChange={e => setTestPhone(e.target.value)}
+            placeholder="Ex: 5534999999999"
+            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+          <button type="button" onClick={sendTest} disabled={testing}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium">
+            {testing ? '...' : '📤 Enviar teste'}
+          </button>
+        </div>
+        {testMsg && (
+          <div className={`mt-2 p-2 rounded-lg text-xs ${testMsg.kind === 'ok' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {testMsg.text}
+          </div>
+        )}
+      </div>
 
       {/* Salvar */}
       <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
