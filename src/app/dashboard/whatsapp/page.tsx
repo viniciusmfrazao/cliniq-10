@@ -268,32 +268,50 @@ export default function WhatsAppPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneFromQuery, clinicId, conversations])
 
-  // Subscription Realtime — uma vez que a clinica esta resolvida
+  // Subscription Realtime — reconexão automática em caso de erro
   useEffect(() => {
     if (!clinicId) return
 
-    setRealtimeStatus('connecting')
-    const channel = supabase
-      .channel(`whatsapp:${clinicId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'eva_conversations',
-          filter: `clinic_id=eq.${clinicId}`,
-        },
-        (payload) => {
-          handleNewRow(payload.new as EvaRow)
-        },
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') setRealtimeStatus('live')
-        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setRealtimeStatus('error')
-      })
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let currentChannel: ReturnType<typeof supabase.channel> | null = null
+
+    function subscribe() {
+      setRealtimeStatus('connecting')
+      const channel = supabase
+        .channel(`whatsapp:${clinicId}:${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'eva_conversations',
+            filter: `clinic_id=eq.${clinicId}`,
+          },
+          (payload) => {
+            handleNewRow(payload.new as EvaRow)
+          },
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setRealtimeStatus('live')
+            if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            setRealtimeStatus('error')
+            // Reconectar após 5s
+            retryTimer = setTimeout(() => {
+              if (currentChannel) supabase.removeChannel(currentChannel)
+              subscribe()
+            }, 5000)
+          }
+        })
+      currentChannel = channel
+    }
+
+    subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      if (retryTimer) clearTimeout(retryTimer)
+      if (currentChannel) supabase.removeChannel(currentChannel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinicId])
@@ -1747,3 +1765,4 @@ function EvaToggle({
     </button>
   )
 }
+
