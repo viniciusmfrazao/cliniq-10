@@ -53,6 +53,31 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
 
   const horaLabel = (h: number) => `${String(h).padStart(2, '0')}:00`
 
+  async function sendTest() {
+    if (!testPhone.trim()) {
+      setTestMsg({ kind: 'err', text: 'Informe um número com DDD (ex: 5534999999999)' })
+      return
+    }
+    setTesting(true); setTestMsg(null)
+    try {
+      const text = template
+        .replace(/\{\{primeiro_nome\}\}/g, 'Ana')
+        .replace(/\{\{nome\}\}/g, 'Ana Silva')
+        .replace(/\{\{procedimento\}\}/g, 'Botox')
+        .replace(/\{\{profissional\}\}/g, 'Dra. Sarah')
+        .replace(/\{\{clinica\}\}/g, clinicName)
+      const r = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
+      })
+      const json = await r.json()
+      if (json.ok) setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada!' })
+      else setTestMsg({ kind: 'err', text: json.error || 'Erro ao enviar' })
+    } catch { setTestMsg({ kind: 'err', text: 'Erro de conexão' }) }
+    finally { setTesting(false) }
+  }
+
   async function handleSave() {
     setSaving(true)
     const cats = excluirCat.split(',').map(s => s.trim()).filter(Boolean)
@@ -203,4 +228,5 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
     </div>
   )
 }
+
 
