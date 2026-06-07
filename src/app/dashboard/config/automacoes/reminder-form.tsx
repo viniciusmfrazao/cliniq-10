@@ -95,6 +95,9 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   const [saving, setSaving]               = useState(false)
   const [savedAt, setSavedAt]             = useState<Date | null>(null)
   const [activeTab, setActiveTab]         = useState<'24h' | '2h'>('24h')
+  const [testPhone, setTestPhone] = useState('')
+  const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [testing, setTesting] = useState(false)
 
   const previewVars: Vars = {
     nome: 'Maria Aparecida da Silva',
@@ -110,6 +113,31 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
 
   const preview24h = useMemo(() => renderPreview(template24h, previewVars), [template24h])
   const preview2h  = useMemo(() => renderPreview(template2h, previewVars), [template2h])
+
+  async function sendTest(template: string, previewFn: (t: string) => string) {
+    if (!testPhone.trim()) {
+      setTestMsg({ kind: 'err', text: 'Informe um número com DDD (ex: 5534999999999)' })
+      return
+    }
+    setTesting(true)
+    setTestMsg(null)
+    try {
+      const text = previewFn(template)
+        .replace(/\{\{link_confirmacao\}\}/g, 'https://app.clinike.com.br/confirmar/TESTE-LINK')
+      const r = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
+      })
+      const json = await r.json()
+      if (json.ok) setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada com sucesso!' })
+      else setTestMsg({ kind: 'err', text: json.error || 'Erro ao enviar' })
+    } catch {
+      setTestMsg({ kind: 'err', text: 'Erro de conexão' })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   async function save() {
     setSaving(true)
@@ -304,6 +332,43 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
         )}
       </div>
 
+      {/* Teste */}
+      <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 mb-4">
+        <p className="font-semibold text-sm text-slate-900 mb-2">Enviar teste pra um número</p>
+        <p className="text-xs text-slate-500 mb-3">Recomendamos testar pro seu próprio celular antes de ativar. O link de confirmação aparecerá como exemplo.</p>
+        <div className="flex gap-2">
+          <input
+            type="tel"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+            placeholder="Ex: 5534999999999"
+            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+          />
+          <button
+            type="button"
+            onClick={() => sendTest(activeTab === '24h' ? template24h : template2h, t => t
+              .replace(/\{\{primeiro_nome\}\}/g, 'Ana')
+              .replace(/\{\{nome\}\}/g, 'Ana Silva')
+              .replace(/\{\{clinica\}\}/g, 'Clínica')
+              .replace(/\{\{profissional\}\}/g, 'Dra. Sarah')
+              .replace(/\{\{procedimento\}\}/g, 'Botox')
+              .replace(/\{\{data\}\}/g, '08/06/2026')
+              .replace(/\{\{hora\}\}/g, '10:00')
+              .replace(/\{\{dia_semana\}\}/g, 'Segunda-feira')
+            )}
+            disabled={testing}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+          >
+            {testing ? '...' : '📤 Enviar teste'}
+          </button>
+        </div>
+        {testMsg && (
+          <div className={`mt-3 p-2 rounded-lg text-xs ${testMsg.kind === 'ok' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {testMsg.text}
+          </div>
+        )}
+      </div>
+
       {/* Salvar */}
       <div className="flex items-center gap-4 pt-2">
         <button
@@ -322,3 +387,4 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     </div>
   )
 }
+
