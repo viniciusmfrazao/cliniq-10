@@ -91,7 +91,7 @@ export default function ClinicSettings({ clinic, automations }: Props) {
     setSendingRelNow(true)
     setSentRelNow(false)
     try {
-      const r = await fetch('/api/config/relatorio-semanal/send-now', { method: 'POST' })
+      const r = await fetch('/api/config/relatorio-semanal/send-now', { method: 'POST', credentials: 'include' })
       const data = await r.json()
       if (data.ok) {
         setSentRelNow(true)
@@ -313,5 +313,6 @@ export default function ClinicSettings({ clinic, automations }: Props) {
     </div>
   )
 }
+
 
 
