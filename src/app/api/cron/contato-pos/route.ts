@@ -17,15 +17,15 @@ import { logEva } from '@/lib/eva-logger'
  *      Também exclui por nome: palavras como "avaliação", "retorno", "consulta"
  *   4) Envia o template pra cada paciente e marca contato_pos_sent_at
  *
- * Variáveis do template: {nome}, {primeiro_nome}, {procedimento}, {profissional}, {clinica}
+ * Variáveis do template: {{nome}}, {{primeiro_nome}}, {{procedimento}}, {{profissional}}, {{clinica}}
  * Auth: Authorization: Bearer ${CRON_SECRET}
  */
 
 const TZ = 'America/Sao_Paulo'
 
-const DEFAULT_TEMPLATE = `Oi {primeiro_nome}! 💜
+const DEFAULT_TEMPLATE = `Oi {{primeiro_nome}}! 💜
 
-Passando pra saber como você está após o seu atendimento de {procedimento} aqui na {clinica}.
+Passando pra saber como você está após o seu atendimento de {{procedimento}} aqui na {{clinica}}.
 
 Sentiu algum desconforto? Tem alguma dúvida? É só chamar! Estamos à disposição 🤍`
 
@@ -38,7 +38,7 @@ const EXCLUDE_NAME_PATTERNS = [
 ]
 
 function fillTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (_, key) => vars[key] || `{${key}}`)
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || `{{${key}}}`)
 }
 
 function getCurrentHourBRT(): number {
@@ -228,3 +228,4 @@ export async function GET(req: NextRequest) {
     results,
   })
 }
+
