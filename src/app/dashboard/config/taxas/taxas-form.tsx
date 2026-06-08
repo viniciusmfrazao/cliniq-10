@@ -57,7 +57,7 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
     setSaving(true)
     const rows = Object.entries(taxas).map(([key, taxa_percentual]) => {
       const [forma, band] = key.split('__')
-      return { clinic_id: clinicId, forma, bandeira: band, taxa_percentual }
+      return { clinic_id: clinicId, forma, bandeira: band || 'todas', taxa_percentual }
     })
 
     const { error } = await supabase
@@ -134,3 +134,4 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
     </div>
   )
 }
+
