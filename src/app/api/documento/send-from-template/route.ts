@@ -169,14 +169,20 @@ export async function POST(req: NextRequest) {
       const instance = waData?.instance_name
 
       if (evUrl && evKey && instance) {
+        const fileUrl = template.image_url as string
+        const isPdf = fileUrl.toLowerCase().endsWith('.pdf')
+        const fileName = isPdf
+          ? (template.name ? `${template.name}.pdf` : 'documento.pdf')
+          : undefined
         await fetch(`${evUrl}/message/sendMedia/${instance}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': evKey },
           body: JSON.stringify({
             number: phone.replace(/\D/g, '').replace(/^(?!55)/, '55'),
-            mediatype: 'image',
-            media: template.image_url,
+            mediatype: isPdf ? 'document' : 'image',
+            media: fileUrl,
             caption: '',
+            ...(fileName ? { fileName } : {}),
           }),
         })
       }

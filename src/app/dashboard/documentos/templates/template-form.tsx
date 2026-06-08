@@ -60,9 +60,9 @@ export default function TemplateForm({ clinicId, template }: Props) {
   )
 
   async function handleImageUpload(file: File) {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp']
-    if (!allowed.includes(file.type)) { alert('Apenas JPG, PNG ou WEBP'); return }
-    if (file.size > 5 * 1024 * 1024) { alert('Imagem deve ter no máximo 5MB'); return }
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+    if (!allowed.includes(file.type)) { alert('Apenas JPG, PNG, WEBP ou PDF'); return }
+    if (file.size > 10 * 1024 * 1024) { alert('Arquivo deve ter no máximo 10MB'); return }
     setUploadingImage(true)
     const ext = file.name.split('.').pop()
     const path = `templates/${clinicId}/${Date.now()}.${ext}`
@@ -263,15 +263,27 @@ export default function TemplateForm({ clinicId, template }: Props) {
             {/* Upload de imagem */}
             <div className="mt-4">
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Imagem do documento <span className="text-xs text-slate-400 font-normal">(opcional — enviada junto com o texto)</span>
+                Anexo do documento <span className="text-xs text-slate-400 font-normal">(opcional — enviado junto com o texto)</span>
               </label>
               {imagePreview ? (
                 <div className="relative inline-block">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="h-32 rounded-xl border border-slate-200 object-contain bg-slate-50"
-                  />
+                  {imagePreview.toLowerCase().endsWith('.pdf') ? (
+                    <a
+                      href={imagePreview}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-4 py-3 h-32 w-64 rounded-xl border border-slate-200 bg-red-50 hover:bg-red-100 transition-colors"
+                    >
+                      <div className="w-12 h-12 rounded-lg bg-red-500 text-white font-bold text-xs flex items-center justify-center shrink-0">PDF</div>
+                      <div className="text-sm text-slate-700 truncate">Clique para abrir o PDF</div>
+                    </a>
+                  ) : (
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="h-32 rounded-xl border border-slate-200 object-contain bg-slate-50"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => { setImagePreview(''); setForm(f => ({ ...f, image_url: '' })) }}
@@ -287,12 +299,12 @@ export default function TemplateForm({ clinicId, template }: Props) {
                   ) : (
                     <>
                       <Icon name="image" className="w-5 h-5 text-slate-400" />
-                      <span className="text-sm text-slate-500">Clique para adicionar uma imagem (JPG, PNG, WEBP — máx. 5MB)</span>
+                      <span className="text-sm text-slate-500">Clique para adicionar imagem ou PDF (JPG, PNG, WEBP, PDF — máx. 10MB)</span>
                     </>
                   )}
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
                     className="hidden"
                     disabled={uploadingImage}
                     onChange={e => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0]) }}
