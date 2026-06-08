@@ -90,9 +90,12 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
     init()
   }, [appointmentId, clinicId, patientId])
 
-  function getTaxa(forma: string, bandeira: string) {
-    // Tenta match exato por bandeira, depois fallback para 'todas' ou sem bandeira
+  function getTaxa(forma: string, bandeira: string, parcelas: number = 1) {
+    // Para crédito, monta a chave com parcelas: credito_1x, credito_2x, etc
+    const formaKey = forma === 'credito' ? `credito_${parcelas}x` : forma
     return (
+      taxas.find(t => t.forma === formaKey && t.bandeira === bandeira)?.taxa_percentual ??
+      taxas.find(t => t.forma === formaKey && (t.bandeira === 'todas' || !t.bandeira))?.taxa_percentual ??
       taxas.find(t => t.forma === forma && t.bandeira === bandeira)?.taxa_percentual ??
       taxas.find(t => t.forma === forma && (t.bandeira === 'todas' || !t.bandeira))?.taxa_percentual ??
       0
@@ -103,7 +106,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
     setSplits(prev => prev.map(s => {
       if (s.id !== id) return s
       const u = { ...s, ...changes }
-      u.taxa = getTaxa(u.forma, u.bandeira)
+      u.taxa = getTaxa(u.forma, u.bandeira, u.parcelas)
       u.liquido = u.valor * (1 - u.taxa / 100)
       return u
     }))
@@ -358,4 +361,5 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   if (!mounted) return null
   return createPortal(modal, document.body)
 }
+
 
