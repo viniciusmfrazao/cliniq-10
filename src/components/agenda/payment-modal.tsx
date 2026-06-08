@@ -277,25 +277,31 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                         className="input w-full text-sm" />
                     </div>
                   </div>
-                  {s.forma === 'credito' && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">Bandeira</label>
-                        <select value={s.bandeira} onChange={e => updateSplit(s.id, { bandeira: e.target.value })} className="input w-full text-sm">
-                          <option value="">Selecione</option>
-                          {[...new Set(taxas.filter(t => t.forma.startsWith('credito')).map(t => t.bandeira).filter(b => b && b !== 'todas'))].map(b => (
-                            <option key={b!} value={b!}>{b}</option>
-                          ))}
-                        </select>
+                  {s.forma === 'credito' && (() => {
+                    const bandeiras = [...new Set(taxas.filter(t => t.forma.startsWith('credito')).map(t => t.bandeira).filter(b => b && b !== 'todas'))]
+                    const temBandeiras = bandeiras.length > 0
+                    return (
+                      <div className={`grid gap-3 ${temBandeiras ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        {temBandeiras && (
+                          <div>
+                            <label className="text-xs text-slate-500 mb-1 block">Bandeira</label>
+                            <select value={s.bandeira} onChange={e => updateSplit(s.id, { bandeira: e.target.value })} className="input w-full text-sm">
+                              <option value="">Selecione</option>
+                              {bandeiras.map(b => (
+                                <option key={b!} value={b!}>{b}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Parcelas</label>
+                          <select value={s.parcelas} onChange={e => updateSplit(s.id, { parcelas: parseInt(e.target.value) })} className="input w-full text-sm">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => <option key={p} value={p}>{p}x</option>)}
+                          </select>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">Parcelas</label>
-                        <select value={s.parcelas} onChange={e => updateSplit(s.id, { parcelas: parseInt(e.target.value) })} className="input w-full text-sm">
-                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => <option key={p} value={p}>{p}x</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                   <div className="flex justify-between text-xs text-slate-500">
                     <span>Taxa: {s.taxa}%</span>
                     <span className="font-medium text-emerald-600">Líquido: {fmt(s.liquido)}</span>
@@ -361,5 +367,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   if (!mounted) return null
   return createPortal(modal, document.body)
 }
+
 
 
