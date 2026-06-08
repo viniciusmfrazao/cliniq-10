@@ -104,6 +104,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     })
   }
 
+  const setSingleValue = (key: string, val: string) => setResponses(prev => ({ ...prev, [key]: val }))
+
   const setTextValue = (field: string, value: string) => {
     setResponses(prev => {
       const next = { ...prev, [field]: value }
@@ -790,4 +792,5 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     </>
   )
 }
+
 
