@@ -111,8 +111,13 @@ export default async function AgendaPage({
 
   // Filtrar profissionais no código (evita problemas com enum)
   const allUsers = allUsersResult.data || []
-  const professionals = allUsers.filter(u => 
+  const professionalsFiltered = allUsers.filter(u => 
     (PROFESSIONAL_ROLES.includes(u.role) || PROFESSIONAL_ROLES.includes(u.professional_role || '')) && u.active !== false
+  )
+  // Se não houver profissionais com role específico, usar admins como fallback
+  const professionals = professionalsFiltered.length > 0 
+    ? professionalsFiltered 
+    : allUsers.filter(u => u.role === 'admin' && u.active !== false
   )
   const appointments = appointmentsResult.data || []
   const todayAppointments = todayAppointmentsResult.data || []
@@ -212,3 +217,4 @@ export default async function AgendaPage({
     </div>
   )
 }
+
