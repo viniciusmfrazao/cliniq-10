@@ -12,6 +12,8 @@ type Taxa = {
 
 const FORMAS = [
   { key: 'pix', label: 'Pix' },
+  { key: 'dinheiro', label: 'Dinheiro' },
+  { key: 'boleto', label: 'Boleto' },
   { key: 'debito', label: 'Débito' },
   { key: 'credito_1x', label: 'Crédito 1x' },
   { key: 'credito_2x', label: 'Crédito 2x' },
@@ -28,7 +30,6 @@ const FORMAS = [
 ]
 
 const BANDEIRAS = [
-  { key: 'todas', label: 'Todas as bandeiras' },
   { key: 'visa', label: 'Visa' },
   { key: 'master', label: 'Mastercard' },
   { key: 'elo', label: 'Elo' },
@@ -43,10 +44,10 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [bandeira, setBandeira] = useState('todas')
+  const [bandeira, setBandeira] = useState('visa')
 
   function getTaxa(forma: string) {
-    return taxas[`${forma}__${bandeira}`] ?? taxas[`${forma}__todas`] ?? 0
+    return taxas[`${forma}__${bandeira}`] ?? 0
   }
 
   function setTaxa(forma: string, valor: number) {
@@ -57,7 +58,7 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
     setSaving(true)
     const rows = Object.entries(taxas).map(([key, taxa_percentual]) => {
       const [forma, band] = key.split('__')
-      return { clinic_id: clinicId, forma, bandeira: band || 'todas', taxa_percentual }
+      return { clinic_id: clinicId, forma, bandeira: band || 'visa', taxa_percentual }
     })
 
     const { error } = await supabase
@@ -134,4 +135,5 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
     </div>
   )
 }
+
 
