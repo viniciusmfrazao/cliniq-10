@@ -729,6 +729,49 @@ export default function AnamneseFormClient({ token }: { token: string }) {
             </div>
           </section>)}
 
+          {/* Perguntas extras configuradas pela clínica */}
+          {cfg?.perguntas_extras && cfg.perguntas_extras.length > 0 && (
+            <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+              <h2 className="text-base tracking-widest uppercase mb-6" style={{ color: 'var(--gold)', fontFamily: 'var(--font-heading)', letterSpacing: '0.15em' }}>
+                Informações Adicionais
+              </h2>
+              {cfg.perguntas_extras.map((p, idx) => (
+                <div key={idx} className="mb-6">
+                  <p className="text-sm mb-3" style={{ color: 'var(--mid)', fontFamily: 'var(--font-heading)' }}>{p.pergunta}</p>
+                  {p.tipo === 'sim_nao' && (
+                    <div className="flex gap-3 flex-wrap">
+                      {['Sim', 'Não'].map(opt => (
+                        <Choice key={opt} group={`extra_${idx}`} value={opt}
+                          selected={responses[`extra_${idx}`] === opt}
+                          onClick={() => setSingleValue(`extra_${idx}`, opt)} />
+                      ))}
+                    </div>
+                  )}
+                  {p.tipo === 'texto' && (
+                    <textarea className="anamnese-input" rows={3}
+                      placeholder="Sua resposta..."
+                      value={responses[`extra_${idx}`] || ''}
+                      onChange={e => setTextValue(`extra_${idx}`, e.target.value)} />
+                  )}
+                  {p.tipo === 'multipla' && p.opcoes && (
+                    <div className="flex gap-3 flex-wrap">
+                      {p.opcoes.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
+                        <Choice key={opt} group={`extra_${idx}`} value={opt} type="multi"
+                          selected={(responses[`extra_${idx}`] || '').includes(opt)}
+                          onClick={() => {
+                            const cur = responses[`extra_${idx}`] || ''
+                            const arr = cur ? cur.split(',').map((s: string) => s.trim()) : []
+                            const next = arr.includes(opt) ? arr.filter((s: string) => s !== opt) : [...arr, opt]
+                            setTextValue(`extra_${idx}`, next.join(', '))
+                          }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+
           {/* Submit */}
           <div className="text-center mt-10">
             <button
@@ -747,3 +790,4 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     </>
   )
 }
+
