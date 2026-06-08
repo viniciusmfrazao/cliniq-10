@@ -131,16 +131,29 @@ export async function POST() {
     ].filter(l => l !== null).join('\n')
 
     let sent = 0
+    const results: Array<{ phone: string; ok: boolean; error?: string }> = []
     for (const phone of phones) {
       try {
         const r = await sendWhatsappMessage({ clinicId, phone, message: linhas, purpose: 'any' })
-        if (r.ok) sent++
-      } catch (e) {
+        if (r.ok) {
+          sent++
+          results.push({ phone, ok: true })
+        } else {
+          results.push({ phone, ok: false, error: (r as any).error || 'erro_desconhecido' })
+        }
+      } catch (e: any) {
         console.error('Erro ao enviar para', phone, e)
+        results.push({ phone, ok: false, error: String(e?.message || e) })
       }
     }
 
-    return NextResponse.json({ ok: true, sent, total: phones.length })
+    return NextResponse.json({
+      ok: sent > 0,
+      sent,
+      total: phones.length,
+      results,
+      ...(sent === 0 ? { error: results[0]?.error || 'nenhum_envio' } : {}),
+    })
   } catch (e: any) {
     console.error('[send-now] erro:', e)
     return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 })

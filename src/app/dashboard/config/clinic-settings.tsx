@@ -93,11 +93,12 @@ export default function ClinicSettings({ clinic, automations }: Props) {
     try {
       const r = await fetch('/api/config/relatorio-semanal/send-now', { method: 'POST', credentials: 'include' })
       const data = await r.json()
-      if (data.ok) {
+      if (data.ok && data.sent > 0) {
         setSentRelNow(true)
         setTimeout(() => setSentRelNow(false), 4000)
       } else {
-        alert(data.error || 'Erro ao enviar relatório')
+        const detalhe = data.results?.find((x: any) => !x.ok)?.error
+        alert(`Não foi possível enviar.\n\nMotivo: ${detalhe || data.error || 'erro_desconhecido'}\n\nEnviados: ${data.sent || 0} de ${data.total || 0}`)
       }
     } catch { alert('Erro de conexão') }
     finally { setSendingRelNow(false) }
