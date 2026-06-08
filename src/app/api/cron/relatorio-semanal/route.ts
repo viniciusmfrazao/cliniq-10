@@ -10,6 +10,16 @@ function fmtMoney(v: number) {
   return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+function parsePhones(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((p: any) => String(p).trim()).filter(Boolean)
+  }
+  if (typeof raw === 'string') {
+    return raw.split(',').map(p => p.trim()).filter(Boolean)
+  }
+  return []
+}
+
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -18,38 +28,55 @@ export async function GET(req: NextRequest) {
 
   const svc = createServiceClient()
   const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-  const hour = `${String(nowBR.getHours()).padStart(2,'0')}:${String(nowBR.getMinutes()).padStart(2,'0')}`
+  const currentHour = nowBR.getHours()
   const dayOfWeek = nowBR.getDay() // 0=dom, 1=seg
+  const todayISO = nowBR.toISOString().slice(0, 10)
 
   const { data: automations } = await svc
     .from('clinic_automations')
-    .select('clinic_id, relatorio_telefones, relatorio_hora, relatorio_dia')
+    .select('clinic_id, relatorio_telefones, relatorio_hora, relatorio_dia, last_relatorio_sent_at')
     .eq('relatorio_semanal', true)
     .eq('relatorio_dia', dayOfWeek)
-    .eq('relatorio_hora', hour)
 
   if (!automations?.length) {
-    return NextResponse.json({ ok: true, sent: 0, reason: 'no clinics scheduled now' })
+    return NextResponse.json({ ok: true, sent: 0, reason: 'no clinics for this weekday', dayOfWeek })
   }
 
-  const results = []
+  const results: any[] = []
 
   for (const auto of automations) {
-    const clinicId = auto.clinic_id
-    const phones: string[] = (auto.relatorio_telefones || '')
-      .split(',').map((p: string) => p.trim()).filter(Boolean)
-    if (!phones.length) continue
+    // Janela de hora: compara só a hora, ignora os minutos
+    // ex: configurado '10:00' aceita execucoes entre 10:00 e 10:59
+    const configHour = parseInt(String(auto.relatorio_hora || '10:00').split(':')[0], 10)
+    if (currentHour !== configHour) {
+      results.push({ clinic_id: auto.clinic_id, skipped: 'hour_mismatch', expected: configHour, got: currentHour })
+      continue
+    }
 
-    // Período: semana passada (seg a dom)
+    // Idempotencia: se ja enviou hoje, pula
+    const lastSent = auto.last_relatorio_sent_at ? String(auto.last_relatorio_sent_at).slice(0, 10) : null
+    if (lastSent === todayISO) {
+      results.push({ clinic_id: auto.clinic_id, skipped: 'already_sent_today' })
+      continue
+    }
+
+    const clinicId = auto.clinic_id
+    const phones = parsePhones(auto.relatorio_telefones)
+    if (!phones.length) {
+      results.push({ clinic_id: clinicId, skipped: 'no_phones' })
+      continue
+    }
+
+    // Periodo: ultimos 7 dias
     const endDate = new Date(nowBR)
-    endDate.setHours(0, 0, 0, 0)
+    endDate.setHours(23, 59, 59, 999)
     const startDate = new Date(endDate)
     startDate.setDate(startDate.getDate() - 7)
 
-    const dateLabel = `${startDate.toLocaleDateString('pt-BR')} a ${new Date(endDate.getTime() - 86400000).toLocaleDateString('pt-BR')}`
+    const dateLabel = `${startDate.toLocaleDateString('pt-BR')} a ${nowBR.toLocaleDateString('pt-BR')}`
 
     const { data: clinic } = await svc.from('clinics').select('name').eq('id', clinicId).single()
-    const clinicName = clinic?.name || 'Clínica'
+    const clinicName = clinic?.name || 'Clinica'
 
     // Agendamentos
     const { data: appts } = await svc
@@ -59,9 +86,9 @@ export async function GET(req: NextRequest) {
       .lt('start_time', endDate.toISOString())
 
     const total = appts?.length || 0
-    const realizados = appts?.filter(a => a.status === 'completed').length || 0
-    const cancelados = appts?.filter(a => a.status === 'cancelled').length || 0
-    const naoCompareceu = appts?.filter(a => a.status === 'no_show').length || 0
+    const realizados = appts?.filter((a: any) => a.status === 'completed').length || 0
+    const cancelados = appts?.filter((a: any) => a.status === 'cancelled').length || 0
+    const naoCompareceu = appts?.filter((a: any) => a.status === 'no_show').length || 0
 
     // Faturamento
     const { data: entradas } = await svc
@@ -70,7 +97,7 @@ export async function GET(req: NextRequest) {
       .gte('created_at', startDate.toISOString())
       .lt('created_at', endDate.toISOString())
 
-    const faturamento = (entradas || []).reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
+    const faturamento = (entradas || []).reduce((s: number, e: any) => s + Number(e.valor_bruto || 0), 0)
     const ticketMedio = realizados > 0 ? faturamento / realizados : 0
 
     // Novos pacientes
@@ -94,49 +121,74 @@ export async function GET(req: NextRequest) {
     }
     const topProcs = Object.entries(procCount).sort((a, b) => b[1] - a[1]).slice(0, 8)
 
-    // Estoque baixo
-    const { data: stockItems } = await svc
-      .from('stock_items').select('name, quantity, min_quantity')
-      .eq('clinic_id', clinicId).not('min_quantity', 'is', null)
+    // Estoque baixo (tabela correta: products)
+    const { data: stockData } = await svc
+      .from('products').select('name, current_stock, min_stock')
+      .eq('clinic_id', clinicId)
+      .eq('is_active', true)
 
-    const lowStock = (stockItems || []).filter(
-      s => Number(s.quantity) <= Number(s.min_quantity)
+    const lowStock = (stockData || []).filter(
+      (s: any) => s.min_stock !== null && Number(s.current_stock) <= Number(s.min_stock)
     )
 
     const linhas = [
-      `📊 *Relatório Semanal — ${clinicName}*`,
-      `📅 Semana de ${dateLabel}`,
+      `📊 *Relatorio Semanal — ${clinicName}*`,
+      `📅 ${dateLabel}`,
       ``,
       `*Agendamentos*`,
       `• Total agendado: ${fmt(total)}`,
       `• ✅ Realizados: ${fmt(realizados)}`,
       `• ❌ Cancelamentos: ${fmt(cancelados)}`,
-      `• 👻 Não compareceram: ${fmt(naoCompareceu)}`,
+      `• 👻 Nao compareceram: ${fmt(naoCompareceu)}`,
       `• 🆕 Novos pacientes: ${fmt(novos || 0)}`,
       ``,
       `*Financeiro*`,
       `• 💰 Faturamento: ${fmtMoney(faturamento)}`,
-      realizados > 0 ? `• 💳 Ticket médio: ${fmtMoney(ticketMedio)}` : null,
+      realizados > 0 ? `• 💳 Ticket medio: ${fmtMoney(ticketMedio)}` : null,
       ``,
       topProcs.length > 0
         ? `*🏆 Procedimentos realizados:*\n${topProcs.map(([n, c]) => `• ${n} — ${c}x`).join('\n')}`
-        : `*Procedimentos:* Nenhum realizado na semana`,
+        : null,
       ``,
       lowStock.length > 0
-        ? `*📦 Estoque com baixo nível:*\n${lowStock.map(s => `• ${s.name} — ${s.quantity} un`).join('\n')}`
+        ? `*📦 Estoque com baixo nivel:*\n${lowStock.map((s: any) => `• ${s.name} — ${s.current_stock} un`).join('\n')}`
         : `*📦 Estoque:* ✅ Tudo em dia!`,
     ].filter(l => l !== null).join('\n')
 
+    let sentForClinic = 0
+    const sendResults: any[] = []
     for (const phone of phones) {
       try {
-        await sendWhatsappMessage({ clinicId, phone, message: linhas, purpose: 'any' })
-      } catch (e) {
-        console.error('Erro ao enviar relatório para', phone, e)
+        const r = await sendWhatsappMessage({ clinicId, phone, message: linhas, purpose: 'any' })
+        if (r.ok) {
+          sentForClinic++
+          sendResults.push({ phone, ok: true })
+        } else {
+          sendResults.push({ phone, ok: false, error: (r as any).error })
+        }
+      } catch (e: any) {
+        sendResults.push({ phone, ok: false, error: String(e?.message || e) })
       }
     }
 
-    results.push({ clinic: clinicName, phones: phones.length, realizados, faturamento })
+    // Marcar como enviado hoje (idempotencia)
+    if (sentForClinic > 0) {
+      await svc.from('clinic_automations')
+        .update({ last_relatorio_sent_at: new Date().toISOString() })
+        .eq('clinic_id', clinicId)
+    }
+
+    results.push({
+      clinic_id: clinicId,
+      clinic: clinicName,
+      phones: phones.length,
+      sent: sentForClinic,
+      realizados,
+      faturamento,
+      sendResults,
+    })
   }
 
-  return NextResponse.json({ ok: true, sent: results.length, results })
+  const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0)
+  return NextResponse.json({ ok: true, sent: totalSent, clinics: results.length, results })
 }
