@@ -166,11 +166,13 @@ export async function POST(req: NextRequest) {
   // 1. Se houver anexo, envia PRIMEIRO (o paciente vê o documento antes da mensagem)
   if (hasAttachment) {
     try {
+      // Buscar instância de AUTOMAÇÃO (não a da Eva/manual)
       const { data: waData } = await svc
         .from('clinic_whatsapp')
         .select('instance_name')
         .eq('clinic_id', clinicId)
         .eq('status', 'connected')
+        .eq('role_outbound_automation', true)
         .limit(1)
         .maybeSingle()
 
@@ -205,7 +207,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Enviar texto DEPOIS (com link de assinatura quando aplicável)
-  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'any' })
+  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
 
   // Marcar como enviado
   // Atualiza whatsapp_sent_at; status fica como foi inserido:

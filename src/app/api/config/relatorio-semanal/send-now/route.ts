@@ -134,7 +134,7 @@ export async function POST() {
     const results: Array<{ phone: string; ok: boolean; error?: string }> = []
     for (const phone of phones) {
       try {
-        const r = await sendWhatsappMessage({ clinicId, phone, message: linhas, purpose: 'any' })
+        const r = await sendWhatsappMessage({ clinicId, phone, message: linhas, purpose: 'automation' })
         if (r.ok) {
           sent++
           results.push({ phone, ok: true })

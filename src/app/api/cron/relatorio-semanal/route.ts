@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
     const sendResults: any[] = []
     for (const phone of phones) {
       try {
-        const r = await sendWhatsappMessage({ clinicId, phone, message: linhas, purpose: 'any' })
+        const r = await sendWhatsappMessage({ clinicId, phone, message: linhas, purpose: 'automation' })
         if (r.ok) {
           sentForClinic++
           sendResults.push({ phone, ok: true })

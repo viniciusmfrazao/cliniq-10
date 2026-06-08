@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     `*Total: ${fmt(total)}*${validoAte}\n\n` +
     `Qualquer dúvida, estamos à disposição! 🤍`
 
-  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'manual' })
+  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
 
   // Registrar envio no orçamento
   await svc.from('orcamentos').update({
