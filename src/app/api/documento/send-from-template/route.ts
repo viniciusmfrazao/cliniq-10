@@ -131,25 +131,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: 'link_only', link, document_id: doc.id })
   }
 
-  // Mensagem: com link de assinatura ou simples
   const requiresSignature = template.requires_signature !== false
-  const hasImage = !!(template as any).image_url
-  const message = requiresSignature
-    ? `Olá ${firstName}! 👋\n\n` +
-      `Antes do seu atendimento na ${clinicName}, por favor leia e assine o documento abaixo:\n\n` +
+  const hasAttachment = !!(template as any).image_url
+  const fileUrl = (template.image_url || '') as string
+  const isPdf = hasAttachment && fileUrl.toLowerCase().endsWith('.pdf')
+
+  // Construir mensagem de texto contextual
+  let message: string
+  if (hasAttachment && requiresSignature) {
+    // Anexo (PDF/imagem) + assinatura → mensagem curta com link após o anexo
+    const procPart = procedureName ? ` referente ao procedimento *${procedureName}*` : ''
+    message =
+      `Olá ${firstName}! 👋\n\n` +
+      `Acima segue o documento da *${clinicName}*${procPart}.\n\n` +
+      `Após a leitura, por favor assine digitalmente aqui:\n${link}\n\n` +
+      `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
+  } else if (hasAttachment && !requiresSignature) {
+    // Só anexo, sem assinatura
+    message =
+      `Olá ${firstName}! 👋\n\n` +
+      `Acima segue o documento da *${clinicName}*. Qualquer dúvida é só chamar! 🤍`
+  } else if (requiresSignature) {
+    // Sem anexo, com assinatura (texto do template é o documento)
+    message =
+      `Olá ${firstName}! 👋\n\n` +
+      `Antes do seu atendimento na *${clinicName}*, por favor leia e assine o documento abaixo:\n\n` +
       `${link}\n\n` +
       `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
-    : filledContent
-      // Com conteúdo de texto: envia o texto do template (com ou sem imagem depois)
-      ? `${filledContent}`
-      // Sem conteúdo: mensagem curta
-      : `Olá ${firstName}! 👋\n\nSegue o documento da ${clinicName}. Qualquer dúvida é só chamar! 🤍`
+  } else {
+    // Sem anexo, sem assinatura → manda o conteúdo do template
+    message = filledContent || `Olá ${firstName}! 👋\n\nSegue o documento da *${clinicName}*. Qualquer dúvida é só chamar! 🤍`
+  }
 
-  // 1. Enviar TEXTO primeiro
-  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'any' })
-
-  // 2. Enviar imagem depois (se existir)
-  if (template.image_url) {
+  // 1. Se houver anexo, envia PRIMEIRO (o paciente vê o documento antes da mensagem)
+  if (hasAttachment) {
     try {
       const { data: waData } = await svc
         .from('clinic_whatsapp')
@@ -169,8 +184,6 @@ export async function POST(req: NextRequest) {
       const instance = waData?.instance_name
 
       if (evUrl && evKey && instance) {
-        const fileUrl = template.image_url as string
-        const isPdf = fileUrl.toLowerCase().endsWith('.pdf')
         const fileName = isPdf
           ? (template.name ? `${template.name}.pdf` : 'documento.pdf')
           : undefined
@@ -187,9 +200,12 @@ export async function POST(req: NextRequest) {
         })
       }
     } catch (e) {
-      console.error('Erro ao enviar imagem do template:', e)
+      console.error('Erro ao enviar anexo do template:', e)
     }
   }
+
+  // 2. Enviar texto DEPOIS (com link de assinatura quando aplicável)
+  const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'any' })
 
   // Marcar como enviado
   // Atualiza whatsapp_sent_at; status fica como foi inserido:
