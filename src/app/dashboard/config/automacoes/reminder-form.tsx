@@ -103,7 +103,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     nome: 'Maria Aparecida da Silva',
     primeiro_nome: 'Maria',
     clinica: clinicName,
-    profissional: 'Dra. Sarah Pina',
+    profissional: 'Dra. ' + clinicName.replace(/clínica|estetica|estética|clinic/gi, '').trim() || 'Profissional',
     procedimento: 'Botox',
     data: new Date(Date.now() + 86400000).toLocaleDateString('pt-BR'),
     hora: '14:30',
@@ -387,4 +387,5 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     </div>
   )
 }
+
 
