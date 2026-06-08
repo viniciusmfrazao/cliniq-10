@@ -91,7 +91,12 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   }, [appointmentId, clinicId, patientId])
 
   function getTaxa(forma: string, bandeira: string) {
-    return taxas.find(t => t.forma === forma && (t.bandeira === bandeira || !t.bandeira))?.taxa_percentual || 0
+    // Tenta match exato por bandeira, depois fallback para 'todas' ou sem bandeira
+    return (
+      taxas.find(t => t.forma === forma && t.bandeira === bandeira)?.taxa_percentual ??
+      taxas.find(t => t.forma === forma && (t.bandeira === 'todas' || !t.bandeira))?.taxa_percentual ??
+      0
+    )
   }
 
   function updateSplit(id: string, changes: Partial<Split>) {
@@ -275,7 +280,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                         <label className="text-xs text-slate-500 mb-1 block">Bandeira</label>
                         <select value={s.bandeira} onChange={e => updateSplit(s.id, { bandeira: e.target.value })} className="input w-full text-sm">
                           <option value="">Selecione</option>
-                          {[...new Set(taxas.filter(t => t.forma === 'credito').map(t => t.bandeira).filter(Boolean))].map(b => (
+                          {[...new Set(taxas.filter(t => t.forma.startsWith('credito')).map(t => t.bandeira).filter(b => b && b !== 'todas'))].map(b => (
                             <option key={b!} value={b!}>{b}</option>
                           ))}
                         </select>
@@ -353,3 +358,4 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   if (!mounted) return null
   return createPortal(modal, document.body)
 }
+
