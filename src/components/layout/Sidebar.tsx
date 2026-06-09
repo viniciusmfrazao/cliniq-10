@@ -249,15 +249,15 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
 
       {/* User Section */}
       <div className="p-4 border-t border-white/10">
-        <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-white/5 backdrop-blur-xl">
-          <div className="w-11 h-11 gradient-bg rounded-xl flex items-center justify-center shadow-lg">
+        <div className="flex items-center gap-2 px-3 py-3 rounded-2xl bg-white/5 backdrop-blur-xl">
+          <div className="w-9 h-9 flex-shrink-0 gradient-bg rounded-xl flex items-center justify-center shadow-lg">
             <span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{userName}</p>
-            <p className="text-xs text-white/50 capitalize">{userRole}</p>
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <p className="text-xs font-semibold text-white truncate">{userName}</p>
+            <p className="text-xs text-white/50 capitalize truncate">{userRole}</p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             <Link
               href="/dashboard/como-funciona"
               className="p-2.5 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all"
@@ -291,4 +291,5 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
     </aside>
   )
 }
+
 
