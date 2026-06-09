@@ -964,7 +964,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
 
   // Aplica filtro de profissional em TODAS as views (corrige bug semana/mes)
   const appointments = selectedProfessional === 'all'
-    ? allAppointments
+    ? localAppointments
     : localAppointments.filter(a => a.professional_id === selectedProfessional)
 
   const blocks = selectedProfessional === 'all'
@@ -1026,7 +1026,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     }
     const label = labels[newStatus] || 'Status atualizado'
     toast.success(label)
-  }, [supabase, router, toast, allAppointments])
+  }, [supabase, router, toast, localAppointments, setLocalAppointments])
 
   // Confirmar procedimentos realizados e finalizar atendimento
   const handleProceduresConfirm = useCallback(async (procedures: Array<{ id: string; name: string; price: number }>) => {
@@ -1654,5 +1654,6 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     </div>
   )
 }
+
 
 
