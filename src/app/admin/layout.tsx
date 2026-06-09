@@ -47,10 +47,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex flex-col">
+    <div className="h-screen bg-slate-100 dark:bg-slate-900 flex flex-col overflow-hidden">
 
       {/* Top Bar */}
-      <header className="sticky top-0 z-50 flex-shrink-0 text-white px-4 py-3 flex items-center justify-between"
+      <header className="flex-shrink-0 text-white px-4 py-3 flex items-center justify-between z-50"
         style={{ background: 'linear-gradient(135deg, #7C3AED, #A78BFA)' }}
       >
         <div className="flex items-center gap-3">
@@ -77,7 +77,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </Link>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Mobile overlay sidebar */}
         {menuOpen && (
