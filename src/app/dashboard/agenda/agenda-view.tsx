@@ -354,7 +354,11 @@ const AppointmentCard = React.memo(function AppointmentCard({
           {apt.patients?.name || 'Paciente'}
         </p>
         {!compact && (
-          <p className="text-xs text-slate-500 truncate">{apt.procedures?.name || 'Atendimento'}</p>
+          <p className="text-xs text-slate-500 truncate">
+            {apt.appointment_procedures && apt.appointment_procedures.length > 0
+              ? apt.appointment_procedures.map(p => p.procedure_name).join(' + ')
+              : apt.procedures?.name || 'Atendimento'}
+          </p>
         )}
       </Link>
 
