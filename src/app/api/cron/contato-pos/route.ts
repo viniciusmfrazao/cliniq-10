@@ -1,231 +1,139 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
-import { logEva } from '@/lib/eva-logger'
 
-/**
- * GET /api/cron/contato-pos
- *
- * Cron de contato pós-procedimento — roda 1x por hora.
- *
- * Para cada clínica com contato_pos_procedimento=true:
- *   1) Verifica se agora é a hora configurada (contato_pos_hora, BRT)
- *   2) Busca TODOS os appointments do DIA ANTERIOR com status='completed'
- *      e contato_pos_sent_at IS NULL
- *   3) Filtra: exclui procedimentos cujas categorias estão em contato_pos_excluir_categorias
- *      (default: 'Atendimento', 'Atendimento ' — cobre Avaliação, Retorno, Consulta)
- *      Também exclui por nome: palavras como "avaliação", "retorno", "consulta"
- *   4) Envia o template pra cada paciente e marca contato_pos_sent_at
- *
- * Variáveis do template: {{nome}}, {{primeiro_nome}}, {{procedimento}}, {{profissional}}, {{clinica}}
- * Auth: Authorization: Bearer ${CRON_SECRET}
- */
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
-const TZ = 'America/Sao_Paulo'
-
-const DEFAULT_TEMPLATE = `Oi {{primeiro_nome}}! 💜
-
-Passando pra saber como você está após o seu atendimento de {{procedimento}} aqui na {{clinica}}.
-
-Sentiu algum desconforto? Tem alguma dúvida? É só chamar! Estamos à disposição 🤍`
-
-// Nomes de procedimento que indicam consulta/avaliação — sempre excluídos
-const EXCLUDE_NAME_PATTERNS = [
-  /avalia[çc][aã]o/i,
-  /consulta/i,
-  /retorno/i,
-  /triagem/i,
-]
-
-function fillTemplate(template: string, vars: Record<string, string>): string {
+function renderTemplate(template: string, vars: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || `{{${key}}}`)
 }
 
 function getCurrentHourBRT(): number {
-  return parseInt(
-    new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', hour12: false })
-      .format(new Date()),
-    10,
-  )
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })).getHours()
 }
 
-function getYesterdayRangeBRT(): { start: string; end: string } {
-  // Calcula início e fim do dia anterior em BRT como UTC ISO strings
-  const now = new Date()
-  const brFormatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-  })
-  const todayBRT = brFormatter.format(now) // YYYY-MM-DD
-
-  // Ontem BRT
-  const yesterday = new Date(now)
-  yesterday.setDate(yesterday.getDate() - 1)
-  const yesterdayBRT = brFormatter.format(yesterday)
-
-  // 00:00 e 23:59:59 de ontem em BRT → UTC
-  const start = new Date(`${yesterdayBRT}T00:00:00-03:00`).toISOString()
-  const end = new Date(`${yesterdayBRT}T23:59:59-03:00`).toISOString()
-
-  return { start, end }
+function getDateBRT(offsetDays = 0): string {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+  d.setDate(d.getDate() + offsetDays)
+  return d.toISOString().split('T')[0]
 }
 
-export async function GET(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  const secret = process.env.CRON_SECRET
-  if (!secret) return NextResponse.json({ ok: false, error: 'cron_not_configured' }, { status: 503 })
-  if (auth !== `Bearer ${secret}`) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
-
-  const url = new URL(req.url)
-  const dryRun = url.searchParams.get('dry') === '1'
-  const force = url.searchParams.get('force') === '1' // ignora verificação de hora
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const force = searchParams.get('force') === '1'
+  const dryRun = searchParams.get('dry') === '1'
 
   const currentHour = getCurrentHourBRT()
+
   const svc = createServiceClient()
 
-  // Clínicas com contato pós ativo
+  // Buscar clínicas com contato-pos ativo
   const { data: automations } = await svc
     .from('clinic_automations')
-    .select('clinic_id, contato_pos_hora, template_contato_pos, contato_pos_excluir_categorias')
+    .select(`
+      clinic_id,
+      contato_pos_hora,
+      template_contato_pos,
+      contato_pos_excluir_categorias,
+      contato_pos_seq
+    `)
     .eq('contato_pos_procedimento', true)
 
-  if (!automations || automations.length === 0) {
-    return NextResponse.json({ ok: true, processed: 0, reason: 'no_clinics_enabled' })
-  }
+  if (!automations?.length) return NextResponse.json({ ok: true, reason: 'sem_clinicas', enviados: 0 })
 
-  const clinicIds = (automations as any[]).map((a) => a.clinic_id)
-
-  // Verificar módulo automacoes ativo
-  const { data: clinicsData } = await svc
-    .from('clinics').select('id, settings, name').in('id', clinicIds)
-
-  const clinicMap = new Map<string, { name: string; hasModule: boolean }>(
-    ((clinicsData ?? []) as any[]).map((c) => {
-      const modules: string[] = c.settings?.active_modules || []
-      return [c.id, {
-        name: c.name,
-        hasModule: modules.length === 0 || modules.includes('automacoes'),
-      }]
-    })
-  )
-
-  // WhatsApp conectado por clínica
-  const { data: waList } = await svc
-    .from('clinic_whatsapp')
-    .select('clinic_id, instance_name, status, is_default, role_outbound_automation')
-    .in('clinic_id', clinicIds)
-    .eq('status', 'connected')
-
-  const waByClinic = new Map<string, any>()
-  for (const w of (waList ?? []) as any[]) {
-    const score = (r: any) => (r.role_outbound_automation ? 2 : 0) + (r.is_default ? 1 : 0)
-    const existing = waByClinic.get(w.clinic_id)
-    if (!existing || score(w) > score(existing)) waByClinic.set(w.clinic_id, w)
-  }
-
-  const { start: rangeStart, end: rangeEnd } = getYesterdayRangeBRT()
   const results: any[] = []
-  let skippedWrongHour = 0
 
-  for (const auto of automations as any[]) {
-    const { clinic_id, contato_pos_hora, template_contato_pos, contato_pos_excluir_categorias } = auto
-
-    const clinic = clinicMap.get(clinic_id)
-    if (!clinic?.hasModule) continue
-
-    const wa = waByClinic.get(clinic_id)
-    if (!wa) { results.push({ clinic_id, skipped: 'wa_not_connected' }); continue }
-
-    // Verificar se é a hora certa pra essa clínica
-    const targetHour = contato_pos_hora ?? 10
+  for (const auto of automations) {
+    const targetHour = Number(auto.contato_pos_hora ?? 10)
     if (!force && currentHour !== targetHour) {
-      skippedWrongHour++
+      results.push({ clinic_id: auto.clinic_id, skipped: 'fora_do_horario' })
       continue
     }
 
-    // Categorias a excluir (default cobre "Atendimento" e variações com espaço)
-    const excludeCats: string[] = contato_pos_excluir_categorias ?? ['Atendimento', 'Atendimento ']
+    // WhatsApp da clínica
+    const { data: wa } = await svc
+      .from('clinic_whatsapp')
+      .select('instance_name, status')
+      .eq('clinic_id', auto.clinic_id)
+      .eq('status', 'connected')
+      .limit(1)
+      .maybeSingle()
 
-    // Buscar atendimentos do dia anterior finalizados
-    const { data: appointments } = await svc
+    if (!wa) { results.push({ clinic_id: auto.clinic_id, skipped: 'sem_whatsapp' }); continue }
+
+    const { data: clinic } = await svc
+      .from('clinics').select('name').eq('id', auto.clinic_id).maybeSingle()
+    const clinicName = clinic?.name || 'Clínica'
+
+    const excluirCats: string[] = auto.contato_pos_excluir_categorias || []
+    const EXCLUIR_NOMES = ['avalia', 'retorno', 'consulta', ...excluirCats.map((c: string) => c.toLowerCase())]
+
+    // ── MENSAGEM 1: atendimentos de ontem ──────────────────────────────
+    const ontem = getDateBRT(-1)
+    const { data: aptsOntem } = await svc
       .from('appointments')
-      .select(`
-        id, start_time,
-        patients(id, name, phone),
-        procedures(id, name, category),
-        professionals:users!appointments_professional_id_fkey(name)
-      `)
-      .eq('clinic_id', clinic_id)
+      .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
+      .eq('clinic_id', auto.clinic_id)
       .eq('status', 'completed')
-      .is('contato_pos_sent_at', null)
-      .gte('start_time', rangeStart)
-      .lte('start_time', rangeEnd)
-      .limit(200)
+      .gte('start_time', `${ontem}T00:00:00`)
+      .lt('start_time', `${ontem}T23:59:59`)
 
-    for (const apt of (appointments ?? []) as any[]) {
-      const proc = apt.procedures as any
+    for (const apt of aptsOntem || []) {
+      const procName = (apt.procedures as any)?.name || ''
+      if (EXCLUIR_NOMES.some(e => procName.toLowerCase().includes(e))) continue
+
       const patient = apt.patients as any
-
-      // Filtro de categoria
-      const procCategory = (proc?.category || '').trim()
-      if (excludeCats.some(cat => cat.trim().toLowerCase() === procCategory.toLowerCase())) {
-        results.push({ apt_id: apt.id, skipped: `categoria_excluida:${procCategory}` })
-        continue
-      }
-
-      // Filtro por nome do procedimento (avaliação, retorno, consulta, etc.)
-      const procName = proc?.name || ''
-      if (EXCLUDE_NAME_PATTERNS.some(p => p.test(procName))) {
-        results.push({ apt_id: apt.id, skipped: `nome_excluido:${procName}` })
-        continue
-      }
-
-      const rawPhone = patient?.phone || ''
-      if (!rawPhone) { results.push({ apt_id: apt.id, skipped: 'no_phone' }); continue }
+      if (!patient?.phone) continue
 
       const vars = {
-        nome: patient.name || '',
         primeiro_nome: (patient.name || '').split(' ')[0],
-        procedimento: procName || 'seu procedimento',
-        profissional: apt.professionals?.name || '',
-        clinica: clinic.name,
+        nome: patient.name || '',
+        procedimento: procName,
+        profissional: (apt.users as any)?.name || 'sua profissional',
+        clinica: clinicName,
       }
 
-      const message = fillTemplate(template_contato_pos?.trim() || DEFAULT_TEMPLATE, vars)
+      const msg = renderTemplate(auto.template_contato_pos || '', vars)
+      if (!dryRun) await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+      results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: 'msg1', proc: procName })
+    }
 
-      if (!dryRun) {
-        // Marca antes de enviar (idempotência)
-        await svc.from('appointments')
-          .update({ contato_pos_sent_at: new Date().toISOString() })
-          .eq('id', apt.id)
+    // ── MENSAGENS SEQUÊNCIA: X dias após o procedimento ────────────────
+    const seqItems = auto.contato_pos_seq || []
+    for (const seqItem of seqItems) {
+      if (!seqItem.ativo || !seqItem.dias || !seqItem.template) continue
 
-        const result = await sendWhatsappMessage({
-          clinicId: clinic_id, phone: rawPhone, message, purpose: 'automation',
-        })
+      const diaAlvo = getDateBRT(-seqItem.dias)
+      const { data: aptsSeq } = await svc
+        .from('appointments')
+        .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
+        .eq('clinic_id', auto.clinic_id)
+        .eq('status', 'completed')
+        .gte('start_time', `${diaAlvo}T00:00:00`)
+        .lt('start_time', `${diaAlvo}T23:59:59`)
 
-        void logEva({
-          clinic_id, phone: rawPhone,
-          source: 'cron-contato-pos',
-          event: 'contato_pos_procedimento',
-          status: result.ok ? 'ok' : 'error',
-          details: { apt_id: apt.id, procedure: vars.procedimento, target_hour: targetHour },
-          error_message: result.ok ? null : (result.error ?? 'unknown'),
-        })
+      for (const apt of aptsSeq || []) {
+        const procName = (apt.procedures as any)?.name || ''
+        if (EXCLUIR_NOMES.some(e => procName.toLowerCase().includes(e))) continue
 
-        results.push({ apt_id: apt.id, clinic_id, procedure: vars.procedimento, sent: result.ok })
-      } else {
-        results.push({ apt_id: apt.id, clinic_id, procedure: vars.procedimento, dry_run: true })
+        const patient = apt.patients as any
+        if (!patient?.phone) continue
+
+        const vars = {
+          primeiro_nome: (patient.name || '').split(' ')[0],
+          nome: patient.name || '',
+          procedimento: procName,
+          profissional: (apt.users as any)?.name || 'sua profissional',
+          clinica: clinicName,
+        }
+
+        const msg = renderTemplate(seqItem.template, vars)
+        if (!dryRun) await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+        results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: `seq_${seqItem.dias}d`, proc: procName })
       }
     }
   }
 
-  return NextResponse.json({
-    ok: true, dryRun, currentHour,
-    processed: results.filter(r => r.sent || r.dry_run).length,
-    sent: results.filter(r => r.sent).length,
-    skipped: results.filter(r => r.skipped).length,
-    skipped_wrong_hour: skippedWrongHour,
-    date_range: { start: rangeStart, end: rangeEnd },
-    results,
-  })
+  return NextResponse.json({ ok: true, dryRun, currentHour, enviados: results.filter(r => !r.skipped).length, results })
 }
-
