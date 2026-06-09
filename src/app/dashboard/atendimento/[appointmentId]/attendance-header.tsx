@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import ProceduresConfirmModal from '@/components/agenda/procedures-confirm-modal'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -34,6 +36,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   const [loading, setLoading] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [status, setStatus] = useState(appointment.status)
+  const [showProcModal, setShowProcModal] = useState(false)
   const [showReschedule, setShowReschedule] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState(
     new Date(appointment.start_time).toISOString().split('T')[0]
@@ -125,6 +128,12 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   }
 
   const finishAttendance = async () => {
+    // Abre modal de confirmação de procedimentos primeiro
+    setShowProcModal(true)
+  }
+
+  const doFinishAttendance = async (procedures: Array<{ id: string; name: string; price: number }>) => {
+    setShowProcModal(false)
     if (!confirm('Finalizar este atendimento?\n\nO estoque dos injetáveis será descontado.')) return
     setLoading(true)
     
@@ -217,10 +226,24 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
         alert(`Estoque descontado!\n\n${applications.length} aplicação(ões) processada(s).`)
       }
 
-      // 3. Finalizar o atendimento
+      // 3. Salvar procedimentos realizados
+      if (procedures.length > 0) {
+        await supabase.from('appointment_procedures').delete().eq('appointment_id', appointment.id)
+        await supabase.from('appointment_procedures').insert(
+          procedures.map(p => ({
+            appointment_id: appointment.id,
+            procedure_id: p.id,
+            procedure_name: p.name,
+            price: p.price,
+            duration_minutes: 30,
+          }))
+        )
+      }
+
+      // 4. Finalizar o atendimento
       const { error: updateError } = await supabase
         .from('appointments')
-        .update({ status: 'completed' })
+        .update({ status: 'completed', procedure_id: procedures[0]?.id || appointment.procedure_id })
         .eq('id', appointment.id)
 
       if (updateError) {
@@ -435,4 +458,25 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
       </div>
     </div>
   )
+
+  // Portal do modal de procedimentos
+  if (typeof window !== 'undefined' && showProcModal) {
+    return (
+      <>
+        {createPortal(
+          <ProceduresConfirmModal
+            appointmentId={appointment.id}
+            clinicId={clinicId}
+            patientName={patient.name}
+            initialProcedureName={appointment.procedures?.name}
+            initialProcedureId={appointment.procedure_id}
+            onConfirm={doFinishAttendance}
+            onCancel={() => setShowProcModal(false)}
+          />,
+          document.body
+        )}
+      </>
+    )
+  }
 }
+
