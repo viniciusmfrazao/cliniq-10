@@ -942,7 +942,11 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
+  const [localAppointments, setLocalAppointments] = useState<Appointment[]>(allAppointments)
   const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null)
+  // Sincronizar com dados do servidor após refresh
+  React.useEffect(() => { setLocalAppointments(allAppointments) }, [allAppointments])
+
   const [blockModal, setBlockModal] = useState<{ open: boolean; hour?: number; profId?: string; editBlock?: Block | null }>({ open: false })
   const [procConfirmModal, setProcConfirmModal] = useState<{
     open: boolean
@@ -952,6 +956,8 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     procedureId?: string | null
   } | null>(null)
 
+  // allAppointments é a prop do servidor, localAppointments é o estado local
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const displayProfessionals = selectedProfessional === 'all' 
     ? professionals 
     : professionals.filter(p => p.id === selectedProfessional)
@@ -959,7 +965,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   // Aplica filtro de profissional em TODAS as views (corrige bug semana/mes)
   const appointments = selectedProfessional === 'all'
     ? allAppointments
-    : allAppointments.filter(a => a.professional_id === selectedProfessional)
+    : localAppointments.filter(a => a.professional_id === selectedProfessional)
 
   const blocks = selectedProfessional === 'all'
     ? allBlocks
@@ -989,7 +995,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   const handleStatusChange = useCallback(async (appointmentId: string, newStatus: string) => {
     // Se está concluindo, abre modal de confirmação de procedimentos
     if (newStatus === 'completed') {
-      const apt = allAppointments.find(a => a.id === appointmentId)
+      const apt = localAppointments.find(a => a.id === appointmentId)
       setProcConfirmModal({
         open: true,
         appointmentId,
@@ -1047,6 +1053,23 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
       status: 'completed',
       procedure_id: mainProc?.id || null,
     }).eq('id', appointmentId)
+
+    // Atualizar estado local para refletir imediatamente na tela
+    setLocalAppointments(prev => prev.map(a => {
+      if (a.id !== appointmentId) return a
+      return {
+        ...a,
+        status: 'completed',
+        procedure_id: mainProc?.id || a.procedure_id,
+        appointment_procedures: procedures.map(p => ({
+          id: p.id,
+          procedure_id: p.id,
+          procedure_name: p.name,
+          price: p.price,
+          duration_minutes: 30,
+        })),
+      }
+    }))
 
     setProcConfirmModal(null)
     router.refresh()
@@ -1631,4 +1654,5 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     </div>
   )
 }
+
 
