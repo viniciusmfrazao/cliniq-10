@@ -149,28 +149,34 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
 
   const [form, setForm] = useState({
     paciente_id: '',
+    nome_livre: '',
     valor: '',
     descricao: '',
     data_vencimento: todayBR(),
   })
+  const [tipoDevedor, setTipoDevedor] = useState<'paciente' | 'fornecedor'>('paciente')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.paciente_id || !form.valor) {
-      alert('Preencha paciente e valor')
+    if ((!form.paciente_id && !form.nome_livre.trim()) || !form.valor) {
+      alert('Preencha o nome e o valor')
       return
     }
     setLoading(true)
+    const nomeFinal = form.paciente_id
+      ? pacientes.find(p => p.id === form.paciente_id)?.name || ''
+      : form.nome_livre.trim()
     const { error } = await supabase.from('debitos').insert({
       clinic_id: clinicId,
-      paciente_id: form.paciente_id,
+      paciente_id: form.paciente_id || null,
+      paciente_nome: nomeFinal,
       valor: parseFloat(form.valor),
       descricao: form.descricao || 'Débito',
       data_vencimento: form.data_vencimento,
       status: 'pendente',
     })
     if (error) { alert('Erro ao salvar: ' + error.message); setLoading(false); return }
-    setForm({ paciente_id: '', valor: '', descricao: '', data_vencimento: todayBR() })
+    setForm({ paciente_id: '', nome_livre: '', valor: '', descricao: '', data_vencimento: todayBR() })
     setShowForm(false)
     setLoading(false)
     router.refresh()
@@ -367,12 +373,35 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
           <h3 className="font-bold text-slate-900 mb-4">Novo Débito</h3>
           <form onSubmit={handleSubmit} className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="md:col-span-2 lg:col-span-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Paciente *</label>
-              <PatientSearch
-                pacientes={pacientes}
-                value={form.paciente_id}
-                onChange={id => setForm({ ...form, paciente_id: id })}
-              />
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-sm font-medium text-slate-700">Quem deve?</label>
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+                  <button type="button" onClick={() => { setTipoDevedor('paciente'); setForm(f => ({...f, nome_livre: ''})) }}
+                    className={`px-3 py-1.5 transition-colors ${tipoDevedor === 'paciente' ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                    Paciente
+                  </button>
+                  <button type="button" onClick={() => { setTipoDevedor('fornecedor'); setForm(f => ({...f, paciente_id: ''})) }}
+                    className={`px-3 py-1.5 transition-colors ${tipoDevedor === 'fornecedor' ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                    Fornecedor / Outro
+                  </button>
+                </div>
+              </div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{tipoDevedor === 'paciente' ? 'Paciente *' : 'Nome do fornecedor *'}</label>
+              {tipoDevedor === 'paciente' ? (
+                <PatientSearch
+                  pacientes={pacientes}
+                  value={form.paciente_id}
+                  onChange={id => setForm({ ...form, paciente_id: id })}
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={form.nome_livre}
+                  onChange={e => setForm({ ...form, nome_livre: e.target.value })}
+                  placeholder="Ex: Vitalab, Farmácia Central..."
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                />
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Valor *</label>
@@ -600,3 +629,4 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
     </div>
   )
 }
+
