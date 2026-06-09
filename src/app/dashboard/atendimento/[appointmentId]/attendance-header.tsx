@@ -329,10 +329,11 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
       )
     : null
 
-  if (finishConfirmModal || procModal) return <>{finishConfirmModal}{procModal}</>
-
   return (
-    <div className="sticky top-0 z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-slate-200 shadow-sm">
+    <>
+      {finishConfirmModal}
+      {procModal}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-slate-200 shadow-sm">
       {/* Banner — atendimento não iniciado */}
       {showStartBanner && (
         <div className="w-full bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-center justify-between gap-3">
@@ -522,10 +523,12 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
         )}
       </div>
     </div>
+    </>
   )
 
 
 }
+
 
 
 
