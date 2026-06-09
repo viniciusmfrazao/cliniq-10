@@ -4,6 +4,14 @@ import { createServiceClient } from '@/lib/supabase/server'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
+  // Validar token da Asaas
+  const asaasToken = req.headers.get('asaas-access-token') || req.headers.get('access_token')
+  const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN
+  if (expectedToken && asaasToken !== expectedToken) {
+    console.warn('[asaas-webhook] Token inválido:', asaasToken)
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const body = await req.json()
     const { event, payment } = body
@@ -150,4 +158,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
 }
+
 
