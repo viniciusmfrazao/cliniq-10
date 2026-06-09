@@ -127,7 +127,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
             onClick={() => setMenuOpen(false)}
           />
           
-          <div className="absolute left-0 top-0 bottom-0 w-[85%] max-w-xs sidebar-gradient animate-slide-in-left overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-[85%] max-w-xs sidebar-gradient animate-slide-in-left overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-20 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-1/2" />
             
@@ -233,6 +233,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
     </>
   )
 }
+
 
 
 
