@@ -17,11 +17,14 @@ type Props = {
   userId?: string 
 }
 
+import { useTheme } from '@/contexts/ThemeContext'
+
 export default function TopBar({ clinicName, userName, userRole = 'viewer', trialDaysLeft, userId }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const { mode, setMode } = useTheme()
   const current = NAV_ITEMS.find(i => i.href === '/dashboard' ? pathname === i.href : pathname.startsWith(i.href))
   const supabase = createClient()
   const nav = NAV_ITEMS.filter(i => i.roles.includes(userRole))
@@ -94,6 +97,13 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                     <Icon name="settings" className="w-4 h-4" />
                     Configurações
                   </Link>
+                  <button
+                    onClick={() => setMode(mode === 'light' ? 'dark' : 'light')}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 w-full text-left"
+                  >
+                    <span className="text-base">{mode === 'light' ? '🌙' : '☀️'}</span>
+                    {mode === 'light' ? 'Modo escuro' : 'Modo claro'}
+                  </button>
                   <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
                   <button
                     onClick={() => { setUserMenuOpen(false); logout() }}
@@ -223,6 +233,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
     </>
   )
 }
+
 
 
 
