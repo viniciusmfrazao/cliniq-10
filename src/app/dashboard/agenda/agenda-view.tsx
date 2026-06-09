@@ -945,7 +945,15 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   const [localAppointments, setLocalAppointments] = useState<Appointment[]>(allAppointments)
   const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null)
   // Sincronizar com dados do servidor após refresh
-  React.useEffect(() => { setLocalAppointments(allAppointments) }, [allAppointments])
+  // Usar ref para evitar sobrescrever após atualização local imediata
+  const skipNextSyncRef = React.useRef(false)
+  React.useEffect(() => {
+    if (skipNextSyncRef.current) {
+      skipNextSyncRef.current = false
+      return
+    }
+    setLocalAppointments(allAppointments)
+  }, [allAppointments])
 
   const [blockModal, setBlockModal] = useState<{ open: boolean; hour?: number; profId?: string; editBlock?: Block | null }>({ open: false })
   const [procConfirmModal, setProcConfirmModal] = useState<{
@@ -1055,6 +1063,8 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     }).eq('id', appointmentId)
 
     // Atualizar estado local para refletir imediatamente na tela
+    // Pular a próxima sincronização com o servidor para não sobrescrever
+    skipNextSyncRef.current = true
     setLocalAppointments(prev => prev.map(a => {
       if (a.id !== appointmentId) return a
       return {
@@ -1654,6 +1664,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     </div>
   )
 }
+
 
 
 
