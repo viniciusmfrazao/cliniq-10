@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -926,6 +927,13 @@ const AppointmentCard = React.memo(function AppointmentCard({
   )
 })
 
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  if (!mounted) return null
+  return createPortal(children, document.body)
+}
+
 export default function AgendaView({ appointments: allAppointments, blocks: allBlocks, viewMode, selectedDate, professionals, selectedProfessional, clinicId }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -1156,28 +1164,19 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   if (viewMode === 'day') {
     return (
       <>
-        {procConfirmModal?.open && (
-          <ProceduresConfirmModal
-            appointmentId={procConfirmModal.appointmentId}
-            clinicId={clinicId}
-            patientName={procConfirmModal.patientName}
-            initialProcedureName={procConfirmModal.procedureName}
-            initialProcedureId={procConfirmModal.procedureId}
-            onConfirm={handleProceduresConfirm}
-            onCancel={() => setProcConfirmModal(null)}
-          />
-        )}
-        {procConfirmModal?.open && (
-          <ProceduresConfirmModal
-            appointmentId={procConfirmModal.appointmentId}
-            clinicId={clinicId}
-            patientName={procConfirmModal.patientName}
-            initialProcedureName={procConfirmModal.procedureName}
-            initialProcedureId={procConfirmModal.procedureId}
-            onConfirm={handleProceduresConfirm}
-            onCancel={() => setProcConfirmModal(null)}
-          />
-        )}
+        <ModalPortal>
+          {procConfirmModal?.open && (
+            <ProceduresConfirmModal
+              appointmentId={procConfirmModal.appointmentId}
+              clinicId={clinicId}
+              patientName={procConfirmModal.patientName}
+              initialProcedureName={procConfirmModal.procedureName}
+              initialProcedureId={procConfirmModal.procedureId}
+              onConfirm={handleProceduresConfirm}
+              onCancel={() => setProcConfirmModal(null)}
+            />
+          )}
+        </ModalPortal>
         <BlockModal
           isOpen={blockModal.open}
           onClose={() => setBlockModal({ open: false })}
@@ -1359,6 +1358,19 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
 
     return (
       <div className="card" style={{overflow: "visible"}}>
+        <ModalPortal>
+          {procConfirmModal?.open && (
+            <ProceduresConfirmModal
+              appointmentId={procConfirmModal.appointmentId}
+              clinicId={clinicId}
+              patientName={procConfirmModal.patientName}
+              initialProcedureName={procConfirmModal.procedureName}
+              initialProcedureId={procConfirmModal.procedureId}
+              onConfirm={handleProceduresConfirm}
+              onCancel={() => setProcConfirmModal(null)}
+            />
+          )}
+        </ModalPortal>
         <div className="p-4 border-b border-slate-100 bg-slate-50">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-slate-600">
