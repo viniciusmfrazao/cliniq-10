@@ -287,6 +287,9 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
               </svg>
             </div>
             <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Finalizar atendimento?</h3>
+            <p className="text-xs text-amber-600 text-center mb-2 flex items-center justify-center gap-1">
+              ⚠️ O estoque dos injetáveis lançados será descontado.
+            </p>
             <p className="text-sm text-slate-500 text-center mb-6">
               {pendingProcedures.length > 0 && (
                 <>
@@ -528,6 +531,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
 
 }
+
 
 
 
