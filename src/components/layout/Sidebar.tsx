@@ -21,6 +21,8 @@ type Props = {
   userPermissions?: string[]
 }
 
+import { useTheme } from '@/contexts/ThemeContext'
+
 export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId, activeModules = [], userPermissions = [] }: Props) {
   const pathname = usePathname()
   const router = useRouter()
@@ -77,6 +79,8 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
         : [...prev, href]
     )
   }
+
+  const { mode, setMode } = useTheme()
 
   async function logout() {
     await supabase.auth.signOut()
@@ -267,6 +271,13 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
                 <NotificationBell userId={userId} />
               </div>
             )}
+            <button
+              onClick={() => setMode(mode === 'light' ? 'dark' : 'light')}
+              className="p-2.5 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+              title={mode === 'light' ? 'Modo escuro' : 'Modo claro'}
+            >
+              <span className="text-base leading-none">{mode === 'light' ? '🌙' : '☀️'}</span>
+            </button>
             <button 
               onClick={logout} 
               className="p-2.5 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all" 
@@ -280,3 +291,4 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
     </aside>
   )
 }
+
