@@ -17,6 +17,8 @@ type Props = {
     status: string
     start_time: string
     checked_in_at?: string | null
+    procedure_id?: string | null
+    procedures?: { name: string; duration_minutes: number; price: number } | null
   }
   patient: {
     id: string
@@ -266,6 +268,23 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
   const showStartBanner = status === 'scheduled' || status === 'confirmed' || status === 'checked_in'
 
+  const procModal = showProcModal && typeof document !== 'undefined'
+    ? createPortal(
+        <ProceduresConfirmModal
+          appointmentId={appointment.id}
+          clinicId={clinicId}
+          patientName={patient.name}
+          initialProcedureName={procedure?.name}
+          initialProcedureId={appointment.procedure_id ?? null}
+          onConfirm={doFinishAttendance}
+          onCancel={() => setShowProcModal(false)}
+        />,
+        document.body
+      )
+    : null
+
+  if (procModal) return <>{procModal}</>
+
   return (
     <div className="sticky top-0 z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-slate-200 shadow-sm">
       {/* Banner — atendimento não iniciado */}
@@ -459,24 +478,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
     </div>
   )
 
-  // Portal do modal de procedimentos
-  if (typeof window !== 'undefined' && showProcModal) {
-    return (
-      <>
-        {createPortal(
-          <ProceduresConfirmModal
-            appointmentId={appointment.id}
-            clinicId={clinicId}
-            patientName={patient.name}
-            initialProcedureName={appointment.procedures?.name}
-            initialProcedureId={appointment.procedure_id}
-            onConfirm={doFinishAttendance}
-            onCancel={() => setShowProcModal(false)}
-          />,
-          document.body
-        )}
-      </>
-    )
-  }
+
 }
+
 
