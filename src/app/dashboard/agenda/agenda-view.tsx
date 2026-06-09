@@ -13,6 +13,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import BlockModal from './block-modal'
 import PaymentModal from '@/components/agenda/payment-modal'
+import ProceduresConfirmModal from '@/components/agenda/procedures-confirm-modal'
 
 type Block = {
   id: string
@@ -931,6 +932,13 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   const toast = useToast()
   const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null)
   const [blockModal, setBlockModal] = useState<{ open: boolean; hour?: number; profId?: string; editBlock?: Block | null }>({ open: false })
+  const [procConfirmModal, setProcConfirmModal] = useState<{
+    open: boolean
+    appointmentId: string
+    patientName: string
+    procedureName?: string | null
+    procedureId?: string | null
+  } | null>(null)
 
   const displayProfessionals = selectedProfessional === 'all' 
     ? professionals 
@@ -967,9 +975,18 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
 
   // Atualizar status do agendamento
   const handleStatusChange = useCallback(async (appointmentId: string, newStatus: string) => {
-    // Guarda status anterior pra permitir Desfazer
-    const apt = allAppointments.find(a => a.id === appointmentId)
-    const previousStatus = apt?.status
+    // Se está concluindo, abre modal de confirmação de procedimentos
+    if (newStatus === 'completed') {
+      const apt = allAppointments.find(a => a.id === appointmentId)
+      setProcConfirmModal({
+        open: true,
+        appointmentId,
+        patientName: apt?.patients?.name || 'Paciente',
+        procedureName: apt?.procedures?.name,
+        procedureId: apt?.procedure_id,
+      })
+      return
+    }
 
     const { error } = await supabase
       .from('appointments')
@@ -983,7 +1000,6 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
 
     router.refresh()
 
-    // Mostra feedback adequado por tipo de mudanca
     const labels: Record<string, string> = {
       confirmed: 'Confirmado',
       cancelled: 'Cancelado',
@@ -991,9 +1007,39 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
       no_show: 'Marcado como nao compareceu',
     }
     const label = labels[newStatus] || 'Status atualizado'
-
     toast.success(label)
   }, [supabase, router, toast, allAppointments])
+
+  // Confirmar procedimentos realizados e finalizar atendimento
+  const handleProceduresConfirm = useCallback(async (procedures: Array<{ id: string; name: string; price: number }>) => {
+    if (!procConfirmModal) return
+    const { appointmentId } = procConfirmModal
+
+    // 1. Atualizar appointment_procedures
+    await supabase.from('appointment_procedures').delete().eq('appointment_id', appointmentId)
+    if (procedures.length > 0) {
+      await supabase.from('appointment_procedures').insert(
+        procedures.map(p => ({
+          appointment_id: appointmentId,
+          procedure_id: p.id,
+          procedure_name: p.name,
+          price: p.price,
+          duration_minutes: 30,
+        }))
+      )
+    }
+
+    // 2. Atualizar procedure principal se só 1 procedimento
+    const mainProc = procedures[0]
+    await supabase.from('appointments').update({
+      status: 'completed',
+      procedure_id: mainProc?.id || null,
+    }).eq('id', appointmentId)
+
+    setProcConfirmModal(null)
+    router.refresh()
+    toast.success('Atendimento concluído!')
+  }, [procConfirmModal, supabase, router, toast])
 
   // Registrar check-in do paciente
   const handleCheckIn = useCallback(async (appointmentId: string) => {
@@ -1110,6 +1156,17 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   if (viewMode === 'day') {
     return (
       <>
+        {procConfirmModal?.open && (
+          <ProceduresConfirmModal
+            appointmentId={procConfirmModal.appointmentId}
+            clinicId={clinicId}
+            patientName={procConfirmModal.patientName}
+            initialProcedureName={procConfirmModal.procedureName}
+            initialProcedureId={procConfirmModal.procedureId}
+            onConfirm={handleProceduresConfirm}
+            onCancel={() => setProcConfirmModal(null)}
+          />
+        )}
         <BlockModal
           isOpen={blockModal.open}
           onClose={() => setBlockModal({ open: false })}
@@ -1547,3 +1604,4 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
     </div>
   )
 }
+
