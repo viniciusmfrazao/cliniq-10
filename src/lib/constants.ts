@@ -50,7 +50,8 @@ export const PROFESSIONAL_ROLES = [
   'esthetician',
   'physiotherapist',
   'nutritionist',
-  'psychologist'
+  'psychologist',
+  'dentist'
 ] as const
 
 // ============================================
@@ -214,3 +215,4 @@ export const HOUR_SLOTS = Array.from(
   { length: BUSINESS_HOURS.end - BUSINESS_HOURS.start }, 
   (_, i) => i + BUSINESS_HOURS.start
 )
+
