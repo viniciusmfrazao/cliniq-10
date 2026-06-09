@@ -7,7 +7,7 @@ export const metadata = {
   title: 'Procedimentos | Clinike',
 }
 
-const PROFESSIONAL_ROLES = ['doctor', 'biomedic', 'nurse', 'esthetician', 'physiotherapist', 'nutritionist', 'psychologist']
+const PROFESSIONAL_ROLES = ['doctor', 'biomedic', 'nurse', 'esthetician', 'physiotherapist', 'nutritionist', 'psychologist', 'dentist']
 
 export default async function ProcedimentosPage() {
   const supabase = await createClient()
@@ -87,3 +87,4 @@ export default async function ProcedimentosPage() {
     </div>
   )
 }
+
