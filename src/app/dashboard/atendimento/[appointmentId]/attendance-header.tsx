@@ -255,6 +255,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
       console.log('=== ATENDIMENTO FINALIZADO ===')
       setStatus('completed')
+      router.refresh()
       router.push('/dashboard/agenda')
     } catch (err) {
       console.error('Erro geral:', err)
@@ -480,5 +481,6 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
 
 }
+
 
 
