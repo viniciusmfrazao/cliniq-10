@@ -97,6 +97,7 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, c
   const [searchQuery, setSearchQuery] = useState('')
   const [procedimentoId, setProcedimentoId] = useState('')
   const [procedimentoNome, setProcedimentoNome] = useState('')
+  const [selectedProcs, setSelectedProcs] = useState<Array<{ id: string; name: string; price: number }>>([])
   const [profissionalId, setProfissionalId] = useState('')
   const [profissionalNome, setProfissionalNome] = useState('')
   const [forma, setForma] = useState('Pix')
@@ -118,12 +119,33 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, c
   }
 
   function handleProcedimentoChange(id: string) {
-    setProcedimentoId(id)
+    if (!id) return
     const proc = procedimentos.find(p => p.id === id)
-    setProcedimentoNome(proc?.name || '')
-    if (proc?.price && !valorBruto) {
-      setValorBruto(proc.price.toString())
-    }
+    if (!proc) return
+    // Toggle: se já está na lista, remove; se não, adiciona
+    setSelectedProcs(prev => {
+      const exists = prev.find(p => p.id === id)
+      if (exists) return prev.filter(p => p.id !== id)
+      const next = [...prev, { id: proc.id, name: proc.name, price: proc.price }]
+      // Atualizar valor bruto como soma de todos
+      const total = next.reduce((s, p) => s + p.price, 0)
+      setValorBruto(total.toString())
+      // Manter compatibilidade com campo único (primeiro proc)
+      setProcedimentoId(next[0]?.id || '')
+      setProcedimentoNome(next.map(p => p.name).join(', '))
+      return next
+    })
+  }
+
+  function removeProc(id: string) {
+    setSelectedProcs(prev => {
+      const next = prev.filter(p => p.id !== id)
+      const total = next.reduce((s, p) => s + p.price, 0)
+      if (total > 0) setValorBruto(total.toString())
+      setProcedimentoId(next[0]?.id || '')
+      setProcedimentoNome(next.map(p => p.name).join(', '))
+      return next
+    })
   }
 
   function handleProfissionalChange(id: string) {
@@ -211,17 +233,34 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, c
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Procedimento</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Procedimento(s)</label>
             <select
-              value={procedimentoId}
+              value=""
               onChange={e => handleProcedimentoChange(e.target.value)}
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             >
-              <option value="">Selecione</option>
+              <option value="">+ Adicionar procedimento</option>
               {procedimentos.map(p => (
-                <option key={p.id} value={p.id}>{p.name} - {fmt(p.price)}</option>
+                <option key={p.id} value={p.id}
+                  disabled={selectedProcs.some(s => s.id === p.id)}>
+                  {selectedProcs.some(s => s.id === p.id) ? '✓ ' : ''}{p.name} - {fmt(p.price)}
+                </option>
               ))}
             </select>
+            {selectedProcs.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedProcs.map(p => (
+                  <div key={p.id} className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
+                    <span className="text-xs text-emerald-800 font-medium">{p.name}</span>
+                    <span className="text-xs text-emerald-600">{fmt(p.price)}</span>
+                    <button type="button" onClick={() => removeProc(p.id)}
+                      className="ml-1 text-emerald-500 hover:text-red-500 text-xs font-bold">
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Profissional *</label>
@@ -355,3 +394,4 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, c
     </form>
   )
 }
+
