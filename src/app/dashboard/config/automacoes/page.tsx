@@ -69,6 +69,7 @@ export default async function AutomacoesPage() {
     contato_pos_hora?: number | null
     template_contato_pos?: string | null
     contato_pos_excluir_categorias?: string[] | null
+    contato_pos_seq?: any[] | null
   }
   const auto = (automation || null) as AutomationRow | null
 
@@ -255,6 +256,7 @@ export default async function AutomacoesPage() {
             hora: auto?.contato_pos_hora ?? 10,
             template: auto?.template_contato_pos || '',
             excluirCategorias: auto?.contato_pos_excluir_categorias ?? ['Atendimento', 'Atendimento '],
+            seq: auto?.contato_pos_seq ?? [],
           }}
         />
       </div>
@@ -269,3 +271,4 @@ export default async function AutomacoesPage() {
     </div>
   )
 }
+
