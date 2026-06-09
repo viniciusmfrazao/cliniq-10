@@ -39,6 +39,8 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   const [elapsedTime, setElapsedTime] = useState(0)
   const [status, setStatus] = useState(appointment.status)
   const [showProcModal, setShowProcModal] = useState(false)
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false)
+  const [pendingProcedures, setPendingProcedures] = useState<Array<{ id: string; name: string; price: number }>>([])
   const [showReschedule, setShowReschedule] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState(
     new Date(appointment.start_time).toISOString().split('T')[0]
@@ -136,7 +138,13 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
   const doFinishAttendance = async (procedures: Array<{ id: string; name: string; price: number }>) => {
     setShowProcModal(false)
-    if (!confirm('Finalizar este atendimento?\n\nO estoque dos injetáveis será descontado.')) return
+    setPendingProcedures(procedures)
+    setShowFinishConfirm(true)
+  }
+
+  const confirmFinish = async () => {
+    setShowFinishConfirm(false)
+    const procedures = pendingProcedures
     setLoading(true)
     
     try {
@@ -159,8 +167,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
       }
 
       if (!applications || applications.length === 0) {
-        console.log('NENHUMA APLICAÇÃO ENCONTRADA para este atendimento')
-        alert('Nenhuma aplicação de injetável encontrada para descontar.\n\nVerifique se você salvou os pontos no mapa.')
+        console.log('Sem aplicações de injetável para descontar — procedimento sem injetável')
       } else {
         console.log(`${applications.length} aplicações para descontar`)
 
@@ -225,7 +232,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
           }
         }
 
-        alert(`Estoque descontado!\n\n${applications.length} aplicação(ões) processada(s).`)
+        console.log(`Estoque descontado: ${applications.length} aplicação(ões)`)
       }
 
       // 3. Salvar procedimentos realizados
@@ -269,6 +276,44 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
   const showStartBanner = status === 'scheduled' || status === 'confirmed' || status === 'checked_in'
 
+  // Modal de confirmação bonito
+  const finishConfirmModal = showFinishConfirm && typeof document !== 'undefined'
+    ? createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Finalizar atendimento?</h3>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              {pendingProcedures.length > 0 && (
+                <>
+                  <span className="font-medium text-slate-700">{pendingProcedures.map(p => p.name).join(', ')}</span>
+                  <br />
+                  <span className="text-violet-600 font-semibold">
+                    Total: R$ {pendingProcedures.reduce((s, p) => s + p.price, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </>
+              )}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowFinishConfirm(false)}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button onClick={confirmFinish}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null
+
   const procModal = showProcModal && typeof document !== 'undefined'
     ? createPortal(
         <ProceduresConfirmModal
@@ -284,7 +329,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
       )
     : null
 
-  if (procModal) return <>{procModal}</>
+  if (finishConfirmModal || procModal) return <>{finishConfirmModal}{procModal}</>
 
   return (
     <div className="sticky top-0 z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-slate-200 shadow-sm">
@@ -481,6 +526,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
 
 }
+
 
 
 
