@@ -1167,6 +1167,17 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
             onCancel={() => setProcConfirmModal(null)}
           />
         )}
+        {procConfirmModal?.open && (
+          <ProceduresConfirmModal
+            appointmentId={procConfirmModal.appointmentId}
+            clinicId={clinicId}
+            patientName={procConfirmModal.patientName}
+            initialProcedureName={procConfirmModal.procedureName}
+            initialProcedureId={procConfirmModal.procedureId}
+            onConfirm={handleProceduresConfirm}
+            onCancel={() => setProcConfirmModal(null)}
+          />
+        )}
         <BlockModal
           isOpen={blockModal.open}
           onClose={() => setBlockModal({ open: false })}
