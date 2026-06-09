@@ -15,14 +15,17 @@ export async function POST(req: Request) {
     const svc = createServiceClient()
     const now = new Date().toISOString()
 
+    // Para eventos de assinatura, o ID vem em body.subscription
+    const subscriptionId = payment?.subscription || body.subscription?.id
+
     // Encontrar clínica pelo subscription ou customer
     let clinicId: string | null = null
 
-    if (payment.subscription) {
+    if (subscriptionId) {
       const { data } = await svc
         .from('clinic_subscriptions')
         .select('clinic_id')
-        .eq('asaas_subscription_id', payment.subscription)
+        .eq('asaas_subscription_id', subscriptionId)
         .maybeSingle()
       clinicId = data?.clinic_id || null
     }
@@ -118,6 +121,25 @@ export async function POST(req: Request) {
         break
       }
 
+      // Assinatura inativada ou removida → cancelar
+      case 'SUBSCRIPTION_INACTIVATED':
+      case 'SUBSCRIPTION_DELETED': {
+        // Buscar pela subscription ID no body (pode vir em `subscription` em vez de `payment`)
+        const subId = body.subscription?.id || payment?.subscription
+        if (subId) {
+          await svc.from('clinic_subscriptions').update({
+            status: 'cancelled',
+            updated_at: now,
+          }).eq('asaas_subscription_id', subId)
+          // Também tenta pelo clinic_id já encontrado
+          if (clinicId) {
+            await svc.from('clinics').update({ plan_expires_at: now }).eq('id', clinicId)
+          }
+        }
+        console.log(`[asaas-webhook] Assinatura cancelada/inativada`)
+        break
+      }
+
       default:
         console.log(`[asaas-webhook] Evento ignorado: ${event}`)
     }
@@ -128,3 +150,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
 }
+
