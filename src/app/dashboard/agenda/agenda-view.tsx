@@ -300,7 +300,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
   return (
     <div 
-      className="relative group"
+      className="relative group h-full"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -314,7 +314,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
             handleMouseEnter()
           }
         }}
-        className={`block p-2 rounded-lg ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-40' : ''}`}
+        className={`block p-2 rounded-lg h-full overflow-hidden ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-40' : ''}`}
       >
         {/* Botão rápido de agendar no mesmo slot — só para cancelados */}
         {isCancelled && (
@@ -1280,7 +1280,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
             
             {/* ── Grade proporcional — cada hora = SLOT_PX pixels ── */}
             {(() => {
-              const SLOT_PX = 80 // altura de 1 hora em px
+              const SLOT_PX = 120 // altura de 1 hora em px
               const BR_TZ = 'America/Sao_Paulo'
               const now = new Date()
               const nowMinutes =
