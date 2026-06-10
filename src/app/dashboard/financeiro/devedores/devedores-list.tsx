@@ -34,25 +34,17 @@ type Props = {
 }
 
 // ─── Busca de paciente por nome/telefone/CPF ─────────────────────────────────
-function PatientSearch({ pacientes, value, onChange }: {
-  pacientes: Paciente[]
+function PatientSearch({ clinicId, value, onChange }: {
+  clinicId: string
   value: string
-  onChange: (id: string) => void
+  onChange: (id: string, name: string) => void
 }) {
-  // inputVal = o que o usuário vê/digita no campo
   const [inputVal, setInputVal] = useState('')
+  const [results, setResults] = useState<Paciente[]>([])
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-
-  // Quando um paciente é selecionado externamente, sincroniza o input
-  useEffect(() => {
-    if (value) {
-      const p = pacientes.find(p => p.id === value)
-      if (p) setInputVal(p.name)
-    } else {
-      setInputVal('')
-    }
-  }, [value])
+  const supabase = createClient()
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -62,31 +54,39 @@ function PatientSearch({ pacientes, value, onChange }: {
     return () => document.removeEventListener('mousedown', handle)
   }, [])
 
-  const filtered = inputVal.length < 2 ? [] : pacientes.filter(p => {
-    const q = inputVal.toLowerCase()
-    return (
-      p.name.toLowerCase().includes(q) ||
-      (p.phone || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
-      ((p as any).cpf || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''))
-    )
-  }).slice(0, 10)
+  useEffect(() => {
+    if (inputVal.length < 2) { setResults([]); return }
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      const { data } = await supabase
+        .from('patients')
+        .select('id, name, phone')
+        .eq('clinic_id', clinicId)
+        .ilike('name', `%${inputVal}%`)
+        .order('name')
+        .limit(10)
+      setResults(data || [])
+      setLoading(false)
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [inputVal])
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value
-    setInputVal(v)
+    setInputVal(e.target.value)
     setOpen(true)
-    if (value) onChange('') // deseleciona paciente atual ao editar
+    if (value) onChange('', '')
   }
 
   function select(p: Paciente) {
-    onChange(p.id)
+    onChange(p.id, p.name)
     setInputVal(p.name)
     setOpen(false)
   }
 
   function clear() {
-    onChange('')
+    onChange('', '')
     setInputVal('')
+    setResults([])
     setOpen(false)
   }
 
@@ -98,8 +98,8 @@ function PatientSearch({ pacientes, value, onChange }: {
           type="text"
           value={inputVal}
           onChange={handleChange}
-          onFocus={() => setOpen(true)}
-          placeholder="Buscar por nome, telefone ou CPF..."
+          onFocus={() => { setOpen(true) }}
+          placeholder="Buscar por nome..."
           className="w-full pl-9 pr-9 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-sm"
           required={!value}
           autoComplete="off"
@@ -110,9 +110,12 @@ function PatientSearch({ pacientes, value, onChange }: {
           </button>
         )}
       </div>
-      {open && filtered.length > 0 && (
+      {open && (loading || results.length > 0) && (
         <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-100 overflow-y-auto max-h-64">
-          {filtered.map(p => (
+          {loading && (
+            <div className="px-4 py-3 text-sm text-slate-400">Buscando...</div>
+          )}
+          {!loading && results.map(p => (
             <button key={p.id} type="button" onMouseDown={() => select(p)}
               className="w-full text-left px-4 py-2.5 hover:bg-violet-50 transition-colors border-b border-slate-50 last:border-0">
               <p className="text-sm font-medium text-slate-900">{p.name}</p>
@@ -121,7 +124,7 @@ function PatientSearch({ pacientes, value, onChange }: {
           ))}
         </div>
       )}
-      {open && inputVal.length >= 2 && filtered.length === 0 && (
+      {open && !loading && inputVal.length >= 2 && results.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-100 px-4 py-3">
           <p className="text-sm text-slate-400">Nenhum paciente encontrado</p>
         </div>
