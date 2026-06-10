@@ -1278,101 +1278,179 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
               ))}
             </div>
             
-            {/* Grade de horários */}
-            {HOUR_SLOTS.map(hour => {
-              const timeStr = `${hour.toString().padStart(2, '0')}:00`
-              const isLunchTime = hour === 12
-              
+            {/* ── Grade proporcional — cada hora = SLOT_PX pixels ── */}
+            {(() => {
+              const SLOT_PX = 80 // altura de 1 hora em px
+              const BR_TZ = 'America/Sao_Paulo'
+              const now = new Date()
+              const nowMinutes =
+                parseInt(now.toLocaleTimeString('pt-BR', { hour: '2-digit', timeZone: BR_TZ })) * 60 +
+                parseInt(now.toLocaleTimeString('pt-BR', { minute: '2-digit', timeZone: BR_TZ }))
+              const firstHour = HOUR_SLOTS[0]
+              const redLineTop = (nowMinutes - firstHour * 60) * (SLOT_PX / 60)
+              const showRedLine = nowMinutes >= firstHour * 60 &&
+                nowMinutes < (HOUR_SLOTS[HOUR_SLOTS.length - 1] + 1) * 60 &&
+                selectedDate === new Date().toLocaleDateString('en-CA', { timeZone: BR_TZ })
+
+              // Calcula top e height de um agendamento/bloco em px
+              function calcBlock(startIso: string, endIso: string | null, fallbackMin = 30) {
+                const s = new Date(startIso)
+                const sMin = s.toLocaleTimeString('pt-BR', { hour: '2-digit', timeZone: BR_TZ }) as unknown as number * 60 +
+                  (parseInt(s.toLocaleTimeString('pt-BR', { minute: '2-digit', timeZone: BR_TZ })) || 0)
+                const startHour = parseInt(s.toLocaleTimeString('pt-BR', { hour: '2-digit', timeZone: BR_TZ }))
+                const startMin = startHour * 60 + (parseInt(s.toLocaleTimeString('pt-BR', { minute: '2-digit', timeZone: BR_TZ })) || 0)
+                const durMin = endIso
+                  ? Math.round((new Date(endIso).getTime() - s.getTime()) / 60000)
+                  : fallbackMin
+                const top = (startMin - firstHour * 60) * (SLOT_PX / 60)
+                const height = Math.max(durMin * (SLOT_PX / 60), 28) // mínimo 28px
+                return { top, height, startMin, durMin }
+              }
+
+              const totalHours = HOUR_SLOTS.length
+              const gridHeight = totalHours * SLOT_PX
+
               return (
-                <div key={hour} className={`flex border-b border-slate-100 dark:border-slate-700 ${isLunchTime ? 'bg-amber-50/30 dark:bg-amber-900/20' : ''}`}>
-                  <div className="w-20 flex-shrink-0 p-2 text-center border-r border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                    <p className={`text-sm font-semibold ${isLunchTime ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                      {timeStr}
-                    </p>
-                    {isLunchTime && <p className="text-xs text-amber-500">🍽️</p>}
+                <div className="flex" style={{ position: 'relative' }}>
+                  {/* Coluna de horas */}
+                  <div className="w-20 flex-shrink-0 border-r border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" style={{ height: gridHeight }}>
+                    {HOUR_SLOTS.map(hour => {
+                      const isLunchTime = hour === 12
+                      return (
+                        <div
+                          key={hour}
+                          style={{ height: SLOT_PX, borderBottom: '1px solid' }}
+                          className="border-slate-100 dark:border-slate-700 flex items-start justify-center pt-2"
+                        >
+                          <span className={`text-sm font-semibold ${isLunchTime ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                            {`${hour.toString().padStart(2, '0')}:00`}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
-                  
+
+                  {/* Colunas por profissional */}
                   {displayProfessionals.map((prof, profIdx) => {
-                    const hourAppointments = appointments.filter(apt => {
-                      const aptHour = new Date(apt.start_time).getHours()
-                      return apt.professional_id === prof.id && aptHour === hour
-                    })
-                    const hourBlocks = blocks.filter(bl => {
-                      if (bl.professional_id !== prof.id) return false
-                      const blStart = new Date(bl.start_time).getHours()
-                      const blEndDate = new Date(bl.end_time)
-                      const blEnd = blEndDate.getHours() + (blEndDate.getMinutes() > 0 ? 1 : 0)
-                      return hour >= blStart && hour < blEnd
-                    })
                     const isLastColumn = profIdx === displayProfessionals.length - 1
-                    const hasContent = hourAppointments.length > 0 || hourBlocks.length > 0
-                    const novoUrl = `/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}&overlap=1`
-                    
+                    const profApts = appointments.filter(apt => apt.professional_id === prof.id)
+                    const profBlocks = blocks.filter(bl => bl.professional_id === prof.id)
+
                     return (
-                      <div 
+                      <div
                         key={prof.id}
-                        className={`flex-1 min-w-[180px] p-1.5 border-r border-slate-100 dark:border-slate-700 last:border-r-0 min-h-[70px] transition-colors relative group/cell ${
-                          draggedAppointment ? 'hover:bg-violet-100 dark:hover:bg-violet-900/30' : ''
-                        }`}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, selectedDate, hour, prof.id)}
+                        className={`flex-1 min-w-[180px] border-r border-slate-100 dark:border-slate-700 last:border-r-0 relative`}
+                        style={{ height: gridHeight }}
                       >
-                        {hasContent ? (
-                          <div className="space-y-1">
-                            {hourAppointments.map(apt => (
-                              <div key={apt.id} className="relative" style={{overflow: "visible"}}>
-                                <AppointmentCard
-                                  apt={apt}
-                                  onStatusChange={handleStatusChange}
-                                  onCheckIn={handleCheckIn}
-                                  onDragStart={handleDragStart}
-                                  isRightColumn={isLastColumn}
-                                  columnIndex={profIdx}
-                                  totalColumns={displayProfessionals.length}
-                                  canDrag={true}
-                                />
-                              </div>
-                            ))}
-                            {hourBlocks.map(bl => {
-                              const blStyle = COLOR_BLOCK[bl.color] || COLOR_BLOCK.slate
-                              return (
-                                <button
-                                  key={bl.id}
-                                  onClick={() => setBlockModal({ open: true, editBlock: bl })}
-                                  className={`w-full text-left p-2 rounded-lg border-l-4 ${blStyle.bg} ${blStyle.border} ${blStyle.text} hover:opacity-80 transition-opacity`}
-                                >
-                                  <div className="flex items-center gap-1">
-                                    <Icon name="lock" className="w-3 h-3 flex-shrink-0" />
-                                    <span className="text-xs font-semibold truncate">{bl.title}</span>
-                                  </div>
-                                  {bl.notes && <p className="text-xs opacity-70 truncate mt-0.5">{bl.notes}</p>}
-                                </button>
-                              )
-                            })}
-                            {/* Botão + para adicionar segundo paciente no mesmo horário */}
-                            <Link
-                              href={novoUrl}
-                              className="w-full flex items-center justify-center gap-1 py-1 rounded-lg border border-dashed border-slate-200 hover:border-violet-300 hover:bg-violet-50 transition-colors opacity-0 group-hover/cell:opacity-100 text-slate-300 hover:text-violet-500"
-                              title="Adicionar outro paciente nesse horário"
+                        {/* Linhas de hora (fundo) */}
+                        {HOUR_SLOTS.map(hour => {
+                          const isLunch = hour === 12
+                          return (
+                            <div
+                              key={hour}
+                              style={{ position: 'absolute', top: (hour - firstHour) * SLOT_PX, left: 0, right: 0, height: SLOT_PX }}
+                              className={`border-b border-slate-100 dark:border-slate-700 ${isLunch ? 'bg-amber-50/30 dark:bg-amber-900/10' : ''} group/cell`}
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleDrop(e, selectedDate, hour, prof.id)}
                             >
-                              <Icon name="plus" className="w-3 h-3" />
-                              <span className="text-xs">Adicionar</span>
-                            </Link>
-                          </div>
-                        ) : (
-                          <Link
-                            href={`/dashboard/agenda/novo?date=${selectedDate}&time=${timeStr}&professional=${prof.id}`}
-                            className="h-full min-h-[60px] flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-lg hover:border-violet-300 hover:bg-violet-50 transition-colors group/link"
+                              {/* Link para novo agendamento ao hover */}
+                              <Link
+                                href={`/dashboard/agenda/novo?date=${selectedDate}&time=${hour.toString().padStart(2,'0')}:00&professional=${prof.id}`}
+                                className="absolute inset-1 rounded-lg border-2 border-dashed border-transparent hover:border-violet-200 hover:bg-violet-50/50 dark:hover:bg-violet-900/10 transition-colors flex items-center justify-center opacity-0 group-hover/cell:opacity-100"
+                              >
+                                <Icon name="plus" className="w-4 h-4 text-violet-300" />
+                              </Link>
+                            </div>
+                          )
+                        })}
+
+                        {/* Blocos de bloqueio (posicionados absoluto) */}
+                        {profBlocks.map(bl => {
+                          const blStyle = COLOR_BLOCK[bl.color] || COLOR_BLOCK.slate
+                          const { top, height } = calcBlock(bl.start_time, bl.end_time, 60)
+                          return (
+                            <button
+                              key={bl.id}
+                              onClick={() => setBlockModal({ open: true, editBlock: bl })}
+                              style={{ position: 'absolute', top: top + 2, left: 4, right: 4, height: height - 4, zIndex: 5 }}
+                              className={`text-left p-2 rounded-lg border-l-4 ${blStyle.bg} ${blStyle.border} ${blStyle.text} hover:opacity-80 transition-opacity overflow-hidden`}
+                            >
+                              <div className="flex items-center gap-1">
+                                <Icon name="lock" className="w-3 h-3 flex-shrink-0" />
+                                <span className="text-xs font-semibold truncate">{bl.title}</span>
+                              </div>
+                              {bl.notes && <p className="text-xs opacity-70 truncate mt-0.5">{bl.notes}</p>}
+                            </button>
+                          )
+                        })}
+
+                        {/* Agendamentos (posicionados absoluto, proporcionais à duração) */}
+                        {profApts.map((apt, aptIdx) => {
+                          const totalDurMin = apt.end_time
+                            ? Math.round((new Date(apt.end_time).getTime() - new Date(apt.start_time).getTime()) / 60000)
+                            : (apt.appointment_procedures?.reduce((s, p) => s + (p.duration_minutes || 30), 0) || apt.procedures?.duration_minutes || 30)
+                          const { top, height } = calcBlock(apt.start_time, apt.end_time, totalDurMin)
+                          
+                          // Detectar sobreposições para dividir largura
+                          const overlapping = profApts.filter((other, otherIdx) => {
+                            if (otherIdx === aptIdx) return false
+                            const otherDur = other.end_time
+                              ? Math.round((new Date(other.end_time).getTime() - new Date(other.start_time).getTime()) / 60000)
+                              : (other.procedures?.duration_minutes || 30)
+                            const { top: oTop, height: oHeight } = calcBlock(other.start_time, other.end_time, otherDur)
+                            return top < oTop + oHeight && top + height > oTop
+                          })
+                          const overlapCount = overlapping.length + 1
+                          const overlapIndex = overlapping.filter((_, i) => {
+                            const other = overlapping[i]
+                            return other.start_time < apt.start_time || (other.start_time === apt.start_time && other.id < apt.id)
+                          }).length
+                          const colWidth = 100 / overlapCount
+                          const colLeft = overlapIndex * colWidth
+
+                          return (
+                            <div
+                              key={apt.id}
+                              style={{
+                                position: 'absolute',
+                                top: top + 2,
+                                left: `calc(${colLeft}% + 2px)`,
+                                width: `calc(${colWidth}% - 4px)`,
+                                height: height - 4,
+                                zIndex: 10,
+                                overflow: 'visible',
+                              }}
+                            >
+                              <AppointmentCard
+                                apt={apt}
+                                onStatusChange={handleStatusChange}
+                                onCheckIn={handleCheckIn}
+                                onDragStart={handleDragStart}
+                                isRightColumn={isLastColumn}
+                                columnIndex={profIdx}
+                                totalColumns={displayProfessionals.length}
+                                canDrag={true}
+                              />
+                            </div>
+                          )
+                        })}
+
+                        {/* Linha vermelha do horário atual */}
+                        {showRedLine && (
+                          <div
+                            style={{ position: 'absolute', top: redLineTop, left: 0, right: 0, zIndex: 20, pointerEvents: 'none' }}
+                            className="flex items-center"
                           >
-                            <Icon name="plus" className="w-4 h-4 text-slate-300 group-hover/link:text-violet-500" />
-                          </Link>
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 -ml-1.5 shadow-sm" />
+                            <div className="flex-1 h-px bg-red-500 opacity-80" />
+                          </div>
                         )}
                       </div>
                     )
                   })}
                 </div>
               )
-            })}
+            })()}
           </div>
         </div>
       </div>
