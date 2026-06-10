@@ -102,7 +102,8 @@ function PatientSearch({ clinicId, value, onChange }: {
           placeholder="Buscar por nome..."
           className="w-full pl-9 pr-9 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-sm"
           required={!value}
-          autoComplete="off"
+          autoComplete="new-password"
+          name="patient-search-field"
         />
         {(value || inputVal) && (
           <button type="button" onClick={clear} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
