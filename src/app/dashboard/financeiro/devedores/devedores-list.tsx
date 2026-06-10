@@ -44,7 +44,6 @@ function PatientSearch({ clinicId, value, onChange }: {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const supabase = createClient()
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -58,24 +57,13 @@ function PatientSearch({ clinicId, value, onChange }: {
     if (inputVal.length < 2) { setResults([]); return }
     const timer = setTimeout(async () => {
       setLoading(true)
-      // RLS já filtra pela clínica — não precisa de .eq('clinic_id')
-      // Busca todos e filtra client-side com e sem acento
-      const { data, error } = await supabase
-        .from('patients')
-        .select('id, name, phone')
-        .order('name')
-        .limit(500)
-      if (error) {
-        console.error('[PatientSearch] erro:', error.message, 'clinicId:', clinicId)
-        setLoading(false)
-        return
+      try {
+        const res = await fetch(`/api/patients/search?q=${encodeURIComponent(inputVal)}`)
+        const data = await res.json()
+        setResults(data || [])
+      } catch (e) {
+        setResults([])
       }
-      const normalized = inputVal.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-      const filtered = (data || []).filter(p => {
-        const nameNorm = p.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-        return nameNorm.includes(normalized) || p.name.toLowerCase().includes(inputVal.toLowerCase())
-      }).slice(0, 10)
-      setResults(filtered)
       setLoading(false)
     }, 200)
     return () => clearTimeout(timer)
