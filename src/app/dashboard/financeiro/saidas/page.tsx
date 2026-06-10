@@ -11,12 +11,25 @@ export default async function SaidasPage() {
   if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
   const clinicId = userData?.clinic_id
 
-  const { data: saidas } = await supabase
-    .from('saidas')
-    .select('*')
-    .eq('clinic_id', clinicId)
-    .order('data', { ascending: false })
-    .limit(100)
+  // Busca lançadas (pago=true) e pendentes (pago=false) separadamente
+  // para não perder pendentes ao filtrar por mês na UI
+  const [{ data: lancadas }, { data: pendentes }] = await Promise.all([
+    supabase
+      .from('saidas')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .eq('pago', true)
+      .order('data', { ascending: false })
+      .limit(200),
+    supabase
+      .from('saidas')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .eq('pago', false)
+      .order('data_vencimento', { ascending: true }),
+  ])
+
+  const saidas = [...(pendentes || []), ...(lancadas || [])]
 
   return (
     <div className="space-y-6">
@@ -39,7 +52,7 @@ export default async function SaidasPage() {
         </Link>
       </div>
 
-      <SaidasList saidas={saidas || []} clinicId={clinicId} />
+      <SaidasList saidas={saidas} clinicId={clinicId} />
     </div>
   )
 }
