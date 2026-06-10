@@ -49,9 +49,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="h-screen bg-slate-100 dark:bg-slate-900 flex flex-col overflow-hidden">
 
-      {/* Top Bar */}
-      <header className="flex-shrink-0 text-white px-4 py-3 flex items-center justify-between z-50"
-        style={{ background: 'linear-gradient(135deg, #7C3AED, #A78BFA)' }}
+      {/* Top Bar — padding-top respeita safe area do iPhone (notch/Dynamic Island) */}
+      <header
+        className="flex-shrink-0 text-white px-4 pb-3 flex items-center justify-between z-50"
+        style={{
+          background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+        }}
       >
         <div className="flex items-center gap-3">
           <button
