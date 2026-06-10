@@ -23,6 +23,9 @@ const CATEGORIAS_DRE = [
 
 const FORMAS = ['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Boleto', 'Transferência']
 
+// Formas que permitem vencimento futuro
+const FORMAS_COM_VENCIMENTO = ['Boleto', 'Crédito', 'Transferência']
+
 function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
@@ -31,7 +34,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
-  
+
   const [data, setData] = useState(todayBR())
   const [descricao, setDescricao] = useState('')
   const [categoria, setCategoria] = useState('')
@@ -39,26 +42,28 @@ export default function SaidaForm({ clinicId, userId }: Props) {
   const [valor, setValor] = useState('')
   const [forma, setForma] = useState('Pix')
   const [observacoes, setObservacoes] = useState('')
+  const [temVencimento, setTemVencimento] = useState(false)
+  const [dataVencimento, setDataVencimento] = useState('')
 
   const categoriaInfo = CATEGORIAS_DRE.find(c => c.value === categoria)
+  const mostrarVencimento = FORMAS_COM_VENCIMENTO.includes(forma)
+  // pago = false quando tem data de vencimento futura
+  const isPagamentoFuturo = temVencimento && dataVencimento && dataVencimento > todayBR()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const valorNum = parseFloat(valor)
-    if (!descricao.trim()) {
-      alert('Informe a descrição')
-      return
-    }
-    if (!valorNum || valorNum <= 0) {
-      alert('Informe o valor')
-      return
-    }
-    
+    if (!descricao.trim()) { alert('Informe a descrição'); return }
+    if (!valorNum || valorNum <= 0) { alert('Informe o valor'); return }
+    if (temVencimento && !dataVencimento) { alert('Informe a data de vencimento'); return }
+
     setLoading(true)
 
     const { error } = await supabase.from('saidas').insert({
       clinic_id: clinicId,
-      data,
+      data: isPagamentoFuturo ? dataVencimento : data,
+      data_vencimento: temVencimento ? dataVencimento : data,
+      pago: !isPagamentoFuturo,
       descricao: descricao.trim(),
       categoria_dre: categoria || null,
       fornecedor: fornecedor.trim() || null,
@@ -88,11 +93,13 @@ export default function SaidaForm({ clinicId, userId }: Props) {
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Data *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {isPagamentoFuturo ? 'Data do lançamento (vencimento)' : 'Data *'}
+            </label>
             <input
               type="date"
-              value={data}
-              onChange={e => setData(e.target.value)}
+              value={isPagamentoFuturo ? dataVencimento : data}
+              onChange={e => isPagamentoFuturo ? setDataVencimento(e.target.value) : setData(e.target.value)}
               required
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
             />
@@ -146,7 +153,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
             <label className="block text-sm font-medium text-slate-700 mb-1">Forma de pagamento *</label>
             <select
               value={forma}
-              onChange={e => setForma(e.target.value)}
+              onChange={e => { setForma(e.target.value); setTemVencimento(false) }}
               required
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
             >
@@ -170,6 +177,41 @@ export default function SaidaForm({ clinicId, userId }: Props) {
           </div>
         </div>
 
+        {/* Opção de vencimento futuro */}
+        {mostrarVencimento && (
+          <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={temVencimento}
+                onChange={e => setTemVencimento(e.target.checked)}
+                className="w-4 h-4 rounded accent-amber-500"
+              />
+              <span className="text-sm font-medium text-amber-800">
+                📅 Tem data de vencimento futura?
+              </span>
+            </label>
+            {temVencimento && (
+              <div>
+                <label className="block text-sm font-medium text-amber-800 mb-1">Data de vencimento</label>
+                <input
+                  type="date"
+                  value={dataVencimento}
+                  onChange={e => setDataVencimento(e.target.value)}
+                  min={todayBR()}
+                  className="w-full px-4 py-2.5 border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white"
+                />
+                {isPagamentoFuturo && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    ⚡ Este lançamento ficará em <strong>A Pagar</strong> até você marcar como pago.
+                    Você receberá alertas quando o vencimento se aproximar.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Observações</label>
           <textarea
@@ -183,10 +225,18 @@ export default function SaidaForm({ clinicId, userId }: Props) {
       </div>
 
       {parseFloat(valor) > 0 && (
-        <div className="bg-rose-50 rounded-2xl p-4 border border-rose-200">
+        <div className={`rounded-2xl p-4 border ${
+          isPagamentoFuturo
+            ? 'bg-amber-50 border-amber-200'
+            : 'bg-rose-50 border-rose-200'
+        }`}>
           <div className="flex items-center justify-between">
-            <span className="font-medium text-rose-700">Valor da saída</span>
-            <span className="text-2xl font-bold text-rose-700">-{fmt(parseFloat(valor))}</span>
+            <span className={`font-medium ${isPagamentoFuturo ? 'text-amber-700' : 'text-rose-700'}`}>
+              {isPagamentoFuturo ? '📅 Pagamento a vencer' : 'Valor da saída'}
+            </span>
+            <span className={`text-2xl font-bold ${isPagamentoFuturo ? 'text-amber-700' : 'text-rose-700'}`}>
+              -{fmt(parseFloat(valor))}
+            </span>
           </div>
         </div>
       )}
@@ -212,7 +262,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
           ) : (
             <>
               <Icon name="check" className="w-5 h-5" />
-              Lançar Saída
+              {isPagamentoFuturo ? 'Agendar Pagamento' : 'Lançar Saída'}
             </>
           )}
         </button>
