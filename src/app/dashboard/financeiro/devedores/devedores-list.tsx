@@ -409,9 +409,9 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
               <label className="block text-sm font-medium text-slate-700 mb-1">{tipoDevedor === 'paciente' ? 'Paciente *' : 'Nome do fornecedor *'}</label>
               {tipoDevedor === 'paciente' ? (
                 <PatientSearch
-                  pacientes={pacientes}
+                  clinicId={clinicId}
                   value={form.paciente_id}
-                  onChange={id => setForm({ ...form, paciente_id: id })}
+                  onChange={(id, _name) => setForm({ ...form, paciente_id: id })}
                 />
               ) : (
                 <input
