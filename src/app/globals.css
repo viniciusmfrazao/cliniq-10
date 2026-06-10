@@ -152,102 +152,242 @@ button, [role="button"], a {
   --card-shadow: 0 4px 20px rgba(168, 85, 247, 0.1);
 }
 
-/* Dark Mode */
+/* ==========================================================
+   DARK MODE — Sistema completo baseado em CSS custom properties
+   Cobre 100% dos componentes sem depender de classes específicas
+   ========================================================== */
+
+/* Variáveis de cor do sistema — mudam automaticamente com .dark */
+:root {
+  --surface-page:    #fafaf8;
+  --surface-card:    #ffffff;
+  --surface-raised:  #f1f5f9;
+  --surface-overlay: #ffffff;
+  --surface-input:   #ffffff;
+
+  --text-primary:    #0f172a;
+  --text-secondary:  #475569;
+  --text-muted:      #94a3b8;
+  --text-inverse:    #ffffff;
+
+  --border-default:  #e2e8f0;
+  --border-strong:   #cbd5e1;
+
+  --shadow-card:     0 4px 20px rgba(99, 102, 241, 0.08);
+  --shadow-elevated: 0 12px 32px rgba(0, 0, 0, 0.10);
+}
+
 .dark {
-  --bg-main: #0F172A;
-  --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  --bg-main:         #0b1120;
+  --surface-page:    #0b1120;
+  --surface-card:    #151f32;
+  --surface-raised:  #1e2d45;
+  --surface-overlay: #1e2d45;
+  --surface-input:   #1a2538;
+
+  --text-primary:    #f0f4ff;
+  --text-secondary:  #94a3b8;
+  --text-muted:      #64748b;
+  --text-inverse:    #0f172a;
+
+  --border-default:  #1e3050;
+  --border-strong:   #2a4060;
+
+  --card-shadow:     0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-card:     0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-elevated: 0 12px 40px rgba(0, 0, 0, 0.6);
 }
 
-.dark body {
-  background: var(--bg-main);
+/* ── Aplicação sistemática das variáveis ── */
+
+.dark body,
+.dark #__next {
+  background-color: var(--surface-page);
+  color: var(--text-primary);
 }
 
-.dark .card {
-  @apply bg-slate-800 border-slate-700;
+/* Cards e superfícies */
+.dark .card,
+.dark [class*="rounded-"][class*="border"],
+.dark .bg-white {
+  background-color: var(--surface-card) !important;
+  border-color: var(--border-default) !important;
+  color: var(--text-primary);
 }
 
+.dark .bg-slate-50,
+.dark .bg-gray-50 {
+  background-color: var(--surface-raised) !important;
+}
+
+.dark .bg-slate-100,
+.dark .bg-gray-100 {
+  background-color: var(--surface-raised) !important;
+}
+
+.dark .bg-slate-200,
+.dark .bg-gray-200 {
+  background-color: #253650 !important;
+}
+
+/* Texto */
+.dark .text-slate-900,
+.dark .text-gray-900 { color: #f0f4ff !important; }
+.dark .text-slate-800,
+.dark .text-gray-800 { color: #e2eaf8 !important; }
+.dark .text-slate-700,
+.dark .text-gray-700 { color: #cbd5e1 !important; }
+.dark .text-slate-600,
+.dark .text-gray-600 { color: #94a3b8 !important; }
+.dark .text-slate-500,
+.dark .text-gray-500 { color: #7e94b0 !important; }
+.dark .text-slate-400,
+.dark .text-gray-400 { color: #64748b !important; }
+
+/* Borders */
+.dark .border-slate-100,
+.dark .border-gray-100 { border-color: var(--border-default) !important; }
+.dark .border-slate-200,
+.dark .border-gray-200 { border-color: var(--border-default) !important; }
+.dark .border-slate-300,
+.dark .border-gray-300 { border-color: var(--border-strong) !important; }
+
+/* Inputs e formulários */
+.dark input,
+.dark textarea,
+.dark select,
 .dark .input {
-  @apply bg-slate-800 border-slate-600 text-white placeholder:text-slate-400;
+  background-color: var(--surface-input) !important;
+  border-color: var(--border-default) !important;
+  color: var(--text-primary) !important;
 }
 
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus,
 .dark .input:focus {
-  border-color: var(--primary);
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent) !important;
 }
 
-.dark .label {
-  @apply text-slate-300;
+.dark select option {
+  background-color: var(--surface-card);
+  color: var(--text-primary);
 }
 
+.dark .label { color: var(--text-secondary) !important; }
+
+/* Botão secundário */
 .dark .btn-secondary {
-  @apply bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:border-slate-500;
+  background-color: var(--surface-raised) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-primary) !important;
 }
 
-/* Dark mode text colors */
-.dark .text-slate-900 { @apply text-slate-100; }
-.dark .text-slate-800 { @apply text-slate-200; }
-.dark .text-slate-700 { @apply text-slate-300; }
-.dark .text-slate-600 { @apply text-slate-400; }
-.dark .text-slate-500 { @apply text-slate-400; }
+.dark .btn-secondary:hover {
+  background-color: #253650 !important;
+}
 
-/* Dark mode backgrounds */
-.dark .bg-white { @apply bg-slate-800; }
-.dark .bg-slate-50 { @apply bg-slate-900; }
-.dark .bg-slate-100 { @apply bg-slate-800; }
+/* Hover states */
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover {
+  background-color: var(--surface-raised) !important;
+}
 
-/* Dark mode borders */
-.dark .border-slate-100 { @apply border-slate-700; }
-.dark .border-slate-200 { @apply border-slate-600; }
-.dark .border-slate-300 { @apply border-slate-500; }
+/* Tabelas */
+.dark table {
+  color: var(--text-primary);
+}
+.dark table thead,
+.dark table thead tr,
+.dark table thead th {
+  background-color: var(--surface-raised) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--border-default) !important;
+}
+.dark table tbody tr {
+  border-color: var(--border-default) !important;
+}
+.dark table tbody tr:hover {
+  background-color: var(--surface-raised) !important;
+}
+.dark table tbody td {
+  color: var(--text-primary);
+  border-color: var(--border-default) !important;
+}
 
-/* Dark mode hover states */
-.dark .hover\:bg-slate-50:hover { @apply bg-slate-700; }
-.dark .hover\:bg-slate-100:hover { @apply bg-slate-700; }
-
-/* Dark mode specific for tables and lists */
-.dark table thead { @apply bg-slate-900; }
-.dark table tbody tr { @apply border-slate-700; }
-.dark table tbody tr:hover { @apply bg-slate-700; }
-
-/* Dark mode for select elements */
-.dark select { @apply bg-slate-800 border-slate-600 text-white; }
-.dark select option { @apply bg-slate-800 text-white; }
-
-/* Dark mode for modals */
+/* Modais e overlays */
 .dark .modal-content,
+.dark [role="dialog"] > div,
 .dark [class*="modal"] > div:not([class*="bg-black"]) {
-  @apply bg-slate-800;
+  background-color: var(--surface-overlay) !important;
+  border-color: var(--border-default) !important;
 }
 
-/* Dark mode utility class to preserve original colors (for colored cards) */
+/* Dividers */
+.dark hr,
+.dark .divide-slate-100 > * + *,
+.dark .divide-slate-200 > * + * {
+  border-color: var(--border-default) !important;
+}
+
+/* Badges coloridos no dark — versões mais escuras / saturadas */
+.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.15) !important; }
+.dark .bg-blue-100    { background-color: rgba(59, 130, 246, 0.15) !important; }
+.dark .bg-amber-100   { background-color: rgba(245, 158, 11, 0.15) !important; }
+.dark .bg-red-100     { background-color: rgba(239, 68, 68, 0.15)  !important; }
+.dark .bg-violet-100  { background-color: rgba(139, 92, 246, 0.15) !important; }
+.dark .bg-purple-100  { background-color: rgba(168, 85, 247, 0.15) !important; }
+.dark .bg-pink-100    { background-color: rgba(236, 72, 153, 0.15) !important; }
+.dark .bg-cyan-100    { background-color: rgba(6, 182, 212, 0.15)  !important; }
+.dark .bg-teal-100    { background-color: rgba(20, 184, 166, 0.15) !important; }
+.dark .bg-orange-100  { background-color: rgba(249, 115, 22, 0.15) !important; }
+.dark .bg-yellow-100  { background-color: rgba(234, 179, 8, 0.15)  !important; }
+
+.dark .text-emerald-700 { color: #34d399 !important; }
+.dark .text-blue-700    { color: #60a5fa !important; }
+.dark .text-amber-700   { color: #fbbf24 !important; }
+.dark .text-red-700     { color: #f87171 !important; }
+.dark .text-violet-700  { color: #a78bfa !important; }
+.dark .text-purple-700  { color: #c084fc !important; }
+.dark .text-pink-700    { color: #f472b6 !important; }
+.dark .text-cyan-700    { color: #22d3ee !important; }
+.dark .text-teal-700    { color: #2dd4bf !important; }
+.dark .text-orange-700  { color: #fb923c !important; }
+.dark .text-yellow-700  { color: #fde047 !important; }
+
+/* Textos de status em badges */
+.dark .text-emerald-800,
+.dark .text-green-800  { color: #6ee7b7 !important; }
+.dark .text-blue-800   { color: #93c5fd !important; }
+.dark .text-red-800    { color: #fca5a5 !important; }
+.dark .text-amber-800  { color: #fcd34d !important; }
+
+/* Preserve colored backgrounds — classe utilitária */
 .preserve-colors .text-slate-900,
 .preserve-colors .text-slate-800,
 .preserve-colors .text-slate-700,
 .preserve-colors .text-slate-600,
 .preserve-colors .text-slate-500 {
-  color: inherit;
+  color: inherit !important;
 }
 
-/* Preserve colored backgrounds in dark mode */
-.dark .bg-emerald-100 { @apply bg-emerald-900/30; }
-.dark .bg-blue-100 { @apply bg-blue-900/30; }
-.dark .bg-amber-100 { @apply bg-amber-900/30; }
-.dark .bg-red-100 { @apply bg-red-900/30; }
-.dark .bg-violet-100 { @apply bg-violet-900/30; }
-.dark .bg-purple-100 { @apply bg-purple-900/30; }
-.dark .bg-pink-100 { @apply bg-pink-900/30; }
-.dark .bg-cyan-100 { @apply bg-cyan-900/30; }
-.dark .bg-teal-100 { @apply bg-teal-900/30; }
+/* Glass effect no dark */
+.dark .glass {
+  background: rgba(21, 31, 50, 0.85);
+  border-color: rgba(255, 255, 255, 0.08);
+}
 
-/* Fix text on colored backgrounds in dark mode */
-.dark .text-emerald-700 { @apply text-emerald-400; }
-.dark .text-blue-700 { @apply text-blue-400; }
-.dark .text-amber-700 { @apply text-amber-400; }
-.dark .text-red-700 { @apply text-red-400; }
-.dark .text-violet-700 { @apply text-violet-400; }
-.dark .text-purple-700 { @apply text-purple-400; }
-.dark .text-pink-700 { @apply text-pink-400; }
-.dark .text-cyan-700 { @apply text-cyan-400; }
-.dark .text-teal-700 { @apply text-teal-400; }
+/* Scrollbar no dark */
+.dark ::-webkit-scrollbar-track { background: var(--surface-page); }
+.dark ::-webkit-scrollbar-thumb { background: var(--border-strong); }
 
 * { 
   -webkit-tap-highlight-color: transparent; 
