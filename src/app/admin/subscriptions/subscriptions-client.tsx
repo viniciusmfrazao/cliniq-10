@@ -32,7 +32,7 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
         body: JSON.stringify({
           clinicId: modal.clinicId,
           planName: plan?.name || form.planName,
-          planPrice: plan?.price || parseFloat(form.planPrice),
+          planPrice: parseFloat(form.planPrice) || plan?.price_monthly || 0,
           billingCycle: form.billingCycle,
           trialDays: parseInt(form.trialDays),
         }),
@@ -131,13 +131,26 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Plano</label>
-                <select value={form.planId} onChange={e => setForm({ ...form, planId: e.target.value })}
+                <select value={form.planId} onChange={e => {
+                  const plan = plans.find(p => p.id === e.target.value)
+                  setForm({ ...form, planId: e.target.value, planPrice: plan?.price_monthly?.toString() || '' })
+                }}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm">
                   <option value="">Selecione...</option>
                   {plans.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} — R$ {p.price}/mês</option>
+                    <option key={p.id} value={p.id}>{p.name} — R$ {p.price_monthly}/mês</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Valor mensal (R$)</label>
+                <input type="number" step="0.01" min="0"
+                  value={form.planPrice}
+                  onChange={e => setForm({ ...form, planPrice: e.target.value })}
+                  placeholder="Ex: 197.00"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-violet-500/20" />
+                <p className="text-xs text-slate-400 mt-1">Pode editar o valor para cobrar diferente do plano padrão</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -192,3 +205,4 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
     </div>
   )
 }
+
