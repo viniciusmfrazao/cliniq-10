@@ -184,16 +184,19 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
     const nomeFinal = form.paciente_id
       ? pacientes.find(p => p.id === form.paciente_id)?.name || ''
       : form.nome_livre.trim()
-    const { error } = await supabase.from('debitos').insert({
-      clinic_id: clinicId,
-      paciente_id: form.paciente_id || null,
-      paciente_nome: nomeFinal,
-      valor: parseFloat(form.valor),
-      descricao: form.descricao || 'Débito',
-      data_vencimento: form.data_vencimento,
-      status: 'pendente',
+    const res = await fetch('/api/debitos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paciente_id: form.paciente_id || null,
+        paciente_nome: nomeFinal,
+        valor: parseFloat(form.valor),
+        descricao: form.descricao || 'Débito',
+        data_vencimento: form.data_vencimento,
+      }),
     })
-    if (error) { alert('Erro ao salvar: ' + error.message); setLoading(false); return }
+    const result = await res.json()
+    if (!res.ok) { alert('Erro ao salvar: ' + result.error); setLoading(false); return }
     setForm({ paciente_id: '', nome_livre: '', valor: '', descricao: '', data_vencimento: todayBR() })
     setShowForm(false)
     setLoading(false)
