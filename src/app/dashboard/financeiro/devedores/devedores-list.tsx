@@ -58,14 +58,21 @@ function PatientSearch({ clinicId, value, onChange }: {
     if (inputVal.length < 2) { setResults([]); return }
     const timer = setTimeout(async () => {
       setLoading(true)
+      // Remove acentos para busca (ex: "Aur" acha "Áurea")
+      const normalized = inputVal.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       const { data } = await supabase
         .from('patients')
         .select('id, name, phone')
         .eq('clinic_id', clinicId)
-        .ilike('name', `%${inputVal}%`)
         .order('name')
-        .limit(10)
-      setResults(data || [])
+        .limit(500)
+      // Filtra client-side com e sem acento
+      const q = normalized.toLowerCase()
+      const filtered = (data || []).filter(p => {
+        const nameNorm = p.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        return nameNorm.includes(q) || p.name.toLowerCase().includes(inputVal.toLowerCase())
+      }).slice(0, 10)
+      setResults(filtered)
       setLoading(false)
     }, 200)
     return () => clearTimeout(timer)
