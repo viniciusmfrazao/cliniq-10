@@ -22,13 +22,22 @@ export async function POST(req: Request) {
     const svc = createServiceClient()
 
     // Buscar dados da clínica
-    const { data: clinic } = await svc.from('clinics').select('id, name, settings, billing_whatsapp').eq('id', clinicId).single()
+    const { data: clinic } = await svc.from('clinics').select('id, name, cnpj, settings, billing_whatsapp, clinic_phone').eq('id', clinicId).single()
     if (!clinic) return NextResponse.json({ ok: false, error: 'Clínica não encontrada' }, { status: 404 })
 
     const settings = clinic.settings as any
-    const email = settings?.email || `clinica-${clinicId}@clinike.com.br`
-    const cpfCnpj = settings?.cnpj || '00000000000000'
-    const phone = clinic.billing_whatsapp || settings?.phone || ''
+
+    // Email: settings > fallback
+    const email = settings?.email || `clinica-${clinicId.replace(/-/g,'')}@clinike.com.br`
+
+    // CNPJ: coluna direta > settings > erro
+    const rawCnpj = (clinic.cnpj || settings?.cnpj || '').replace(/\D/g, '')
+    if (!rawCnpj || rawCnpj.length < 11) {
+      return NextResponse.json({ ok: false, error: 'CNPJ ou CPF da clínica não cadastrado. Preencha o CNPJ no admin antes de gerar o link.' }, { status: 400 })
+    }
+
+    // Telefone: billing_whatsapp > clinic_phone > settings
+    const phone = (clinic.billing_whatsapp || clinic.clinic_phone || settings?.phone || '').replace(/\D/g, '')
 
     // 1. Criar customer na Asaas
     let customerId: string
@@ -44,7 +53,7 @@ export async function POST(req: Request) {
       const customer = await asaas('/customers', {
         name: clinic.name,
         email,
-        cpfCnpj: cpfCnpj.replace(/\D/g, ''),
+        cpfCnpj: rawCnpj,
         mobilePhone: phone.replace(/\D/g, ''),
         notificationDisabled: false,
       })
@@ -101,3 +110,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
 }
+
