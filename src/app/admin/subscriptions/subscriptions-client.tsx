@@ -31,7 +31,7 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clinicId: modal.clinicId,
-          planName: plan?.name || form.planName,
+          planName: plan?.display_name || plan?.name || form.planName,
           planPrice: parseFloat(form.planPrice) || plan?.price_monthly || 0,
           billingCycle: form.billingCycle,
           trialDays: parseInt(form.trialDays),
@@ -138,7 +138,7 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm">
                   <option value="">Selecione...</option>
                   {plans.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} — R$ {p.price_monthly}/mês</option>
+                    <option key={p.id} value={p.id}>{p.display_name || p.name} — R$ {p.price_monthly}/mês</option>
                   ))}
                 </select>
               </div>
@@ -205,4 +205,5 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
     </div>
   )
 }
+
 
