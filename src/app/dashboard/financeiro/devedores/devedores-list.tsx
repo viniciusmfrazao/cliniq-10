@@ -81,9 +81,9 @@ function PatientSearch({ pacientes, value, onChange }: {
         <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <input
           type="text"
-          value={selected && !open ? selected.name : query}
+          value={open ? query : (selected ? selected.name : query)}
           onChange={e => { setQuery(e.target.value); setOpen(true); if (value) onChange('') }}
-          onFocus={() => { setOpen(true); if (selected) setQuery('') }}
+          onFocus={() => { setOpen(true); if (selected) setQuery(selected.name) }}
           placeholder="Buscar por nome, telefone ou CPF..."
           className="w-full pl-9 pr-9 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-sm"
           required={!value}
