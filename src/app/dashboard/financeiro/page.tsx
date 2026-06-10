@@ -3,14 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
-import { todayBR, startOfMonthBR, endOfMonthBR } from '@/lib/datetime'
+import { todayBR, startOfMonthBR, endOfMonthBR, parseDateBR } from '@/lib/datetime'
 
-function fmt(v: number) {
-  return formatBRL(v || 0)
-}
-function fmtCompact(v: number) {
-  return formatBRLCompact(v || 0)
-}
+function fmt(v: number) { return formatBRL(v || 0) }
+function fmtCompact(v: number) { return formatBRLCompact(v || 0) }
 
 export default async function FinanceiroPage() {
   const supabase = await createClient()
@@ -19,7 +15,6 @@ export default async function FinanceiroPage() {
   const clinicId = userData?.clinic_id
   if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
 
-  // Tudo no fuso de Brasilia (servidor roda em UTC)
   const todayStr = todayBR()
   const startOfMonth = startOfMonthBR().slice(0, 10)
   const endOfMonth = endOfMonthBR().slice(0, 10)
@@ -37,12 +32,14 @@ export default async function FinanceiroPage() {
     .gte('data_venda', startOfMonth)
     .lte('data_venda', endOfMonth)
 
+  // Saídas do mês: apenas pagas (pago=true) até hoje — exclui futuros agendados
   const { data: saidasMes } = await supabase
     .from('saidas')
     .select('valor')
     .eq('clinic_id', clinicId)
+    .eq('pago', true)
     .gte('data', startOfMonth)
-    .lte('data', endOfMonth)
+    .lte('data', todayStr)
 
   const { data: ultimasEntradas } = await supabase
     .from('entradas')
@@ -51,19 +48,22 @@ export default async function FinanceiroPage() {
     .order('data_venda', { ascending: false })
     .limit(5)
 
+  // Últimas saídas: apenas pagas e até hoje — sem futuros agendados
   const { data: ultimasSaidas } = await supabase
     .from('saidas')
     .select('*')
     .eq('clinic_id', clinicId)
+    .eq('pago', true)
+    .lte('data', todayStr)
     .order('data', { ascending: false })
     .limit(5)
 
-  const receitaHoje = entradasHoje?.reduce((sum, e) => sum + Number(e.valor_bruto || 0), 0) || 0
-  const receitaMes = entradasMes?.reduce((sum, e) => sum + Number(e.valor_bruto || 0), 0) || 0
-  const liquidoMes = entradasMes?.reduce((sum, e) => sum + Number(e.valor_liquido || 0), 0) || 0
-  const despesasMes = saidasMes?.reduce((sum, s) => sum + Number(s.valor || 0), 0) || 0
-  const resultadoMes = liquidoMes - despesasMes
-  const ticketMedio = entradasMes?.length ? liquidoMes / entradasMes.length : 0
+  const receitaHoje   = entradasHoje?.reduce((s, e) => s + Number(e.valor_bruto  || 0), 0) || 0
+  const receitaMes    = entradasMes?.reduce((s, e)  => s + Number(e.valor_bruto  || 0), 0) || 0
+  const liquidoMes    = entradasMes?.reduce((s, e)  => s + Number(e.valor_liquido|| 0), 0) || 0
+  const despesasMes   = saidasMes?.reduce((s, d)    => s + Number(d.valor        || 0), 0) || 0
+  const resultadoMes  = liquidoMes - despesasMes
+  const ticketMedio   = entradasMes?.length ? liquidoMes / entradasMes.length : 0
 
   const mesLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
@@ -92,6 +92,7 @@ export default async function FinanceiroPage() {
         </div>
       </div>
 
+      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
         <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
           <div className="flex items-center gap-3 mb-2 md:mb-3">
@@ -168,10 +169,11 @@ export default async function FinanceiroPage() {
             <span className="md:hidden">{fmtCompact(resultadoMes)}</span>
             <span className="hidden md:inline">{fmt(resultadoMes)}</span>
           </p>
-          <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado</p>
+          <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Lucro operacional</p>
         </div>
       </div>
 
+      {/* Atalhos */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Link href="/dashboard/financeiro/devedores" className="bg-white rounded-xl p-4 border border-rose-200 shadow-sm hover:border-rose-300 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-rose-100 rounded-lg flex items-center justify-center group-hover:bg-rose-200 transition">
@@ -219,11 +221,12 @@ export default async function FinanceiroPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-900 text-sm">DRE</p>
-            <p className="text-xs text-slate-500">Resultado</p>
+            <p className="text-xs text-slate-500">Resultado mensal</p>
           </div>
         </Link>
       </div>
 
+      {/* Últimas movimentações */}
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-5 border-b border-slate-100">
@@ -251,7 +254,7 @@ export default async function FinanceiroPage() {
                   <div>
                     <p className="font-medium text-slate-900">{e.paciente_nome || 'Paciente'}</p>
                     <p className="text-sm text-slate-500">
-                      {e.procedimento_nome || 'Procedimento'} • {new Date(e.data_venda).toLocaleDateString('pt-BR')}
+                      {e.procedimento_nome || 'Procedimento'} • {parseDateBR(e.data_venda)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -272,7 +275,7 @@ export default async function FinanceiroPage() {
               </div>
               <div>
                 <h3 className="font-bold text-slate-900">Últimas saídas</h3>
-                <p className="text-xs text-slate-500">Despesas recentes</p>
+                <p className="text-xs text-slate-500">Despesas pagas até hoje</p>
               </div>
             </div>
             <Link href="/dashboard/financeiro/saidas" className="text-sm text-rose-600 font-semibold">
@@ -290,7 +293,7 @@ export default async function FinanceiroPage() {
                   <div>
                     <p className="font-medium text-slate-900">{s.descricao}</p>
                     <p className="text-sm text-slate-500">
-                      {s.categoria_dre || 'Sem categoria'} • {new Date(s.data).toLocaleDateString('pt-BR')}
+                      {s.categoria_dre || 'Sem categoria'} • {parseDateBR(s.data)}
                     </p>
                   </div>
                   <div className="text-right">
