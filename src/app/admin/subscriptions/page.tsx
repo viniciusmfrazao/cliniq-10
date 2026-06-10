@@ -12,8 +12,9 @@ export default async function SubscriptionsPage() {
     `)
     .order('created_at', { ascending: false })
 
-  const { data: plans } = await svc.from('plans').select('id, name, price_monthly, price_yearly').eq('active', true).order('price_monthly')
+  const { data: plans } = await svc.from('plans').select('id, name, display_name, price_monthly, price_yearly').eq('active', true).order('price_monthly')
 
   return <SubscriptionsClient clinics={clinics || []} plans={plans || []} />
 }
+
 
