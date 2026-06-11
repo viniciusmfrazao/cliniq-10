@@ -51,16 +51,7 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
-const sessionMigrationScript = [
-  "(function(){",
-  "try{",
-  // Remove chave antiga do localStorage
-  "localStorage.removeItem('clinike-auth-token');",
-  // Remove cookie antigo que causa sessao cruzada entre clinicas
-  "document.cookie='clinike-auth-token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';",
-  "}catch(e){}",
-  "})();"
-].join("")
+const sessionMigrationScript = "(function(){try{localStorage.removeItem('clinike-auth-token');}catch(e){}})()"
 
 const themeScript = `
   (function() {
