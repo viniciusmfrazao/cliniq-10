@@ -317,13 +317,38 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   }
 
   const cfg = anamnese?.anamnese_config
+  const cor = cfg?.cor_primaria || '#b89a6a'
+  const titulo = cfg?.titulo || 'Ficha de Anamnese Facial'
+  const subtitulo = cfg?.subtitulo || ''
+  const secoesAtivas = cfg?.secoes_ativas || ['procedimentos','habitos','alergias','medicamentos','saude','outras','mulheres','queixa']
+
+  const Choice = ({ group, value, selected, onClick, type = 'single' }: any) => (  const Choice = ({ group, value, selected, onClick, type = 'single' }: any) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 px-4 py-2 rounded text-sm transition-all"
+      style={{
+        border: `1px solid ${selected ? '#b89a6a' : '#e0d5c5'}`,
+        background: selected ? '#f5ede0' : '#f9f5f0',
+        color: selected ? '#1a1410' : '#8a7a6a',
+      }}
+    >
+      <span
+        className="w-4 h-4 rounded-full flex items-center justify-center"
+        style={{ border: `1px solid ${selected ? '#b89a6a' : 'currentColor'}`, background: selected ? '#b89a6a' : 'transparent' }}
+      >
+        {selected && <span className="w-2 h-2 rounded-full bg-white" />}
+      </span>
+      {value}
+    </button>
+  )
 
   // Retorna perguntas extras de uma seção específica, na ordem configurada
   function perguntasExtra(secao: string) {
     return (cfg?.perguntas_extras || []).filter((p: any) => p.secao === secao)
   }
 
-  // Renderiza uma pergunta extra
+  // Renderiza uma pergunta extra (Choice deve estar definido antes desta função)
   function renderPerguntaExtra(p: any, idx: number) {
     const key = `extra_${p.id || idx}`
     return (
@@ -373,34 +398,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
       </div>
     )
   }
-  const cor = cfg?.cor_primaria || '#b89a6a'
-  const titulo = cfg?.titulo || 'Ficha de Anamnese Facial'
-  const subtitulo = cfg?.subtitulo || ''
-  const secoesAtivas = cfg?.secoes_ativas || ['procedimentos','habitos','alergias','medicamentos','saude','outras','mulheres','queixa']
-
-  const Choice = ({ group, value, selected, onClick, type = 'single' }: any) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-2 px-4 py-2 rounded text-sm transition-all"
-      style={{
-        border: `1px solid ${selected ? '#b89a6a' : '#e0d5c5'}`,
-        background: selected ? '#f5ede0' : '#f9f5f0',
-        color: selected ? '#1a1410' : '#8a7a6a',
-      }}
-    >
-      <span
-        className="w-4 h-4 rounded-full flex items-center justify-center"
-        style={{ border: `1px solid ${selected ? '#b89a6a' : 'currentColor'}`, background: selected ? '#b89a6a' : 'transparent' }}
-      >
-        {selected && <span className="w-2 h-2 rounded-full bg-white" />}
-      </span>
-      {value}
-    </button>
-  )
 
   return (
-    <>
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Jost:wght@300;400;500&display=swap');
         
