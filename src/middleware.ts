@@ -12,13 +12,6 @@ export async function middleware(request: NextRequest) {
   const isPublic = PUBLIC_ROUTES.includes(path) || PUBLIC_PREFIXES.some(p => path.startsWith(p))
   if (isPublic) return NextResponse.next()
 
-  const oldCookie = request.cookies.get('clinike-auth-token')
-  const newCookie = request.cookies.get('sb-yqrjbyaucimvmzpfipgs-auth-token')
-
-  if (!oldCookie && !newCookie) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -26,14 +19,7 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          const all = request.cookies.getAll()
-          const hasNew = all.some(c => c.name === 'sb-yqrjbyaucimvmzpfipgs-auth-token')
-          if (!hasNew && oldCookie) {
-            return [...all, { name: 'sb-yqrjbyaucimvmzpfipgs-auth-token', value: oldCookie.value }]
-          }
-          return all
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           response = NextResponse.next({ request })
@@ -49,20 +35,6 @@ export async function middleware(request: NextRequest) {
 
   if (!session) {
     return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  // Migra cookie antigo para o novo automaticamente
-  if (oldCookie && !newCookie) {
-    response.cookies.set('sb-yqrjbyaucimvmzpfipgs-auth-token', oldCookie.value, {
-      path: '/',
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-    })
-    response.cookies.set('clinike-auth-token', '', {
-      expires: new Date(0),
-      path: '/',
-    })
   }
 
   return response
