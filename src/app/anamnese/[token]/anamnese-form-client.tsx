@@ -317,6 +317,62 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   }
 
   const cfg = anamnese?.anamnese_config
+
+  // Retorna perguntas extras de uma seção específica, na ordem configurada
+  function perguntasExtra(secao: string) {
+    return (cfg?.perguntas_extras || []).filter((p: any) => p.secao === secao)
+  }
+
+  // Renderiza uma pergunta extra
+  function renderPerguntaExtra(p: any, idx: number) {
+    const key = `extra_${p.id || idx}`
+    return (
+      <div key={key} className="mb-6">
+        <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>{p.pergunta}</p>
+        {p.tipo === 'sim_nao' && (
+          <div className="flex gap-3 flex-wrap">
+            {['Sim', 'Não'].map((opt: string) => (
+              <Choice key={opt} group={key} value={opt}
+                selected={responses[key] === opt}
+                onClick={() => setSingleValue(key, opt)} />
+            ))}
+          </div>
+        )}
+        {p.tipo === 'texto' && (
+          <textarea className="anamnese-input" rows={3}
+            placeholder="Sua resposta..."
+            value={responses[key] || ''}
+            onChange={e => setTextValue(key, e.target.value)} />
+        )}
+        {p.tipo === 'multipla' && p.opcoes && (
+          <div className="flex gap-3 flex-wrap">
+            {p.opcoes.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
+              <Choice key={opt} group={key} value={opt} type="multi"
+                selected={(responses[key] || '').includes(opt)}
+                onClick={() => {
+                  const cur = responses[key] || ''
+                  const arr = cur ? cur.split(',').map((s: string) => s.trim()) : []
+                  const next = arr.includes(opt) ? arr.filter((s: string) => s !== opt) : [...arr, opt]
+                  setTextValue(key, next.join(', '))
+                }} />
+            ))}
+          </div>
+        )}
+        {p.sub_pergunta && responses[key] === p.sub_pergunta.condicao_valor && (
+          <div className="mt-3 pl-4 border-l-2" style={{ borderColor: 'var(--gold)' }}>
+            <p className="text-sm mb-2" style={{ color: 'var(--mid)' }}>↳ {p.sub_pergunta.pergunta}</p>
+            <input
+              type={p.sub_pergunta.tipo === 'numero' ? 'number' : 'text'}
+              className="anamnese-input"
+              placeholder={p.sub_pergunta.placeholder || ''}
+              value={responses[`${key}_sub`] || ''}
+              onChange={e => setTextValue(`${key}_sub`, e.target.value)}
+            />
+          </div>
+        )}
+      </div>
+    )
+  }
   const cor = cfg?.cor_primaria || '#b89a6a'
   const titulo = cfg?.titulo || 'Ficha de Anamnese Facial'
   const subtitulo = cfg?.subtitulo || ''
@@ -801,63 +857,11 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Observação</p>
               <textarea className="anamnese-input" placeholder="Descreva aqui todas as suas queixas facial ou corporal..." rows={4} value={responses.queixa_obs || ''} onChange={e => setTextValue('queixa_obs', e.target.value)} />
             </div>
+          {perguntasExtra('queixa').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
           </section>)}
 
-          {/* Perguntas extras configuradas pela clínica */}
-          {cfg?.perguntas_extras && cfg.perguntas_extras.length > 0 && (
-            <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
-              <h2 className="text-base tracking-widest uppercase mb-6" style={{ color: 'var(--gold)', fontFamily: 'var(--font-heading)', letterSpacing: '0.15em' }}>
-                Informações Adicionais
-              </h2>
-              {cfg.perguntas_extras.map((p: any, idx: number) => (
-                <div key={idx} className="mb-6">
-                  <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>{p.pergunta}</p>
-                  {p.tipo === 'sim_nao' && (
-                    <div className="flex gap-3 flex-wrap">
-                      {['Sim', 'Não'].map((opt: string) => (
-                        <Choice key={opt} group={`extra_${idx}`} value={opt}
-                          selected={responses[`extra_${idx}`] === opt}
-                          onClick={() => setSingleValue(`extra_${idx}`, opt)} />
-                      ))}
-                    </div>
-                  )}
-                  {p.tipo === 'texto' && (
-                    <textarea className="anamnese-input" rows={3}
-                      placeholder="Sua resposta..."
-                      value={responses[`extra_${idx}`] || ''}
-                      onChange={e => setTextValue(`extra_${idx}`, e.target.value)} />
-                  )}
-                  {p.tipo === 'multipla' && p.opcoes && (
-                    <div className="flex gap-3 flex-wrap">
-                      {p.opcoes.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
-                        <Choice key={opt} group={`extra_${idx}`} value={opt} type="multi"
-                          selected={(responses[`extra_${idx}`] || '').includes(opt)}
-                          onClick={() => {
-                            const cur = responses[`extra_${idx}`] || ''
-                            const arr = cur ? cur.split(',').map((s: string) => s.trim()) : []
-                            const next = arr.includes(opt) ? arr.filter((s: string) => s !== opt) : [...arr, opt]
-                            setTextValue(`extra_${idx}`, next.join(', '))
-                          }} />
-                      ))}
-                    </div>
-                  )}
-                  {/* Sub-pergunta condicional */}
-                  {p.sub_pergunta && responses[`extra_${idx}`] === p.sub_pergunta.condicao_valor && (
-                    <div className="mt-3 pl-4 border-l-2" style={{ borderColor: 'var(--gold)' }}>
-                      <p className="text-sm mb-2" style={{ color: 'var(--mid)' }}>↳ {p.sub_pergunta.pergunta}</p>
-                      <input
-                        type={p.sub_pergunta.tipo === 'numero' ? 'number' : 'text'}
-                        className="anamnese-input"
-                        placeholder={p.sub_pergunta.placeholder || ''}
-                        value={responses[`extra_${idx}_sub`] || ''}
-                        onChange={e => setTextValue(`extra_${idx}_sub`, e.target.value)}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </section>
-          )}
+          {/* Perguntas extras sem seção específica (fallback) */}
+          {perguntasExtra('outras_extra').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
 
           {/* Submit */}
           <div className="text-center mt-10">
