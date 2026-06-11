@@ -342,7 +342,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
 
   return (
     <>
-      <style jsx global>{`
+      <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Jost:wght@300;400;500&display=swap');
         
         .anamnese-page {
