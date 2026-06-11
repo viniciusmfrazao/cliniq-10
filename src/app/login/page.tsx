@@ -19,28 +19,10 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Email ou senha incorretos.'); setLoading(false); return }
-
-    // Detecta super admin antes de mandar pro /dashboard pra evitar loops:
-    // super_admins nao tem clinic_id em `users` em alguns ambientes.
-    let dest = '/dashboard'
-    try {
-      const userId = data.user?.id
-      if (userId) {
-        const { data: sa } = await supabase
-          .from('super_admins')
-          .select('id')
-          .eq('id', userId)
-          .maybeSingle()
-        if (sa) dest = '/admin'
-      }
-    } catch {
-      // Se a checagem falhar, segue pro fluxo normal — /admin tambem
-      // valida via isSuperAdmin no SSR.
-    }
-
-    router.push(dest)
+    // dashboard/layout redireciona para /admin automaticamente se for super_admin
+    router.push('/dashboard')
     router.refresh()
   }
 
