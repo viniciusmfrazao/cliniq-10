@@ -267,6 +267,33 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
     config.campos_identificacao || []
   )
   const [novaSecao, setNovaSecao] = useState('queixa')
+  const [modalTeste, setModalTeste] = useState(false)
+  const [telefoneTeste, setTelefoneTeste] = useState('')
+  const [enviandoTeste, setEnviandoTeste] = useState(false)
+  const [resultadoTeste, setResultadoTeste] = useState<{ link?: string; sent?: boolean; error?: string } | null>(null)
+
+  async function enviarTeste() {
+    if (!telefoneTeste.trim()) return
+    setEnviandoTeste(true)
+    setResultadoTeste(null)
+    try {
+      const res = await fetch('/api/anamnese/teste', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefone: telefoneTeste }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setResultadoTeste({ error: data.error || 'Erro ao enviar' })
+      } else {
+        setResultadoTeste({ link: data.link, sent: data.sent })
+      }
+    } catch {
+      setResultadoTeste({ error: 'Erro de conexão' })
+    } finally {
+      setEnviandoTeste(false)
+    }
+  }
   const [novaTipo, setNovaTipo] = useState<'sim_nao'|'texto'|'multipla'>('sim_nao')
   const [novaPergunta, setNovaPergunta] = useState('')
   const [novaOpcoes, setNovaOpcoes] = useState('')
@@ -498,19 +525,102 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
         </button>
       </div>
 
-      {/* Salvar */}
-      <div className="flex gap-3 pb-8">
-        <button onClick={() => router.back()}
-          className="flex-1 py-3 border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-50 transition">
-          Cancelar
+      {/* Botões */}
+      <div className="space-y-3 pb-8">
+        {/* Enviar teste */}
+        <button
+          onClick={() => { setModalTeste(true); setResultadoTeste(null) }}
+          className="w-full py-3 border-2 border-dashed border-violet-300 rounded-xl font-semibold text-violet-600 hover:bg-violet-50 transition flex items-center justify-center gap-2"
+        >
+          <Icon name="send" className="w-4 h-4" />
+          Enviar ficha de teste
         </button>
-        <button onClick={salvar} disabled={saving}
-          className={`flex-1 py-3 rounded-xl font-semibold text-white transition ${
-            saved ? 'bg-emerald-600' : 'bg-violet-600 hover:bg-violet-700'
-          } disabled:opacity-50`}>
-          {saving ? 'Salvando...' : saved ? '✓ Salvo!' : 'Salvar Configurações'}
-        </button>
+
+        <div className="flex gap-3">
+          <button onClick={() => router.back()}
+            className="flex-1 py-3 border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-50 transition">
+            Cancelar
+          </button>
+          <button onClick={salvar} disabled={saving}
+            className={`flex-1 py-3 rounded-xl font-semibold text-white transition ${
+              saved ? 'bg-emerald-600' : 'bg-violet-600 hover:bg-violet-700'
+            } disabled:opacity-50`}>
+            {saving ? 'Salvando...' : saved ? '✓ Salvo!' : 'Salvar Configurações'}
+          </button>
+        </div>
       </div>
+
+      {/* Modal de teste */}
+      {modalTeste && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900">Enviar ficha de teste</h3>
+              <button onClick={() => { setModalTeste(false); setResultadoTeste(null); setTelefoneTeste('') }}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-400">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!resultadoTeste ? (
+              <>
+                <p className="text-sm text-slate-500">
+                  Digite o número que vai receber a ficha de teste via WhatsApp.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Número (com DDD)</label>
+                  <input
+                    type="tel"
+                    value={telefoneTeste}
+                    onChange={e => setTelefoneTeste(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && enviarTeste()}
+                    placeholder="Ex: 34991805722"
+                    autoFocus
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-sm"
+                  />
+                </div>
+                <button
+                  onClick={enviarTeste}
+                  disabled={enviandoTeste || !telefoneTeste.trim()}
+                  className="w-full py-3 bg-violet-600 text-white rounded-xl font-semibold hover:bg-violet-700 transition disabled:opacity-50"
+                >
+                  {enviandoTeste ? 'Enviando...' : 'Enviar via WhatsApp'}
+                </button>
+              </>
+            ) : resultadoTeste.error ? (
+              <>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+                  ❌ {resultadoTeste.error}
+                </div>
+                <button onClick={() => setResultadoTeste(null)}
+                  className="w-full py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
+                  Tentar novamente
+                </button>
+              </>
+            ) : (
+              <>
+                {resultadoTeste.sent ? (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700">
+                    ✅ Enviado com sucesso! Verifique o WhatsApp do número informado.
+                  </div>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700 space-y-2">
+                    <p>⚠️ WhatsApp não disponível. Copie o link abaixo para testar:</p>
+                    <a href={resultadoTeste.link} target="_blank" rel="noopener noreferrer"
+                      className="block text-xs text-violet-600 underline break-all">
+                      {resultadoTeste.link}
+                    </a>
+                  </div>
+                )}
+                <button onClick={() => { setModalTeste(false); setResultadoTeste(null); setTelefoneTeste('') }}
+                  className="w-full py-2.5 bg-slate-100 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-200 transition">
+                  Fechar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
