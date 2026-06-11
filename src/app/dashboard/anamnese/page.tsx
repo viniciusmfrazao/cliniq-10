@@ -53,13 +53,22 @@ export default async function AnamnesesPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Fichas de Anamnese</h1>
           <p className="text-slate-500 dark:text-slate-400">Gerencie as fichas de anamnese dos pacientes</p>
         </div>
-        <Link
-          href="/dashboard/anamnese/enviar"
-          className="btn-primary flex items-center gap-2"
-        >
-          <Icon name="plus" className="w-4 h-4" />
-          Enviar Anamnese
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/dashboard/anamnese/configurar"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-50 transition"
+          >
+            <Icon name="settings" className="w-4 h-4" />
+            Configurar
+          </Link>
+          <Link
+            href="/dashboard/anamnese/enviar"
+            className="btn-primary flex items-center gap-2"
+          >
+            <Icon name="plus" className="w-4 h-4" />
+            Enviar Anamnese
+          </Link>
+        </div>
       </div>
 
       <div className="card overflow-hidden">
