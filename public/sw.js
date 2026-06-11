@@ -3,7 +3,7 @@
 // para resposta instantanea ao reabrir o app. NAO faz cache de dados/API
 // (Supabase) — todas as requisicoes dinamicas passam direto pela rede.
 
-const VERSION = 'v3'
+const VERSION = 'v2'
 const SHELL_CACHE = `clinike-shell-${VERSION}`
 const SHELL_ASSETS = ['/manifest.json', '/logo.svg', '/favicon.svg']
 
