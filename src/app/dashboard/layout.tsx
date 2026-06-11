@@ -8,7 +8,7 @@ import AppProviders from '@/components/layout/AppProviders'
 import WhatsappHealthBanner from '@/components/layout/WhatsappHealthBanner'
 import WhatsappHealthBannerWrapper from '@/components/layout/WhatsappHealthBannerWrapper'
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children, searchParams }: { children: React.ReactNode, searchParams?: { admin?: string } }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -24,7 +24,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .select('id')
     .eq('id', user.id)
     .maybeSingle()
-  if (sa) redirect('/admin')
+  if (sa && searchParams?.admin !== '0') redirect('/admin')
 
   // Usuário sem clinic_id e sem super_admin vai para login
   if (!userData?.clinic_id) {
