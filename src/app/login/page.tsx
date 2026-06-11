@@ -19,11 +19,15 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    console.log('[LOGIN] iniciando signInWithPassword...')
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    console.log('[LOGIN] resultado:', { error: error?.message, userId: data?.user?.id })
     if (error) { setError('Email ou senha incorretos.'); setLoading(false); return }
-    // Usa window.location para garantir reload completo após login
-    // router.push causa race condition: cookie ainda não confirmado quando o
-    // middleware checa a sessão, resultando em redirect de volta ao /login
+    console.log('[LOGIN] sucesso, checando sessão...')
+    const { data: { session } } = await supabase.auth.getSession()
+    console.log('[LOGIN] sessão:', session ? 'OK token=' + session.access_token?.slice(0,20) : 'NULL')
+    console.log('[LOGIN] cookies:', document.cookie)
+    console.log('[LOGIN] navegando para /dashboard...')
     window.location.href = '/dashboard'
   }
 
