@@ -10,24 +10,14 @@ export async function middleware(request: NextRequest) {
   if (path.startsWith('/api/')) return NextResponse.next()
 
   const isPublic = PUBLIC_ROUTES.includes(path) || PUBLIC_PREFIXES.some(p => path.startsWith(p))
-
-  // Aceita os dois nomes de cookie — antigo e novo
-  // Isso resolve para todos os usuários sem precisar limpar nada
-  const oldCookie = request.cookies.get('clinike-auth-token')
-  const newCookie = request.cookies.get('sb-yqrjbyaucimvmzpfipgs-auth-token')
-  const sessionCookie = newCookie || oldCookie
-
   if (isPublic) return NextResponse.next()
 
-  if (!sessionCookie) {
+  const oldCookie = request.cookies.get('clinike-auth-token')
+  const newCookie = request.cookies.get('sb-yqrjbyaucimvmzpfipgs-auth-token')
+
+  if (!oldCookie && !newCookie) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
-
-  // Cria response passando o cookie correto para o Supabase validar
-  const requestWithCookie = new Request(request.url, {
-    headers: request.headers,
-    method: request.method,
-  })
 
   let response = NextResponse.next({ request })
 
@@ -37,7 +27,6 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          // Retorna os cookies normais + mapeia o antigo para o nome novo
           const all = request.cookies.getAll()
           const hasNew = all.some(c => c.name === 'sb-yqrjbyaucimvmzpfipgs-auth-token')
           if (!hasNew && oldCookie) {
@@ -45,7 +34,7 @@ export async function middleware(request: NextRequest) {
           }
           return all
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
@@ -62,8 +51,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Se o usuário tem só o cookie antigo, seta o novo também na resposta
-  if (oldCookie && !newCookie && session) {
+  // Migra cookie antigo para o novo automaticamente
+  if (oldCookie && !newCookie) {
     response.cookies.set('sb-yqrjbyaucimvmzpfipgs-auth-token', oldCookie.value, {
       path: '/',
       httpOnly: true,
