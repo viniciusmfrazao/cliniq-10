@@ -2,13 +2,10 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
 export default function LoginPage() {
-  const router = useRouter()
-  const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,35 +16,32 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    // Limpa sessão antiga via servidor (único jeito de apagar cookies HttpOnly)
-    try {
-      await fetch('/api/auth/clear-session')
-    } catch {}
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) { setError('Email ou senha incorretos.'); setLoading(false); return }
-    // Aguarda o cookie ser persistido antes de navegar
-    await new Promise(resolve => setTimeout(resolve, 500))
+
+    const supabase = createClient()
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (signInError) {
+      setError('Email ou senha incorretos.')
+      setLoading(false)
+      return
+    }
+
+    // Reload completo garante que o servidor lê o novo cookie
     window.location.href = '/dashboard'
   }
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
-      {/* Left Panel - Decorative */}
+      {/* Left Panel */}
       <div className="hidden lg:flex flex-1 relative items-center justify-center p-12" style={{ background: 'linear-gradient(135deg, #1E1041 0%, #3730A3 50%, #6366F1 100%)' }}>
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-glow" />
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse-glow" style={{ animationDelay: '1s' }} />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-white/5 rounded-full blur-2xl" />
         </div>
-        
         <div className="relative text-white max-w-md">
-          {/* Logo com + e nome */}
           <div className="flex items-center gap-4 mb-8">
-            <img 
-              src="/logo.svg" 
-              alt="Clinike" 
-              className="w-20 h-20 rounded-2xl animate-float shadow-2xl"
-            />
+            <img src="/logo.svg" alt="Clinike" className="w-20 h-20 rounded-2xl animate-float shadow-2xl" />
             <div>
               <h2 className="text-3xl font-black">Clinike</h2>
               <p className="text-white/60 text-sm">Simples como deve ser</p>
@@ -61,10 +55,9 @@ export default function LoginPage() {
           <p className="text-white/70 text-lg">
             Agenda, pacientes, financeiro, estoque, prontuário e muito mais — tudo em um sistema moderno, 100% na nuvem.
           </p>
-          
           <div className="mt-12 flex gap-3 flex-wrap">
             {['Agenda', 'Pacientes', 'Injetáveis', 'Estoque', 'Financeiro'].map((item, i) => (
-              <div 
+              <div
                 key={item}
                 className="px-4 py-2 bg-white/10 backdrop-blur rounded-xl text-sm font-medium animate-slide-up"
                 style={{ animationDelay: `${i * 100}ms` }}
@@ -76,16 +69,11 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right Panel - Form */}
+      {/* Right Panel */}
       <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 via-white to-slate-100">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
-            <img 
-              src="/logo.svg" 
-              alt="Clinike" 
-              className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-xl"
-            />
+            <img src="/logo.svg" alt="Clinike" className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-xl" />
             <h1 className="text-3xl font-black text-slate-900">Clinike</h1>
             <p className="text-slate-500 text-sm mt-1">Simples como deve ser</p>
           </div>
@@ -103,13 +91,13 @@ export default function LoginPage() {
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                     <Icon name="mail" className="w-5 h-5" />
                   </div>
-                  <input 
-                    className="input pl-12" 
-                    type="email" 
-                    placeholder="voce@clinica.com" 
-                    value={email} 
-                    onChange={e => setEmail(e.target.value)} 
-                    required 
+                  <input
+                    className="input pl-12"
+                    type="email"
+                    placeholder="voce@clinica.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
                   />
                 </div>
               </div>
@@ -119,13 +107,13 @@ export default function LoginPage() {
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                     <Icon name="lock" className="w-5 h-5" />
                   </div>
-                  <input 
-                    className="input pl-12 pr-12" 
-                    type={showPassword ? 'text' : 'password'} 
-                    placeholder="••••••••" 
-                    value={password} 
-                    onChange={e => setPassword(e.target.value)} 
-                    required 
+                  <input
+                    className="input pl-12 pr-12"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
                   />
                   <button
                     type="button"
@@ -144,9 +132,9 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <button 
-                type="submit" 
-                disabled={loading} 
+              <button
+                type="submit"
+                disabled={loading}
                 className="btn-primary flex items-center justify-center gap-2"
               >
                 {loading ? (
@@ -164,8 +152,8 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-8 pt-8 border-t-2 border-slate-100">
-              <Link 
-                href="/esqueci-senha" 
+              <Link
+                href="/esqueci-senha"
                 className="text-sm text-slate-500 hover:text-slate-700 flex items-center justify-center gap-2 font-medium"
               >
                 <Icon name="unlock" className="w-4 h-4" />
