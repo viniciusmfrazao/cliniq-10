@@ -41,6 +41,8 @@ const ACTION_LABELS: Record<string, string> = {
   DELETE: 'Removido',
 }
 
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardPage({ searchParams }: { searchParams: { welcome?: string } }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
