@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { titulo, subtitulo, cor_primaria, secoes_ativas, perguntas_extras } = body
+  const { titulo, subtitulo, cor_primaria, secoes_ativas, perguntas_extras, campos_identificacao } = body
 
   const { error } = await supabase
     .from('anamnese_config')
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
       cor_primaria,
       secoes_ativas,
       perguntas_extras,
+      campos_identificacao: campos_identificacao || [],
       updated_at: new Date().toISOString(),
     }, { onConflict: 'clinic_id' })
 
