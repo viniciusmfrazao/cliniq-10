@@ -44,7 +44,8 @@ const ACTION_LABELS: Record<string, string> = {
 export default async function DashboardPage({ searchParams }: { searchParams: { welcome?: string } }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('name, clinic_id, role').eq('id', user!.id).single()
+  if (!user) return null
+  const { data: userData } = await supabase.from('users').select('name, clinic_id, role').eq('id', user.id).single()
   const { data: clinic } = await supabase.from('clinics').select('name, trial_ends_at, settings').eq('id', userData?.clinic_id).single()
   
   // Get active modules from clinic settings
