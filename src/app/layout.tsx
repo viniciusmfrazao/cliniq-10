@@ -51,31 +51,6 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
-
-const sessionFixScript = \`
-  (function() {
-    try {
-      // Fix: migra sessão salva com storageKey 'clinike-auth-token' (chave errada)
-      // de volta para a chave padrão do Supabase
-      var OLD_KEY = 'clinike-auth-token'
-      var SUPABASE_URL = 'yqrjbyaucimvmzpfipgs'
-      var NEW_KEY = 'sb-' + SUPABASE_URL + '-auth-token'
-      
-      var oldSession = localStorage.getItem(OLD_KEY)
-      var newSession = localStorage.getItem(NEW_KEY)
-      
-      if (oldSession && !newSession) {
-        // Migra sessão da chave antiga para a nova
-        localStorage.setItem(NEW_KEY, oldSession)
-        localStorage.removeItem(OLD_KEY)
-      } else if (oldSession) {
-        // Já tem sessão nova — só remove a antiga
-        localStorage.removeItem(OLD_KEY)
-      }
-    } catch (e) {}
-  })();
-\`
-
 const themeScript = `
   (function() {
     try {
@@ -118,7 +93,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-        <script dangerouslySetInnerHTML={{ __html: sessionFixScript }} />
         <script dangerouslySetInnerHTML={{ __html: authHashRedirectScript }} />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
