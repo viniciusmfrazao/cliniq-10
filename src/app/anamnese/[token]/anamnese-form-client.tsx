@@ -8,8 +8,7 @@ type AnamneseConfig = {
   subtitulo?: string
   cor_primaria?: string
   secoes_ativas?: string[]
-  campos_identificacao?: string[]
-  perguntas_extras?: Array<{ secao: string; pergunta: string; tipo: 'sim_nao'|'texto'|'multipla'; opcoes?: string; sub_pergunta?: { pergunta: string; tipo: string; placeholder?: string; condicao_valor: string } }>
+  perguntas_extras?: Array<{ secao: string; pergunta: string; tipo: 'sim_nao'|'texto'|'multipla'; opcoes?: string }>
 }
 
 type AnamneseData = {
@@ -343,63 +342,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     </button>
   )
 
-  // Retorna perguntas extras de uma seção específica, na ordem configurada
-  function perguntasExtra(secao: string) {
-    return (cfg?.perguntas_extras || []).filter((p: any) => p.secao === secao)
-  }
-
-  // Renderiza uma pergunta extra (Choice deve estar definido antes desta função)
-  function renderPerguntaExtra(p: any, idx: number) {
-    const key = `extra_${p.id || idx}`
-    return (
-      <div key={key} className="mb-6">
-        <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>{p.pergunta}</p>
-        {p.tipo === 'sim_nao' && (
-          <div className="flex gap-3 flex-wrap">
-            {['Sim', 'Não'].map((opt: string) => (
-              <Choice key={opt} group={key} value={opt}
-                selected={responses[key] === opt}
-                onClick={() => setSingleValue(key, opt)} />
-            ))}
-          </div>
-        )}
-        {p.tipo === 'texto' && (
-          <textarea className="anamnese-input" rows={3}
-            placeholder="Sua resposta..."
-            value={responses[key] || ''}
-            onChange={e => setTextValue(key, e.target.value)} />
-        )}
-        {p.tipo === 'multipla' && p.opcoes && (
-          <div className="flex gap-3 flex-wrap">
-            {p.opcoes.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
-              <Choice key={opt} group={key} value={opt} type="multi"
-                selected={(responses[key] || '').includes(opt)}
-                onClick={() => {
-                  const cur = responses[key] || ''
-                  const arr = cur ? cur.split(',').map((s: string) => s.trim()) : []
-                  const next = arr.includes(opt) ? arr.filter((s: string) => s !== opt) : [...arr, opt]
-                  setTextValue(key, next.join(', '))
-                }} />
-            ))}
-          </div>
-        )}
-        {p.sub_pergunta && responses[key] === p.sub_pergunta.condicao_valor && (
-          <div className="mt-3 pl-4 border-l-2" style={{ borderColor: 'var(--gold)' }}>
-            <p className="text-sm mb-2" style={{ color: 'var(--mid)' }}>↳ {p.sub_pergunta.pergunta}</p>
-            <input
-              type={p.sub_pergunta.tipo === 'numero' ? 'number' : 'text'}
-              className="anamnese-input"
-              placeholder={p.sub_pergunta.placeholder || ''}
-              value={responses[`${key}_sub`] || ''}
-              onChange={e => setTextValue(`${key}_sub`, e.target.value)}
-            />
-          </div>
-        )}
-      </div>
-    )
-  }
-
   return (
+    <>
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Jost:wght@300;400;500&display=swap');
         
@@ -459,7 +403,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               {anamnese?.clinics.name || 'Clínica Estética'}
             </div>
             <h1 className="text-4xl font-light leading-tight" style={{ color: 'var(--dark)' }}>
-              {titulo}
+              Ficha de Anamnese<br />Facial
             </h1>
             <div className="flex items-center justify-center gap-4 mt-5">
               <div className="w-16 h-px" style={{ background: cor, opacity: 0.5 }} />
@@ -467,87 +411,16 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               <div className="w-16 h-px" style={{ background: cor, opacity: 0.5 }} />
             </div>
             {anamnese?.patients && (
-              <div className="mt-6 p-4 rounded text-left space-y-3" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
-                <p className="text-sm" style={{ color: 'var(--light-text)' }}>
+              <div className="mt-6 p-4 rounded" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+                <p className="text-sm mb-2" style={{ color: 'var(--light-text)' }}>
                   Paciente: <strong style={{ color: 'var(--dark)' }}>{anamnese.patients.name}</strong>
                 </p>
-
-                {/* Data de nascimento */}
-                {cfg?.campos_identificacao?.includes('data_nascimento') && (
-                  <div>
-                    <p className="text-xs mb-1" style={{ color: 'var(--light-text)' }}>Data de nascimento</p>
-                    {anamnese.patients.birth_date ? (
-                      <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>
-                        {parseDateBR(anamnese.patients.birth_date)}
-                      </p>
-                    ) : (
-                      <input
-                        type="date"
-                        className="anamnese-input"
-                        value={responses._data_nascimento || ''}
-                        onChange={e => setTextValue('_data_nascimento', e.target.value)}
-                      />
-                    )}
-                  </div>
-                )}
-                {!cfg?.campos_identificacao?.includes('data_nascimento') && anamnese.patients.birth_date && (
+                {anamnese.patients.birth_date && (
                   <p className="text-sm" style={{ color: 'var(--light-text)' }}>
-                    Data de nascimento: <strong style={{ color: 'var(--dark)' }}>{parseDateBR(anamnese.patients.birth_date)}</strong>
+                    Data de nascimento: <strong style={{ color: 'var(--dark)' }}>
+                      {parseDateBR(anamnese.patients.birth_date)}
+                    </strong>
                   </p>
-                )}
-
-                {/* CPF */}
-                {cfg?.campos_identificacao?.includes('cpf') && (
-                  <div>
-                    <p className="text-xs mb-1" style={{ color: 'var(--light-text)' }}>CPF</p>
-                    {anamnese.patients.cpf ? (
-                      <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{anamnese.patients.cpf}</p>
-                    ) : (
-                      <input
-                        type="text"
-                        className="anamnese-input"
-                        placeholder="000.000.000-00"
-                        value={responses._cpf || ''}
-                        onChange={e => setTextValue('_cpf', e.target.value)}
-                      />
-                    )}
-                  </div>
-                )}
-
-                {/* Telefone */}
-                {cfg?.campos_identificacao?.includes('telefone') && (
-                  <div>
-                    <p className="text-xs mb-1" style={{ color: 'var(--light-text)' }}>Telefone</p>
-                    {anamnese.patients.phone ? (
-                      <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{anamnese.patients.phone}</p>
-                    ) : (
-                      <input
-                        type="tel"
-                        className="anamnese-input"
-                        placeholder="(00) 00000-0000"
-                        value={responses._telefone || ''}
-                        onChange={e => setTextValue('_telefone', e.target.value)}
-                      />
-                    )}
-                  </div>
-                )}
-
-                {/* E-mail */}
-                {cfg?.campos_identificacao?.includes('email') && (
-                  <div>
-                    <p className="text-xs mb-1" style={{ color: 'var(--light-text)' }}>E-mail</p>
-                    {anamnese.patients.email ? (
-                      <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{anamnese.patients.email}</p>
-                    ) : (
-                      <input
-                        type="email"
-                        className="anamnese-input"
-                        placeholder="seu@email.com"
-                        value={responses._email || ''}
-                        onChange={e => setTextValue('_email', e.target.value)}
-                      />
-                    )}
-                  </div>
                 )}
               </div>
             )}
@@ -570,7 +443,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <input 
                   type="text" 
                   placeholder="ex: jan/2024" 
-          {perguntasExtra('procedimentos').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
                   className="anamnese-input" 
                   style={{ width: '150px' }}
                   value={responses.botox_quando || ''}
@@ -610,7 +482,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <input type="text" placeholder="ex: mar/2024" className="anamnese-input" style={{ width: '150px' }} value={responses.bioestim_quando || ''} onChange={e => setTextValue('bioestim_quando', e.target.value)} />
               </div>
             </div>
-          {perguntasExtra('habitos').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
 
             <div className="h-px my-5" style={{ background: 'var(--border)' }} />
 
@@ -639,7 +510,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
             <div className="mb-7">
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Atividade física</p>
               <div className="flex flex-col gap-2">
-          {perguntasExtra('alergias').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
                 <Choice group="atividade" value="0–3x / semana" selected={responses.atividade === '0–3x / semana'} onClick={() => selectSingle('atividade', '0–3x / semana')} />
                 <Choice group="atividade" value="5–7x / semana" selected={responses.atividade === '5–7x / semana'} onClick={() => selectSingle('atividade', '5–7x / semana')} />
                 <Choice group="atividade" value="7x / semana — alta intensidade" selected={responses.atividade === '7x / semana — alta intensidade'} onClick={() => selectSingle('atividade', '7x / semana — alta intensidade')} />
@@ -665,7 +535,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 </div>
                 <span className="text-sm" style={{ color: 'var(--light-text)' }}>
                   Qtd. cigarros/dia: <input type="number" min="0" placeholder="—" className="anamnese-input ml-2" style={{ width: '70px' }} value={responses.tabaco_qtd || ''} onChange={e => setTextValue('tabaco_qtd', e.target.value)} />
-          {perguntasExtra('medicamentos').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
                 </span>
               </div>
             </div>
@@ -704,7 +573,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Medicamentos em Uso
             </h2>
-          {perguntasExtra('saude').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
 
             {[
               { key: 'antiinfl', label: 'anti-inflamatório' },
@@ -740,7 +608,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 </div>
                 <input type="text" className="anamnese-input flex-1" placeholder="Cite qual" style={{ minWidth: '150px' }} value={responses.autoim_qual || ''} onChange={e => setTextValue('autoim_qual', e.target.value)} />
               </div>
-          {perguntasExtra('outras').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
             </div>
 
             <div className="mb-5">
@@ -766,7 +633,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
 
           {/* OUTRAS INFORMAÇÕES */}
           {secoesAtivas.includes('outras') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
-          {perguntasExtra('mulheres').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Outras Informações
             </h2>
@@ -807,7 +673,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           <section className="rounded-b p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)', borderTop: 'none' }}>
             <div className="mb-5">
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>No momento está grávida ou existe possibilidade de gravidez?</p>
-          {perguntasExtra('queixa').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
               <div className="flex gap-2">
                 <Choice group="gravida" value="Não" selected={responses.gravida === 'Não'} onClick={() => selectSingle('gravida', 'Não')} />
                 <Choice group="gravida" value="Sim" selected={responses.gravida === 'Sim'} onClick={() => selectSingle('gravida', 'Sim')} />
@@ -864,11 +729,50 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Observação</p>
               <textarea className="anamnese-input" placeholder="Descreva aqui todas as suas queixas facial ou corporal..." rows={4} value={responses.queixa_obs || ''} onChange={e => setTextValue('queixa_obs', e.target.value)} />
             </div>
-          {perguntasExtra('queixa').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
           </section>)}
 
-          {/* Perguntas extras sem seção específica (fallback) */}
-          {perguntasExtra('outras_extra').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
+          {/* Perguntas extras configuradas pela clínica */}
+          {cfg?.perguntas_extras && cfg.perguntas_extras.length > 0 && (
+            <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+              <h2 className="text-base tracking-widest uppercase mb-6" style={{ color: 'var(--gold)', fontFamily: 'var(--font-heading)', letterSpacing: '0.15em' }}>
+                Informações Adicionais
+              </h2>
+              {cfg.perguntas_extras.map((p, idx) => (
+                <div key={idx} className="mb-6">
+                  <p className="text-sm mb-3" style={{ color: 'var(--mid)', fontFamily: 'var(--font-heading)' }}>{p.pergunta}</p>
+                  {p.tipo === 'sim_nao' && (
+                    <div className="flex gap-3 flex-wrap">
+                      {['Sim', 'Não'].map(opt => (
+                        <Choice key={opt} group={`extra_${idx}`} value={opt}
+                          selected={responses[`extra_${idx}`] === opt}
+                          onClick={() => setSingleValue(`extra_${idx}`, opt)} />
+                      ))}
+                    </div>
+                  )}
+                  {p.tipo === 'texto' && (
+                    <textarea className="anamnese-input" rows={3}
+                      placeholder="Sua resposta..."
+                      value={responses[`extra_${idx}`] || ''}
+                      onChange={e => setTextValue(`extra_${idx}`, e.target.value)} />
+                  )}
+                  {p.tipo === 'multipla' && p.opcoes && (
+                    <div className="flex gap-3 flex-wrap">
+                      {p.opcoes.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
+                        <Choice key={opt} group={`extra_${idx}`} value={opt} type="multi"
+                          selected={(responses[`extra_${idx}`] || '').includes(opt)}
+                          onClick={() => {
+                            const cur = responses[`extra_${idx}`] || ''
+                            const arr = cur ? cur.split(',').map((s: string) => s.trim()) : []
+                            const next = arr.includes(opt) ? arr.filter((s: string) => s !== opt) : [...arr, opt]
+                            setTextValue(`extra_${idx}`, next.join(', '))
+                          }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
 
           {/* Submit */}
           <div className="text-center mt-10">
