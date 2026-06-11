@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isSuperAdmin } from '@/lib/super-admin'
 import { createServiceClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   const ok = await isSuperAdmin()
   if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
