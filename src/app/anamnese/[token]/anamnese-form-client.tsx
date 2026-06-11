@@ -8,7 +8,8 @@ type AnamneseConfig = {
   subtitulo?: string
   cor_primaria?: string
   secoes_ativas?: string[]
-  perguntas_extras?: Array<{ secao: string; pergunta: string; tipo: 'sim_nao'|'texto'|'multipla'; opcoes?: string }>
+  campos_identificacao?: string[]
+  perguntas_extras?: Array<{ secao: string; pergunta: string; tipo: 'sim_nao'|'texto'|'multipla'; opcoes?: string; sub_pergunta?: { pergunta: string; tipo: string; placeholder?: string; condicao_valor: string } }>
 }
 
 type AnamneseData = {
@@ -403,7 +404,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               {anamnese?.clinics.name || 'Clínica Estética'}
             </div>
             <h1 className="text-4xl font-light leading-tight" style={{ color: 'var(--dark)' }}>
-              Ficha de Anamnese<br />Facial
+              {titulo}
             </h1>
             <div className="flex items-center justify-center gap-4 mt-5">
               <div className="w-16 h-px" style={{ background: cor, opacity: 0.5 }} />
@@ -411,16 +412,87 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               <div className="w-16 h-px" style={{ background: cor, opacity: 0.5 }} />
             </div>
             {anamnese?.patients && (
-              <div className="mt-6 p-4 rounded" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
-                <p className="text-sm mb-2" style={{ color: 'var(--light-text)' }}>
+              <div className="mt-6 p-4 rounded text-left space-y-3" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+                <p className="text-sm" style={{ color: 'var(--light-text)' }}>
                   Paciente: <strong style={{ color: 'var(--dark)' }}>{anamnese.patients.name}</strong>
                 </p>
-                {anamnese.patients.birth_date && (
+
+                {/* Data de nascimento */}
+                {cfg?.campos_identificacao?.includes('data_nascimento') && (
+                  <div>
+                    <p className="text-xs mb-1" style={{ color: 'var(--light-text)' }}>Data de nascimento</p>
+                    {anamnese.patients.birth_date ? (
+                      <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>
+                        {parseDateBR(anamnese.patients.birth_date)}
+                      </p>
+                    ) : (
+                      <input
+                        type="date"
+                        className="anamnese-input"
+                        value={responses._data_nascimento || ''}
+                        onChange={e => setTextValue('_data_nascimento', e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+                {!cfg?.campos_identificacao?.includes('data_nascimento') && anamnese.patients.birth_date && (
                   <p className="text-sm" style={{ color: 'var(--light-text)' }}>
-                    Data de nascimento: <strong style={{ color: 'var(--dark)' }}>
-                      {parseDateBR(anamnese.patients.birth_date)}
-                    </strong>
+                    Data de nascimento: <strong style={{ color: 'var(--dark)' }}>{parseDateBR(anamnese.patients.birth_date)}</strong>
                   </p>
+                )}
+
+                {/* CPF */}
+                {cfg?.campos_identificacao?.includes('cpf') && (
+                  <div>
+                    <p className="text-xs mb-1" style={{ color: 'var(--light-text)' }}>CPF</p>
+                    {anamnese.patients.cpf ? (
+                      <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{anamnese.patients.cpf}</p>
+                    ) : (
+                      <input
+                        type="text"
+                        className="anamnese-input"
+                        placeholder="000.000.000-00"
+                        value={responses._cpf || ''}
+                        onChange={e => setTextValue('_cpf', e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Telefone */}
+                {cfg?.campos_identificacao?.includes('telefone') && (
+                  <div>
+                    <p className="text-xs mb-1" style={{ color: 'var(--light-text)' }}>Telefone</p>
+                    {anamnese.patients.phone ? (
+                      <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{anamnese.patients.phone}</p>
+                    ) : (
+                      <input
+                        type="tel"
+                        className="anamnese-input"
+                        placeholder="(00) 00000-0000"
+                        value={responses._telefone || ''}
+                        onChange={e => setTextValue('_telefone', e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* E-mail */}
+                {cfg?.campos_identificacao?.includes('email') && (
+                  <div>
+                    <p className="text-xs mb-1" style={{ color: 'var(--light-text)' }}>E-mail</p>
+                    {anamnese.patients.email ? (
+                      <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{anamnese.patients.email}</p>
+                    ) : (
+                      <input
+                        type="email"
+                        className="anamnese-input"
+                        placeholder="seu@email.com"
+                        value={responses._email || ''}
+                        onChange={e => setTextValue('_email', e.target.value)}
+                      />
+                    )}
+                  </div>
                 )}
               </div>
             )}
