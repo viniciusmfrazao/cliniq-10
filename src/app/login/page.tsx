@@ -21,9 +21,10 @@ export default function LoginPage() {
     setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Email ou senha incorretos.'); setLoading(false); return }
-    // dashboard/layout redireciona para /admin automaticamente se for super_admin
-    router.push('/dashboard')
-    router.refresh()
+    // Usa window.location para garantir reload completo após login
+    // router.push causa race condition: cookie ainda não confirmado quando o
+    // middleware checa a sessão, resultando em redirect de volta ao /login
+    window.location.href = '/dashboard'
   }
 
   return (
