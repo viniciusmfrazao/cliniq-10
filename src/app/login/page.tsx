@@ -1,7 +1,5 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -21,15 +19,8 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    console.log('[LOGIN] iniciando signInWithPassword...')
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    console.log('[LOGIN] resultado:', { error: error?.message, userId: data?.user?.id })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Email ou senha incorretos.'); setLoading(false); return }
-    console.log('[LOGIN] sucesso, checando sessão...')
-    const { data: { session } } = await supabase.auth.getSession()
-    console.log('[LOGIN] sessão:', session ? 'OK token=' + session.access_token?.slice(0,20) : 'NULL')
-    console.log('[LOGIN] cookies:', document.cookie)
-    console.log('[LOGIN] navegando para /dashboard...')
     window.location.href = '/dashboard'
   }
 
