@@ -21,6 +21,8 @@ type PatchBody = {
   }
 }
 
+export const dynamic = 'force-dynamic'
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } },
