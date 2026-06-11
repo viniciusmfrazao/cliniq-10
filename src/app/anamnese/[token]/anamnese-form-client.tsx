@@ -737,12 +737,12 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               <h2 className="text-base tracking-widest uppercase mb-6" style={{ color: 'var(--gold)', fontFamily: 'var(--font-heading)', letterSpacing: '0.15em' }}>
                 Informações Adicionais
               </h2>
-              {cfg.perguntas_extras.map((p, idx) => (
+              {cfg.perguntas_extras.map((p: any, idx: number) => (
                 <div key={idx} className="mb-6">
-                  <p className="text-sm mb-3" style={{ color: 'var(--mid)', fontFamily: 'var(--font-heading)' }}>{p.pergunta}</p>
+                  <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>{p.pergunta}</p>
                   {p.tipo === 'sim_nao' && (
                     <div className="flex gap-3 flex-wrap">
-                      {['Sim', 'Não'].map(opt => (
+                      {['Sim', 'Não'].map((opt: string) => (
                         <Choice key={opt} group={`extra_${idx}`} value={opt}
                           selected={responses[`extra_${idx}`] === opt}
                           onClick={() => setSingleValue(`extra_${idx}`, opt)} />
@@ -767,6 +767,19 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                             setTextValue(`extra_${idx}`, next.join(', '))
                           }} />
                       ))}
+                    </div>
+                  )}
+                  {/* Sub-pergunta condicional */}
+                  {p.sub_pergunta && responses[`extra_${idx}`] === p.sub_pergunta.condicao_valor && (
+                    <div className="mt-3 pl-4 border-l-2" style={{ borderColor: 'var(--gold)' }}>
+                      <p className="text-sm mb-2" style={{ color: 'var(--mid)' }}>↳ {p.sub_pergunta.pergunta}</p>
+                      <input
+                        type={p.sub_pergunta.tipo === 'numero' ? 'number' : 'text'}
+                        className="anamnese-input"
+                        placeholder={p.sub_pergunta.placeholder || ''}
+                        value={responses[`extra_${idx}_sub`] || ''}
+                        onChange={e => setTextValue(`extra_${idx}_sub`, e.target.value)}
+                      />
                     </div>
                   )}
                 </div>
