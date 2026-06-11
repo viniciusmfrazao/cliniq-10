@@ -27,6 +27,8 @@ export default function LoginPage() {
     } catch {}
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Email ou senha incorretos.'); setLoading(false); return }
+    // Aguarda o cookie ser persistido antes de navegar
+    await new Promise(resolve => setTimeout(resolve, 500))
     window.location.href = '/dashboard'
   }
 
