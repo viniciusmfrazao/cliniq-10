@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { parseDateBR } from '@/lib/datetime'
 import Link from 'next/link'
@@ -45,6 +46,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('name, clinic_id, role').eq('id', user!.id).single()
+
+  // Super admin não tem clínica própria — redireciona para o painel admin
+  if (userData?.role === 'super_admin') {
+    const { redirect } = await import('next/navigation')
+    redirect('/admin')
+  }
+
   const { data: clinic } = await supabase.from('clinics').select('name, trial_ends_at, settings').eq('id', userData?.clinic_id).single()
   
   // Get active modules from clinic settings
