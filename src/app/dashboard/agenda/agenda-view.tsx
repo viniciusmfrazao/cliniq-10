@@ -301,8 +301,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   return (
     <div 
       className="relative group h-full"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onClick={e => { e.preventDefault(); e.stopPropagation(); setShowPreview(p => !p) }}
     >
       <Link
         href={`/dashboard/atendimento/${apt.id}`}
@@ -608,17 +607,22 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
       {/* Popup lateral — só desktop */}
       {showPreview && !useSheet && (
-        <div
-          className="fixed z-[9999] w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
-          style={{
-            maxHeight: '85vh',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-          }}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
+        <>
+          {/* Overlay para fechar ao clicar fora */}
+          <div
+            className="fixed inset-0 z-[9998]"
+            onClick={e => { e.stopPropagation(); setShowPreview(false) }}
+          />
+          <div
+            className="fixed z-[9999] w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
+            style={{
+              maxHeight: '85vh',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
           <div className="flex items-start gap-3 mb-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${isCheckedIn ? 'bg-gradient-to-br from-emerald-500 to-teal-500' : 'bg-gradient-to-br from-violet-500 to-purple-500'}`}>
               {apt.patients?.name?.charAt(0) || '?'}
@@ -911,6 +915,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* Modal de pagamento */}
