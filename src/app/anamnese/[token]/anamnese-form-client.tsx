@@ -322,7 +322,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   const subtitulo = cfg?.subtitulo || ''
   const secoesAtivas = cfg?.secoes_ativas || ['procedimentos','habitos','alergias','medicamentos','saude','outras','mulheres','queixa']
 
-  const Choice = ({ group, value, selected, onClick, type = 'single' }: any) => (  const Choice = ({ group, value, selected, onClick, type = 'single' }: any) => (
+  const Choice = ({ group, value, selected, onClick, type = 'single' }: any) => (
     <button
       type="button"
       onClick={onClick}
