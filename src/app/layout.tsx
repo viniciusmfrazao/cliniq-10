@@ -54,10 +54,10 @@ export const viewport: Viewport = {
 const sessionMigrationScript = [
   "(function(){",
   "try{",
-  "var O='clinike-auth-token';",
-  "var N='sb-yqrjbyaucimvmzpfipgs-auth-token';",
-  "var o=localStorage.getItem(O);",
-  "if(o){localStorage.setItem(N,o);localStorage.removeItem(O);}",
+  // Remove chave antiga do localStorage
+  "localStorage.removeItem('clinike-auth-token');",
+  // Remove cookie antigo que causa sessao cruzada entre clinicas
+  "document.cookie='clinike-auth-token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';",
   "}catch(e){}",
   "})();"
 ].join("")
