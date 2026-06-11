@@ -18,17 +18,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .from('users').select('name, role, clinic_id, permissions').eq('id', user.id).maybeSingle()
 
   // Super admin sempre vai para /admin, mesmo que tenha clinic_id
-  try {
-    const svc = createServiceClient()
-    const { data: sa } = await svc
-      .from('super_admins')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle()
-    if (sa) redirect('/admin')
-  } catch {
-    // Se service role falhar, continua fluxo normal
-  }
+  // Usa o client do próprio usuário (RLS: só vê o próprio registro)
+  const { data: sa } = await supabase
+    .from('super_admins')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (sa) redirect('/admin')
 
   // Usuário sem clinic_id e sem super_admin vai para login
   if (!userData?.clinic_id) {
