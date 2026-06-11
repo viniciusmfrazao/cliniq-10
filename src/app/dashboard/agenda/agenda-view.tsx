@@ -239,14 +239,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
-    // Popup: usa posição real do card na tela para decidir lado
+    // Popup: profissional na metade esquerda → abre à direita, e vice-versa
+    const isLeftHalf = totalColumns <= 1
+      ? (cardRef.current ? cardRef.current.getBoundingClientRect().left < window.innerWidth / 2 : true)
+      : columnIndex < Math.ceil(totalColumns / 2)
+    setPopupSide(isLeftHalf ? 'right' : 'left')
+    // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
-      // Se tem 320px à direita do card → abre à direita, senão à esquerda
-      const spaceRight = window.innerWidth - rect.right
-      const spaceLeft = rect.left
-      setPopupSide(spaceRight >= 300 ? 'right' : spaceLeft >= 300 ? 'left' : spaceRight >= spaceLeft ? 'right' : 'left')
-      // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
       setPopupTop(window.innerHeight - rect.bottom >= 420)
     }
     setShowPreview(true)
@@ -301,7 +301,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
   return (
     <div 
       className="relative group h-full"
-      onClick={e => { e.preventDefault(); e.stopPropagation(); setShowPreview(p => !p) }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <Link
         href={`/dashboard/atendimento/${apt.id}`}
@@ -607,22 +608,15 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
       {/* Popup lateral — só desktop */}
       {showPreview && !useSheet && (
-        <>
-          {/* Overlay para fechar ao clicar fora */}
-          <div
-            className="fixed inset-0 z-[9998]"
-            onClick={e => { e.stopPropagation(); setShowPreview(false) }}
-          />
-          <div
-            className="fixed z-[9999] w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
-            style={{
-              maxHeight: '85vh',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
+        <div
+          className={`absolute z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
+            popupSide === 'right' ? 'left-full ml-1' : 'right-full mr-1'
+          } ${
+            popupTop ? 'top-0' : 'bottom-0'
+          }`}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
           <div className="flex items-start gap-3 mb-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${isCheckedIn ? 'bg-gradient-to-br from-emerald-500 to-teal-500' : 'bg-gradient-to-br from-violet-500 to-purple-500'}`}>
               {apt.patients?.name?.charAt(0) || '?'}
@@ -915,7 +909,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
             )}
           </div>
         </div>
-        </>
       )}
 
       {/* Modal de pagamento */}
