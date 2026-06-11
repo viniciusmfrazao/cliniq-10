@@ -5,6 +5,8 @@ import { gerarPixEMV, pixParaWhatsApp } from '@/lib/pix'
 
 // Chave Pix carregada do banco (app_settings)
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   const ok = await isSuperAdmin()
   if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
