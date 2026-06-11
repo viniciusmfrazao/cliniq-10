@@ -609,11 +609,25 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {/* Popup lateral — só desktop */}
       {showPreview && !useSheet && (
         <div
-          className={`absolute z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
-            popupSide === 'right' ? 'left-full ml-1' : 'right-full mr-1'
-          } ${
-            popupTop ? 'top-0' : 'bottom-0'
-          }`}
+          className={`fixed z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto`}
+          style={{
+            maxHeight: '80vh',
+            top: (() => {
+              if (!cardRef.current) return 0
+              const rect = cardRef.current.getBoundingClientRect()
+              const popupH = Math.min(window.innerHeight * 0.8, 500)
+              const spaceBelow = window.innerHeight - rect.top
+              if (spaceBelow >= popupH) return rect.top
+              return Math.max(8, window.innerHeight - popupH - 8)
+            })(),
+            left: (() => {
+              if (!cardRef.current) return 0
+              const rect = cardRef.current.getBoundingClientRect()
+              const spaceRight = window.innerWidth - rect.right
+              if (spaceRight >= 300) return rect.right + 4
+              return Math.max(8, rect.left - 292)
+            })(),
+          }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
