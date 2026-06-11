@@ -19,16 +19,9 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    // Limpa TUDO do storage antigo antes de logar — garante cookie correto
+    // Limpa sessão antiga via servidor (único jeito de apagar cookies HttpOnly)
     try {
-      // Remove todas as chaves antigas do localStorage
-      const keysToRemove = Object.keys(localStorage).filter(k => 
-        k.includes('clinike-auth') || k.includes('supabase') || k.includes('sb-')
-      )
-      keysToRemove.forEach(k => localStorage.removeItem(k))
-      // Remove cookies antigos
-      document.cookie = 'clinike-auth-token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
-      document.cookie = 'sb-yqrjbyaucimvmzpfipgs-auth-token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
+      await fetch('/api/auth/clear-session')
     } catch {}
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Email ou senha incorretos.'); setLoading(false); return }
