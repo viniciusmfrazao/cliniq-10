@@ -8,6 +8,13 @@ const ADMIN_ROUTES = ['/admin']
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
+  // Cookie antigo presente mas sem o correto: limpa tudo e manda pro login
+  const hasOldCookie = request.cookies.has('clinike-auth-token')
+  const hasNewCookie = request.cookies.has('sb-yqrjbyaucimvmzpfipgs-auth-token')
+  if (hasOldCookie && !hasNewCookie && path !== '/api/auth/clear-session') {
+    return NextResponse.redirect(new URL('/api/auth/clear-session', request.url))
+  }
+
   // Skip auth check for public routes (faster)
   if (PUBLIC_ROUTES.includes(path) || PUBLIC_PREFIXES.some(p => path.startsWith(p))) {
     return NextResponse.next()
