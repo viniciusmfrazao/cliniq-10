@@ -51,6 +51,17 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
+const sessionMigrationScript = [
+  "(function(){",
+  "try{",
+  "var O='clinike-auth-token';",
+  "var N='sb-yqrjbyaucimvmzpfipgs-auth-token';",
+  "var o=localStorage.getItem(O);",
+  "if(o){localStorage.setItem(N,o);localStorage.removeItem(O);}",
+  "}catch(e){}",
+  "})();"
+].join("")
+
 const themeScript = `
   (function() {
     try {
@@ -93,6 +104,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <script dangerouslySetInnerHTML={{ __html: sessionMigrationScript }} />
         <script dangerouslySetInnerHTML={{ __html: authHashRedirectScript }} />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
