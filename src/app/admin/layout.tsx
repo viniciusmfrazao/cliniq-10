@@ -74,7 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
         </div>
         <Link
-          href="/dashboard"
+          href="/dashboard?admin=0"
           className="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg transition whitespace-nowrap"
         >
           ← Sistema
