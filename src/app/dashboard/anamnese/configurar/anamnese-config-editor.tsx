@@ -38,7 +38,15 @@ type Config = {
   cor_primaria: string
   secoes_ativas: string[]
   perguntas_extras: Pergunta[]
+  campos_identificacao: string[]
 }
+
+const CAMPOS_ID = [
+  { id: 'data_nascimento', label: 'Data de nascimento', desc: 'Paciente preenche se não cadastrado' },
+  { id: 'cpf',            label: 'CPF',                 desc: 'Documento de identificação' },
+  { id: 'telefone',       label: 'Telefone',             desc: 'Número de contato' },
+  { id: 'email',          label: 'E-mail',               desc: 'Endereço de e-mail' },
+]
 
 function gerarId() {
   return Math.random().toString(36).slice(2, 9)
@@ -255,6 +263,9 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
   const [perguntas, setPerguntas] = useState<Pergunta[]>(
     (config.perguntas_extras || []).map((p: Pergunta) => ({ ...p, id: p.id || gerarId() }))
   )
+  const [camposId, setCamposId] = useState<string[]>(
+    config.campos_identificacao || []
+  )
   const [novaSecao, setNovaSecao] = useState('queixa')
   const [novaTipo, setNovaTipo] = useState<'sim_nao'|'texto'|'multipla'>('sim_nao')
   const [novaPergunta, setNovaPergunta] = useState('')
@@ -312,6 +323,7 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
           cor_primaria: cor,
           secoes_ativas: secoesAtivas,
           perguntas_extras: perguntas,
+          campos_identificacao: camposId,
         }),
       })
       if (!res.ok) throw new Error('Erro ao salvar')
@@ -350,6 +362,38 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
             <span className="text-sm text-slate-500">{cor}</span>
           </div>
         </div>
+      </div>
+
+      {/* Campos de identificação */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-3">
+        <div>
+          <h3 className="font-bold text-slate-800">Dados do Paciente</h3>
+          <p className="text-sm text-slate-500 mt-1">Campos que o paciente preenche na ficha caso não estejam cadastrados</p>
+        </div>
+        {CAMPOS_ID.map(c => (
+          <label key={c.id} className={`flex items-center gap-4 p-3 rounded-xl border cursor-pointer transition-colors ${
+            camposId.includes(c.id)
+              ? 'border-emerald-200 bg-emerald-50'
+              : 'border-slate-100 bg-slate-50 opacity-60'
+          }`}>
+            <input
+              type="checkbox"
+              checked={camposId.includes(c.id)}
+              onChange={() => setCamposId(prev =>
+                prev.includes(c.id) ? prev.filter(x => x !== c.id) : [...prev, c.id]
+              )}
+              className="w-4 h-4 accent-emerald-600"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-slate-800 text-sm">{c.label}</p>
+              <p className="text-xs text-slate-500">{c.desc}</p>
+            </div>
+            {camposId.includes(c.id)
+              ? <span className="text-xs text-emerald-600 font-semibold">Ativo</span>
+              : <span className="text-xs text-slate-400">Inativo</span>
+            }
+          </label>
+        ))}
       </div>
 
       {/* Seções */}
