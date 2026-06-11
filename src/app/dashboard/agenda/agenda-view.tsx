@@ -239,14 +239,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
     }
-    // Popup: profissional na metade esquerda → abre à direita, e vice-versa
-    const isLeftHalf = totalColumns <= 1
-      ? (cardRef.current ? cardRef.current.getBoundingClientRect().left < window.innerWidth / 2 : true)
-      : columnIndex < Math.ceil(totalColumns / 2)
-    setPopupSide(isLeftHalf ? 'right' : 'left')
-    // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
+    // Popup: usa posição real do card na tela para decidir lado
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
+      // Se tem 320px à direita do card → abre à direita, senão à esquerda
+      const spaceRight = window.innerWidth - rect.right
+      const spaceLeft = rect.left
+      setPopupSide(spaceRight >= 300 ? 'right' : spaceLeft >= 300 ? 'left' : spaceRight >= spaceLeft ? 'right' : 'left')
+      // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
       setPopupTop(window.innerHeight - rect.bottom >= 420)
     }
     setShowPreview(true)
