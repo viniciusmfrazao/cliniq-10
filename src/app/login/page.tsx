@@ -19,6 +19,12 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
+    // Limpa qualquer sessão antiga antes de logar
+    try {
+      await supabase.auth.signOut()
+      document.cookie = 'clinike-auth-token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
+      localStorage.removeItem('clinike-auth-token')
+    } catch {}
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Email ou senha incorretos.'); setLoading(false); return }
     window.location.href = '/dashboard'
