@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     .eq('id', user.id)
     .single()
 
+  if (!userData?.clinic_id) return NextResponse.json({ error: 'Clínica não encontrada' }, { status: 400 })
   if (!['admin','super_admin','manager'].includes(userData?.role || '')) {
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
