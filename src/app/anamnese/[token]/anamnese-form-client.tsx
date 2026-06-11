@@ -571,6 +571,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <input 
                   type="text" 
                   placeholder="ex: jan/2024" 
+          {perguntasExtra('procedimentos').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
                   className="anamnese-input" 
                   style={{ width: '150px' }}
                   value={responses.botox_quando || ''}
@@ -610,6 +611,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <input type="text" placeholder="ex: mar/2024" className="anamnese-input" style={{ width: '150px' }} value={responses.bioestim_quando || ''} onChange={e => setTextValue('bioestim_quando', e.target.value)} />
               </div>
             </div>
+          {perguntasExtra('habitos').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
 
             <div className="h-px my-5" style={{ background: 'var(--border)' }} />
 
@@ -638,6 +640,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
             <div className="mb-7">
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Atividade física</p>
               <div className="flex flex-col gap-2">
+          {perguntasExtra('alergias').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
                 <Choice group="atividade" value="0–3x / semana" selected={responses.atividade === '0–3x / semana'} onClick={() => selectSingle('atividade', '0–3x / semana')} />
                 <Choice group="atividade" value="5–7x / semana" selected={responses.atividade === '5–7x / semana'} onClick={() => selectSingle('atividade', '5–7x / semana')} />
                 <Choice group="atividade" value="7x / semana — alta intensidade" selected={responses.atividade === '7x / semana — alta intensidade'} onClick={() => selectSingle('atividade', '7x / semana — alta intensidade')} />
@@ -663,6 +666,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 </div>
                 <span className="text-sm" style={{ color: 'var(--light-text)' }}>
                   Qtd. cigarros/dia: <input type="number" min="0" placeholder="—" className="anamnese-input ml-2" style={{ width: '70px' }} value={responses.tabaco_qtd || ''} onChange={e => setTextValue('tabaco_qtd', e.target.value)} />
+          {perguntasExtra('medicamentos').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
                 </span>
               </div>
             </div>
@@ -701,6 +705,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Medicamentos em Uso
             </h2>
+          {perguntasExtra('saude').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
 
             {[
               { key: 'antiinfl', label: 'anti-inflamatório' },
@@ -736,6 +741,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 </div>
                 <input type="text" className="anamnese-input flex-1" placeholder="Cite qual" style={{ minWidth: '150px' }} value={responses.autoim_qual || ''} onChange={e => setTextValue('autoim_qual', e.target.value)} />
               </div>
+          {perguntasExtra('outras').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
             </div>
 
             <div className="mb-5">
@@ -761,6 +767,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
 
           {/* OUTRAS INFORMAÇÕES */}
           {secoesAtivas.includes('outras') && (<section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
+          {perguntasExtra('mulheres').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
             <h2 className="text-xs tracking-widest uppercase pb-3 mb-7 border-b" style={{ color: 'var(--gold)', borderColor: 'var(--border)' }}>
               Outras Informações
             </h2>
@@ -801,6 +808,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           <section className="rounded-b p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)', borderTop: 'none' }}>
             <div className="mb-5">
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>No momento está grávida ou existe possibilidade de gravidez?</p>
+          {perguntasExtra('queixa').map((p: any, idx: number) => renderPerguntaExtra(p, idx))}
               <div className="flex gap-2">
                 <Choice group="gravida" value="Não" selected={responses.gravida === 'Não'} onClick={() => selectSingle('gravida', 'Não')} />
                 <Choice group="gravida" value="Sim" selected={responses.gravida === 'Sim'} onClick={() => selectSingle('gravida', 'Sim')} />
