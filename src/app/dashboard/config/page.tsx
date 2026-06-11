@@ -124,6 +124,28 @@ export default async function ConfigPage() {
           </Link>
         </div>
 
+        {/* Atendimento */}
+        {isAdmin && (
+          <div className="card p-6">
+            <h2 className="text-sm font-semibold text-slate-900 mb-4">📋 Atendimento</h2>
+            <div className="grid gap-3">
+              <Link
+                href="/dashboard/config/anamnese"
+                className="flex items-center gap-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 rounded-xl transition-colors border border-emerald-200"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow">
+                  <Icon name="fileText" className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-emerald-900">Ficha de Anamnese</p>
+                  <p className="text-xs text-emerald-700">Perguntas, seções e dados dos pacientes</p>
+                </div>
+                <Icon name="chevronRight" className="w-5 h-5 text-emerald-400" />
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Integrações - apenas admin */}
         {isAdmin && (
           <div className="card p-6">
@@ -174,20 +196,6 @@ export default async function ConfigPage() {
                 <Icon name="chevronRight" className="w-5 h-5 text-violet-400" />
               </Link>
               )}
-
-              <Link
-                href="/dashboard/config/anamnese"
-                className="flex items-center gap-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 rounded-xl transition-colors border border-emerald-200"
-              >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow">
-                  <Icon name="fileText" className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-emerald-900">Ficha de Anamnese</p>
-                  <p className="text-xs text-emerald-700">Título, cores, seções e perguntas personalizadas</p>
-                </div>
-                <Icon name="chevronRight" className="w-5 h-5 text-emerald-400" />
-              </Link>
 
               <Link
                 href="/dashboard/config/lgpd"
