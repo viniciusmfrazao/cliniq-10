@@ -7,6 +7,8 @@ import Icon from '@/components/ui/Icon'
 import PatientSearch from '@/components/ui/PatientSearch'
 import QuickPatientModal from '@/components/ui/QuickPatientModal'
 import { todayBR } from '@/lib/datetime'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Patient = { id: string; name: string }
 type Procedure = { id: string; name: string; duration_minutes: number; price: number; professional_ids?: string[] | null }
