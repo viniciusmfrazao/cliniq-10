@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Professional = { id: string; name: string; role?: string }
 
@@ -81,7 +83,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
       : await supabase.from('procedures').insert(payload)
 
     if (error) {
-      setError(error.message)
+      setError(parseSupabaseError(error))
       setLoading(false)
       return
     }
