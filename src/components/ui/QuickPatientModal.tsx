@@ -45,7 +45,7 @@ export default function QuickPatientModal({ clinicId, onPatientCreated, onClose 
       .single()
 
     if (insertError) {
-      setError(insertError.message)
+      setError(parseSupabaseError(insertError))
       setLoading(false)
       return
     }
