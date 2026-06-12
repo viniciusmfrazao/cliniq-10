@@ -15,6 +15,8 @@ import BottomSheet from '@/components/ui/BottomSheet'
 import BlockModal from './block-modal'
 import PaymentModal from '@/components/agenda/payment-modal'
 import ProceduresConfirmModal from '@/components/agenda/procedures-confirm-modal'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Block = {
   id: string
