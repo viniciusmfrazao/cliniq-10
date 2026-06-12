@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type MedicalRecord = {
   id: string
