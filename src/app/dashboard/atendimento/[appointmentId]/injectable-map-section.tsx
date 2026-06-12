@@ -7,6 +7,8 @@ import Icon from '@/components/ui/Icon'
 import FaceMap from '@/components/ui/FaceMap'
 import { createLogger } from '@/lib/logger'
 import { todayBR } from '@/lib/datetime'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 const log = createLogger('InjectableMap')
 
