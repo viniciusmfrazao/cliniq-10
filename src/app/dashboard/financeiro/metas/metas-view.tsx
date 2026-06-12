@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Meta = {
   id: string
