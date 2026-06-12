@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from './Icon'
 import { maskPhone, unmask } from '@/lib/masks'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Props = {
   clinicId: string
