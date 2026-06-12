@@ -3,6 +3,8 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -155,7 +157,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
           template_lembrete_2h: template2h || null,
         })
         .eq('clinic_id', clinicId)
-      if (error) { alert(`Erro ao salvar: ${error.message}`); return }
+      if (error) { alert(parseSupabaseError(error)); return }
       setSavedAt(new Date())
       router.refresh()
     } finally {
