@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Props = {
   clinicId: string
