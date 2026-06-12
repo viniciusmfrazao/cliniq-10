@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Taxa = {
   id: string
