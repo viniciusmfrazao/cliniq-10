@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { createLogger } from '@/lib/logger'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 const log = createLogger('AttendanceHeader')
 
