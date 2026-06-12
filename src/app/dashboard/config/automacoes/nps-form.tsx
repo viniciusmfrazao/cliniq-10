@@ -4,6 +4,8 @@ import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Initial = {
   enabled: boolean
@@ -164,7 +166,7 @@ export default function NpsForm({ clinicId, clinicName, initial }: Props) {
         )
         .eq('clinic_id', clinicId)
       if (error) {
-        alert(`Erro ao salvar: ${error.message}`)
+        alert(parseSupabaseError(error))
         return
       }
       setSavedAt(new Date())
