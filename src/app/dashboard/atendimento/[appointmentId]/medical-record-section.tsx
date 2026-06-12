@@ -7,6 +7,8 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import AutoTextarea from '@/components/ui/AutoTextarea'
 import PhotoLightbox from '@/components/ui/PhotoLightbox'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Props = {
   patient: { id: string; name: string }
@@ -231,7 +233,7 @@ export default function MedicalRecordSection({
 
       if (error) {
         console.error('Erro ao salvar:', error)
-        alert(`Erro ao salvar prontuário: ${error.message}`)
+        alert(parseSupabaseError(error))
         return
       }
 
