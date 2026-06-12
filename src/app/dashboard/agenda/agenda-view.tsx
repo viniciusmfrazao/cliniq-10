@@ -305,6 +305,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
   return (
     <div 
+      ref={cardRef}
       className="relative group h-full"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
