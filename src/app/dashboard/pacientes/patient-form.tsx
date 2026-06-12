@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { maskPhone, maskCPF, maskCEP, unmask, validateCPF, phoneCanonical } from '@/lib/masks'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Patient = {
   id?: string
