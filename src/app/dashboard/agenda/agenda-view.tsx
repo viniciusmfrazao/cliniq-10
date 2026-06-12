@@ -112,6 +112,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const cardRef = useRef<HTMLDivElement>(null)
   const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
   const [popupTop, setPopupTop] = useState(true)
+  const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
   const isMobile = useIsMobile()
   const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
@@ -247,7 +248,11 @@ const AppointmentCard = React.memo(function AppointmentCard({
     // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
-      setPopupTop(window.innerHeight - rect.bottom >= 420)
+      const hasSpaceBelow = window.innerHeight - rect.bottom >= 420
+      setPopupTop(hasSpaceBelow)
+      const x = isLeftHalf ? rect.right + 4 : rect.left - 292
+      const y = hasSpaceBelow ? rect.top : rect.bottom - 420
+      setPopupPos({ x: Math.max(4, x), y: Math.max(4, y) })
     }
     setShowPreview(true)
     setUseSheet(isMobile)
@@ -606,17 +611,15 @@ const AppointmentCard = React.memo(function AppointmentCard({
         </BottomSheet>
       )}
 
-      {/* Popup lateral — só desktop */}
-      {showPreview && !useSheet && (
-        <div
-          className={`absolute z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh] ${
-            popupSide === 'right' ? 'left-full ml-1' : 'right-full mr-1'
-          } ${
-            popupTop ? 'top-0' : 'bottom-0'
-          }`}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
+      {/* Popup lateral — só desktop, via portal para escapar overflow:hidden */}
+      {showPreview && !useSheet && popupPos && (
+        <ModalPortal>
+          <div
+            className="fixed z-[9999] w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
+            style={{ left: popupPos.x, top: popupPos.y }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+          >
           <div className="flex items-start gap-3 mb-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${isCheckedIn ? 'bg-gradient-to-br from-emerald-500 to-teal-500' : 'bg-gradient-to-br from-violet-500 to-purple-500'}`}>
               {apt.patients?.name?.charAt(0) || '?'}
@@ -908,7 +911,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
               </div>
             )}
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Modal de pagamento */}
