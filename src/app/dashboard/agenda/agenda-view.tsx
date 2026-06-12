@@ -1340,7 +1340,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                       <div
                         key={prof.id}
                         className={`flex-1 min-w-[180px] border-r border-slate-100 dark:border-slate-700 last:border-r-0 relative`}
-                        style={{ height: gridHeight }}
+                        style={{ height: gridHeight, overflow: 'visible' }}
                       >
                         {/* Linhas de hora (fundo) */}
                         {HOUR_SLOTS.map(hour => {
