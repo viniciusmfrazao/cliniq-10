@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Member = {
   id: string
