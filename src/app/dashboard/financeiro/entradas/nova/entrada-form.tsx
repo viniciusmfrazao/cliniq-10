@@ -47,6 +47,8 @@ function PacienteBusca({ pacientes, onSelect }: { pacientes: { id: string; name:
 }
 import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
+import { parseSupabaseError } from '@/lib/error-messages'
+
 
 type Props = {
   pacientes: { id: string; name: string }[]
