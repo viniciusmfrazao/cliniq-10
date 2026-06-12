@@ -612,11 +612,11 @@ const AppointmentCard = React.memo(function AppointmentCard({
       )}
 
       {/* Popup lateral — só desktop, via portal+fixed para escapar overflow-x-auto e overflow-x-hidden */}
-      {showPreview && !useSheet && popupPos && (
+      {showPreview && !useSheet && (
         <ModalPortal>
           <div
             className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
-            style={{ left: popupPos.x, top: popupPos.y, zIndex: 9999 }}
+            style={{ left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999 }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
