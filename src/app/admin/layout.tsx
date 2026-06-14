@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 const NAV = [
   { href: '/admin',               icon: '📊', label: 'Dashboard' },
@@ -42,9 +43,18 @@ function SidebarContent({ pathname, onClose }: { pathname: string; onClose?: () 
   )
 }
 
+const CLINIKE_DASHBOARD = '/dashboard'
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+  const supabase = createClient()
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
     <div className="h-screen bg-slate-100 dark:bg-slate-900 flex flex-col overflow-hidden">
@@ -73,12 +83,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             🛡️ Super Admin
           </Link>
         </div>
-        <Link
-          href="/dashboard?admin=0"
-          className="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg transition whitespace-nowrap"
-        >
-          ← Sistema
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={CLINIKE_DASHBOARD}
+            className="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg transition whitespace-nowrap"
+          >
+            ← Sistema
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="text-xs bg-white/15 hover:bg-red-500/80 px-3 py-1.5 rounded-lg transition whitespace-nowrap"
+            title="Sair"
+          >
+            Sair
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
