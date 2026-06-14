@@ -274,7 +274,7 @@ export default function HistoricoPacienteView({ entradas }: Props) {
                     <div>
                       <p className="font-medium text-slate-900">{e.procedimento_nome || 'Atendimento'}</p>
                       <p className="text-sm text-slate-500">
-                        {new Date(e.data_venda).toLocaleDateString('pt-BR')}
+                        {new Date(e.data_venda + 'T12:00:00').toLocaleDateString('pt-BR')}
                       </p>
                     </div>
                     <span className="font-bold text-emerald-600">{fmt(e.valor_bruto)}</span>
