@@ -101,11 +101,12 @@ export async function PATCH(
     if (!['admin', 'super_admin', 'manager'].includes(currentUser?.role || ''))
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
-    const { professional_role, permissions } = await request.json()
+    const { professional_role, permissions, name } = await request.json()
 
     const updateData: Record<string, unknown> = {}
     if (professional_role !== undefined) updateData.professional_role = professional_role || null
     if (permissions !== undefined) updateData.permissions = permissions
+    if (name !== undefined && name.trim()) updateData.name = name.trim()
 
     if (Object.keys(updateData).length === 0)
       return NextResponse.json({ error: 'Nada para atualizar' }, { status: 400 })

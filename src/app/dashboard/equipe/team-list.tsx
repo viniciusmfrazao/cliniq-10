@@ -73,6 +73,9 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
   const [editingSchedules, setEditingSchedules] = useState<Member | null>(null)
   const [editingUnavail, setEditingUnavail] = useState<Member | null>(null)
   const [editingProfRole, setEditingProfRole] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState<string | null>(null)
+  const [nameValue, setNameValue] = useState('')
+  const [savingName, setSavingName] = useState(false)
 
   const PROF_OPTIONS = [
     { value: '', label: 'Não atende pacientes' },
@@ -97,6 +100,21 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
     } catch {}
     setLoading(null)
     setEditingProfRole(null)
+    router.refresh()
+  }
+
+  async function handleSaveName(memberId: string) {
+    if (!nameValue.trim()) return
+    setSavingName(true)
+    try {
+      await fetch(`/api/team/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicId, name: nameValue.trim() })
+      })
+    } catch {}
+    setSavingName(false)
+    setEditingName(null)
     router.refresh()
   }
 
@@ -185,10 +203,52 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                 </span>
               </div>
               <div>
-                <p className={`text-sm font-medium ${showReactivate ? 'text-slate-500' : 'text-slate-900'}`}>
-                  {member.name}
-                  {member.id === currentUserId && <span className="text-slate-400 ml-1">(você)</span>}
-                </p>
+                {editingName === member.id ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={nameValue}
+                      onChange={e => setNameValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSaveName(member.id)
+                        if (e.key === 'Escape') setEditingName(null)
+                      }}
+                      className="text-sm border border-violet-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 w-44"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleSaveName(member.id)}
+                      disabled={savingName}
+                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                      title="Salvar"
+                    >
+                      <Icon name="check" className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingName(null)}
+                      className="p-1 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="Cancelar"
+                    >
+                      <Icon name="x" className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 group/name">
+                    <p className={`text-sm font-medium ${showReactivate ? 'text-slate-500' : 'text-slate-900'}`}>
+                      {member.name}
+                      {member.id === currentUserId && <span className="text-slate-400 ml-1">(você)</span>}
+                    </p>
+                    {!showReactivate && (
+                      <button
+                        onClick={() => { setEditingName(member.id); setNameValue(member.name) }}
+                        className="opacity-0 group-hover/name:opacity-100 p-0.5 text-slate-300 hover:text-violet-500 transition-all rounded"
+                        title="Editar nome"
+                      >
+                        <Icon name="edit" className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-slate-500">{member.email}</p>
               </div>
             </div>
