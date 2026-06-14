@@ -25,6 +25,10 @@ export default async function AgendaPage({
   const selectedDate = sp.date || todayBR()
   const viewMode = sp.view || 'day'
   const selectedProfessional = sp.professional || 'all'
+  // Parse multi-select: 'all' ou 'id1,id2,...'
+  const selectedProfIds = selectedProfessional === 'all'
+    ? []
+    : selectedProfessional.split(',').filter(Boolean)
   const selectedStatus = sp.status || 'all'
   const today = todayBR()
 
@@ -203,10 +207,12 @@ export default async function AgendaPage({
 
       {/* Agenda */}
       <AgendaView 
-        appointments={selectedStatus === 'all' 
-          ? (appointments || [])
-          : (appointments || []).filter(a => a.status === selectedStatus)
-        }
+        appointments={(() => {
+          let apts = appointments || []
+          if (selectedStatus !== 'all') apts = apts.filter(a => a.status === selectedStatus)
+          if (selectedProfIds.length > 0) apts = apts.filter(a => selectedProfIds.includes(a.professional_id || ''))
+          return apts
+        })()}
         blocks={blocks}
         viewMode={viewMode}
         selectedDate={selectedDate}

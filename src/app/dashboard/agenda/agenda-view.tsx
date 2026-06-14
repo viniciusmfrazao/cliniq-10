@@ -972,19 +972,24 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   } | null>(null)
 
   // allAppointments é a prop do servidor, localAppointments é o estado local
+  // Parse multi-select: 'all' ou 'id1,id2,...'
+  const selectedProfIds = selectedProfessional === 'all'
+    ? []
+    : selectedProfessional.split(',').filter(Boolean)
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const displayProfessionals = selectedProfessional === 'all' 
-    ? professionals 
-    : professionals.filter(p => p.id === selectedProfessional)
+  const displayProfessionals = selectedProfIds.length === 0
+    ? professionals
+    : professionals.filter(p => selectedProfIds.includes(p.id))
 
-  // Aplica filtro de profissional em TODAS as views (corrige bug semana/mes)
-  const appointments = selectedProfessional === 'all'
+  // Aplica filtro de profissional em TODAS as views
+  const appointments = selectedProfIds.length === 0
     ? localAppointments
-    : localAppointments.filter(a => a.professional_id === selectedProfessional)
+    : localAppointments.filter(a => selectedProfIds.includes(a.professional_id || ''))
 
-  const blocks = selectedProfessional === 'all'
+  const blocks = selectedProfIds.length === 0
     ? allBlocks
-    : allBlocks.filter(b => b.professional_id === selectedProfessional)
+    : allBlocks.filter(b => selectedProfIds.includes(b.professional_id))
 
   const COLOR_BLOCK: Record<string, { bg: string; text: string; border: string }> = {
     slate:  { bg: 'bg-slate-200',  text: 'text-slate-700',  border: 'border-slate-400' },
