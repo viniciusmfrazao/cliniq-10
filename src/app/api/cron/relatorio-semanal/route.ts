@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
   for (const auto of automations) {
     // Janela de hora: compara só a hora, ignora os minutos
     // ex: configurado '10:00' aceita execucoes entre 10:00 e 10:59
-    const configHour = parseInt(String(auto.relatorio_hora || '10:00').split(':')[0], 10)
-    if (currentHour !== configHour) {
+    const configHour = parseInt(String(auto.relatorio_hora ?? '10:00').split(':')[0], 10)
+    if (isNaN(configHour) || currentHour !== configHour) {
       results.push({ clinic_id: auto.clinic_id, skipped: 'hour_mismatch', expected: configHour, got: currentHour })
       continue
     }
@@ -94,8 +94,8 @@ export async function GET(req: NextRequest) {
     const { data: entradas } = await svc
       .from('entradas').select('valor_bruto')
       .eq('clinic_id', clinicId)
-      .gte('created_at', startDate.toISOString())
-      .lt('created_at', endDate.toISOString())
+      .gte('data_venda', startDate.toISOString().slice(0, 10))
+      .lte('data_venda', endDate.toISOString().slice(0, 10))
 
     const faturamento = (entradas || []).reduce((s: number, e: any) => s + Number(e.valor_bruto || 0), 0)
     const ticketMedio = realizados > 0 ? faturamento / realizados : 0
