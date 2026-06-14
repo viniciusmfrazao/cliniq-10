@@ -43,7 +43,8 @@ function SidebarContent({ pathname, onClose }: { pathname: string; onClose?: () 
   )
 }
 
-const CLINIKE_DASHBOARD = '/dashboard'
+// admin=0 bypassa o redirect automático para /admin no dashboard layout
+const CLINIKE_DASHBOARD = '/dashboard?admin=0'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false)
