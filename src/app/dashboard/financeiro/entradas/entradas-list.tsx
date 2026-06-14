@@ -5,7 +5,7 @@ import Icon from '@/components/ui/Icon'
 import { todayBR } from '@/lib/datetime'
 import { useToast } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
-import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 type Entrada = {
   id: string
