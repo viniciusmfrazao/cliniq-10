@@ -41,6 +41,40 @@ export default function AgendaFilters({ currentDate, currentView, currentProfess
 
   const allSelected = selectedProfIds.length === 0
 
+  // Persistir filtros no localStorage
+  const STORAGE_KEY = 'agenda_filters'
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    const params = new URLSearchParams(window.location.search)
+    const hasProfParam = params.has('professional')
+    const hasViewParam = params.has('view')
+    const hasStatusParam = params.has('status')
+    // Só restaura se não há nenhum parâmetro na URL (navegação limpa)
+    if (!hasProfParam && !hasViewParam && !hasStatusParam && saved) {
+      try {
+        const { professional, view, status } = JSON.parse(saved)
+        const updates: Record<string, string> = {}
+        if (professional && professional !== 'all') updates.professional = professional
+        if (view && view !== 'day') updates.view = view
+        if (status && status !== 'all') updates.status = status
+        if (Object.keys(updates).length > 0) {
+          const newParams = new URLSearchParams(params.toString())
+          Object.entries(updates).forEach(([k, v]) => newParams.set(k, v))
+          router.replace(`/dashboard/agenda?${newParams.toString()}`)
+        }
+      } catch {}
+    }
+  }, []) // eslint-disable-line
+
+  // Salvar filtros sempre que mudarem
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      professional: currentProfessional,
+      view: currentView,
+      status: currentStatus,
+    }))
+  }, [currentProfessional, currentView, currentStatus])
+
   function toggleProf(id: string) {
     let next: string[]
     if (selectedProfIds.includes(id)) {
