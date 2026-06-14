@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useTransition } from 'react'
 import Icon from '@/components/ui/Icon'
-import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
 import { useToast } from '@/components/ui/Toast'
+import { createClient } from '@/lib/supabase/client'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 type Entrada = {
   id: string
@@ -32,25 +32,52 @@ function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
 
+// Primeiro e último dia do mês atual
+function primeiroDiaMes() {
+  return todayBR().slice(0, 7) + '-01'
+}
+function ultimoDiaMes() {
+  const hoje = todayBR()
+  const [y, m] = hoje.slice(0, 7).split('-').map(Number)
+  const ultimo = new Date(y, m, 0).getDate()
+  return `${y}-${String(m).padStart(2,'0')}-${String(ultimo).padStart(2,'0')}`
+}
+
 export default function EntradasList({ entradas, clinicId }: Props) {
   const [list, setList] = useState(entradas)
   const [search, setSearch] = useState('')
-  const [mes, setMes] = useState(todayBR().slice(0, 7))
+  const [dataInicio, setDataInicio] = useState(primeiroDiaMes())
+  const [dataFim, setDataFim] = useState(ultimoDiaMes())
   const [deleting, setDeleting] = useState<string | null>(null)
-  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const supabase = createClient()
   const toast = useToast()
 
-  const filteredList = list.filter(e => {
-    const matchSearch = !search || 
-      e.paciente_nome?.toLowerCase().includes(search.toLowerCase()) ||
-      e.procedimento_nome?.toLowerCase().includes(search.toLowerCase())
-    const matchMes = !mes || e.data_venda?.startsWith(mes)
-    return matchSearch && matchMes
-  })
+  async function buscar() {
+    startTransition(async () => {
+      const params = new URLSearchParams()
+      if (dataInicio) params.set('data_inicio', dataInicio)
+      if (dataFim) params.set('data_fim', dataFim)
+      const res = await fetch(`/api/financeiro/entradas?${params}`)
+      if (!res.ok) {
+        toast.error('Erro ao buscar entradas')
+        return
+      }
+      const { data } = await res.json()
+      setList(data || [])
+    })
+  }
+
+  const filteredList = list.filter(e =>
+    !search ||
+    e.paciente_nome?.toLowerCase().includes(search.toLowerCase()) ||
+    e.procedimento_nome?.toLowerCase().includes(search.toLowerCase()) ||
+    e.profissional_nome?.toLowerCase().includes(search.toLowerCase())
+  )
 
   const totalBruto = filteredList.reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
   const totalLiquido = filteredList.reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
+  const totalTaxas = totalBruto - totalLiquido
 
   const porProcedimento = filteredList.reduce((acc, e) => {
     const proc = e.procedimento_nome || 'Sem procedimento'
@@ -61,10 +88,6 @@ export default function EntradasList({ entradas, clinicId }: Props) {
   }, {} as Record<string, { valor: number; qtd: number }>)
 
   async function handleDelete(id: string) {
-    // Padrao optimistic-undo:
-    // 1) Remove visualmente AGORA (UX rapida)
-    // 2) Mostra toast com botao "Desfazer" por 5s
-    // 3) Se nao desfizer no prazo, manda o DELETE pro banco
     const removed = list.find(e => e.id === id)
     if (!removed) return
 
@@ -73,7 +96,7 @@ export default function EntradasList({ entradas, clinicId }: Props) {
     let undone = false
     toast.undo({
       title: 'Entrada removida',
-      description: 'Voce tem 5s pra desfazer',
+      description: 'Você tem 5s para desfazer',
       duration: 5000,
       onUndo: () => {
         undone = true
@@ -89,7 +112,6 @@ export default function EntradasList({ entradas, clinicId }: Props) {
       const { error } = await supabase.from('entradas').delete().eq('id', id)
       setDeleting(null)
       if (error) {
-        // restaura e avisa
         setList(prev => [...prev, removed].sort(
           (a, b) => (b.data_venda || '').localeCompare(a.data_venda || '')
         ))
@@ -100,25 +122,52 @@ export default function EntradasList({ entradas, clinicId }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col md:flex-row gap-3">
-        <div className="flex-1 relative">
-          <Icon name="search" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar por paciente ou procedimento..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-          />
+      {/* Filtros */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+        <div className="flex flex-col md:flex-row gap-3">
+          {/* Busca textual */}
+          <div className="flex-1 relative">
+            <Icon name="search" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar por paciente, procedimento ou profissional..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"
+            />
+          </div>
+
+          {/* Filtro de período */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+              <Icon name="calendar" className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={e => setDataInicio(e.target.value)}
+                className="bg-transparent text-sm text-slate-700 focus:outline-none w-32"
+              />
+              <span className="text-slate-400 text-sm">até</span>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={e => setDataFim(e.target.value)}
+                className="bg-transparent text-sm text-slate-700 focus:outline-none w-32"
+              />
+            </div>
+            <button
+              onClick={buscar}
+              disabled={isPending}
+              className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition disabled:opacity-60 text-sm"
+            >
+              {isPending ? <LoadingSpinner size="sm" /> : <Icon name="search" className="w-4 h-4" />}
+              Filtrar
+            </button>
+          </div>
         </div>
-        <input
-          type="month"
-          value={mes}
-          onChange={e => setMes(e.target.value)}
-          className="px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-        />
       </div>
 
+      {/* Totais */}
       <div className="flex flex-wrap gap-3 text-sm">
         <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl">
           <span className="font-medium">Total Bruto:</span> {fmt(totalBruto)}
@@ -126,11 +175,17 @@ export default function EntradasList({ entradas, clinicId }: Props) {
         <div className="bg-violet-50 text-violet-700 px-4 py-2 rounded-xl">
           <span className="font-medium">Total Líquido:</span> {fmt(totalLiquido)}
         </div>
+        {totalTaxas > 0 && (
+          <div className="bg-rose-50 text-rose-700 px-4 py-2 rounded-xl">
+            <span className="font-medium">Taxas:</span> {fmt(totalTaxas)}
+          </div>
+        )}
         <div className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl">
           <span className="font-medium">{filteredList.length}</span> registros
         </div>
       </div>
 
+      {/* Por procedimento */}
       {Object.keys(porProcedimento).length > 1 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
           <h4 className="font-semibold text-slate-700 mb-3 text-sm flex items-center gap-2">
@@ -152,11 +207,14 @@ export default function EntradasList({ entradas, clinicId }: Props) {
         </div>
       )}
 
+      {/* Lista */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         {/* Mobile: cards */}
         <div className="md:hidden divide-y divide-slate-100">
           {filteredList.length === 0 ? (
-            <div className="px-4 py-12 text-center text-slate-500">Nenhuma entrada encontrada</div>
+            <div className="px-4 py-12 text-center text-slate-500">
+              {isPending ? 'Buscando...' : 'Nenhuma entrada encontrada'}
+            </div>
           ) : filteredList.map(e => (
             <div key={e.id} className="p-4">
               <div className="flex items-start justify-between">
@@ -164,8 +222,13 @@ export default function EntradasList({ entradas, clinicId }: Props) {
                   <p className="font-semibold text-slate-900">{e.paciente_nome || '-'}</p>
                   <p className="text-sm text-slate-500 truncate mt-0.5">{e.procedimento_nome || '-'}</p>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className="text-xs text-slate-400">{new Date(e.data_venda).toLocaleDateString('pt-BR')}</span>
+                    <span className="text-xs text-slate-400">
+                      {new Date(e.data_venda + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    </span>
                     <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">{e.forma_pagamento}</span>
+                    {e.profissional_nome && (
+                      <span className="text-xs text-slate-400">{e.profissional_nome}</span>
+                    )}
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0 ml-3">
@@ -200,14 +263,14 @@ export default function EntradasList({ entradas, clinicId }: Props) {
               {filteredList.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
-                    Nenhuma entrada encontrada
+                    {isPending ? 'Buscando...' : 'Nenhuma entrada encontrada'}
                   </td>
                 </tr>
               ) : (
                 filteredList.map(e => (
                   <tr key={e.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 text-sm">
-                      {new Date(e.data_venda).toLocaleDateString('pt-BR')}
+                      {new Date(e.data_venda + 'T12:00:00').toLocaleDateString('pt-BR')}
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-slate-900">
                       {e.paciente_nome || '-'}
@@ -230,7 +293,7 @@ export default function EntradasList({ entradas, clinicId }: Props) {
                     <td className="px-4 py-3 text-sm text-right">
                       <span className="text-emerald-600 font-medium">{fmt(e.valor_liquido)}</span>
                       {e.taxa_percentual > 0 && (
-                        <span className="text-xs text-slate-400 ml-1">(-{e.taxa_percentual}%)</span>
+                        <span className="text-xs text-slate-400 ml-1">(-{(e.taxa_percentual * 100).toFixed(1)}%)</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">

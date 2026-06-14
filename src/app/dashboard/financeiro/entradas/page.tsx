@@ -5,24 +5,32 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import EntradasList from './entradas-list'
 
+export const dynamic = 'force-dynamic'
+
 export default async function EntradasPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
+  if (!user) redirect('/login')
+  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user.id).single()
   if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
   const clinicId = userData?.clinic_id
+
+  // Carrega o mês atual por padrão
+  const hoje = new Date()
+  const primeiroDia = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-01`
+  const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0)
+  const ultimoDiaStr = `${ultimoDia.getFullYear()}-${String(ultimoDia.getMonth()+1).padStart(2,'0')}-${String(ultimoDia.getDate()).padStart(2,'0')}`
 
   const { data: entradas } = await supabase
     .from('entradas')
     .select('*')
     .eq('clinic_id', clinicId)
+    .gte('data_venda', primeiroDia)
+    .lte('data_venda', ultimoDiaStr)
     .order('data_venda', { ascending: false })
-    .limit(100)
 
   const pacientes = await getAllPatients<{ id: string; name: string }>(
-    supabase,
-    clinicId,
-    'id, name'
+    supabase, clinicId, 'id, name'
   )
 
   const { data: procedimentos } = await supabase
@@ -60,7 +68,7 @@ export default async function EntradasPage() {
         </Link>
       </div>
 
-      <EntradasList 
+      <EntradasList
         entradas={entradas || []}
         pacientes={pacientes || []}
         procedimentos={procedimentos || []}
