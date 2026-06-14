@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 
 // DELETE - Desativar membro da equipe (soft delete para manter histórico)
 export async function DELETE(
@@ -125,6 +126,12 @@ export async function PATCH(
       .eq('clinic_id', currentUser!.clinic_id)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+    if (updateData.name) {
+      revalidatePath('/dashboard/agenda')
+      revalidatePath('/dashboard/equipe')
+    }
+
     return NextResponse.json({ success: true })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
