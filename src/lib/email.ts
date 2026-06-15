@@ -1,7 +1,5 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const FROM = 'Clinike <noreply@clinike.com.br>'
 const APP_URL = 'https://app.clinike.com.br'
 
@@ -116,6 +114,12 @@ export async function sendWelcomeEmail({
   </table>
 </body>
 </html>`
+
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY não configurada — email de boas-vindas não enviado')
+    return null
+  }
+  const resend = new Resend(process.env.RESEND_API_KEY)
 
   return resend.emails.send({
     from: FROM,
