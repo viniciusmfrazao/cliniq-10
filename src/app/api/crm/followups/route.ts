@@ -72,8 +72,14 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Atualizar next_contact_at do lead
-  await supabase.from('leads').update({ next_contact_at: scheduled_at }).eq('id', lead_id)
+  // Atualizar next_contact_at e pausar Eva automática até o horário do followup
+  // Motivo: se a equipe agendou para falar com o lead, a Eva não deve falar antes
+  // eva_pause_until = horário do followup manual (o cron já respeita esse campo)
+  await supabase.from('leads').update({
+    next_contact_at: scheduled_at,
+    eva_pause_until: scheduled_at,
+    eva_next_followup_at: null, // cancela fila automática da Eva
+  }).eq('id', lead_id)
 
   return NextResponse.json({ ok: true, data })
 }
@@ -110,8 +116,15 @@ export async function PATCH(req: NextRequest) {
       followup_id: followup.id,
     })
 
-    // Atualizar last_contact_at do lead
-    await supabase.from('leads').update({ last_contact_at: new Date().toISOString() }).eq('id', followup.lead_id)
+    // Atualizar last_contact_at e liberar Eva para o próximo ciclo de followup
+    // Agenda próximo followup automático da Eva daqui a 4h
+    const evaNextAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString()
+    await supabase.from('leads').update({
+      last_contact_at: new Date().toISOString(),
+      eva_pause_until: null,            // libera Eva
+      eva_next_followup_at: evaNextAt,  // recomeça o ciclo a partir de agora
+      eva_followup_count: 0,            // zera contagem (humano já fez contato)
+    }).eq('id', followup.lead_id)
   }
 
   return NextResponse.json({ ok: true })
