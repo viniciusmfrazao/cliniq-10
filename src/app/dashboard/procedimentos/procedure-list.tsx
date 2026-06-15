@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import ProcedureForm from './procedure-form'
+import ResultadosEvaTab from './ResultadosEvaTab'
 
 type Professional = { id: string; name: string; role?: string }
 
@@ -26,13 +27,15 @@ type Props = {
   professionals: Professional[]
   clinicId: string
   isAdmin: boolean
+  hasEva?: boolean
 }
 
-export default function ProcedureList({ procedures, professionals, clinicId, isAdmin }: Props) {
+export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [deleting, setDeleting] = useState<string | null>(null)
   const [editing, setEditing] = useState<Procedure | null>(null)
+  const [activeTab, setActiveTab] = useState<'dados' | 'resultados'>('dados')
 
   async function handleDelete(id: string) {
     setDeleting(id)
@@ -199,26 +202,64 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-100 p-4 flex items-center justify-between">
+            {/* Header */}
+            <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 p-4 flex items-center justify-between z-10">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Editar procedimento</h2>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Editar procedimento</h2>
                 <p className="text-xs text-slate-500">{editing.name}</p>
               </div>
               <button
-                onClick={() => setEditing(null)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
+                onClick={() => { setEditing(null); setActiveTab('dados') }}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
               >
                 <Icon name="x" className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Abas — só mostra Resultados EVA se a clínica tiver o módulo */}
+            {hasEva && (
+              <div className="flex border-b border-slate-100 dark:border-slate-700 px-4">
+                <button
+                  onClick={() => setActiveTab('dados')}
+                  className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'dados'
+                      ? 'border-violet-500 text-violet-600 dark:text-violet-400'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  Dados
+                </button>
+                <button
+                  onClick={() => setActiveTab('resultados')}
+                  className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                    activeTab === 'resultados'
+                      ? 'border-violet-500 text-violet-600 dark:text-violet-400'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  <Icon name="robot" className="w-4 h-4" />
+                  Resultados EVA
+                </button>
+              </div>
+            )}
+
+            {/* Conteúdo */}
             <div className="p-4">
-              <ProcedureForm
-                clinicId={clinicId}
-                professionals={professionals}
-                procedure={editing}
-                onSaved={() => setEditing(null)}
-                onCancel={() => setEditing(null)}
-              />
+              {activeTab === 'dados' ? (
+                <ProcedureForm
+                  clinicId={clinicId}
+                  professionals={professionals}
+                  procedure={editing}
+                  onSaved={() => { setEditing(null); setActiveTab('dados') }}
+                  onCancel={() => { setEditing(null); setActiveTab('dados') }}
+                />
+              ) : (
+                <ResultadosEvaTab
+                  clinicId={clinicId}
+                  procedureId={editing.id}
+                  procedureName={editing.name}
+                />
+              )}
             </div>
           </div>
         </div>

@@ -23,7 +23,7 @@ export default async function ProcedimentosPage() {
 
   if (!userData?.clinic_id) redirect('/login')
 
-  const [proceduresResult, professionalsResult] = await Promise.all([
+  const [proceduresResult, professionalsResult, clinicResult] = await Promise.all([
     supabase
       .from('procedures')
       .select('*')
@@ -35,6 +35,11 @@ export default async function ProcedimentosPage() {
       .select('id, name, role, professional_role, active')
       .eq('clinic_id', userData.clinic_id)
       .order('name'),
+    supabase
+      .from('clinics')
+      .select('settings')
+      .eq('id', userData.clinic_id)
+      .single(),
   ])
 
   const procedures = proceduresResult.data || []
@@ -43,6 +48,8 @@ export default async function ProcedimentosPage() {
   )
 
   const isAdmin = userData.role === 'admin' || userData.role === 'super_admin'
+  const activeModules: string[] = clinicResult.data?.settings?.active_modules || []
+  const hasEva = activeModules.includes('eva_ai')
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -82,6 +89,7 @@ export default async function ProcedimentosPage() {
           professionals={professionals}
           clinicId={userData.clinic_id}
           isAdmin={isAdmin}
+          hasEva={hasEva}
         />
       </div>
     </div>
