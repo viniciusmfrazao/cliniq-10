@@ -11,7 +11,7 @@ import { logEva } from '@/lib/eva-logger'
  * isFollowup=true pra Eva gerar uma mensagem proativa de retomada.
  *
  * Tempos (5 estágios):
- *   t0 (paciente parou de responder) → +2h cron envia #1 (count vira 1)
+ *   t0 (paciente parou de responder) → +4h cron envia #1 (count vira 1)
  *   +24h depois → cron envia #2 (count vira 2)
  *   +48h depois → cron envia #3 (count vira 3)
  *   +5d depois → cron envia #4 (count vira 4)
@@ -316,15 +316,15 @@ export async function GET(req: NextRequest) {
     //   - OU o cliente respondeu DEPOIS da última mensagem da Eva (no estágio > 0)
     //
     // Isso evita o caso: cliente fala → Eva responde → cron dispara follow-up
-    // 2h depois mesmo com a conversa em andamento no mesmo dia.
+    // 4h depois mesmo com a conversa em andamento no mesmo dia.
     const followupCount = lead.eva_followup_count ?? 0
     const lastAssistantMsg = lastAssistantMap.get(`${lead.clinic_id}:${lead.phone}`)
     const lastUserMsg = lastUserMap.get(`${lead.clinic_id}:${lead.phone}`)
 
     // Se o cliente enviou mensagem há menos de 3h → conversa ativa, não disparar
-    const CONVERSA_ATIVA_MS = 3 * 60 * 60 * 1000
+    const CONVERSA_ATIVA_MS = 4 * 60 * 60 * 1000
     if (lastUserMsg && (Date.now() - new Date(lastUserMsg).getTime()) < CONVERSA_ATIVA_MS) {
-      // Reagenda o follow-up para daqui a 2h a partir da última mensagem do cliente
+      // Reagenda o follow-up para daqui a 4h a partir da última mensagem do cliente
       if (!dryRun) {
         const novoNextAt = new Date(new Date(lastUserMsg).getTime() + CONVERSA_ATIVA_MS).toISOString()
         await svc.from('leads').update({ eva_next_followup_at: novoNextAt }).eq('id', lead.id)
