@@ -2,13 +2,24 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
-const AUTH_COOKIE_NAMES = [
-  'sb-yqrjbyaucimvmzpfipgs-auth-token',
-  'clinike-auth-token',
-]
+// Extrai o project ref da URL do Supabase (funciona em prod e staging)
+// Ex: https://yqrjbyaucimvmzpfipgs.supabase.co → yqrjbyaucimvmzpfipgs
+function getProjectRef(): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const match = url.match(/https:\/\/([^.]+)\.supabase\.co/)
+  return match?.[1] ?? 'yqrjbyaucimvmzpfipgs'
+}
+
+function getAuthCookieNames(): string[] {
+  return [
+    `sb-${getProjectRef()}-auth-token`,
+    'clinike-auth-token',
+  ]
+}
 
 export async function createClient() {
   const cookieStore = await cookies()
+  const standardCookieName = `sb-${getProjectRef()}-auth-token`
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,11 +28,11 @@ export async function createClient() {
       cookies: {
         getAll() {
           const all = cookieStore.getAll()
-          const hasStandard = all.some(c => c.name === 'sb-yqrjbyaucimvmzpfipgs-auth-token')
+          const hasStandard = all.some(c => c.name === standardCookieName)
           if (!hasStandard) {
-            const alt = all.find(c => AUTH_COOKIE_NAMES.includes(c.name))
+            const alt = all.find(c => getAuthCookieNames().includes(c.name))
             if (alt) {
-              return [...all, { name: 'sb-yqrjbyaucimvmzpfipgs-auth-token', value: alt.value }]
+              return [...all, { name: standardCookieName, value: alt.value }]
             }
           }
           return all
