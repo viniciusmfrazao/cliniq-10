@@ -339,8 +339,9 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Para estágios > 0: se Eva falou depois do cliente → cliente não respondeu o follow-up anterior
-    if (followupCount > 0) {
+    // Para todos os estágios: se Eva falou depois do cliente → cliente não respondeu a última mensagem
+    // Inclui count=0: a Eva já respondeu a primeira msg do lead e ele sumiu — não disparar sem ele responder
+    if (followupCount >= 0) {
       if (
         lastAssistantMsg &&
         (!lastUserMsg || lastUserMsg <= lastAssistantMsg)
