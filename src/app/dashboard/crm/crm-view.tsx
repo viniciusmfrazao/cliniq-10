@@ -262,21 +262,21 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     // Followup buckets (Eva aguardando resposta) — 5 estagios
     followupTotal: leads.filter(isInFollowup).length,
     followup2h: leads.filter(l => followupBucket(l) === 'fu_2h').length,
-    followup24h: leads.filter(l => followupBucket(l) === 'fu_24h').length,
+    followup4h: leads.filter(l => followupBucket(l) === 'fu_4h').length,
     followup48h: leads.filter(l => followupBucket(l) === 'fu_48h').length,
     followup5d: leads.filter(l => followupBucket(l) === 'fu_5d').length,
     followup10d: leads.filter(l => followupBucket(l) === 'fu_10d').length,
   }
 
   const isFollowupFilter = (f: string) =>
-    f === 'followup_all' || f === 'fu_2h' || f === 'fu_24h' || f === 'fu_48h' || f === 'fu_5d' || f === 'fu_10d'
+    f === 'followup_all' || f === 'fu_2h' || f === 'fu_4h' || f === 'fu_48h' || f === 'fu_5d' || f === 'fu_10d'
 
   // Filtrar leads — alem dos status, tem filtros especiais:
   //   'human_review'        -> leads escalados pra atendimento humano
   //   'hot' / 'warm' / 'cold' -> filtra por temperatura (ai_priority)
   //   'pending_contact'      -> leads com next_contact_at vencido
   //   'followup_all'         -> qualquer lead em followup ativo
-  //   'fu_2h' / 'fu_24h' / 'fu_48h' / 'fu_5d' / 'fu_10d' -> bucket especifico
+  //   'fu_2h' / 'fu_4h' / 'fu_48h' / 'fu_5d' / 'fu_10d' -> bucket especifico
 
   // Filtro global de linha WhatsApp (vem da sidebar)
   // CRM mostra todos os leads independente da linha WhatsApp selecionada
@@ -605,11 +605,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
               disabled={stats.followup2h === 0}
             />
             <FollowupChip
-              active={filter === 'fu_24h'}
-              onClick={() => setFilter(filter === 'fu_24h' ? 'followup_all' : 'fu_24h')}
-              label={`🟠 24h (${stats.followup24h})`}
+              active={filter === 'fu_4h'}
+              onClick={() => setFilter(filter === 'fu_4h' ? 'followup_all' : 'fu_4h')}
+              label={`🟠 4h (${stats.followup4h})`}
               tone="orange"
-              disabled={stats.followup24h === 0}
+              disabled={stats.followup4h === 0}
             />
             <FollowupChip
               active={filter === 'fu_48h'}
@@ -681,7 +681,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
             <optgroup label="Follow-up (Eva aguardando)">
               <option value="followup_all">Todos em follow-up ({stats.followupTotal})</option>
               {stats.followup2h > 0 && <option value="fu_2h">⏰ Aguardando 2h ({stats.followup2h})</option>}
-              {stats.followup24h > 0 && <option value="fu_24h">⏰ Aguardando 24h ({stats.followup24h})</option>}
+              {stats.followup4h > 0 && <option value="fu_4h">⏰ Aguardando 4h ({stats.followup4h})</option>}
               {stats.followup48h > 0 && <option value="fu_48h">⏰ Aguardando 48h ({stats.followup48h})</option>}
               {stats.followup5d > 0 && <option value="fu_5d">⏰ Aguardando 5 dias ({stats.followup5d})</option>}
               {stats.followup10d > 0 && <option value="fu_10d">⏰ Última chance · 10d ({stats.followup10d})</option>}
