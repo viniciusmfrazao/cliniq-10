@@ -243,7 +243,7 @@ async function ensureLead(payload: IncomingPayload, ctx: DonnaContext): Promise<
 // Defaults caso a clinica nao customize em /dashboard/config
 // (count=N significa "ja mandou N follow-ups; em quanto tempo manda o proximo")
 const DEFAULT_FOLLOWUP_DELAYS_MS: Record<number, number> = {
-  0: 2 * 60 * 60 * 1000,        // 2h
+  0: 4 * 60 * 60 * 1000,        // 4h
   1: 24 * 60 * 60 * 1000,       // 24h
   2: 48 * 60 * 60 * 1000,       // 48h
   3: 5 * 24 * 60 * 60 * 1000,   // 5 dias
@@ -282,7 +282,7 @@ function resolveFollowupDelays(
 // Mantido por compatibilidade com codigo abaixo que usa FOLLOWUP_DELAYS_MS
 // (sera substituido por resolveFollowupDelays no scope de cada chamada)
 const FOLLOWUP_DELAYS_MS: Record<number, number> = {
-  0: 2 * 60 * 60 * 1000,
+  0: 4 * 60 * 60 * 1000,
   1: 24 * 60 * 60 * 1000,
   2: 48 * 60 * 60 * 1000,
   3: 5 * 24 * 60 * 60 * 1000,
@@ -317,7 +317,7 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
     // agenda o próximo (ou marca lost se já chegou no 5º estagio).
     const newCount = ((ctx.lead as any).eva_followup_count ?? 0) + 1;
     if (newCount >= 6) {
-      // Esgotou tentativas (mandou 5 follow-ups: 2h, 24h, 48h, 5d, 10d)
+      // Esgotou tentativas (mandou 5 follow-ups: 4h, 24h, 48h, 5d, 10d)
       await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
         method: 'PATCH',
         headers: {
@@ -353,7 +353,7 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
   }
 
   // Caso normal: paciente respondeu → reseta contagem e agenda primeiro
-  // follow-up pra daqui a 2h (ou o que a clinica configurou).
+  // follow-up pra daqui a 4h (ou o que a clinica configurou).
   const delays = resolveFollowupDelays((ctx.clinic.settings as any)?.eva ?? null);
   const delay = delays[0];
   await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
