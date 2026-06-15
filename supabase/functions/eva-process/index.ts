@@ -36,7 +36,7 @@ import { sanitizeWhatsapp, fetchJson, parseData } from './utils.ts';
 import { buildSystemPrompt, TOOLS, EmotionalMemory } from './prompt.ts';
 import { runConversation, MODEL_PREMIUM } from './claude.ts';
 import type { ConversationStepLog } from './claude.ts';
-import { executeToolByName, criarAgendamento } from './tools.ts';
+import { executeToolByName, criarAgendamento, sendResultImages } from './tools.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -621,6 +621,7 @@ Deno.serve(async (req) => {
 
   const t0 = Date.now();
   const errors: string[] = [];
+  const imagesSentProcedures = new Set<string>(); // evita reenvio de imagens na mesma sessão
   let body: unknown = null;
   try {
     body = await req.json();
@@ -773,6 +774,15 @@ Deno.serve(async (req) => {
       );
       // Atualiza ctx.lead localmente para o prompt saber que já tem interesse
       if (ctx.lead) ctx.lead.interest = procDetectado.name;
+      // Galeria de resultados: enviar imagens do procedimento via Evolution
+      sendResultImages(
+        procDetectado.id,
+        procDetectado.name,
+        ctx,
+        payload,
+        { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY },
+        imagesSentProcedures,
+      ).catch(e => errors.push(`sendResultImages_camada0: ${e?.message ?? e}`));
     }
   }
 
@@ -935,6 +945,25 @@ Deno.serve(async (req) => {
       });
       if (name === 'criar_agendamento' && r.meta?.appointmentCreated === true) {
         appointmentCreated = true;
+      }
+      // Galeria de resultados: após registrar_interesse, enviar imagens do procedimento
+      if (name === 'registrar_interesse') {
+        const procNome = (input as any).procedimento ?? '';
+        const procEncontrado = ctx.procedures.find(p =>
+          p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') ===
+          procNome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') ||
+          p.name.toLowerCase().includes(procNome.toLowerCase())
+        );
+        if (procEncontrado?.id) {
+          sendResultImages(
+            procEncontrado.id,
+            procEncontrado.name,
+            ctx,
+            payload,
+            { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY },
+            imagesSentProcedures,
+          ).catch(e => errors.push(`sendResultImages_tool: ${e?.message ?? e}`));
+        }
       }
       return r.resultStr;
     },

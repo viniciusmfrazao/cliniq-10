@@ -620,6 +620,105 @@ export async function registrarInteresse(
   return `Interesse em "${procedimento}" registrado no CRM (prioridade: ${prioridade}). Continue a conversa naturalmente, sem mencionar registro/CRM. Conduza pra avaliacao se fizer sentido.`;
 }
 
+
+// ─── sendResultImages ──────────────────────────────────────────────────────
+//
+// Chamada APÓS registrar_interesse (tanto pela CAMADA 0 quanto pelo dispatcher).
+// Busca até N imagens ativas do procedimento e envia via Evolution API.
+// Idempotente: não reenvia se images_sent_procedures já contém o procedure_id.
+//
+export async function sendResultImages(
+  procedureId: string | null | undefined,
+  procedureName: string,
+  ctx: DonnaContext,
+  payload: IncomingPayload,
+  env: ToolEnv,
+  imagesSentProcedures: Set<string>,
+): Promise<void> {
+  // Sem procedure_id não conseguimos buscar as imagens
+  if (!procedureId) return;
+
+  // Já enviou imagens desse procedimento nessa sessão — não reenviar
+  if (imagesSentProcedures.has(procedureId)) return;
+
+  const ev = ctx.evolution;
+  if (!ev?.url || !ev?.master_key) return;
+
+  const instanceName =
+    (typeof payload.instance === 'string' && payload.instance.trim()) || ev.instance || '';
+  if (!instanceName) return;
+
+  try {
+    // 1) Verificar se a clínica tem o toggle ativo
+    const autoUrl = `${env.supabaseUrl}/rest/v1/clinic_automations?clinic_id=eq.${payload.clinicId}&select=eva_send_result_images,eva_max_result_images`;
+    const autoRes = await fetchJson<{ eva_send_result_images: boolean; eva_max_result_images: number }[]>(autoUrl, {
+      method: 'GET',
+      headers: { apikey: env.serviceKey, Authorization: `Bearer ${env.serviceKey}` },
+    });
+    if (!autoRes.ok || !autoRes.data?.length) return;
+    const automations = autoRes.data[0];
+    if (!automations.eva_send_result_images) return;
+    const maxImages = Math.min(automations.eva_max_result_images ?? 3, 6);
+
+    // 2) Buscar imagens ativas do procedimento (ordenadas por display_order)
+    const imgUrl = `${env.supabaseUrl}/rest/v1/procedure_result_images?clinic_id=eq.${payload.clinicId}&procedure_id=eq.${procedureId}&active=eq.true&lgpd_consent=eq.true&order=display_order.asc&limit=${maxImages}&select=image_url,caption`;
+    const imgRes = await fetchJson<{ image_url: string; caption: string | null }[]>(imgUrl, {
+      method: 'GET',
+      headers: { apikey: env.serviceKey, Authorization: `Bearer ${env.serviceKey}` },
+    });
+    if (!imgRes.ok || !imgRes.data?.length) return;
+
+    const images = imgRes.data;
+
+    // 3) Enviar cada imagem via Evolution API sendMedia
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      const caption = i === 0
+        ? (img.caption || `✨ Resultado real de ${procedureName}`)
+        : (img.caption || '');
+
+      await fetchJson(`${ev.url}/message/sendMedia/${encodeURIComponent(instanceName)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: ev.master_key,
+        },
+        body: JSON.stringify({
+          number: payload.phone,
+          mediatype: 'image',
+          mimetype: 'image/jpeg',
+          media: img.image_url,
+          caption,
+        }),
+      });
+
+      // Pequeno delay entre imagens para não sobrecarregar
+      if (i < images.length - 1) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+
+    // 4) Marcar como enviado para evitar reenvio na mesma sessão
+    imagesSentProcedures.add(procedureId);
+
+    console.log(JSON.stringify({
+      evt: 'result_images_sent',
+      clinic: payload.clinicId,
+      procedure_id: procedureId,
+      procedure_name: procedureName,
+      count: images.length,
+    }));
+  } catch (e) {
+    // Fail silencioso — não interrompe o fluxo principal da Eva
+    console.warn(JSON.stringify({
+      evt: 'result_images_error',
+      clinic: payload.clinicId,
+      procedure_id: procedureId,
+      error: e instanceof Error ? e.message : String(e),
+    }));
+  }
+}
+
 // ─── informar_valor_avista ─────────────────────────────────────────────────
 
 /**
