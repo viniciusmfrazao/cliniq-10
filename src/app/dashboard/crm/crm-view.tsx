@@ -1339,34 +1339,6 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
           )}
         </div>
 
-        {/* Temperatura manual */}
-        <div className="mx-4 mt-3 p-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl border border-slate-200 dark:border-slate-600">
-          <p className="text-xs text-slate-500 mb-2 font-medium">🌡️ Temperatura:</p>
-          <div className="flex gap-2">
-            {(['hot', 'warm', 'cold'] as const).map(t => {
-              const cfg = AI_PRIORITY_CONFIG[t]
-              const isActive = lead.ai_priority === t
-              return (
-                <button key={t}
-                  onClick={async () => {
-                    const newPriority = isActive ? null : t
-                    await supabase.from('leads').update({ ai_priority: newPriority }).eq('id', lead.id)
-                    onUpdate()
-                  }}
-                  className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition border ${isActive ? cfg.color + ' border-transparent ring-2 ring-offset-1 ' + (t === 'hot' ? 'ring-red-400' : t === 'warm' ? 'ring-amber-400' : 'ring-blue-400') : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}>
-                  {t === 'hot' ? '🔥 Quente' : t === 'warm' ? '☀️ Morno' : '❄️ Frio'}
-                </button>
-              )
-            })}
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1.5">
-            {lead.ai_priority ? '✏️ Definido manualmente · clique para remover' : `ℹ️ Automático — ${calcTemperatura(lead) === 'hot' ? 'ativo recentemente' : calcTemperatura(lead) === 'warm' ? 'algum tempo sem contato' : 'muito tempo sem contato'}`}
-          </p>
-        </div>
-
-        {/* Follow-ups e Histórico de Contatos */}
-        <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} />
-
         {/* Tabs */}
         <div className="flex border-b border-slate-100">
           <button
@@ -1386,6 +1358,34 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {tab === 'info' ? (
             <>
+              {/* Temperatura manual */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl border border-slate-200 dark:border-slate-600">
+                <p className="text-xs text-slate-500 mb-2 font-medium">🌡️ Temperatura:</p>
+                <div className="flex gap-2">
+                  {(['hot', 'warm', 'cold'] as const).map(t => {
+                    const cfg = AI_PRIORITY_CONFIG[t]
+                    const isActive = lead.ai_priority === t
+                    return (
+                      <button key={t}
+                        onClick={async () => {
+                          const newPriority = isActive ? null : t
+                          await supabase.from('leads').update({ ai_priority: newPriority }).eq('id', lead.id)
+                          onUpdate()
+                        }}
+                        className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition border ${isActive ? cfg.color + ' border-transparent ring-2 ring-offset-1 ' + (t === 'hot' ? 'ring-red-400' : t === 'warm' ? 'ring-amber-400' : 'ring-blue-400') : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}>
+                        {t === 'hot' ? '🔥 Quente' : t === 'warm' ? '☀️ Morno' : '❄️ Frio'}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  {lead.ai_priority ? '✏️ Definido manualmente · clique para remover' : `ℹ️ Automático — ${calcTemperatura(lead) === 'hot' ? 'ativo recentemente' : calcTemperatura(lead) === 'warm' ? 'algum tempo sem contato' : 'muito tempo sem contato'}`}
+                </p>
+              </div>
+
+              {/* Follow-ups e Histórico de Contatos */}
+              <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} />
+
               {/* Contato Rápido */}
               <div className="flex gap-2">
                 {lead.phone && (
@@ -1415,18 +1415,36 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
                 )}
               </div>
 
-              {/* Status */}
+              {/* Status — coluna do Kanban */}
               <div>
-                <label className="label">Status</label>
-                <select
-                  className="input"
-                  value={form.status}
-                  onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
-                >
-                  {stages.map(s => (
-                    <option key={s.id} value={s.id}>{s.label}</option>
-                  ))}
-                </select>
+                <label className="label">Coluna do CRM</label>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {stages.map(s => {
+                    const isActive = form.status === s.id
+                    const colorMap: Record<string, string> = {
+                      slate:   isActive ? 'bg-slate-600 text-white border-slate-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                      blue:    isActive ? 'bg-blue-500 text-white border-blue-500'   : 'border-blue-200 text-blue-600 hover:bg-blue-50',
+                      amber:   isActive ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-200 text-amber-600 hover:bg-amber-50',
+                      emerald: isActive ? 'bg-emerald-500 text-white border-emerald-500' : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50',
+                      red:     isActive ? 'bg-red-500 text-white border-red-500'     : 'border-red-200 text-red-600 hover:bg-red-50',
+                    }
+                    const iconMap: Record<string, string> = {
+                      new: '✨', contacted: '💬', scheduled: '📅', converted: '✅', lost: '❌',
+                    }
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, status: s.id }))}
+                        className={`w-full text-left px-3 py-2 rounded-lg border font-medium text-sm transition flex items-center gap-2 ${colorMap[s.color] ?? ''}`}
+                      >
+                        <span>{iconMap[s.id]}</span>
+                        <span>{s.label}</span>
+                        {isActive && <span className="ml-auto text-xs opacity-75">← coluna atual</span>}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               {form.status === 'lost' && (
