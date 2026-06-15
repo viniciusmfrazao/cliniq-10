@@ -20,6 +20,9 @@ type Contact = {
 type Props = {
   leadId: string
   leadName: string
+  evaNextFollowupAt?: string | null
+  evaFollowupCount?: number | null
+  evaPauseUntil?: string | null
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -38,7 +41,17 @@ const TYPE_LABELS: Record<string, string> = {
   other: 'Outro',
 }
 
-export default function LeadFollowupPanel({ leadId, leadName }: Props) {
+function formatRelativeTime(dateStr: string): string {
+  const diff = new Date(dateStr).getTime() - Date.now()
+  if (diff <= 0) return 'agora'
+  const h = Math.floor(diff / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  if (h >= 24) return `em ${Math.floor(h / 24)}d`
+  if (h > 0) return `em ${h}h${m > 0 ? ` ${m}min` : ''}`
+  return `em ${m}min`
+}
+
+export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt, evaFollowupCount, evaPauseUntil }: Props) {
   const [tab, setTab] = useState<'followups' | 'contacts'>('followups')
   const [followups, setFollowups] = useState<Followup[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -120,6 +133,24 @@ export default function LeadFollowupPanel({ leadId, leadName }: Props) {
 
   return (
     <div className="mt-3 border-t border-slate-100 dark:border-slate-700 pt-3">
+      {/* Banner: status do followup automático da Eva */}
+      {evaPauseUntil && new Date(evaPauseUntil) > new Date() ? (
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+          <span>⏸️</span>
+          <span>Eva pausada até {new Date(evaPauseUntil).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })} — followup manual agendado</span>
+        </div>
+      ) : evaNextFollowupAt && new Date(evaNextFollowupAt) > new Date() ? (
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700 rounded-lg text-xs text-violet-700 dark:text-violet-300">
+          <span className="animate-pulse">🤖</span>
+          <span>Eva enviará followup automático <strong>{formatRelativeTime(evaNextFollowupAt)}</strong> · estágio {(evaFollowupCount ?? 0) + 1} de 5</span>
+        </div>
+      ) : evaNextFollowupAt && new Date(evaNextFollowupAt) <= new Date() ? (
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-lg text-xs text-emerald-700 dark:text-emerald-300">
+          <span>✅</span>
+          <span>Eva enviou followup automático (estágio {evaFollowupCount ?? 0} de 5) · aguardando resposta do lead</span>
+        </div>
+      ) : null}
+
       {/* Tabs */}
       <div className="flex items-center gap-1 mb-3">
         <button onClick={() => setTab('followups')}
