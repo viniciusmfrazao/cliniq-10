@@ -225,13 +225,13 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
   const getFollowupCount = (l: Lead): number => l.eva_followup_count ?? 0
 
-  const followupBucket = (l: Lead): 'fu_2h' | 'fu_24h' | 'fu_48h' | 'fu_5d' | 'fu_10d' | null => {
+  const followupBucket = (l: Lead): 'fu_2h' | 'fu_4h' | 'fu_48h' | 'fu_5d' | 'fu_10d' | null => {
     if (!isInFollowup(l)) return null
     const c = getFollowupCount(l)
     if (c >= 4) return 'fu_10d'
     if (c === 3) return 'fu_5d'
     if (c === 2) return 'fu_48h'
-    if (c === 1) return 'fu_24h'
+    if (c === 1) return 'fu_4h'
     return 'fu_2h'
   }
 
@@ -1365,7 +1365,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
         </div>
 
         {/* Follow-ups e Histórico de Contatos */}
-        <LeadFollowupPanel leadId={lead.id} leadName={lead.name} />
+        <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} />
 
         {/* Tabs */}
         <div className="flex border-b border-slate-100">
