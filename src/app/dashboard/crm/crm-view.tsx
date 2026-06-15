@@ -1418,15 +1418,15 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
               {/* Status — coluna do Kanban */}
               <div>
                 <label className="label">Coluna do CRM</label>
-                <div className="grid grid-cols-1 gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
                   {stages.map(s => {
                     const isActive = form.status === s.id
                     const colorMap: Record<string, string> = {
-                      slate:   isActive ? 'bg-slate-600 text-white border-slate-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50',
-                      blue:    isActive ? 'bg-blue-500 text-white border-blue-500'   : 'border-blue-200 text-blue-600 hover:bg-blue-50',
+                      slate:   isActive ? 'bg-slate-600 text-white border-slate-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50',
+                      blue:    isActive ? 'bg-blue-500 text-white border-blue-500'   : 'border-blue-200 text-blue-500 hover:bg-blue-50',
                       amber:   isActive ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-200 text-amber-600 hover:bg-amber-50',
                       emerald: isActive ? 'bg-emerald-500 text-white border-emerald-500' : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50',
-                      red:     isActive ? 'bg-red-500 text-white border-red-500'     : 'border-red-200 text-red-600 hover:bg-red-50',
+                      red:     isActive ? 'bg-red-500 text-white border-red-500'     : 'border-red-200 text-red-500 hover:bg-red-50',
                     }
                     const iconMap: Record<string, string> = {
                       new: '✨', contacted: '💬', scheduled: '📅', converted: '✅', lost: '❌',
@@ -1436,11 +1436,10 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
                         key={s.id}
                         type="button"
                         onClick={() => setForm(prev => ({ ...prev, status: s.id }))}
-                        className={`w-full text-left px-3 py-2 rounded-lg border font-medium text-sm transition flex items-center gap-2 ${colorMap[s.color] ?? ''}`}
+                        className={`text-left px-3 py-2 rounded-lg border font-medium text-xs transition flex items-center gap-1.5 ${isActive ? 'ring-2 ring-offset-1 ' + (s.color === 'red' ? 'ring-red-400' : s.color === 'emerald' ? 'ring-emerald-400' : s.color === 'amber' ? 'ring-amber-400' : s.color === 'blue' ? 'ring-blue-400' : 'ring-slate-400') : ''} ${colorMap[s.color] ?? ''}`}
                       >
                         <span>{iconMap[s.id]}</span>
-                        <span>{s.label}</span>
-                        {isActive && <span className="ml-auto text-xs opacity-75">← coluna atual</span>}
+                        <span className="truncate">{s.label}</span>
                       </button>
                     )
                   })}
