@@ -1502,13 +1502,6 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
                 </div>
               </div>
 
-              {/* Eva IA Sugestão */}
-              {lead.ai_suggested_action && (
-                <div className="p-3 bg-violet-50 rounded-xl">
-                  <p className="text-xs font-medium text-violet-600 mb-1">💡 Sugestão Eva IA</p>
-                  <p className="text-sm text-violet-900">{lead.ai_suggested_action}</p>
-                </div>
-              )}
             </>
           ) : (
             <>
