@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import AppointmentForm from '../appointment-form'
 
+export const dynamic = 'force-dynamic'
+
 export default async function NovoAgendamentoPage({ 
   searchParams 
 }: { 
