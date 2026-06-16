@@ -328,6 +328,59 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   const titulo = cfg?.titulo || 'Ficha de Anamnese Facial'
   const subtitulo = cfg?.subtitulo || ''
   const secoesAtivas = cfg?.secoes_ativas || ['procedimentos','habitos','alergias','medicamentos','saude','outras','mulheres','queixa']
+  const perguntasExtras = cfg?.perguntas_extras || []
+
+  // Helper: retorna perguntas extras vinculadas a uma seção específica
+  const extrasDaSecao = (secaoId: string) =>
+    perguntasExtras.filter((p: any) => p.secao === secaoId)
+
+  // Renderiza as perguntas extras de uma seção
+  const renderExtras = (secaoId: string) => {
+    const extras = extrasDaSecao(secaoId)
+    if (extras.length === 0) return null
+    return (
+      <div className="mt-5 pt-5 border-t" style={{ borderColor: 'var(--border)' }}>
+        {extras.map((p: any, i: number) => {
+          // Índice global para manter as chaves de resposta consistentes
+          const idx = perguntasExtras.indexOf(p)
+          return (
+            <div key={idx} className="mb-6">
+              <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>{p.pergunta}</p>
+              {p.tipo === 'sim_nao' && (
+                <div className="flex gap-3 flex-wrap">
+                  {['Sim', 'Não'].map(opt => (
+                    <Choice key={opt} group={`extra_${idx}`} value={opt}
+                      selected={responses[`extra_${idx}`] === opt}
+                      onClick={() => setSingleValue(`extra_${idx}`, opt)} />
+                  ))}
+                </div>
+              )}
+              {p.tipo === 'texto' && (
+                <textarea className="anamnese-input" rows={3}
+                  placeholder="Sua resposta..."
+                  value={responses[`extra_${idx}`] || ''}
+                  onChange={e => setTextValue(`extra_${idx}`, e.target.value)} />
+              )}
+              {p.tipo === 'multipla' && p.opcoes && (
+                <div className="flex gap-3 flex-wrap">
+                  {p.opcoes.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
+                    <Choice key={opt} group={`extra_${idx}`} value={opt} type="multi"
+                      selected={(responses[`extra_${idx}`] || '').includes(opt)}
+                      onClick={() => {
+                        const cur = responses[`extra_${idx}`] || ''
+                        const arr = cur ? cur.split(',').map((s: string) => s.trim()) : []
+                        const next = arr.includes(opt) ? arr.filter((s: string) => s !== opt) : [...arr, opt]
+                        setTextValue(`extra_${idx}`, next.join(', '))
+                      }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
 
   const Choice = ({ group, value, selected, onClick, type = 'single' }: any) => (
     <button
@@ -553,6 +606,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 onChange={e => setTextValue('experiencia_desc', e.target.value)}
               />
             </div>
+            {renderExtras('procedimentos')}
           </section>)}
 
           {/* HÁBITOS DE VIDA */}
@@ -592,6 +646,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 </span>
               </div>
             </div>
+            {renderExtras('habitos')}
           </section>)}
 
           {/* ALERGIAS */}
@@ -620,6 +675,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <Choice group="herpes" value="Sim" selected={responses.herpes === 'Sim'} onClick={() => selectSingle('herpes', 'Sim')} />
               </div>
             </div>
+            {renderExtras('alergias')}
           </section>)}
 
           {/* MEDICAMENTOS */}
@@ -645,6 +701,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 </div>
               </div>
             ))}
+            {renderExtras('medicamentos')}
           </section>)}
 
           {/* SAÚDE */}
@@ -683,6 +740,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               </div>
               <textarea className="anamnese-input" placeholder="Se sim, descreva aqui qual..." rows={3} value={responses.inforelevante_desc || ''} onChange={e => setTextValue('inforelevante_desc', e.target.value)} />
             </div>
+            {renderExtras('saude')}
           </section>)}
 
           {/* OUTRAS INFORMAÇÕES */}
@@ -718,6 +776,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               </div>
               <input type="text" className="anamnese-input" placeholder="Se outro, especifique" value={responses.conheceu_outro || ''} onChange={e => setTextValue('conheceu_outro', e.target.value)} />
             </div>
+            {renderExtras('outras')}
           </section>)}
 
           {/* EXCLUSIVO MULHERES */}
@@ -740,6 +799,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <Choice group="lactante" value="Sim" selected={responses.lactante === 'Sim'} onClick={() => selectSingle('lactante', 'Sim')} />
               </div>
             </div>
+            {renderExtras('mulheres')}
           </section></>)}
 
           {/* PRINCIPAL QUEIXA */}
@@ -783,50 +843,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Observação</p>
               <textarea className="anamnese-input" placeholder="Descreva aqui todas as suas queixas facial ou corporal..." rows={4} value={responses.queixa_obs || ''} onChange={e => setTextValue('queixa_obs', e.target.value)} />
             </div>
+            {renderExtras('queixa')}
           </section>)}
-
-          {/* Perguntas extras configuradas pela clínica */}
-          {cfg?.perguntas_extras && cfg.perguntas_extras.length > 0 && (
-            <section className="rounded p-9 mb-7" style={{ background: 'var(--warm-white)', border: '1px solid var(--border)' }}>
-              <h2 className="text-base tracking-widest uppercase mb-6" style={{ color: 'var(--gold)', fontFamily: 'var(--font-heading)', letterSpacing: '0.15em' }}>
-                Informações Adicionais
-              </h2>
-              {cfg.perguntas_extras.map((p, idx) => (
-                <div key={idx} className="mb-6">
-                  <p className="text-sm mb-3" style={{ color: 'var(--mid)', fontFamily: 'var(--font-heading)' }}>{p.pergunta}</p>
-                  {p.tipo === 'sim_nao' && (
-                    <div className="flex gap-3 flex-wrap">
-                      {['Sim', 'Não'].map(opt => (
-                        <Choice key={opt} group={`extra_${idx}`} value={opt}
-                          selected={responses[`extra_${idx}`] === opt}
-                          onClick={() => setSingleValue(`extra_${idx}`, opt)} />
-                      ))}
-                    </div>
-                  )}
-                  {p.tipo === 'texto' && (
-                    <textarea className="anamnese-input" rows={3}
-                      placeholder="Sua resposta..."
-                      value={responses[`extra_${idx}`] || ''}
-                      onChange={e => setTextValue(`extra_${idx}`, e.target.value)} />
-                  )}
-                  {p.tipo === 'multipla' && p.opcoes && (
-                    <div className="flex gap-3 flex-wrap">
-                      {p.opcoes.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
-                        <Choice key={opt} group={`extra_${idx}`} value={opt} type="multi"
-                          selected={(responses[`extra_${idx}`] || '').includes(opt)}
-                          onClick={() => {
-                            const cur = responses[`extra_${idx}`] || ''
-                            const arr = cur ? cur.split(',').map((s: string) => s.trim()) : []
-                            const next = arr.includes(opt) ? arr.filter((s: string) => s !== opt) : [...arr, opt]
-                            setTextValue(`extra_${idx}`, next.join(', '))
-                          }} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </section>
-          )}
 
           {/* Submit */}
           <div className="text-center mt-10">
