@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -30,12 +30,27 @@ type Props = {
   hasEva?: boolean
 }
 
-export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva = false }: Props) {
+export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva: hasEvaProp = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [deleting, setDeleting] = useState<string | null>(null)
   const [editing, setEditing] = useState<Procedure | null>(null)
   const [activeTab, setActiveTab] = useState<'dados' | 'resultados'>('dados')
+  const [hasEva, setHasEva] = useState(hasEvaProp)
+
+  // Busca hasEva no client para garantir valor correto mesmo se server não autenticou
+  useEffect(() => {
+    async function checkEva() {
+      const { data } = await supabase
+        .from('clinics')
+        .select('settings')
+        .eq('id', clinicId)
+        .single()
+      const modules: string[] = data?.settings?.active_modules || []
+      setHasEva(modules.includes('eva_ia'))
+    }
+    checkEva()
+  }, [clinicId])
 
   async function handleDelete(id: string) {
     setDeleting(id)
