@@ -64,6 +64,12 @@ export default function AlertaDespesasForm({ clinicId, initial }: Props) {
         </button>
       </div>
 
+      {/* Horário de envio */}
+      <div className="flex items-center gap-2 text-sm text-slate-500 bg-slate-50 rounded-xl px-4 py-3">
+        <span>🕗</span>
+        <span>Enviado automaticamente todo dia às <strong className="text-slate-700">08:00</strong> da manhã</span>
+      </div>
+
       {/* Quando alertar */}
       {enabled && (
         <div>
