@@ -44,6 +44,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
 
+  // Campos de identificação que o paciente pode preencher (se vazios no cadastro)
+  const [cpfInput, setCpfInput] = useState('')
+  const [birthDateInput, setBirthDateInput] = useState('')
+
   // Restaurar rascunho ao montar (client-side only)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -183,6 +187,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
         body: JSON.stringify({
           responses,
           signature,
+          identificacao: {
+            cpf: cpfInput.trim() || null,
+            birth_date: birthDateInput || null,
+          },
         }),
       })
 
@@ -415,12 +423,50 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <p className="text-sm mb-2" style={{ color: 'var(--light-text)' }}>
                   Paciente: <strong style={{ color: 'var(--dark)' }}>{anamnese.patients.name}</strong>
                 </p>
-                {anamnese.patients.birth_date && (
+                {anamnese.patients.birth_date ? (
                   <p className="text-sm" style={{ color: 'var(--light-text)' }}>
                     Data de nascimento: <strong style={{ color: 'var(--dark)' }}>
                       {parseDateBR(anamnese.patients.birth_date)}
                     </strong>
                   </p>
+                ) : (
+                  <div className="mt-3">
+                    <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
+                      Data de nascimento <span style={{ color: '#b89a6a' }}>*</span>
+                    </label>
+                    <input
+                      type="date"
+                      className="anamnese-input"
+                      value={birthDateInput}
+                      onChange={e => setBirthDateInput(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      style={{ maxWidth: '200px' }}
+                    />
+                  </div>
+                )}
+                {!anamnese.patients.cpf && (
+                  <div className="mt-3">
+                    <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
+                      CPF <span style={{ color: '#b89a6a' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="anamnese-input"
+                      placeholder="000.000.000-00"
+                      value={cpfInput}
+                      onChange={e => {
+                        // Formata CPF automaticamente
+                        const v = e.target.value.replace(/\D/g, '').slice(0, 11)
+                        const fmt = v
+                          .replace(/(\d{3})(\d)/, '$1.$2')
+                          .replace(/(\d{3})(\d)/, '$1.$2')
+                          .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+                        setCpfInput(fmt)
+                      }}
+                      maxLength={14}
+                      style={{ maxWidth: '200px' }}
+                    />
+                  </div>
                 )}
               </div>
             )}

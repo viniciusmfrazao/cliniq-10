@@ -60,7 +60,7 @@ export async function POST(
   try {
     const { token } = params
     const body = await request.json()
-    const { responses, signature } = body
+    const { responses, signature, identificacao } = body
 
     if (!responses || !signature) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
@@ -77,7 +77,7 @@ export async function POST(
     // Find anamnese
     const { data: anamnese, error: findError } = await getAdmin()
       .from('anamneses')
-      .select('id, status')
+      .select('id, status, patient_id')
       .eq('token', token)
       .maybeSingle()
 
@@ -91,6 +91,40 @@ export async function POST(
 
     if (anamnese.status === 'expired') {
       return NextResponse.json({ error: 'Link expirado' }, { status: 410 })
+    }
+
+    // Atualizar cadastro do paciente com dados de identificação (apenas campos vazios)
+    if (identificacao && anamnese.patient_id) {
+      const updates: Record<string, string> = {}
+      if (identificacao.cpf?.trim()) {
+        // Verificar se o paciente ainda não tem CPF
+        const { data: pat } = await getAdmin()
+          .from('patients')
+          .select('cpf, birth_date')
+          .eq('id', anamnese.patient_id)
+          .single()
+        if (!pat?.cpf && identificacao.cpf.trim()) {
+          updates.cpf = identificacao.cpf.trim()
+        }
+        if (!pat?.birth_date && identificacao.birth_date) {
+          updates.birth_date = identificacao.birth_date
+        }
+      } else if (identificacao.birth_date) {
+        const { data: pat } = await getAdmin()
+          .from('patients')
+          .select('birth_date')
+          .eq('id', anamnese.patient_id)
+          .single()
+        if (!pat?.birth_date) {
+          updates.birth_date = identificacao.birth_date
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await getAdmin()
+          .from('patients')
+          .update(updates)
+          .eq('id', anamnese.patient_id)
+      }
     }
 
     // Update anamnese with responses
