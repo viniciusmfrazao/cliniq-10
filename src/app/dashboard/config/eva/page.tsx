@@ -42,7 +42,8 @@ export default async function EvaConfigPage() {
   const automations = autoRes.data
 
   return (
-          <div className="mb-6">
+    <div className="space-y-6">
+      <div className="mb-6">
         <Link
           href="/dashboard/config"
           className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
@@ -51,7 +52,7 @@ export default async function EvaConfigPage() {
           Voltar
         </Link>
       </div>
-      <div className="space-y-6">
+
       {/* Painel de custo */}
       <div className="card p-6">
         <EvaCostPanel clinicId={clinic.id} />
