@@ -689,6 +689,7 @@ export async function sendResultImages(
           mimetype: 'image/jpeg',
           media: img.image_url,
           caption,
+          fileName: `resultado-${Date.now()}.jpg`,
         }),
       });
 
