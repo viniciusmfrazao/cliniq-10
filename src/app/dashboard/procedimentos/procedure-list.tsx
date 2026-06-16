@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -30,12 +30,27 @@ type Props = {
   hasEva?: boolean
 }
 
-export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva = false }: Props) {
+export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva: hasEvaProp = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [deleting, setDeleting] = useState<string | null>(null)
   const [editing, setEditing] = useState<Procedure | null>(null)
   const [activeTab, setActiveTab] = useState<'dados' | 'resultados'>('dados')
+  const [hasEva, setHasEva] = useState(hasEvaProp)
+
+  // Busca hasEva no client para garantir valor correto mesmo se server não autenticou
+  useEffect(() => {
+    async function checkEva() {
+      const { data } = await supabase
+        .from('clinics')
+        .select('settings')
+        .eq('id', clinicId)
+        .single()
+      const modules: string[] = data?.settings?.active_modules || []
+      setHasEva(modules.includes('eva_ia'))
+    }
+    checkEva()
+  }, [clinicId])
 
   async function handleDelete(id: string) {
     setDeleting(id)
@@ -200,8 +215,8 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
 
       {/* Modal de edição */}
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center pt-16 pb-24 px-4 md:p-4 md:pb-4 bg-black/40">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-2xl w-full max-h-full md:max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 p-4 flex items-center justify-between z-10">
               <div>
