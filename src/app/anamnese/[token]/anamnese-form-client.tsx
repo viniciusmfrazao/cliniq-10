@@ -8,6 +8,7 @@ type AnamneseConfig = {
   subtitulo?: string
   cor_primaria?: string
   secoes_ativas?: string[]
+  campos_identificacao?: string[]
   perguntas_extras?: Array<{ secao: string; pergunta: string; tipo: 'sim_nao'|'texto'|'multipla'; opcoes?: string }>
 }
 
@@ -329,6 +330,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   const subtitulo = cfg?.subtitulo || ''
   const secoesAtivas = cfg?.secoes_ativas || ['procedimentos','habitos','alergias','medicamentos','saude','outras','mulheres','queixa']
   const perguntasExtras = cfg?.perguntas_extras || []
+  // Campos de identificação habilitados pela clínica (default: data_nascimento e cpf)
+  const camposIdAtivos: string[] = cfg?.campos_identificacao?.length
+    ? cfg.campos_identificacao
+    : ['data_nascimento', 'cpf']
 
   // Helper: retorna perguntas extras vinculadas a uma seção específica
   const extrasDaSecao = (secaoId: string) =>
@@ -476,36 +481,38 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <p className="text-sm mb-2" style={{ color: 'var(--light-text)' }}>
                   Paciente: <strong style={{ color: 'var(--dark)' }}>{anamnese.patients.name}</strong>
                 </p>
-                {anamnese.patients.birth_date ? (
-                  <div className="mt-3">
-                    <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
-                      Data de nascimento <span style={{ fontSize: '11px', color: '#b89a6a' }}>(confirme ou corrija)</span>
-                    </label>
-                    <input
-                      type="date"
-                      className="anamnese-input"
-                      defaultValue={anamnese.patients.birth_date.slice(0, 10)}
-                      onChange={e => setBirthDateInput(e.target.value)}
-                      max={new Date().toISOString().split('T')[0]}
-                      style={{ maxWidth: '200px' }}
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-3">
-                    <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
-                      Data de nascimento <span style={{ color: '#b89a6a' }}>*</span>
-                    </label>
-                    <input
-                      type="date"
-                      className="anamnese-input"
-                      value={birthDateInput}
-                      onChange={e => setBirthDateInput(e.target.value)}
-                      max={new Date().toISOString().split('T')[0]}
-                      style={{ maxWidth: '200px' }}
-                    />
-                  </div>
+                {camposIdAtivos.includes('data_nascimento') && (
+                  anamnese.patients.birth_date ? (
+                    <div className="mt-3">
+                      <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
+                        Data de nascimento <span style={{ fontSize: '11px', color: '#b89a6a' }}>(confirme ou corrija)</span>
+                      </label>
+                      <input
+                        type="date"
+                        className="anamnese-input"
+                        defaultValue={anamnese.patients.birth_date.slice(0, 10)}
+                        onChange={e => setBirthDateInput(e.target.value)}
+                        max={new Date().toISOString().split('T')[0]}
+                        style={{ maxWidth: '200px' }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="mt-3">
+                      <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
+                        Data de nascimento <span style={{ color: '#b89a6a' }}>*</span>
+                      </label>
+                      <input
+                        type="date"
+                        className="anamnese-input"
+                        value={birthDateInput}
+                        onChange={e => setBirthDateInput(e.target.value)}
+                        max={new Date().toISOString().split('T')[0]}
+                        style={{ maxWidth: '200px' }}
+                      />
+                    </div>
+                  )
                 )}
-                {!anamnese.patients.cpf && (
+                {camposIdAtivos.includes('cpf') && !anamnese.patients.cpf && (
                   <div className="mt-3">
                     <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
                       CPF <span style={{ color: '#b89a6a' }}>*</span>
