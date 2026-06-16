@@ -742,6 +742,98 @@ export async function sendResultImages(
   }
 }
 
+// ─── enviar_fotos_resultado ────────────────────────────────────────────────
+
+/**
+ * Tool chamada pela Eva quando a paciente pede para ver fotos/resultados de um
+ * procedimento. Diferente do envio automático (sendResultImages na CAMADA 0),
+ * aqui a Eva ESCOLHE o momento e escreve o texto de apresentação com calor.
+ *
+ * Fluxo: 1) acha o procedimento certo por pontuação (nome completo > palavras,
+ * empate a favor de quem tem imagem), 2) envia as imagens via sendResultImages,
+ * 3) retorna instrução para o Claude apresentar com contexto e calor.
+ */
+export async function enviarFotosResultado(
+  args: { procedimento?: string },
+  ctx: DonnaContext,
+  payload: IncomingPayload,
+  env: ToolEnv,
+  imagesSentProcedures: Set<string>,
+): Promise<string> {
+  // Texto base do match: o que a Eva passou + interesse já registrado do lead
+  const pedido = norm(args.procedimento || '');
+  const interesse = norm(ctx.lead?.interest || '');
+  const textoMatch = `${pedido} ${interesse}`.trim();
+
+  if (!textoMatch) {
+    return 'A paciente nao especificou o procedimento. Pergunte com simpatia de qual procedimento ela quer ver os resultados antes de prosseguir.';
+  }
+
+  // Descobre quais procedimentos têm imagens (desempate a favor deles)
+  let procIdsComImagem = new Set<string>();
+  try {
+    const idsUrl = `${env.supabaseUrl}/rest/v1/procedure_result_images?clinic_id=eq.${payload.clinicId}&active=eq.true&lgpd_consent=eq.true&select=procedure_id`;
+    const idsRes = await fetchJson<{ procedure_id: string }[]>(idsUrl, {
+      method: 'GET',
+      headers: { apikey: env.serviceKey, Authorization: `Bearer ${env.serviceKey}` },
+    });
+    if (idsRes.ok && idsRes.data) {
+      procIdsComImagem = new Set(idsRes.data.map((r) => r.procedure_id));
+    }
+  } catch (_e) { /* segue sem o desempate */ }
+
+  // Pontuação de match (mesma lógica validada da CAMADA FOTO)
+  let melhor: { id: string; name: string; temImagem: boolean } | null = null;
+  let melhorScore = 0;
+  for (const p of ctx.procedures) {
+    const procNorm = norm(p.name);
+    const palavras = procNorm.split(/\s+/).filter((w) => w.length >= 4);
+    if (palavras.length === 0) continue;
+
+    let score = 0;
+    if (textoMatch.includes(procNorm)) score += 100;
+    const palavrasMatch = palavras.filter((w) => textoMatch.includes(w));
+    score += palavrasMatch.length * 10;
+    score += Math.round((palavrasMatch.length / palavras.length) * 20);
+    if (score === 0) continue;
+    if (procIdsComImagem.has(p.id)) score += 5;
+
+    if (score > melhorScore) {
+      melhorScore = score;
+      melhor = { id: p.id, name: p.name, temImagem: procIdsComImagem.has(p.id) };
+    }
+  }
+
+  if (!melhor) {
+    return `Nao identifiquei o procedimento "${args.procedimento || ctx.lead?.interest || ''}" na lista. Confirme com a paciente qual procedimento ela quer ver, de forma natural.`;
+  }
+
+  // Procedimento identificado mas SEM imagem cadastrada
+  if (!melhor.temImagem) {
+    return [
+      `O procedimento "${melhor.name}" ainda nao tem fotos de resultado cadastradas.`,
+      'NAO invente que tem fotos. Conduza com calor: explique que o melhor e uma avaliacao presencial com a profissional, que mostra referencias e planeja o resultado. Convide para agendar.',
+    ].join('\n');
+  }
+
+  // Envia as imagens (reaproveita sendResultImages — respeita toggle, LGPD, idempotência)
+  await sendResultImages(
+    melhor.id,
+    melhor.name,
+    ctx,
+    payload,
+    env,
+    imagesSentProcedures,
+  );
+
+  return [
+    `FOTOS DE RESULTADO DE "${melhor.name}" FORAM ENVIADAS pelo WhatsApp agora.`,
+    'As imagens ja chegaram para a paciente. Sua resposta deve APRESENTAR essas fotos com calor e contexto, como se voce estivesse mostrando pessoalmente.',
+    'Exemplos de tom (adapte, nao copie): "Olha que resultado lindo desse procedimento 😍", "Da uma olhada nesse antes e depois, ficou natural e harmonioso".',
+    'Depois de apresentar, conduza com leveza para uma avaliacao ou agendamento. Seja genuina e calorosa, nunca robotica.',
+  ].join('\n');
+}
+
 // ─── informar_valor_avista ─────────────────────────────────────────────────
 
 /**
@@ -804,6 +896,7 @@ export async function executeToolByName(
   ctx: DonnaContext,
   payload: IncomingPayload,
   env: ToolEnv,
+  imagesSentProcedures?: Set<string>,
 ): Promise<ToolExecutionResult> {
   switch (name) {
     case 'consultar_agenda': {
@@ -828,6 +921,10 @@ export async function executeToolByName(
     }
     case 'informar_valor_avista': {
       const r = await informarValorAvista(input as any, ctx, payload, env);
+      return { resultStr: r };
+    }
+    case 'enviar_fotos_resultado': {
+      const r = await enviarFotosResultado(input as any, ctx, payload, env, imagesSentProcedures ?? new Set<string>());
       return { resultStr: r };
     }
     default:

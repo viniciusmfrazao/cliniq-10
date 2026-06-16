@@ -36,7 +36,7 @@ import { sanitizeWhatsapp, fetchJson, parseData } from './utils.ts';
 import { buildSystemPrompt, TOOLS, EmotionalMemory } from './prompt.ts';
 import { runConversation, MODEL_PREMIUM } from './claude.ts';
 import type { ConversationStepLog } from './claude.ts';
-import { executeToolByName, criarAgendamento, sendResultImages } from './tools.ts';
+import { executeToolByName, criarAgendamento } from './tools.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -774,61 +774,16 @@ Deno.serve(async (req) => {
       );
       // Atualiza ctx.lead localmente para o prompt saber que já tem interesse
       if (ctx.lead) ctx.lead.interest = procDetectado.name;
-      // Galeria de resultados: enviar imagens do procedimento via Evolution
-      sendResultImages(
-        procDetectado.id,
-        procDetectado.name,
-        ctx,
-        payload,
-        { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY },
-        imagesSentProcedures,
-      ).catch(e => errors.push(`sendResultImages_camada0: ${e?.message ?? e}`));
+      // Nota: o envio de fotos NÃO acontece mais aqui automaticamente.
+      // A Eva envia fotos via tool 'enviar_fotos_resultado' quando a paciente
+      // pede, apresentando com contexto e calor.
     }
   }
 
-  // ─── CAMADA FOTO: pedido explícito de foto/resultado ─────────────────────
-  //
-  // Caso real (lead 553491805722): cliente pediu "tem foto pra ver como fica?"
-  // e a Eva respondeu só com texto. A galeria só dispara no momento exato do
-  // registrar_interesse — quando o cliente pede a foto DEPOIS, não havia gatilho.
-  //
-  // Solução: quando o cliente menciona foto/imagem/resultado/antes e depois,
-  // buscar o procedimento de interesse atual do lead e enviar as imagens.
-  // Funciona mesmo se o interesse foi registrado em turno anterior.
-  if (!payload.isFollowup && ctx.lead?.id) {
-    const lowerFoto = (payload.userText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const pediuFoto = /\b(foto|fotos|imagem|imagens|antes e depois|antes\/depois|como fica|como ficou|resultado|resultados|ver como|mostrar|portfolio|portifolio)\b/.test(lowerFoto);
-
-    if (pediuFoto) {
-      // Tenta achar o procedimento: 1) o que o lead mencionou agora, 2) o interesse já registrado
-      let procFoto = ctx.procedures.find(p => {
-        const procNorm = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (lowerFoto.includes(procNorm)) return true;
-        return procNorm.split(/\s+/).some(w => w.length >= 4 && lowerFoto.includes(w));
-      });
-
-      // Se não detectou na mensagem atual, usa o interesse já registrado no lead
-      if (!procFoto && ctx.lead.interest) {
-        const interestNorm = ctx.lead.interest.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        procFoto = ctx.procedures.find(p => {
-          const procNorm = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          return procNorm === interestNorm || procNorm.includes(interestNorm) || interestNorm.includes(procNorm);
-        });
-      }
-
-      if (procFoto?.id) {
-        console.log(JSON.stringify({ evt: 'camada_foto', proc: procFoto.name, clinic: payload.clinicId }));
-        await sendResultImages(
-          procFoto.id,
-          procFoto.name,
-          ctx,
-          payload,
-          { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY },
-          imagesSentProcedures,
-        ).catch(e => errors.push(`sendResultImages_camada_foto: ${e?.message ?? e}`));
-      }
-    }
-  }
+  // ─── Envio de fotos de resultado ─────────────────────────────────────────
+  // O envio de fotos agora é feito pela tool 'enviar_fotos_resultado', que a
+  // Eva chama quando a paciente pede para ver resultados. Assim a Eva escolhe
+  // o momento e apresenta as fotos com calor e contexto (em vez de envio cru).
 
   // ─── CAMADA 1 + 3: detecção de intenção e escalonamento de modelo ────────
   //
@@ -986,28 +941,9 @@ Deno.serve(async (req) => {
       const r = await executeToolByName(name, input, ctx, payload, {
         supabaseUrl: SUPABASE_URL,
         serviceKey: SERVICE_ROLE_KEY,
-      });
+      }, imagesSentProcedures);
       if (name === 'criar_agendamento' && r.meta?.appointmentCreated === true) {
         appointmentCreated = true;
-      }
-      // Galeria de resultados: após registrar_interesse, enviar imagens do procedimento
-      if (name === 'registrar_interesse') {
-        const procNome = (input as any).procedimento ?? '';
-        const procEncontrado = ctx.procedures.find(p =>
-          p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') ===
-          procNome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') ||
-          p.name.toLowerCase().includes(procNome.toLowerCase())
-        );
-        if (procEncontrado?.id) {
-          sendResultImages(
-            procEncontrado.id,
-            procEncontrado.name,
-            ctx,
-            payload,
-            { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY },
-            imagesSentProcedures,
-          ).catch(e => errors.push(`sendResultImages_tool: ${e?.message ?? e}`));
-        }
       }
       return r.resultStr;
     },
@@ -1164,7 +1100,7 @@ Deno.serve(async (req) => {
         executeTool: async (name, input) => {
           const r = await executeToolByName(name, input, ctx, payload, {
             supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY,
-          });
+          }, imagesSentProcedures);
           if (name === 'criar_agendamento' && r.meta?.appointmentCreated === true) appointmentCreated = true;
           return r.resultStr;
         },
