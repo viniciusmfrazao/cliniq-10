@@ -60,7 +60,7 @@ export async function POST(
   try {
     const { token } = params
     const body = await request.json()
-    const { responses, signature } = body
+    const { responses, signature, identificacao } = body
 
     if (!responses || !signature) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
@@ -77,7 +77,7 @@ export async function POST(
     // Find anamnese
     const { data: anamnese, error: findError } = await getAdmin()
       .from('anamneses')
-      .select('id, status')
+      .select('id, status, patient_id')
       .eq('token', token)
       .maybeSingle()
 
@@ -91,6 +91,40 @@ export async function POST(
 
     if (anamnese.status === 'expired') {
       return NextResponse.json({ error: 'Link expirado' }, { status: 410 })
+    }
+
+    // Atualizar cadastro do paciente com dados de identificação (apenas campos vazios)
+    if (identificacao && anamnese.patient_id) {
+      const updates: Record<string, string> = {}
+      const { data: pat } = await getAdmin()
+        .from('patients')
+        .select('cpf, birth_date, phone, email')
+        .eq('id', anamnese.patient_id)
+        .single()
+
+      // CPF: só salva se o paciente ainda não tem
+      if (!pat?.cpf && identificacao.cpf?.trim()) {
+        updates.cpf = identificacao.cpf.trim()
+      }
+      // Data de nascimento: sempre atualiza se o paciente enviou um valor
+      if (identificacao.birth_date) {
+        updates.birth_date = identificacao.birth_date
+      }
+      // Telefone: só salva se o paciente ainda não tem
+      if (!pat?.phone && identificacao.phone?.trim()) {
+        updates.phone = identificacao.phone.trim()
+      }
+      // Email: só salva se o paciente ainda não tem
+      if (!pat?.email && identificacao.email?.trim()) {
+        updates.email = identificacao.email.trim()
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await getAdmin()
+          .from('patients')
+          .update(updates)
+          .eq('id', anamnese.patient_id)
+      }
     }
 
     // Update anamnese with responses

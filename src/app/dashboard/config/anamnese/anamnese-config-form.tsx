@@ -355,8 +355,10 @@ export default function AnamneseConfigForm({ config, clinicId }: { config: Confi
       })
       if (!res.ok) throw new Error('Erro ao salvar')
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-      router.refresh()
+      setTimeout(() => {
+        setSaved(false)
+        window.location.reload()
+      }, 800)
     } catch {
       alert('Erro ao salvar configurações')
     } finally {

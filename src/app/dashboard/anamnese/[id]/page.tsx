@@ -20,6 +20,16 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
   
   if (error || !anamnese) notFound()
 
+  // Buscar config da clínica para exibir perguntas extras
+  const { data: anamneseConfig } = await supabase
+    .from('anamnese_config')
+    .select('perguntas_extras')
+    .eq('clinic_id', anamnese.clinic_id)
+    .maybeSingle()
+
+  const perguntasExtras: Array<{ id: string; pergunta: string; tipo: string }> =
+    anamneseConfig?.perguntas_extras || []
+
   const responses = anamnese.responses || {}
 
   const renderResponse = (label: string, value: any) => {
@@ -204,6 +214,23 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
             {renderResponse('Áreas de interesse', responses.queixa)}
             {renderResponse('Observação', responses.queixa_obs)}
           </div>
+
+          {/* Perguntas extras configuradas pela clínica */}
+          {perguntasExtras.length > 0 && (
+            <div className="card p-6 md:col-span-2">
+              <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                  <Icon name="plus" className="w-4 h-4 text-violet-600" />
+                </div>
+                Informações Adicionais
+              </h2>
+              {perguntasExtras.map((p, idx) => {
+                const val = responses[`extra_${idx}`]
+                if (!val) return null
+                return renderResponse(p.pergunta, val)
+              })}
+            </div>
+          )}
         </div>
       ) : (
         <div className="card p-12 text-center">
