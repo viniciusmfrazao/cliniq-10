@@ -63,6 +63,8 @@ type Props = {
   clinicId: string
   clinicName: string
   settings: Record<string, unknown>
+  evaSendResultImages?: boolean
+  evaMaxResultImages?: number
 }
 
 const STAGE_LABELS: Record<'1' | '2' | '3' | '4' | '5', string> = {
@@ -79,7 +81,7 @@ function fmtMinutes(min: number): string {
   return `${Math.round(min / 1440)}d`
 }
 
-export default function EvaConfigForm({ clinicId, clinicName, settings }: Props) {
+export default function EvaConfigForm({ clinicId, clinicName, settings, evaSendResultImages = false, evaMaxResultImages = 3 }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const initial = (settings.eva ?? {}) as EvaCfg
@@ -107,6 +109,10 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
   })
   const [discountPolicy, setDiscountPolicy] = useState<string>(initial.discount_policy ?? '')
   const [qualifyingQuestions, setQualifyingQuestions] = useState<string>(initial.qualifying_questions ?? '')
+
+  // Galeria de resultados
+  const [sendResultImages, setSendResultImages] = useState(evaSendResultImages)
+  const [maxResultImages, setMaxResultImages] = useState(evaMaxResultImages)
 
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
@@ -144,6 +150,13 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
         .eq('id', clinicId)
 
       if (upErr) throw upErr
+
+      // Salvar toggle da galeria de resultados
+      await supabase
+        .from('clinic_automations')
+        .update({ eva_send_result_images: sendResultImages, eva_max_result_images: maxResultImages })
+        .eq('clinic_id', clinicId)
+
       setSavedAt(Date.now())
       router.refresh()
     } catch (e) {
@@ -229,6 +242,55 @@ export default function EvaConfigForm({ clinicId, clinicName, settings }: Props)
           <div className="mt-3 p-3 bg-violet-50 rounded-lg border border-violet-100">
             <p className="text-xs font-medium text-violet-700 mb-1">Personalidade ativa (personalizada):</p>
             <p className="text-xs text-violet-600 whitespace-pre-line">{personalidade}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Galeria de resultados */}
+      <div className="card p-5 mb-4">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <span className="text-base">📸</span> Galeria de resultados
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Quando ativado, a EVA envia fotos de antes/depois automaticamente quando um lead demonstra interesse em um procedimento.
+              As fotos são cadastradas em <strong>Procedimentos → Resultados EVA</strong>.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSendResultImages(v => !v)}
+            className={`relative ml-4 flex-shrink-0 w-11 h-6 rounded-full transition-colors ${
+              sendResultImages ? 'bg-violet-500' : 'bg-slate-200'
+            }`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+              sendResultImages ? 'translate-x-5' : 'translate-x-0'
+            }`} />
+          </button>
+        </div>
+
+        {sendResultImages && (
+          <div className="mt-4 flex items-center gap-3">
+            <label className="text-sm text-slate-700">Máx. de fotos por envio:</label>
+            <div className="flex items-center gap-2">
+              {[1, 2, 3].map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setMaxResultImages(n)}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium border transition-colors ${
+                    maxResultImages === n
+                      ? 'bg-violet-500 text-white border-violet-500'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-slate-400">foto{maxResultImages > 1 ? 's' : ''} por mensagem</span>
           </div>
         )}
       </div>
