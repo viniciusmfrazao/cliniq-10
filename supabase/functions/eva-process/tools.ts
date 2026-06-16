@@ -635,18 +635,40 @@ export async function sendResultImages(
   env: ToolEnv,
   imagesSentProcedures: Set<string>,
 ): Promise<void> {
+  // Helper de log que persiste em eva_logs (visível no painel admin)
+  const logGaleria = async (status: string, details: Record<string, unknown>) => {
+    try {
+      await fetchJson(`${env.supabaseUrl}/rest/v1/rpc/insert_eva_log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: env.serviceKey,
+          Authorization: `Bearer ${env.serviceKey}`,
+        },
+        body: JSON.stringify({
+          p_clinic_id: payload.clinicId,
+          p_phone: payload.phone?.replace(/\D/g, '').slice(-11) ?? null,
+          p_source: 'eva-process',
+          p_event: 'galeria_resultado',
+          p_status: status,
+          p_details: { procedure_id: procedureId, procedure_name: procedureName, ...details },
+        }),
+      });
+    } catch (_e) { /* nunca quebra o fluxo por causa de log */ }
+  };
+
   // Sem procedure_id não conseguimos buscar as imagens
-  if (!procedureId) return;
+  if (!procedureId) { await logGaleria('skip', { motivo: 'sem_procedure_id' }); return; }
 
   // Já enviou imagens desse procedimento nessa sessão — não reenviar
-  if (imagesSentProcedures.has(procedureId)) return;
+  if (imagesSentProcedures.has(procedureId)) { await logGaleria('skip', { motivo: 'ja_enviado_na_sessao' }); return; }
 
   const ev = ctx.evolution;
-  if (!ev?.url || !ev?.master_key) return;
+  if (!ev?.url || !ev?.master_key) { await logGaleria('skip', { motivo: 'evolution_sem_credencial', tem_url: !!ev?.url, tem_key: !!ev?.master_key }); return; }
 
   const instanceName =
     (typeof payload.instance === 'string' && payload.instance.trim()) || ev.instance || '';
-  if (!instanceName) return;
+  if (!instanceName) { await logGaleria('skip', { motivo: 'sem_instancia' }); return; }
 
   try {
     // 1) Verificar se a clínica tem o toggle ativo
@@ -655,9 +677,9 @@ export async function sendResultImages(
       method: 'GET',
       headers: { apikey: env.serviceKey, Authorization: `Bearer ${env.serviceKey}` },
     });
-    if (!autoRes.ok || !autoRes.data?.length) return;
+    if (!autoRes.ok || !autoRes.data?.length) { await logGaleria('skip', { motivo: 'sem_automations', ok: autoRes.ok }); return; }
     const automations = autoRes.data[0];
-    if (!automations.eva_send_result_images) return;
+    if (!automations.eva_send_result_images) { await logGaleria('skip', { motivo: 'toggle_desligado' }); return; }
     const maxImages = Math.min(automations.eva_max_result_images ?? 3, 6);
 
     // 2) Buscar imagens ativas do procedimento (ordenadas por display_order)
@@ -666,18 +688,20 @@ export async function sendResultImages(
       method: 'GET',
       headers: { apikey: env.serviceKey, Authorization: `Bearer ${env.serviceKey}` },
     });
-    if (!imgRes.ok || !imgRes.data?.length) return;
+    if (!imgRes.ok || !imgRes.data?.length) { await logGaleria('skip', { motivo: 'sem_imagens', ok: imgRes.ok, count: imgRes.data?.length ?? 0 }); return; }
 
     const images = imgRes.data;
 
     // 3) Enviar cada imagem via Evolution API sendMedia
+    let enviadas = 0;
+    const respostas: unknown[] = [];
     for (let i = 0; i < images.length; i++) {
       const img = images[i];
       const caption = i === 0
         ? (img.caption || `✨ Resultado real de ${procedureName}`)
         : (img.caption || '');
 
-      await fetchJson(`${ev.url}/message/sendMedia/${encodeURIComponent(instanceName)}`, {
+      const sendRes = await fetchJson(`${ev.url}/message/sendMedia/${encodeURIComponent(instanceName)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -689,8 +713,13 @@ export async function sendResultImages(
           mimetype: 'image/jpeg',
           media: img.image_url,
           caption,
+          fileName: `resultado-${Date.now()}.jpg`,
         }),
       });
+
+      if (sendRes.ok) enviadas++;
+      // Captura status e resposta da Evolution para diagnóstico
+      respostas.push({ ok: sendRes.ok, status: (sendRes as any).status, error: (sendRes as any).error });
 
       // Pequeno delay entre imagens para não sobrecarregar
       if (i < images.length - 1) {
@@ -699,23 +728,17 @@ export async function sendResultImages(
     }
 
     // 4) Marcar como enviado para evitar reenvio na mesma sessão
-    imagesSentProcedures.add(procedureId);
+    if (enviadas > 0) imagesSentProcedures.add(procedureId);
 
-    console.log(JSON.stringify({
-      evt: 'result_images_sent',
-      clinic: payload.clinicId,
-      procedure_id: procedureId,
-      procedure_name: procedureName,
-      count: images.length,
-    }));
+    await logGaleria(enviadas > 0 ? 'ok' : 'error', {
+      instancia: instanceName,
+      total_imagens: images.length,
+      enviadas,
+      respostas_evolution: respostas,
+    });
   } catch (e) {
     // Fail silencioso — não interrompe o fluxo principal da Eva
-    console.warn(JSON.stringify({
-      evt: 'result_images_error',
-      clinic: payload.clinicId,
-      procedure_id: procedureId,
-      error: e instanceof Error ? e.message : String(e),
-    }));
+    await logGaleria('error', { erro: e instanceof Error ? e.message : String(e) });
   }
 }
 
