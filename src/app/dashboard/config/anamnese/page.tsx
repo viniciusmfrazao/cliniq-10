@@ -35,7 +35,8 @@ export default async function AnamneseConfigPage() {
   }
 
   return (
-          <div className="mb-6">
+    <div className="max-w-3xl mx-auto py-6 px-4">
+      <div className="mb-6">
         <Link
           href="/dashboard/config"
           className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
@@ -44,7 +45,6 @@ export default async function AnamneseConfigPage() {
           Voltar
         </Link>
       </div>
-      <div className="max-w-3xl mx-auto py-6 px-4">
       <AnamneseConfigForm config={config} clinicId={clinicId} />
     </div>
   )

@@ -38,7 +38,8 @@ export default async function AuditoriaPage() {
     .eq('clinic_id', currentUser.clinic_id)
 
   return (
-          <div className="mb-6">
+    <div className="max-w-6xl mx-auto">
+      <div className="mb-6">
         <Link
           href="/dashboard"
           className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
@@ -47,7 +48,6 @@ export default async function AuditoriaPage() {
           Voltar
         </Link>
       </div>
-      <div className="max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Auditoria</h1>
         <p className="text-sm text-slate-500 mt-0.5">Histórico de ações no sistema</p>
