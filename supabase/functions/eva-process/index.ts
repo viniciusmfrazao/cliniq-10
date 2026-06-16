@@ -786,6 +786,50 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ─── CAMADA FOTO: pedido explícito de foto/resultado ─────────────────────
+  //
+  // Caso real (lead 553491805722): cliente pediu "tem foto pra ver como fica?"
+  // e a Eva respondeu só com texto. A galeria só dispara no momento exato do
+  // registrar_interesse — quando o cliente pede a foto DEPOIS, não havia gatilho.
+  //
+  // Solução: quando o cliente menciona foto/imagem/resultado/antes e depois,
+  // buscar o procedimento de interesse atual do lead e enviar as imagens.
+  // Funciona mesmo se o interesse foi registrado em turno anterior.
+  if (!payload.isFollowup && ctx.lead?.id) {
+    const lowerFoto = (payload.userText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const pediuFoto = /\b(foto|fotos|imagem|imagens|antes e depois|antes\/depois|como fica|como ficou|resultado|resultados|ver como|mostrar|portfolio|portifolio)\b/.test(lowerFoto);
+
+    if (pediuFoto) {
+      // Tenta achar o procedimento: 1) o que o lead mencionou agora, 2) o interesse já registrado
+      let procFoto = ctx.procedures.find(p => {
+        const procNorm = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (lowerFoto.includes(procNorm)) return true;
+        return procNorm.split(/\s+/).some(w => w.length >= 4 && lowerFoto.includes(w));
+      });
+
+      // Se não detectou na mensagem atual, usa o interesse já registrado no lead
+      if (!procFoto && ctx.lead.interest) {
+        const interestNorm = ctx.lead.interest.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        procFoto = ctx.procedures.find(p => {
+          const procNorm = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          return procNorm === interestNorm || procNorm.includes(interestNorm) || interestNorm.includes(procNorm);
+        });
+      }
+
+      if (procFoto?.id) {
+        console.log(JSON.stringify({ evt: 'camada_foto', proc: procFoto.name, clinic: payload.clinicId }));
+        await sendResultImages(
+          procFoto.id,
+          procFoto.name,
+          ctx,
+          payload,
+          { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY },
+          imagesSentProcedures,
+        ).catch(e => errors.push(`sendResultImages_camada_foto: ${e?.message ?? e}`));
+      }
+    }
+  }
+
   // ─── CAMADA 1 + 3: detecção de intenção e escalonamento de modelo ────────
   //
   // O Haiku falha em chamar consultar_agenda quando deveria (dado real: 17/17
