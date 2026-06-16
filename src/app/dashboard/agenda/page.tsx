@@ -26,7 +26,7 @@ export default async function AgendaPage({
   const viewMode = sp.view || 'day'
   const selectedProfessional = sp.professional || 'all'
   // Parse multi-select: 'all' ou 'id1,id2,...'
-  const selectedProfIds = selectedProfessional === 'all'
+  const rawSelectedProfIds = selectedProfessional === 'all'
     ? []
     : selectedProfessional.split(',').filter(Boolean)
   const selectedStatus = sp.status || 'all'
@@ -123,6 +123,10 @@ export default async function AgendaPage({
     ? professionalsFiltered 
     : allUsers.filter(u => u.role === 'admin' && u.active !== false
   )
+
+  // Validar IDs selecionados — se algum ID não existe na lista atual, ignorar (evita tela vazia)
+  const validProfIds = new Set(professionals.map((p: any) => p.id))
+  const selectedProfIds = rawSelectedProfIds.filter(id => validProfIds.has(id))
   const appointments = appointmentsResult.data || []
   const todayAppointments = todayAppointmentsResult.data || []
   const blocks = blocksResult.data || []
