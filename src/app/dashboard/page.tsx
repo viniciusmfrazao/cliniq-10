@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { parseDateBR } from '@/lib/datetime'
 import Link from 'next/link'
+import NovidadeBanner from './NovidadeBanner'
 import Icon from '@/components/ui/Icon'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import WeeklyChart from '@/components/dashboard/WeeklyChart'
@@ -288,6 +289,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           </Link>
         </div>
       </div>
+
+      {/* Banner de novidade */}
+      <NovidadeBanner />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">

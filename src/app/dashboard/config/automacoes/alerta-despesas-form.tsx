@@ -23,6 +23,7 @@ export default function AlertaDespesasForm({ clinicId, initial }: Props) {
   const [enabled, setEnabled] = useState(initial.enabled)
   const [diasAntes, setDiasAntes] = useState(initial.diasAntes)
   const [saving, setSaving] = useState(false)
+  const [sending, setSending] = useState(false)
 
   async function salvar() {
     setSaving(true)
@@ -38,6 +39,29 @@ export default function AlertaDespesasForm({ clinicId, initial }: Props) {
       toast.error('Erro ao salvar. Tente novamente.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function enviarAgora() {
+    setSending(true)
+    try {
+      const res = await fetch('/api/config/alerta-despesas/send-now', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        toast.success(`Alerta enviado para ${data.sent} número${data.sent > 1 ? 's' : ''}!`)
+      } else if (data.error === 'sem_despesas_na_janela') {
+        toast.error('Nenhuma despesa vencendo na janela configurada.')
+      } else if (data.error === 'sem_telefones') {
+        toast.error('Nenhum telefone configurado no relatório semanal.')
+      } else if (data.error === 'alerta_despesas_desativado') {
+        toast.error('Ative o alerta antes de enviar.')
+      } else {
+        toast.error('Erro ao enviar. Verifique o WhatsApp conectado.')
+      }
+    } catch {
+      toast.error('Erro ao enviar. Tente novamente.')
+    } finally {
+      setSending(false)
     }
   }
 
@@ -101,6 +125,25 @@ export default function AlertaDespesasForm({ clinicId, initial }: Props) {
         <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
           ⚠️ Nenhum telefone configurado no relatório semanal. Configure os telefones de destino
           no campo "Telefones do relatório" para receber os alertas.
+        </div>
+      )}
+
+      {/* Enviar agora */}
+      {enabled && initial.temTelefones && (
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+          <p className="text-sm font-medium text-slate-700">Enviar agora</p>
+          <p className="text-xs text-slate-500">
+            Envia o alerta imediatamente para os números configurados, com as despesas da janela atual.
+          </p>
+          <button
+            type="button"
+            onClick={enviarAgora}
+            disabled={sending}
+            className="btn btn-primary mt-2 flex items-center gap-2"
+          >
+            {sending ? <LoadingSpinner size="sm" /> : '📤'}
+            {sending ? 'Enviando...' : 'Enviar alerta agora'}
+          </button>
         </div>
       )}
 
