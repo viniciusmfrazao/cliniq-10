@@ -29,13 +29,15 @@ export default async function EvaConfigPage() {
     redirect('/dashboard/config')
   }
 
-  const { data: clinic } = await supabase
-    .from('clinics')
-    .select('id, name, settings')
-    .eq('id', userData.clinic_id)
-    .single()
+  const [clinicRes, autoRes] = await Promise.all([
+    supabase.from('clinics').select('id, name, settings').eq('id', userData.clinic_id).single(),
+    supabase.from('clinic_automations').select('eva_send_result_images, eva_max_result_images').eq('clinic_id', userData.clinic_id).single(),
+  ])
 
+  const clinic = clinicRes.data
   if (!clinic) redirect('/dashboard/config')
+
+  const automations = autoRes.data
 
   return (
     <div className="space-y-6">
@@ -49,6 +51,8 @@ export default async function EvaConfigPage() {
         clinicId={clinic.id}
         clinicName={clinic.name}
         settings={(clinic.settings ?? {}) as Record<string, unknown>}
+        evaSendResultImages={automations?.eva_send_result_images ?? false}
+        evaMaxResultImages={automations?.eva_max_result_images ?? 3}
       />
     </div>
   )
