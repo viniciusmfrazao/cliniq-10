@@ -424,11 +424,19 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                   Paciente: <strong style={{ color: 'var(--dark)' }}>{anamnese.patients.name}</strong>
                 </p>
                 {anamnese.patients.birth_date ? (
-                  <p className="text-sm" style={{ color: 'var(--light-text)' }}>
-                    Data de nascimento: <strong style={{ color: 'var(--dark)' }}>
-                      {parseDateBR(anamnese.patients.birth_date)}
-                    </strong>
-                  </p>
+                  <div className="mt-3">
+                    <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
+                      Data de nascimento <span style={{ fontSize: '11px', color: '#b89a6a' }}>(confirme ou corrija)</span>
+                    </label>
+                    <input
+                      type="date"
+                      className="anamnese-input"
+                      defaultValue={anamnese.patients.birth_date.slice(0, 10)}
+                      onChange={e => setBirthDateInput(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      style={{ maxWidth: '200px' }}
+                    />
+                  </div>
                 ) : (
                   <div className="mt-3">
                     <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
