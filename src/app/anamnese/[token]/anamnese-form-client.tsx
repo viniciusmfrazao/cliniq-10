@@ -48,6 +48,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   // Campos de identificação que o paciente pode preencher (se vazios no cadastro)
   const [cpfInput, setCpfInput] = useState('')
   const [birthDateInput, setBirthDateInput] = useState('')
+  const [phoneInput, setPhoneInput] = useState('')
+  const [emailInput, setEmailInput] = useState('')
 
   // Restaurar rascunho ao montar (client-side only)
   useEffect(() => {
@@ -191,6 +193,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           identificacao: {
             cpf: cpfInput.trim() || null,
             birth_date: birthDateInput || null,
+            phone: phoneInput.trim() || null,
+            email: emailInput.trim() || null,
           },
         }),
       })
@@ -533,6 +537,36 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                       }}
                       maxLength={14}
                       style={{ maxWidth: '200px' }}
+                    />
+                  </div>
+                )}
+                {camposIdAtivos.includes('telefone') && !anamnese.patients.phone && (
+                  <div className="mt-3">
+                    <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
+                      Telefone / WhatsApp <span style={{ color: '#b89a6a' }}>*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      className="anamnese-input"
+                      placeholder="(00) 00000-0000"
+                      value={phoneInput}
+                      onChange={e => setPhoneInput(e.target.value)}
+                      style={{ maxWidth: '200px' }}
+                    />
+                  </div>
+                )}
+                {camposIdAtivos.includes('email') && !anamnese.patients.email && (
+                  <div className="mt-3">
+                    <label className="text-sm block mb-1" style={{ color: 'var(--mid)' }}>
+                      E-mail
+                    </label>
+                    <input
+                      type="email"
+                      className="anamnese-input"
+                      placeholder="seu@email.com"
+                      value={emailInput}
+                      onChange={e => setEmailInput(e.target.value)}
+                      style={{ maxWidth: '260px' }}
                     />
                   </div>
                 )}

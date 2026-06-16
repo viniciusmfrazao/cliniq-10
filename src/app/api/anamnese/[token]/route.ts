@@ -98,7 +98,7 @@ export async function POST(
       const updates: Record<string, string> = {}
       const { data: pat } = await getAdmin()
         .from('patients')
-        .select('cpf, birth_date')
+        .select('cpf, birth_date, phone, email')
         .eq('id', anamnese.patient_id)
         .single()
 
@@ -107,9 +107,16 @@ export async function POST(
         updates.cpf = identificacao.cpf.trim()
       }
       // Data de nascimento: sempre atualiza se o paciente enviou um valor
-      // (permite corrigir data cadastrada errada)
       if (identificacao.birth_date) {
         updates.birth_date = identificacao.birth_date
+      }
+      // Telefone: só salva se o paciente ainda não tem
+      if (!pat?.phone && identificacao.phone?.trim()) {
+        updates.phone = identificacao.phone.trim()
+      }
+      // Email: só salva se o paciente ainda não tem
+      if (!pat?.email && identificacao.email?.trim()) {
+        updates.email = identificacao.email.trim()
       }
 
       if (Object.keys(updates).length > 0) {
