@@ -11,6 +11,7 @@ import RecallHistory from './recall-history'
 import NpsForm from './nps-form'
 import NpsHistory from './nps-history'
 import ContatoPosForm from './contato-pos-form'
+import AlertaDespesasForm from './alerta-despesas-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,6 +71,9 @@ export default async function AutomacoesPage() {
     template_contato_pos?: string | null
     contato_pos_excluir_categorias?: string[] | null
     contato_pos_seq?: any[] | null
+    alerta_despesas?: boolean | null
+    alerta_despesas_dias_antes?: number | null
+    relatorio_telefones?: any
   }
   const auto = (automation || null) as AutomationRow | null
 
@@ -257,6 +261,31 @@ export default async function AutomacoesPage() {
             template: auto?.template_contato_pos || '',
             excluirCategorias: auto?.contato_pos_excluir_categorias ?? ['Atendimento', 'Atendimento '],
             seq: auto?.contato_pos_seq ?? [],
+          }}
+        />
+      </div>
+
+      {/* Alerta de despesas */}
+      <div className="card overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-md">
+            <span className="text-2xl">💸</span>
+          </div>
+          <div className="flex-1">
+            <h2 className="font-semibold text-slate-900">Alerta de despesas</h2>
+            <p className="text-sm text-slate-500">
+              Avisa via WhatsApp quando há boletos/despesas vencendo hoje ou em 7 dias
+            </p>
+          </div>
+        </div>
+        <AlertaDespesasForm
+          clinicId={clinicId}
+          initial={{
+            enabled: auto?.alerta_despesas ?? false,
+            diasAntes: auto?.alerta_despesas_dias_antes ?? 1,
+            temTelefones: Array.isArray(auto?.relatorio_telefones)
+              ? auto.relatorio_telefones.length > 0
+              : !!auto?.relatorio_telefones,
           }}
         />
       </div>
