@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 import AuditList from './audit-list'
 
 export default async function AuditoriaPage() {
@@ -36,7 +38,16 @@ export default async function AuditoriaPage() {
     .eq('clinic_id', currentUser.clinic_id)
 
   return (
-    <div className="max-w-6xl mx-auto">
+          <div className="mb-6">
+        <Link
+          href="/dashboard"
+          className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
+        >
+          <Icon name="chevronLeft" className="w-4 h-4" />
+          Voltar
+        </Link>
+      </div>
+      <div className="max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Auditoria</h1>
         <p className="text-sm text-slate-500 mt-0.5">Histórico de ações no sistema</p>

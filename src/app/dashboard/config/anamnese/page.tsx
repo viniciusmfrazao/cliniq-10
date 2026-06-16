@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 import AnamneseConfigForm from './anamnese-config-form'
 
 export default async function AnamneseConfigPage() {
@@ -33,7 +35,16 @@ export default async function AnamneseConfigPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-6 px-4">
+          <div className="mb-6">
+        <Link
+          href="/dashboard/config"
+          className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
+        >
+          <Icon name="chevronLeft" className="w-4 h-4" />
+          Voltar
+        </Link>
+      </div>
+      <div className="max-w-3xl mx-auto py-6 px-4">
       <AnamneseConfigForm config={config} clinicId={clinicId} />
     </div>
   )

@@ -290,13 +290,7 @@ export default async function AutomacoesPage() {
         />
       </div>
 
-      {/* Outras automações (placeholder) */}
-      <div className="card p-6 bg-slate-50 border-dashed border-2 border-slate-200">
-        <p className="text-sm text-slate-500 text-center">
-          Mais automações em breve: lembrete 2h antes (plano Pro), follow-up de lead,
-          reativação de lead perdido, relatório semanal…
-        </p>
-      </div>
+
     </div>
   )
 }

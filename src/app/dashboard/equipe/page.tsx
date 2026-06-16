@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 import InviteForm from './invite-form'
 import TeamList from './team-list'
 
@@ -32,7 +34,16 @@ export default async function EquipePage() {
   const inactiveMembers = (allMembers || []).filter(m => m.active === false)
 
   return (
-    <div className="max-w-2xl mx-auto">
+          <div className="mb-6">
+        <Link
+          href="/dashboard"
+          className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
+        >
+          <Icon name="chevronLeft" className="w-4 h-4" />
+          Voltar
+        </Link>
+      </div>
+      <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Equipe</h1>
         <p className="text-sm text-slate-500 mt-0.5">Gerencie os membros da sua clínica</p>

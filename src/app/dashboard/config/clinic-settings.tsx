@@ -23,7 +23,7 @@ type Props = {
 export default function ClinicSettings({ clinic, automations }: Props) {
   const router = useRouter()
   const supabase = createClient()
-  const [openSection, setOpenSection] = useState<string>('dados')
+  const [openSection, setOpenSection] = useState<string>('')
 
   const s = clinic?.settings || {}
   const [name, setName]                 = useState(clinic?.name || '')
