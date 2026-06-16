@@ -7,7 +7,7 @@ import AgendaView from './agenda-view'
 import AgendaFilters from './agenda-filters'
 import { todayBR, startOfDayBR, endOfDayBR, addDaysBR, BR_OFFSET } from '@/lib/datetime'
 
-export const revalidate = 30
+export const dynamic = 'force-dynamic'
 
 export default async function AgendaPage({ 
   searchParams 
