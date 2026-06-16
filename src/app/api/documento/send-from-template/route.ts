@@ -147,10 +147,11 @@ export async function POST(req: NextRequest) {
       `Após a leitura, por favor assine digitalmente aqui:\n${link}\n\n` +
       `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
   } else if (hasAttachment && !requiresSignature) {
-    // Só anexo, sem assinatura
-    message =
-      `Olá ${firstName}! 👋\n\n` +
-      `Acima segue o documento da *${clinicName}*. Qualquer dúvida é só chamar! 🤍`
+    // Anexo sem assinatura — usa o conteúdo do template como mensagem
+    // Se o template não tem conteúdo, usa texto genérico
+    message = filledContent && filledContent.trim()
+      ? filledContent
+      : `Olá ${firstName}! 👋\n\nAcima segue o documento da *${clinicName}*. Qualquer dúvida é só chamar! 🤍`
   } else if (requiresSignature) {
     // Sem anexo, com assinatura (texto do template é o documento)
     message =
