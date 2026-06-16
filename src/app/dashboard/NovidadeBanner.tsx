@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
 const STORAGE_KEY = 'clinike_novidade_alerta_despesas_v1'
-const EXPIRA_EM_DIAS = 30
+const EXPIRA_EM_DIAS = 3
 
 export default function NovidadeBanner() {
   const [visible, setVisible] = useState(false)
