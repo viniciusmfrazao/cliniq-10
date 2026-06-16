@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 import EvaConfigForm from './eva-config-form'
 import EvaCostPanel from './eva-cost-panel'
 
@@ -40,7 +42,16 @@ export default async function EvaConfigPage() {
   const automations = autoRes.data
 
   return (
-    <div className="space-y-6">
+          <div className="mb-6">
+        <Link
+          href="/dashboard/config"
+          className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
+        >
+          <Icon name="chevronLeft" className="w-4 h-4" />
+          Voltar
+        </Link>
+      </div>
+      <div className="space-y-6">
       {/* Painel de custo */}
       <div className="card p-6">
         <EvaCostPanel clinicId={clinic.id} />
