@@ -560,5 +560,16 @@ export const TOOLS = [
       required: ['nome_completo'],
     },
   },
+  {
+    name: 'enviar_fotos_resultado',
+    description: 'Use quando a paciente pedir para ver FOTOS, IMAGENS, RESULTADOS, ANTES E DEPOIS, ou "como fica" de um procedimento. Esta tool envia as fotos de resultado pelo WhatsApp automaticamente. Depois de chamar, voce DEVE apresentar as fotos com calor e contexto na sua resposta. NUNCA diga que nao tem fotos sem antes chamar esta tool — e ela quem sabe se existem fotos cadastradas.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        procedimento: { type: 'string', description: 'Nome do procedimento que a paciente quer ver os resultados. Se ela nao especificou, use o procedimento de interesse da conversa.' },
+      },
+      required: ['procedimento'],
+    },
+  },
 ];
 
