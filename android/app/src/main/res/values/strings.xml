@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Clinike</string>
+    <string name="title_activity_main">Clinike</string>
+    <string name="package_name">com.clinike.app</string>
+    <string name="custom_url_scheme">com.clinike.app</string>
+</resources>

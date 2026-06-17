@@ -1,0 +1,97 @@
+name: Build Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: 'Version code (ex: 2)'
+        required: true
+        default: '1'
+      version_name:
+        description: 'Version name (ex: 1.0.1)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Sync Capacitor (sem build estático — app usa WebView remota)
+        run: |
+          # Cria pasta out vazia para o cap sync não reclamar
+          mkdir -p out
+          npx cap sync android
+
+      - name: Update version code and name
+        run: |
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.event.inputs.version_code }}/" android/app/build.gradle
+          sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/" android/app/build.gradle
+          echo "Version updated:"
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/clinike-release.keystore
+
+      - name: Configure signing
+        run: |
+          cat >> android/app/build.gradle << 'EOF'
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file('../clinike-release.keystore')
+                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+
+      - name: Build release AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: clinike-release-v${{ github.event.inputs.version_name }}.aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Build info
+        run: |
+          echo "✅ Build concluído!"
+          echo "Version: ${{ github.event.inputs.version_name }} (${{ github.event.inputs.version_code }})"
+          ls -lh android/app/build/outputs/bundle/release/

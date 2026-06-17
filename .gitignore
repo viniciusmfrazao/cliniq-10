@@ -22,4 +22,3 @@ stress-test/results/
 # Capacitor — projetos nativos gerados (Xcode/Android Studio)
 # Esses diretórios são gerados pelo 'npx cap add ios/android' e não vão no git
 /ios/
-/android/
