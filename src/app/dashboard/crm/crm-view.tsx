@@ -116,6 +116,8 @@ type Props = {
   templates: MessageTemplate[]
   /** Quando true, mostra banner indicando que a Eva está em modo manual. */
   evaPaused?: boolean
+  /** IDs de leads com follow-up MANUAL pendente (agendado pela secretaria). */
+  manualFollowupLeadIds?: string[]
 }
 
 const DEFAULT_STAGES = [
@@ -182,7 +184,7 @@ const AI_PRIORITY_CONFIG = {
   cold: { label: '❄️ Frio', color: 'bg-blue-100 text-blue-700' },
 }
 
-export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false }: Props) {
+export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false, manualFollowupLeadIds = [] }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const { selectedLine } = useWaLine()
@@ -217,16 +219,28 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   //   count 2 -> ja mandou 2, proxima em 48h
   //   count 3 -> ja mandou 3, proxima em 5d
   //   count 4 -> ultima chance (~10d)
-  const isInFollowup = (l: Lead): boolean =>
+  const isEvaFollowup = (l: Lead): boolean =>
     !!l.eva_next_followup_at &&
     l.status !== 'converted' &&
     l.status !== 'lost' &&
     !l.needs_human_review
 
+  // Follow-up MANUAL pendente (secretaria agendou, ainda não concluído).
+  const manualFollowupSet = new Set(manualFollowupLeadIds)
+  const hasManualFollowup = (l: Lead): boolean =>
+    manualFollowupSet.has(l.id) &&
+    l.status !== 'converted' &&
+    l.status !== 'lost'
+
+  // Um lead está "em follow-up" se a Eva agendou a próxima tentativa OU se há
+  // um follow-up manual pendente. Alimenta o card e o filtro "Em follow-up".
+  const isInFollowup = (l: Lead): boolean => isEvaFollowup(l) || hasManualFollowup(l)
+
   const getFollowupCount = (l: Lead): number => l.eva_followup_count ?? 0
 
   const followupBucket = (l: Lead): 'fu_2h' | 'fu_4h' | 'fu_48h' | 'fu_5d' | 'fu_10d' | null => {
-    if (!isInFollowup(l)) return null
+    // Os 5 sub-estágios são exclusivos da Eva — follow-up manual não entra nos buckets.
+    if (!isEvaFollowup(l)) return null
     const c = getFollowupCount(l)
     if (c >= 4) return 'fu_10d'
     if (c === 3) return 'fu_5d'
