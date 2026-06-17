@@ -39,6 +39,10 @@ jobs:
         run: |
           mkdir -p out
           echo '<html><body>Clinike</body></html>' > out/index.html
+          # ts-node é necessário para o CLI ler o capacitor.config.ts
+          npm install --save-dev ts-node --legacy-peer-deps
+          # registra a plataforma android (pasta já existe no repo) e sincroniza
+          npx cap add android 2>/dev/null || true
           npx cap sync android
 
       - name: Update version
