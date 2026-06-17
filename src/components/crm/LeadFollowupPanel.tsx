@@ -100,7 +100,13 @@ export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt,
       const resp = await fetch('/api/crm/followups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: leadId, ...form }),
+        // datetime-local é horário local (browser). Convertendo p/ ISO UTC,
+        // o horário gravado bate com o que a secretária digitou (sem -3h).
+        body: JSON.stringify({
+          lead_id: leadId,
+          ...form,
+          scheduled_at: new Date(form.scheduled_at).toISOString(),
+        }),
       })
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}))
