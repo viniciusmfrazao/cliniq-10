@@ -46,26 +46,49 @@ jobs:
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/clinike-release.keystore
 
-      - name: Configure signing
+      - name: Configure signing in build.gradle
         run: |
-          cat >> android/app/build.gradle << 'EOF'
+          # Adicionar configuração de signing via variáveis de ambiente
+          # de forma mais robusta usando um arquivo keystore properties
+          cat > android/keystore.properties << EOF
+          storeFile=clinike-release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
 
-          android {
+          # Verificar se já tem signingConfig release no build.gradle
+          if ! grep -q "signingConfigs" android/app/build.gradle; then
+            # Inserir signing config antes de "buildTypes"
+            python3 -c "
+          content = open('android/app/build.gradle').read()
+          signing = '''
               signingConfigs {
                   release {
-                      storeFile file('../clinike-release.keystore')
-                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
-                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
-                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                      def props = new Properties()
+                      def propsFile = rootProject.file('keystore.properties')
+                      if (propsFile.exists()) { props.load(propsFile.newDataInputStream()) }
+                      storeFile file(rootProject.projectDir.absolutePath + '/' + props['storeFile'])
+                      storePassword props['storePassword']
+                      keyAlias props['keyAlias']
+                      keyPassword props['keyPassword']
                   }
               }
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.release
-                  }
-              }
-          }
-          EOF
+          '''
+          content = content.replace('    buildTypes {', signing + '    buildTypes {')
+          content = content.replace(
+              '            release {',
+              '            release {\n                signingConfig signingConfigs.release'
+          )
+          open('android/app/build.gradle', 'w').write(content)
+          print('Signing config adicionado!')
+          "
+          else
+            echo "signingConfigs já existe no build.gradle"
+          fi
+
+          echo "=== build.gradle final ==="
+          cat android/app/build.gradle
 
       - name: Build release AAB
         run: |
