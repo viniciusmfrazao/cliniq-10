@@ -35,27 +35,11 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Run cap sync
+      - name: Prepare web dir and cap sync
         run: |
           mkdir -p out
           echo '<html><body>Clinike</body></html>' > out/index.html
-          npm install --save-dev ts-node --legacy-peer-deps
-          {
-            echo "=== node ===" && node --version
-            echo "=== cap version ===" && npx cap --version
-            echo "=== cap add android ===" && npx cap add android 2>&1 || true
-            echo "=== cap sync android ===" && npx cap sync android 2>&1
-          } 2>&1 | tee /tmp/capsync.log
-          # falha se cap sync falhou (exit code não 0 em subshell)
           npx cap sync android
-
-      - name: Upload cap sync log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: capsync-log
-          path: /tmp/capsync.log
-          retention-days: 1
 
       - name: Update version
         run: |
@@ -82,7 +66,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease --info 2>&1 | tail -50
+          ./gradlew bundleRelease 2>&1 | tail -80
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
