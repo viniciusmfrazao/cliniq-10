@@ -61,6 +61,7 @@ export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt,
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ scheduled_at: '', type: 'whatsapp', note: '' })
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Formulário de novo contato
   const [showContactForm, setShowContactForm] = useState(false)
@@ -92,15 +93,23 @@ export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt,
   async function handleSaveFollowup() {
     if (!form.scheduled_at) return
     setSaving(true)
+    setSaveError(null)
     try {
-      await fetch('/api/crm/followups', {
+      const resp = await fetch('/api/crm/followups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lead_id: leadId, ...form }),
       })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}))
+        setSaveError(data?.error || 'Não foi possível salvar o follow-up. Tente novamente.')
+        return
+      }
       setForm({ scheduled_at: '', type: 'whatsapp', note: '' })
       setShowForm(false)
       await loadFollowups()
+    } catch {
+      setSaveError('Erro de conexão ao salvar. Tente novamente.')
     } finally { setSaving(false) }
   }
 
@@ -214,6 +223,11 @@ export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt,
                   className="text-xs px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
                 />
               </div>
+              {saveError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                  {saveError}
+                </p>
+              )}
               <div className="flex gap-2">
                 <button onClick={handleSaveFollowup} disabled={!form.scheduled_at || saving}
                   className="flex-1 text-xs py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg font-medium transition">
