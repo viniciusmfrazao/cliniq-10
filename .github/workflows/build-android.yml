@@ -35,6 +35,14 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Run cap sync (gera capacitor.settings.gradle e arquivos de build)
+        run: |
+          mkdir -p out
+          echo '<html><body>Clinike</body></html>' > out/index.html
+          npx cap sync android
+          echo "=== Arquivos gerados ==="
+          ls android/capacitor.settings.gradle android/app/capacitor.build.gradle
+
       - name: Update version code and name
         run: |
           sed -i "s/versionCode [0-9]*/versionCode ${{ github.event.inputs.version_code }}/" android/app/build.gradle
