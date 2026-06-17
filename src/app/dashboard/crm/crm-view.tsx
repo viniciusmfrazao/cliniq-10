@@ -148,6 +148,8 @@ type Props = {
   templates: MessageTemplate[]
   /** Quando true, mostra banner indicando que a Eva está em modo manual. */
   evaPaused?: boolean
+  /** Eva ativa (módulo + auto-resposta). Quando false, não exibe follow-up automático da Eva. */
+  evaActive?: boolean
   /** Mapa lead_id -> data ISO do próximo follow-up MANUAL pendente. */
   manualFollowups?: Record<string, string>
 }
@@ -216,7 +218,7 @@ const AI_PRIORITY_CONFIG = {
   cold: { label: '❄️ Frio', color: 'bg-blue-100 text-blue-700' },
 }
 
-export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false, manualFollowups = {} }: Props) {
+export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false, evaActive = true, manualFollowups = {} }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const { selectedLine } = useWaLine()
@@ -252,6 +254,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   //   count 3 -> ja mandou 3, proxima em 5d
   //   count 4 -> ultima chance (~10d)
   const isEvaFollowup = (l: Lead): boolean =>
+    evaActive &&
     !!l.eva_next_followup_at &&
     l.status !== 'converted' &&
     l.status !== 'lost' &&
@@ -767,7 +770,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   const aiPriority = tempKey ? AI_PRIORITY_CONFIG[tempKey as keyof typeof AI_PRIORITY_CONFIG] : null
                   const tempIsManual = !lead.ai_priority && !!tempKey
                   const needsContact = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
-                  const followup = getFollowupBadge(lead)
+                  const followup = evaActive ? getFollowupBadge(lead) : null
                   const manualFollowup = getManualFollowupBadge(manualFollowups[lead.id], lead.status)
                   const followupClass =
                     followup?.tone === 'darkred'
@@ -1444,7 +1447,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
               </div>
 
               {/* Follow-ups e Histórico de Contatos */}
-              <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} />
+              <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} evaActive={evaActive} />
 
               {/* Contato Rápido */}
               <div className="flex gap-2">

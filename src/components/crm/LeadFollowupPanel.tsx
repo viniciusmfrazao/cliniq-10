@@ -23,6 +23,8 @@ type Props = {
   evaNextFollowupAt?: string | null
   evaFollowupCount?: number | null
   evaPauseUntil?: string | null
+  /** Eva ativa na clínica. Quando false, não mostra banners de follow-up automático. */
+  evaActive?: boolean
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -51,7 +53,7 @@ function formatRelativeTime(dateStr: string): string {
   return `em ${m}min`
 }
 
-export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt, evaFollowupCount, evaPauseUntil }: Props) {
+export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt, evaFollowupCount, evaPauseUntil, evaActive = true }: Props) {
   const [tab, setTab] = useState<'followups' | 'contacts'>('followups')
   const [followups, setFollowups] = useState<Followup[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -143,7 +145,12 @@ export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt,
   return (
     <div className="mt-3 border-t border-slate-100 dark:border-slate-700 pt-3">
       {/* Banner: status do followup automático da Eva */}
-      {evaPauseUntil && new Date(evaPauseUntil) > new Date() ? (
+      {!evaActive ? (
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-500 dark:text-slate-400">
+          <span>🔕</span>
+          <span>Eva desativada nesta clínica — os follow-ups manuais abaixo são enviados por você.</span>
+        </div>
+      ) : evaPauseUntil && new Date(evaPauseUntil) > new Date() ? (
         <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-700 dark:text-amber-300">
           <span>⏸️</span>
           <span>Eva pausada até {new Date(evaPauseUntil).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })} — followup manual agendado</span>
