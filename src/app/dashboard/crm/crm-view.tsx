@@ -1098,6 +1098,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           stages={STAGES}
           onClose={() => setSelectedLead(null)}
           onUpdate={() => { setSelectedLead(null); router.refresh() }}
+          evaActive={evaActive}
         />
       )}
 
@@ -1252,7 +1253,7 @@ function NewLeadModal({ clinicId, procedures, users, sources, onClose, onSuccess
 }
 
 // Modal de Detalhes do Lead
-function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, onUpdate }: {
+function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, onUpdate, evaActive = true }: {
   lead: Lead
   procedures: { id: string; name: string }[]
   users: { id: string; name: string }[]
@@ -1260,6 +1261,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
   stages: { id: string; label: string; color: string; order: number }[]
   onClose: () => void
   onUpdate: () => void
+  evaActive?: boolean
 }) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
