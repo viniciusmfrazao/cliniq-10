@@ -81,6 +81,38 @@ function getFollowupBadge(
   return { label: 'Aguardando 2h', tone: 'amber' }
 }
 
+/**
+ * Badge de prazo do follow-up MANUAL no card do funil.
+ * Mostra se está atrasado e há quanto tempo, ou quanto falta.
+ * scheduledAt é um timestamp ISO com timezone (instante absoluto).
+ */
+function getManualFollowupBadge(
+  scheduledAt: string | undefined,
+  status: string,
+): { label: string; overdue: boolean } | null {
+  if (!scheduledAt) return null
+  if (status === 'converted' || status === 'lost') return null
+  const diffMs = new Date(scheduledAt).getTime() - Date.now()
+  const overdue = diffMs < 0
+  const abs = Math.abs(diffMs)
+  const mins = Math.round(abs / 60000)
+  let delta: string
+  if (mins < 1) delta = 'agora'
+  else if (mins < 60) delta = `${mins} min`
+  else {
+    const hours = Math.round(mins / 60)
+    if (hours < 24) delta = `${hours}h`
+    else {
+      const days = Math.round(hours / 24)
+      delta = `${days} ${days === 1 ? 'dia' : 'dias'}`
+    }
+  }
+  const label = overdue
+    ? (delta === 'agora' ? 'Follow-up agora' : `Follow-up atrasado · há ${delta}`)
+    : (delta === 'agora' ? 'Follow-up agora' : `Follow-up em ${delta}`)
+  return { label, overdue }
+}
+
 const HUMAN_REVIEW_REASONS: Record<string, { label: string; emoji: string }> = {
   cancelamento: { label: 'Cancelamento', emoji: '🚫' },
   reagendamento: { label: 'Reagendamento', emoji: '🔄' },
@@ -116,8 +148,8 @@ type Props = {
   templates: MessageTemplate[]
   /** Quando true, mostra banner indicando que a Eva está em modo manual. */
   evaPaused?: boolean
-  /** IDs de leads com follow-up MANUAL pendente (agendado pela secretaria). */
-  manualFollowupLeadIds?: string[]
+  /** Mapa lead_id -> data ISO do próximo follow-up MANUAL pendente. */
+  manualFollowups?: Record<string, string>
 }
 
 const DEFAULT_STAGES = [
@@ -184,7 +216,7 @@ const AI_PRIORITY_CONFIG = {
   cold: { label: '❄️ Frio', color: 'bg-blue-100 text-blue-700' },
 }
 
-export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false, manualFollowupLeadIds = [] }: Props) {
+export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false, manualFollowups = {} }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const { selectedLine } = useWaLine()
@@ -226,7 +258,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     !l.needs_human_review
 
   // Follow-up MANUAL pendente (secretaria agendou, ainda não concluído).
-  const manualFollowupSet = new Set(manualFollowupLeadIds)
+  const manualFollowupSet = new Set(Object.keys(manualFollowups))
   const hasManualFollowup = (l: Lead): boolean =>
     manualFollowupSet.has(l.id) &&
     l.status !== 'converted' &&
@@ -736,6 +768,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   const tempIsManual = !lead.ai_priority && !!tempKey
                   const needsContact = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
                   const followup = getFollowupBadge(lead)
+                  const manualFollowup = getManualFollowupBadge(manualFollowups[lead.id], lead.status)
                   const followupClass =
                     followup?.tone === 'darkred'
                       ? 'bg-red-200 text-red-900 border-red-300'
@@ -814,6 +847,19 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                         <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md border mb-2 ${followupClass}`} title="Eva está aguardando resposta da paciente">
                           <span>{followupEmoji}</span>
                           <span className="font-medium">{followup.label}</span>
+                        </div>
+                      )}
+                      {manualFollowup && (
+                        <div
+                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md border mb-2 ${
+                            manualFollowup.overdue
+                              ? 'bg-red-100 text-red-700 border-red-200'
+                              : 'bg-sky-100 text-sky-700 border-sky-200'
+                          }`}
+                          title="Follow-up agendado manualmente"
+                        >
+                          <span>{manualFollowup.overdue ? '⏰' : '📅'}</span>
+                          <span className="font-medium">{manualFollowup.label}</span>
                         </div>
                       )}
                       <div className="flex flex-wrap gap-1 mb-2">

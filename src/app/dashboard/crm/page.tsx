@@ -66,14 +66,19 @@ export default async function CRMPage() {
     status: normalizeCRMStatus(lead.status),
   }))
 
-  // Leads com follow-up MANUAL pendente (agendado pela secretaria, ainda não concluído).
-  // Usado para incluí-los no card/filtro "Em follow-up" do funil.
+  // Follow-up MANUAL pendente (agendado pela secretaria, ainda não concluído).
+  // Mapa lead_id -> data do próximo follow-up (o mais cedo). Alimenta o card/filtro
+  // "Em follow-up" e o badge de prazo no card do funil.
   const { data: pendingFollowups } = await supabase
     .from('lead_followups')
-    .select('lead_id')
+    .select('lead_id, scheduled_at')
     .eq('clinic_id', userData?.clinic_id || '')
     .is('done_at', null)
-  const manualFollowupLeadIds = Array.from(new Set((pendingFollowups || []).map(f => f.lead_id)))
+    .order('scheduled_at', { ascending: true })
+  const manualFollowups: Record<string, string> = {}
+  for (const f of pendingFollowups || []) {
+    if (!manualFollowups[f.lead_id]) manualFollowups[f.lead_id] = f.scheduled_at
+  }
 
   // Buscar procedimentos para o select
   const { data: procedures } = await supabase
@@ -131,7 +136,7 @@ export default async function CRMPage() {
       settings={normalizedSettings}
       templates={templates || []}
       evaPaused={evaPaused}
-      manualFollowupLeadIds={manualFollowupLeadIds}
+      manualFollowups={manualFollowups}
     />
   )
 }
