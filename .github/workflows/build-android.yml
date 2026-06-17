@@ -91,14 +91,29 @@ jobs:
           cat android/app/build.gradle
 
       - name: Build release AAB
+        id: gradle_build
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease --stacktrace 2>&1 | tee /tmp/gradle_output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        continue-on-error: true
+
+      - name: Show Gradle error
+        if: always()
+        run: |
+          echo "=== ÚLTIMAS 100 LINHAS DO GRADLE ==="
+          tail -100 /tmp/gradle_output.txt || echo "sem output"
+          echo "=== ARQUIVOS GERADOS ==="
+          find android/app/build/outputs -type f 2>/dev/null || echo "nenhum output gerado"
+
+      - name: Fail if build failed
+        if: steps.gradle_build.outcome == 'failure'
+        run: exit 1
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
