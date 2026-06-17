@@ -35,12 +35,6 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Sync Capacitor (sem build estático — app usa WebView remota)
-        run: |
-          # Cria pasta out vazia para o cap sync não reclamar
-          mkdir -p out
-          npx cap sync android
-
       - name: Update version code and name
         run: |
           sed -i "s/versionCode [0-9]*/versionCode ${{ github.event.inputs.version_code }}/" android/app/build.gradle
