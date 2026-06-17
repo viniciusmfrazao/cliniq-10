@@ -505,7 +505,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
             title="O que significa cada cor, badge e estágio"
           >
             <span>📖</span>
-            <span className="hidden sm:inline">Como ler</span>
+            <span className="hidden sm:inline">Como usar</span>
           </button>
           <button
             onClick={() => setShowSettings(true)}
@@ -1677,7 +1677,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
 }
 
 /**
- * Modal "Como ler o CRM" — referência visual de cores, badges e estágios.
+ * Modal "Como usar o CRM" — referência visual de cores, badges e estágios.
  * Aparece quando o admin/secretaria clica no botao 📖 do header. Vale tanto
  * como onboarding pra membros novos quanto como cola pra quem esquece o
  * que cada termo significa.
