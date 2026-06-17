@@ -318,7 +318,6 @@ export async function GET(req: NextRequest) {
     // Isso evita o caso: cliente fala → Eva responde → cron dispara follow-up
     // 2h depois mesmo com a conversa em andamento no mesmo dia.
     const followupCount = lead.eva_followup_count ?? 0
-    const lastAssistantMsg = lastAssistantMap.get(`${lead.clinic_id}:${lead.phone}`)
     const lastUserMsg = lastUserMap.get(`${lead.clinic_id}:${lead.phone}`)
 
     // Se o cliente enviou mensagem há menos de 3h → conversa ativa, não disparar
@@ -339,23 +338,13 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Para todos os estágios: se Eva falou depois do cliente → cliente não respondeu a última mensagem
-    // Inclui count=0: a Eva já respondeu a primeira msg do lead e ele sumiu — não disparar sem ele responder
-    if (followupCount >= 0) {
-      if (
-        lastAssistantMsg &&
-        (!lastUserMsg || lastUserMsg <= lastAssistantMsg)
-      ) {
-        results.push({
-          lead_id: lead.id,
-          clinic_id: lead.clinic_id,
-          phone: lead.phone,
-          stage: followupCount + 1,
-          skipped: 'client_did_not_reply_last_followup',
-        })
-        continue
-      }
-    }
+    // NOTA (jun/2026): removido o antigo bloqueio 'client_did_not_reply_last_followup'.
+    // Ele pulava o followup justamente quando o cliente estava em silêncio — que é
+    // EXATAMENTE o caso que a sequência existe pra resolver (ver cabeçalho:
+    // "paciente parou de responder → Eva envia followup"). Esse bloqueio congelava
+    // os leads no estágio em que estavam (a própria msg da Eva virava a "última"),
+    // deixando 240+ leads parados por até 19 dias. O guard de conversa ativa (<2h)
+    // acima já evita disparo durante uma conversa em andamento.
 
     const stage = (lead.eva_followup_count ?? 0) + 1
     if (stage > 5) {
