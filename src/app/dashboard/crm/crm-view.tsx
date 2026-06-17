@@ -1909,6 +1909,7 @@ function LegendModal({ onClose }: { onClose: () => void }) {
                 <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">O que a Eva faz sozinha</p>
                 {[
                   '✅ Responde as primeiras mensagens do lead',
+                  '✅ Transcreve e responde áudios do WhatsApp',
                   '✅ Explica procedimentos e preços',
                   '✅ Envia fotos de resultados quando o lead pede',
                   '✅ Manda follow-ups automáticos quando o lead some',
@@ -1928,7 +1929,7 @@ function LegendModal({ onClose }: { onClose: () => void }) {
                     { emoji: '🔄', label: 'Reagendamento', desc: 'Quer trocar data/horário' },
                     { emoji: '⚠️', label: 'Reclamação', desc: 'Está insatisfeito' },
                     { emoji: '❓', label: 'Dúvida clínica', desc: 'Pergunta técnica/médica' },
-                    { emoji: '📷', label: 'Foto ou áudio', desc: 'Enviou mídia que Eva não consegue ver' },
+                    { emoji: '📷', label: 'Foto ou vídeo', desc: 'Enviou imagem/vídeo — Eva não consegue ver o conteúdo visual' },
                     { emoji: '🔁', label: 'Instabilidade', desc: 'Situação incomum ou fora do padrão' },
                   ].map(r => (
                     <div key={r.label} className="flex gap-2 items-start p-2.5 rounded-lg bg-rose-50 border border-rose-100 text-xs">
