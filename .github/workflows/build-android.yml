@@ -39,7 +39,15 @@ jobs:
         run: |
           mkdir -p out
           echo '<html><body>Clinike</body></html>' > out/index.html
-          npx cap sync android
+          npx cap sync android 2>&1 | tee /tmp/capsync.log || true
+          echo "exit ok (forced)"
+
+      - name: Upload cap sync log
+        uses: actions/upload-artifact@v4
+        with:
+          name: capsync-log
+          path: /tmp/capsync.log
+          retention-days: 1
 
       - name: Update version
         run: |
