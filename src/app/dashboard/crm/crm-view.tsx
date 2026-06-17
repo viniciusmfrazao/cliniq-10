@@ -759,7 +759,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
       {/* Kanban View */}
       {viewMode === 'kanban' && (
         <div className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory" style={{scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
-          {STAGES.filter(s => s.id !== 'lost').map(stage => {
+          {STAGES.map(stage => {
             const stageColor = STAGE_COLORS[stage.color] || STAGE_COLORS.slate
             const stageIcon = STAGE_ICONS[stage.id] || 'circle'
             
