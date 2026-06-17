@@ -56,10 +56,10 @@ export async function POST(req: NextRequest) {
   if (!lead_id || !scheduled_at) return NextResponse.json({ error: 'lead_id e scheduled_at obrigatórios' }, { status: 400 })
 
   // Buscar clinic_id do usuário
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('auth_id', user.id).single()
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).single()
   if (!userData?.clinic_id) return NextResponse.json({ error: 'Clínica não encontrada' }, { status: 400 })
 
-  const { data: userRow } = await supabase.from('users').select('id').eq('auth_id', user.id).single()
+  const { data: userRow } = await supabase.from('users').select('id').eq('id', user.id).single()
 
   const { data, error } = await supabase.from('lead_followups').insert({
     clinic_id: userData.clinic_id,
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest) {
   const { id, note } = await req.json()
   if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
 
-  const { data: userRow } = await supabase.from('users').select('id, clinic_id').eq('auth_id', user.id).single()
+  const { data: userRow } = await supabase.from('users').select('id, clinic_id').eq('id', user.id).single()
 
   // Marcar follow-up como feito
   const { data: followup, error } = await supabase
