@@ -74,11 +74,28 @@ function getFollowupBadge(
   if (lead.status === 'converted' || lead.status === 'lost') return null
   if (lead.needs_human_review) return null
   const count = lead.eva_followup_count ?? 0
-  if (count >= 4) return { label: 'Última chance · 10d', tone: 'darkred' }
-  if (count === 3) return { label: 'Aguardando 5d', tone: 'red' }
-  if (count === 2) return { label: 'Aguardando 48h', tone: 'orange' }
-  if (count === 1) return { label: 'Aguardando 24h', tone: 'orange' }
-  return { label: 'Aguardando 2h', tone: 'amber' }
+  // Cor escala conforme o estágio (1 a 5) da sequência da Eva.
+  const tone: 'amber' | 'orange' | 'red' | 'darkred' =
+    count >= 4 ? 'darkred' : count === 3 ? 'red' : count >= 1 ? 'orange' : 'amber'
+  // Tempo REAL até o próximo followup automático (igual ao modal), não rótulo fixo.
+  const diffMs = new Date(lead.eva_next_followup_at).getTime() - Date.now()
+  let when: string
+  if (diffMs <= 0) when = 'enviando'
+  else {
+    const totalMin = Math.round(diffMs / 60000)
+    if (totalMin < 60) when = `em ${totalMin}min`
+    else {
+      const h = Math.floor(totalMin / 60)
+      const m = totalMin % 60
+      if (h < 24) when = m > 0 ? `em ${h}h${m}min` : `em ${h}h`
+      else {
+        const d = Math.floor(h / 24)
+        const rh = h % 24
+        when = rh > 0 ? `em ${d}d${rh}h` : `em ${d}d`
+      }
+    }
+  }
+  return { label: `Followup Eva · ${when}`, tone }
 }
 
 /**
