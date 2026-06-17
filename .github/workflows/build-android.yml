@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Java
@@ -32,6 +32,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Check versions
+        run: |
+          node -v
+          npm -v
+          java -version
+
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
@@ -39,15 +45,16 @@ jobs:
         run: |
           mkdir -p out
           echo '<html><body>Clinike</body></html>' > out/index.html
-          npx cap sync android 2>&1 | tee /tmp/capsync.log || true
-          echo "exit ok (forced)"
+          npx cap sync android 2>&1 | tee /tmp/capsync.log
+          test ${PIPESTATUS[0]} -eq 0
 
       - name: Upload cap sync log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: capsync-log
           path: /tmp/capsync.log
-          retention-days: 1
+          retention-days: 3
 
       - name: Update version
         run: |
@@ -74,7 +81,16 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease 2>&1 | tail -80
+          ./gradlew bundleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle_build.log
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload gradle log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: /tmp/gradle_build.log
+          retention-days: 3
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
