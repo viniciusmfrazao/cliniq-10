@@ -66,6 +66,20 @@ export default async function CRMPage() {
     status: normalizeCRMStatus(lead.status),
   }))
 
+  // Follow-up MANUAL pendente (agendado pela secretaria, ainda não concluído).
+  // Mapa lead_id -> data do próximo follow-up (o mais cedo). Alimenta o card/filtro
+  // "Em follow-up" e o badge de prazo no card do funil.
+  const { data: pendingFollowups } = await supabase
+    .from('lead_followups')
+    .select('lead_id, scheduled_at')
+    .eq('clinic_id', userData?.clinic_id || '')
+    .is('done_at', null)
+    .order('scheduled_at', { ascending: true })
+  const manualFollowups: Record<string, string> = {}
+  for (const f of pendingFollowups || []) {
+    if (!manualFollowups[f.lead_id]) manualFollowups[f.lead_id] = f.scheduled_at
+  }
+
   // Buscar procedimentos para o select
   const { data: procedures } = await supabase
     .from('procedures')
@@ -112,6 +126,9 @@ export default async function CRMPage() {
   const clinicModules: string[] = (await supabase.from('clinics').select('settings').eq('id', userData?.clinic_id || '').single()).data?.settings?.active_modules || []
   const hasEvaModule = clinicModules.length === 0 || clinicModules.includes('eva_ia')
   const evaPaused = hasEvaModule && waInstance?.auto_reply_enabled === false
+  // Eva "ativa" = clínica tem o módulo E auto-resposta não está desligada.
+  // Quando inativa, não anunciamos followup automático da Eva (ela não vai agir).
+  const evaActive = hasEvaModule && waInstance?.auto_reply_enabled !== false
 
   return (
     <CRMView
@@ -122,6 +139,8 @@ export default async function CRMPage() {
       settings={normalizedSettings}
       templates={templates || []}
       evaPaused={evaPaused}
+      evaActive={evaActive}
+      manualFollowups={manualFollowups}
     />
   )
 }

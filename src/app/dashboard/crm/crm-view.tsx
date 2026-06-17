@@ -74,11 +74,60 @@ function getFollowupBadge(
   if (lead.status === 'converted' || lead.status === 'lost') return null
   if (lead.needs_human_review) return null
   const count = lead.eva_followup_count ?? 0
-  if (count >= 4) return { label: 'Última chance · 10d', tone: 'darkred' }
-  if (count === 3) return { label: 'Aguardando 5d', tone: 'red' }
-  if (count === 2) return { label: 'Aguardando 48h', tone: 'orange' }
-  if (count === 1) return { label: 'Aguardando 24h', tone: 'orange' }
-  return { label: 'Aguardando 2h', tone: 'amber' }
+  // Cor escala conforme o estágio (1 a 5) da sequência da Eva.
+  const tone: 'amber' | 'orange' | 'red' | 'darkred' =
+    count >= 4 ? 'darkred' : count === 3 ? 'red' : count >= 1 ? 'orange' : 'amber'
+  // Tempo REAL até o próximo followup automático (igual ao modal), não rótulo fixo.
+  const diffMs = new Date(lead.eva_next_followup_at).getTime() - Date.now()
+  let when: string
+  if (diffMs <= 0) when = 'enviando'
+  else {
+    const totalMin = Math.round(diffMs / 60000)
+    if (totalMin < 60) when = `em ${totalMin}min`
+    else {
+      const h = Math.floor(totalMin / 60)
+      const m = totalMin % 60
+      if (h < 24) when = m > 0 ? `em ${h}h${m}min` : `em ${h}h`
+      else {
+        const d = Math.floor(h / 24)
+        const rh = h % 24
+        when = rh > 0 ? `em ${d}d${rh}h` : `em ${d}d`
+      }
+    }
+  }
+  return { label: `Followup Eva · ${when}`, tone }
+}
+
+/**
+ * Badge de prazo do follow-up MANUAL no card do funil.
+ * Mostra se está atrasado e há quanto tempo, ou quanto falta.
+ * scheduledAt é um timestamp ISO com timezone (instante absoluto).
+ */
+function getManualFollowupBadge(
+  scheduledAt: string | undefined,
+  status: string,
+): { label: string; overdue: boolean } | null {
+  if (!scheduledAt) return null
+  if (status === 'converted' || status === 'lost') return null
+  const diffMs = new Date(scheduledAt).getTime() - Date.now()
+  const overdue = diffMs < 0
+  const abs = Math.abs(diffMs)
+  const mins = Math.round(abs / 60000)
+  let delta: string
+  if (mins < 1) delta = 'agora'
+  else if (mins < 60) delta = `${mins} min`
+  else {
+    const hours = Math.round(mins / 60)
+    if (hours < 24) delta = `${hours}h`
+    else {
+      const days = Math.round(hours / 24)
+      delta = `${days} ${days === 1 ? 'dia' : 'dias'}`
+    }
+  }
+  const label = overdue
+    ? (delta === 'agora' ? 'Follow-up agora' : `Follow-up atrasado · há ${delta}`)
+    : (delta === 'agora' ? 'Follow-up agora' : `Follow-up em ${delta}`)
+  return { label, overdue }
 }
 
 const HUMAN_REVIEW_REASONS: Record<string, { label: string; emoji: string }> = {
@@ -116,6 +165,10 @@ type Props = {
   templates: MessageTemplate[]
   /** Quando true, mostra banner indicando que a Eva está em modo manual. */
   evaPaused?: boolean
+  /** Eva ativa (módulo + auto-resposta). Quando false, não exibe follow-up automático da Eva. */
+  evaActive?: boolean
+  /** Mapa lead_id -> data ISO do próximo follow-up MANUAL pendente. */
+  manualFollowups?: Record<string, string>
 }
 
 const DEFAULT_STAGES = [
@@ -182,7 +235,7 @@ const AI_PRIORITY_CONFIG = {
   cold: { label: '❄️ Frio', color: 'bg-blue-100 text-blue-700' },
 }
 
-export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false }: Props) {
+export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false, evaActive = true, manualFollowups = {} }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const { selectedLine } = useWaLine()
@@ -217,16 +270,29 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   //   count 2 -> ja mandou 2, proxima em 48h
   //   count 3 -> ja mandou 3, proxima em 5d
   //   count 4 -> ultima chance (~10d)
-  const isInFollowup = (l: Lead): boolean =>
+  const isEvaFollowup = (l: Lead): boolean =>
+    evaActive &&
     !!l.eva_next_followup_at &&
     l.status !== 'converted' &&
     l.status !== 'lost' &&
     !l.needs_human_review
 
+  // Follow-up MANUAL pendente (secretaria agendou, ainda não concluído).
+  const manualFollowupSet = new Set(Object.keys(manualFollowups))
+  const hasManualFollowup = (l: Lead): boolean =>
+    manualFollowupSet.has(l.id) &&
+    l.status !== 'converted' &&
+    l.status !== 'lost'
+
+  // Um lead está "em follow-up" se a Eva agendou a próxima tentativa OU se há
+  // um follow-up manual pendente. Alimenta o card e o filtro "Em follow-up".
+  const isInFollowup = (l: Lead): boolean => isEvaFollowup(l) || hasManualFollowup(l)
+
   const getFollowupCount = (l: Lead): number => l.eva_followup_count ?? 0
 
   const followupBucket = (l: Lead): 'fu_2h' | 'fu_4h' | 'fu_48h' | 'fu_5d' | 'fu_10d' | null => {
-    if (!isInFollowup(l)) return null
+    // Os 5 sub-estágios são exclusivos da Eva — follow-up manual não entra nos buckets.
+    if (!isEvaFollowup(l)) return null
     const c = getFollowupCount(l)
     if (c >= 4) return 'fu_10d'
     if (c === 3) return 'fu_5d'
@@ -721,7 +787,8 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   const aiPriority = tempKey ? AI_PRIORITY_CONFIG[tempKey as keyof typeof AI_PRIORITY_CONFIG] : null
                   const tempIsManual = !lead.ai_priority && !!tempKey
                   const needsContact = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
-                  const followup = getFollowupBadge(lead)
+                  const followup = evaActive ? getFollowupBadge(lead) : null
+                  const manualFollowup = getManualFollowupBadge(manualFollowups[lead.id], lead.status)
                   const followupClass =
                     followup?.tone === 'darkred'
                       ? 'bg-red-200 text-red-900 border-red-300'
@@ -800,6 +867,19 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                         <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md border mb-2 ${followupClass}`} title="Eva está aguardando resposta da paciente">
                           <span>{followupEmoji}</span>
                           <span className="font-medium">{followup.label}</span>
+                        </div>
+                      )}
+                      {manualFollowup && (
+                        <div
+                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md border mb-2 ${
+                            manualFollowup.overdue
+                              ? 'bg-red-100 text-red-700 border-red-200'
+                              : 'bg-sky-100 text-sky-700 border-sky-200'
+                          }`}
+                          title="Follow-up agendado manualmente"
+                        >
+                          <span>{manualFollowup.overdue ? '⏰' : '📅'}</span>
+                          <span className="font-medium">{manualFollowup.label}</span>
                         </div>
                       )}
                       <div className="flex flex-wrap gap-1 mb-2">
@@ -1018,6 +1098,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           stages={STAGES}
           onClose={() => setSelectedLead(null)}
           onUpdate={() => { setSelectedLead(null); router.refresh() }}
+          evaActive={evaActive}
         />
       )}
 
@@ -1172,7 +1253,7 @@ function NewLeadModal({ clinicId, procedures, users, sources, onClose, onSuccess
 }
 
 // Modal de Detalhes do Lead
-function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, onUpdate }: {
+function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, onUpdate, evaActive = true }: {
   lead: Lead
   procedures: { id: string; name: string }[]
   users: { id: string; name: string }[]
@@ -1180,6 +1261,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
   stages: { id: string; label: string; color: string; order: number }[]
   onClose: () => void
   onUpdate: () => void
+  evaActive?: boolean
 }) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -1384,7 +1466,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
               </div>
 
               {/* Follow-ups e Histórico de Contatos */}
-              <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} />
+              <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} evaActive={evaActive} />
 
               {/* Contato Rápido */}
               <div className="flex gap-2">
