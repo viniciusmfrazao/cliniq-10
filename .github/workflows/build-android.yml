@@ -35,103 +35,47 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Run cap sync (gera capacitor.settings.gradle e arquivos de build)
+      - name: Run cap sync
         run: |
           mkdir -p out
           echo '<html><body>Clinike</body></html>' > out/index.html
           npx cap sync android
-          echo "=== Arquivos gerados ==="
-          ls android/capacitor.settings.gradle android/app/capacitor.build.gradle
 
-      - name: Update version code and name
+      - name: Update version
         run: |
           sed -i "s/versionCode [0-9]*/versionCode ${{ github.event.inputs.version_code }}/" android/app/build.gradle
           sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/" android/app/build.gradle
-          echo "Version updated:"
           grep -E "versionCode|versionName" android/app/build.gradle
 
       - name: Decode keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/clinike-release.keystore
+          ls -lh android/clinike-release.keystore
 
-      - name: Configure signing in build.gradle
+      - name: Create keystore.properties
         run: |
-          # Adicionar configuração de signing via variáveis de ambiente
-          # de forma mais robusta usando um arquivo keystore properties
-          cat > android/keystore.properties << EOF
+          cat > android/keystore.properties << PROPS
           storeFile=clinike-release.keystore
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
-
-          # Verificar se já tem signingConfig release no build.gradle
-          if ! grep -q "signingConfigs" android/app/build.gradle; then
-            # Inserir signing config antes de "buildTypes"
-            python3 -c "
-          content = open('android/app/build.gradle').read()
-          signing = '''
-              signingConfigs {
-                  release {
-                      def props = new Properties()
-                      def propsFile = rootProject.file('keystore.properties')
-                      if (propsFile.exists()) { props.load(propsFile.newDataInputStream()) }
-                      storeFile file(rootProject.projectDir.absolutePath + '/' + props['storeFile'])
-                      storePassword props['storePassword']
-                      keyAlias props['keyAlias']
-                      keyPassword props['keyPassword']
-                  }
-              }
-          '''
-          content = content.replace('    buildTypes {', signing + '    buildTypes {')
-          content = content.replace(
-              '            release {',
-              '            release {\n                signingConfig signingConfigs.release'
-          )
-          open('android/app/build.gradle', 'w').write(content)
-          print('Signing config adicionado!')
-          "
-          else
-            echo "signingConfigs já existe no build.gradle"
-          fi
-
-          echo "=== build.gradle final ==="
-          cat android/app/build.gradle
+          PROPS
+          echo "keystore.properties criado"
 
       - name: Build release AAB
-        id: gradle_build
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease --stacktrace 2>&1 | tee /tmp/gradle_output.txt
-          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        continue-on-error: true
-
-      - name: Show Gradle error
-        if: always()
-        run: |
-          echo "=== ÚLTIMAS 100 LINHAS DO GRADLE ==="
-          tail -100 /tmp/gradle_output.txt || echo "sem output"
-          echo "=== ARQUIVOS GERADOS ==="
-          find android/app/build/outputs -type f 2>/dev/null || echo "nenhum output gerado"
-
-      - name: Fail if build failed
-        if: steps.gradle_build.outcome == 'failure'
-        run: exit 1
+          ./gradlew bundleRelease --info 2>&1 | tail -50
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: clinike-release-v${{ github.event.inputs.version_name }}.aab
+          name: clinike-v${{ github.event.inputs.version_name }}.aab
           path: android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 30
 
-      - name: Build info
+      - name: Done
         run: |
           echo "✅ Build concluído!"
-          echo "Version: ${{ github.event.inputs.version_name }} (${{ github.event.inputs.version_code }})"
           ls -lh android/app/build/outputs/bundle/release/
