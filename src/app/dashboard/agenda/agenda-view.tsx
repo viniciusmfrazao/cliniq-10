@@ -112,6 +112,20 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [debitosLoaded, setDebitosLoaded] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+
+  // Reposiciona o popup verticalmente após renderizar com a altura real do conteúdo
+  useEffect(() => {
+    if (!showPreview || useSheet || !popupRef.current || !popupPos) return
+    const MARGIN = 8
+    const realH = popupRef.current.offsetHeight
+    const maxY = window.innerHeight - realH - MARGIN
+    if (popupPos.y > maxY) {
+      setPopupPos(prev => prev ? { ...prev, y: Math.max(MARGIN, maxY) } : prev)
+    }
+  // só roda quando o popup aparece/muda de card
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPreview, popupPos?.x])
   const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
   const [popupTop, setPopupTop] = useState(true)
   const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
@@ -640,6 +654,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
       {showPreview && !useSheet && (
         <ModalPortal>
           <div
+            ref={popupRef}
             className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
             style={{ left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999 }}
             onMouseEnter={handleMouseEnter}
