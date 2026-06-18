@@ -116,40 +116,10 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
   const [popupTop, setPopupTop] = useState(true)
   const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
+  const [popupBottom, setPopupBottom] = useState<number | null>(null)
 
   const [popupMaxH, setPopupMaxH] = useState<number | undefined>(undefined)
 
-  // Ajusta posição e altura do popup após renderizar (determinístico, sem loop)
-  useEffect(() => {
-    if (!showPreview || useSheet || !popupRef.current || !popupPos) return
-    const MARGIN = 8
-    const el = popupRef.current
-
-    // mede a altura natural do conteúdo (sem limite), temporariamente
-    const prevMax = el.style.maxHeight
-    el.style.maxHeight = 'none'
-    const naturalH = el.getBoundingClientRect().height
-    el.style.maxHeight = prevMax
-
-    const viewportH = window.innerHeight
-    const usableH = viewportH - 2 * MARGIN
-
-    if (naturalH >= usableH) {
-      // conteúdo maior que a tela → fixa no topo e ativa scroll interno
-      if (popupPos.y !== MARGIN) {
-        setPopupPos(prev => prev ? { ...prev, y: MARGIN } : prev)
-      }
-      setPopupMaxH(usableH)
-    } else {
-      // cabe na tela → garante que não ultrapasse a borda inferior
-      const maxY = viewportH - naturalH - MARGIN
-      if (popupPos.y > maxY) {
-        setPopupPos(prev => prev ? { ...prev, y: Math.max(MARGIN, maxY) } : prev)
-      }
-      setPopupMaxH(undefined)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPreview, debitosLoaded])
   const isMobile = useIsMobile()
   const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
@@ -282,15 +252,13 @@ const AppointmentCard = React.memo(function AppointmentCard({
       ? (cardRef.current ? cardRef.current.getBoundingClientRect().left < window.innerWidth / 2 : true)
       : columnIndex < Math.ceil(totalColumns / 2)
     setPopupSide(isLeftHalf ? 'right' : 'left')
-    // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
+    // Vertical: card na metade de baixo → popup ancora pela base (cresce pra cima)
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
       const POPUP_W = 292
-      const POPUP_H = Math.min(420, window.innerHeight * 0.8)
       const MARGIN = 8
 
-      // Horizontal: tenta abrir à direita, se não couber abre à esquerda,
-      // se ainda não couber empurra pra dentro da viewport
+      // Horizontal: tenta abrir à direita, se não couber abre à esquerda
       let x: number
       if (isLeftHalf) {
         x = rect.right + 4
@@ -305,13 +273,19 @@ const AppointmentCard = React.memo(function AppointmentCard({
       }
       x = Math.max(MARGIN, Math.min(x, window.innerWidth - POPUP_W - MARGIN))
 
-      // Vertical: garante que nunca saia da viewport
-      const hasSpaceBelow = window.innerHeight - rect.bottom >= POPUP_H + MARGIN
-      setPopupTop(hasSpaceBelow)
-      let y = hasSpaceBelow ? rect.top : rect.bottom - POPUP_H
-      y = Math.max(MARGIN, Math.min(y, window.innerHeight - POPUP_H - MARGIN))
-
-      setPopupPos({ x, y })
+      // Se o card está na metade de baixo da tela → ancora pela base (cresce pra cima)
+      const inLowerHalf = rect.top > window.innerHeight / 2
+      if (inLowerHalf) {
+        // bottom = distância da base do popup até a base da viewport
+        const bottom = window.innerHeight - rect.bottom
+        setPopupPos({ x, y: -1 }) // y=-1 sinaliza modo "bottom"
+        setPopupBottom(Math.max(MARGIN, bottom))
+        setPopupTop(false)
+      } else {
+        setPopupPos({ x, y: Math.max(MARGIN, rect.top) })
+        setPopupBottom(null)
+        setPopupTop(true)
+      }
     }
     setShowPreview(true)
     setUseSheet(isMobile)
@@ -677,7 +651,10 @@ const AppointmentCard = React.memo(function AppointmentCard({
           <div
             ref={popupRef}
             className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
-            style={{ left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999, maxHeight: popupMaxH ? `${popupMaxH}px` : '80vh' }}
+            style={popupBottom !== null
+              ? { left: popupPos?.x ?? 0, bottom: popupBottom, zIndex: 9999, maxHeight: '92vh' }
+              : { left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999, maxHeight: '92vh' }
+            }
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
