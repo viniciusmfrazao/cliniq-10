@@ -120,6 +120,36 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
   const [popupMaxH, setPopupMaxH] = useState<number | undefined>(undefined)
 
+  // Permite rolar a página com o mouse sobre o popup (quando o popup não tem scroll próprio)
+  useEffect(() => {
+    if (!showPreview || useSheet) return
+    const el = popupRef.current
+    if (!el) return
+
+    function onWheel(e: WheelEvent) {
+      const popup = popupRef.current
+      if (!popup) return
+      const canScrollInternally = popup.scrollHeight > popup.clientHeight + 1
+      if (canScrollInternally) return // popup rola normalmente
+      // popup não rola → repassa pro container scrollável da agenda
+      e.preventDefault()
+      let node: HTMLElement | null = popup.parentElement
+      while (node) {
+        const oy = getComputedStyle(node).overflowY
+        if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) {
+          node.scrollTop += e.deltaY
+          return
+        }
+        node = node.parentElement
+      }
+      ;(document.scrollingElement || document.documentElement).scrollTop += e.deltaY
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPreview, useSheet, popupBottom])
+
   const isMobile = useIsMobile()
   const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
@@ -654,25 +684,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
         <ModalPortal>
           <div
             ref={popupRef}
-            onWheel={(e) => {
-              const el = e.currentTarget
-              const canScrollInternally = el.scrollHeight > el.clientHeight
-              if (canScrollInternally) return // deixa o popup rolar normalmente
-              // popup não rola → repassa o scroll pro container da página
-              e.preventDefault()
-              const scrollable = document.scrollingElement || document.documentElement
-              // procura um ancestral scrollável da agenda (caso o scroll não seja o window)
-              let node: HTMLElement | null = el.parentElement
-              while (node) {
-                const oy = getComputedStyle(node).overflowY
-                if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) {
-                  node.scrollBy({ top: e.deltaY })
-                  return
-                }
-                node = node.parentElement
-              }
-              scrollable.scrollBy({ top: e.deltaY })
-            }}
             className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4"
             style={popupBottom !== null
               ? { left: popupPos?.x ?? 0, bottom: popupBottom, zIndex: 9999, maxHeight: popupMaxH ? `${popupMaxH}px` : '92vh', overflowY: 'auto' }
