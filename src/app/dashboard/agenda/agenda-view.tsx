@@ -117,18 +117,30 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [popupTop, setPopupTop] = useState(true)
   const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
 
-  // Reposiciona o popup verticalmente após renderizar com a altura real do conteúdo
+  const [popupMaxH, setPopupMaxH] = useState<number | undefined>(undefined)
+
+  // Reposiciona o popup e ajusta altura máxima após renderizar (considera zoom)
   useEffect(() => {
     if (!showPreview || useSheet || !popupRef.current || !popupPos) return
     const MARGIN = 8
-    // getBoundingClientRect considera zoom do browser corretamente
     const rect = popupRef.current.getBoundingClientRect()
-    const maxY = window.innerHeight - rect.height - MARGIN
-    if (rect.bottom > window.innerHeight - MARGIN) {
-      setPopupPos(prev => prev ? { ...prev, y: Math.max(MARGIN, maxY) } : prev)
+    const available = window.innerHeight - popupPos.y - MARGIN
+
+    // Se o popup não cabe no espaço abaixo da posição atual, sobe e limita altura
+    if (rect.height > available) {
+      const maxY = Math.max(MARGIN, window.innerHeight - rect.height - MARGIN)
+      const newY = Math.max(MARGIN, Math.min(popupPos.y, maxY))
+      const newAvailable = window.innerHeight - newY - MARGIN
+      if (newY !== popupPos.y) {
+        setPopupPos(prev => prev ? { ...prev, y: newY } : prev)
+      }
+      // limita a altura ao espaço real disponível → scroll interno cobre o resto
+      setPopupMaxH(Math.min(newAvailable, window.innerHeight - 2 * MARGIN))
+    } else {
+      setPopupMaxH(undefined)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPreview, popupPos?.x])
+  }, [showPreview, popupPos?.x, popupPos?.y])
   const isMobile = useIsMobile()
   const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
@@ -655,8 +667,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
         <ModalPortal>
           <div
             ref={popupRef}
-            className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
-            style={{ left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999 }}
+            className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
+            style={{ left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999, maxHeight: popupMaxH ? `${popupMaxH}px` : '80vh' }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
