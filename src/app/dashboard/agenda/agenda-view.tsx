@@ -121,12 +121,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
   useEffect(() => {
     if (!showPreview || useSheet || !popupRef.current || !popupPos) return
     const MARGIN = 8
-    const realH = popupRef.current.offsetHeight
-    const maxY = window.innerHeight - realH - MARGIN
-    if (popupPos.y > maxY) {
+    // getBoundingClientRect considera zoom do browser corretamente
+    const rect = popupRef.current.getBoundingClientRect()
+    const maxY = window.innerHeight - rect.height - MARGIN
+    if (rect.bottom > window.innerHeight - MARGIN) {
       setPopupPos(prev => prev ? { ...prev, y: Math.max(MARGIN, maxY) } : prev)
     }
-  // só roda quando o popup aparece/muda de card
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPreview, popupPos?.x])
   const isMobile = useIsMobile()
