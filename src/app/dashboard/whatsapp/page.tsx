@@ -273,12 +273,20 @@ export default function WhatsAppPage() {
     if (!clinicId) return
 
     let retryTimer: ReturnType<typeof setTimeout> | null = null
-    let currentChannel: ReturnType<typeof supabase.channel> | null = null
+    let destroyed = false
+
+    // Nome fixo do canal (sem Date.now) — evita múltiplos canais acumulados
+    const CHANNEL_NAME = `whatsapp:${clinicId}`
+
+    // Remove canal anterior se existir (segurança contra double-mount)
+    try { supabase.removeChannel(supabase.channel(CHANNEL_NAME)) } catch { /* noop */ }
 
     function subscribe() {
+      if (destroyed) return
       setRealtimeStatus('connecting')
+
       const channel = supabase
-        .channel(`whatsapp:${clinicId}:${Date.now()}`)
+        .channel(CHANNEL_NAME)
         .on(
           'postgres_changes',
           {
@@ -288,30 +296,32 @@ export default function WhatsAppPage() {
             filter: `clinic_id=eq.${clinicId}`,
           },
           (payload) => {
-            handleNewRow(payload.new as EvaRow)
+            if (!destroyed) handleNewRow(payload.new as EvaRow)
           },
         )
         .subscribe((status) => {
+          if (destroyed) return
           if (status === 'SUBSCRIBED') {
             setRealtimeStatus('live')
             if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             setRealtimeStatus('error')
-            // Reconectar após 5s
+            // Reconectar após 5s — sem re-criar canal duplicado
+            if (retryTimer) clearTimeout(retryTimer)
             retryTimer = setTimeout(() => {
-              if (currentChannel) supabase.removeChannel(currentChannel)
+              try { supabase.removeChannel(channel) } catch { /* noop */ }
               subscribe()
             }, 5000)
           }
         })
-      currentChannel = channel
     }
 
     subscribe()
 
     return () => {
+      destroyed = true
       if (retryTimer) clearTimeout(retryTimer)
-      if (currentChannel) supabase.removeChannel(currentChannel)
+      try { supabase.removeChannel(supabase.channel(CHANNEL_NAME)) } catch { /* noop */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinicId])
