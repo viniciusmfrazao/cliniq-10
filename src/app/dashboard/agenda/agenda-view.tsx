@@ -117,22 +117,20 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [popupTop, setPopupTop] = useState(true)
   const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
 
-  const isMobile = useIsMobile()
-  const [useSheet, setUseSheet] = useState(false)
-
-  // Após renderizar, reposiciona o popup verticalmente para SEMPRE caber inteiro na tela.
+  // Reposiciona o popup verticalmente após renderizar com a altura real do conteúdo
   useEffect(() => {
     if (!showPreview || useSheet || !popupRef.current || !popupPos) return
     const MARGIN = 8
-    const h = popupRef.current.getBoundingClientRect().height
-    // y ideal = posição atual, mas nunca deixa passar da borda inferior nem superior
-    const maxY = window.innerHeight - h - MARGIN
-    const idealY = Math.max(MARGIN, Math.min(popupPos.y, maxY))
-    if (Math.abs(idealY - popupPos.y) > 1) {
-      setPopupPos(prev => prev ? { ...prev, y: idealY } : prev)
+    // getBoundingClientRect considera zoom do browser corretamente
+    const rect = popupRef.current.getBoundingClientRect()
+    const maxY = window.innerHeight - rect.height - MARGIN
+    if (rect.bottom > window.innerHeight - MARGIN) {
+      setPopupPos(prev => prev ? { ...prev, y: Math.max(MARGIN, maxY) } : prev)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPreview, useSheet, popupPos?.x, debitosLoaded])
+  }, [showPreview, popupPos?.x])
+  const isMobile = useIsMobile()
+  const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
@@ -263,13 +261,15 @@ const AppointmentCard = React.memo(function AppointmentCard({
       ? (cardRef.current ? cardRef.current.getBoundingClientRect().left < window.innerWidth / 2 : true)
       : columnIndex < Math.ceil(totalColumns / 2)
     setPopupSide(isLeftHalf ? 'right' : 'left')
-
+    // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
       const POPUP_W = 292
+      const POPUP_H = Math.min(420, window.innerHeight * 0.8)
       const MARGIN = 8
 
-      // Horizontal: tenta abrir à direita, se não couber abre à esquerda
+      // Horizontal: tenta abrir à direita, se não couber abre à esquerda,
+      // se ainda não couber empurra pra dentro da viewport
       let x: number
       if (isLeftHalf) {
         x = rect.right + 4
@@ -284,10 +284,13 @@ const AppointmentCard = React.memo(function AppointmentCard({
       }
       x = Math.max(MARGIN, Math.min(x, window.innerWidth - POPUP_W - MARGIN))
 
-      // Posição vertical inicial alinhada ao card; o reposicionamento real
-      // (garantindo que cabe inteiro) acontece no useEffect após renderizar.
-      setPopupPos({ x, y: Math.max(MARGIN, rect.top) })
-      setPopupTop(true)
+      // Vertical: garante que nunca saia da viewport
+      const hasSpaceBelow = window.innerHeight - rect.bottom >= POPUP_H + MARGIN
+      setPopupTop(hasSpaceBelow)
+      let y = hasSpaceBelow ? rect.top : rect.bottom - POPUP_H
+      y = Math.max(MARGIN, Math.min(y, window.innerHeight - POPUP_H - MARGIN))
+
+      setPopupPos({ x, y })
     }
     setShowPreview(true)
     setUseSheet(isMobile)
@@ -652,8 +655,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
         <ModalPortal>
           <div
             ref={popupRef}
-            className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
-            style={{ left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999, maxHeight: `calc(100vh - 16px)` }}
+            className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
+            style={{ left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999 }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
