@@ -119,28 +119,37 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
   const [popupMaxH, setPopupMaxH] = useState<number | undefined>(undefined)
 
-  // Reposiciona o popup e ajusta altura máxima após renderizar (considera zoom)
+  // Ajusta posição e altura do popup após renderizar (determinístico, sem loop)
   useEffect(() => {
     if (!showPreview || useSheet || !popupRef.current || !popupPos) return
     const MARGIN = 8
-    const rect = popupRef.current.getBoundingClientRect()
-    const available = window.innerHeight - popupPos.y - MARGIN
+    const el = popupRef.current
 
-    // Se o popup não cabe no espaço abaixo da posição atual, sobe e limita altura
-    if (rect.height > available) {
-      const maxY = Math.max(MARGIN, window.innerHeight - rect.height - MARGIN)
-      const newY = Math.max(MARGIN, Math.min(popupPos.y, maxY))
-      const newAvailable = window.innerHeight - newY - MARGIN
-      if (newY !== popupPos.y) {
-        setPopupPos(prev => prev ? { ...prev, y: newY } : prev)
+    // mede a altura natural do conteúdo (sem limite), temporariamente
+    const prevMax = el.style.maxHeight
+    el.style.maxHeight = 'none'
+    const naturalH = el.getBoundingClientRect().height
+    el.style.maxHeight = prevMax
+
+    const viewportH = window.innerHeight
+    const usableH = viewportH - 2 * MARGIN
+
+    if (naturalH >= usableH) {
+      // conteúdo maior que a tela → fixa no topo e ativa scroll interno
+      if (popupPos.y !== MARGIN) {
+        setPopupPos(prev => prev ? { ...prev, y: MARGIN } : prev)
       }
-      // limita a altura ao espaço real disponível → scroll interno cobre o resto
-      setPopupMaxH(Math.min(newAvailable, window.innerHeight - 2 * MARGIN))
+      setPopupMaxH(usableH)
     } else {
+      // cabe na tela → garante que não ultrapasse a borda inferior
+      const maxY = viewportH - naturalH - MARGIN
+      if (popupPos.y > maxY) {
+        setPopupPos(prev => prev ? { ...prev, y: Math.max(MARGIN, maxY) } : prev)
+      }
       setPopupMaxH(undefined)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPreview, popupPos?.x, popupPos?.y])
+  }, [showPreview, debitosLoaded])
   const isMobile = useIsMobile()
   const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
