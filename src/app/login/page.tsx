@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
-import { useBiometric } from '@/hooks/useBiometric'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -13,34 +12,13 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
-  const {
-    isAvailable: biometryAvailable,
-    hasCredentials: biometryHasCredentials,
-    isLoading: biometryLoading,
-    biometryType,
-    saveCredentials,
-    authenticateWithBiometry,
-  } = useBiometric()
-
-  async function handleBiometricLogin() {
-    const credentials = await authenticateWithBiometry()
-    if (!credentials) return
-    await doLogin(credentials.email, credentials.password)
-  }
-
-  const [showBioModal, setShowBioModal] = useState(false)
-  const [pendingCreds, setPendingCreds] = useState<{email:string; password:string} | null>(null)
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    await doLogin(email, password)
-  }
-
-  async function doLogin(em: string, pw: string, skipModal = false) {
     setLoading(true)
     setError('')
+
     const supabase = createClient()
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: em, password: pw })
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (signInError) {
       setError('Email ou senha incorretos.')
@@ -48,64 +26,12 @@ export default function LoginPage() {
       return
     }
 
-    // Se veio do login manual, biometria disponível e ainda não tem credenciais salvas
-    // → mostra modal perguntando se quer ativar
-    if (!skipModal && biometryAvailable && !biometryHasCredentials) {
-      setPendingCreds({ email: em, password: pw })
-      setShowBioModal(true)
-      setLoading(false)
-      return
-    }
-
+    // Reload completo garante que o servidor lê o novo cookie
     window.location.href = '/dashboard'
   }
-
-  function handleBioModalYes() {
-    if (pendingCreds) saveCredentials(pendingCreds.email, pendingCreds.password)
-    setShowBioModal(false)
-    window.location.href = '/dashboard'
-  }
-
-  function handleBioModalNo() {
-    setShowBioModal(false)
-    window.location.href = '/dashboard'
-  }
-
-  const showBiometricButton = biometryAvailable && biometryHasCredentials
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
-
-      {/* Modal de ativação do Face ID */}
-      {showBioModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-6">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
-            <div className="text-5xl mb-4">
-              {biometryType === 'Face ID' ? '🔐' : '👆'}
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">
-              Ativar {biometryType}?
-            </h3>
-            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-              Nas próximas vezes, você pode entrar no Clinike usando {biometryType} — sem digitar email e senha.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleBioModalYes}
-                className="btn-primary"
-              >
-                Sim, ativar {biometryType}
-              </button>
-              <button
-                onClick={handleBioModalNo}
-                className="text-sm text-slate-500 hover:text-slate-700 py-2 transition-colors"
-              >
-                Não, continuar sem biometria
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Left Panel */}
       <div className="hidden lg:flex flex-1 relative items-center justify-center p-12" style={{ background: 'linear-gradient(135deg, #1E1041 0%, #3730A3 50%, #6366F1 100%)' }}>
         <div className="absolute inset-0 overflow-hidden">
@@ -146,7 +72,7 @@ export default function LoginPage() {
       {/* Right Panel */}
       <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 via-white to-slate-100">
         <div className="w-full max-w-md">
-          <div className="lg:hidden text-center mb-10 pt-10">
+          <div className="lg:hidden text-center mb-10">
             <img src="/logo.svg" alt="Clinike" className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-xl" />
             <h1 className="text-3xl font-black text-slate-900">Clinike</h1>
             <p className="text-slate-500 text-sm mt-1">Simples como deve ser</p>
@@ -157,31 +83,6 @@ export default function LoginPage() {
               <h2 className="text-2xl font-black text-slate-900">Bem-vindo de volta!</h2>
               <p className="text-slate-500 mt-2">Entre para acessar sua clínica</p>
             </div>
-
-            {/* Botão de biometria */}
-            {showBiometricButton && (
-              <button
-                type="button"
-                onClick={handleBiometricLogin}
-                disabled={biometryLoading || loading}
-                className="w-full mb-6 flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl border-2 border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 font-semibold transition-colors disabled:opacity-60"
-              >
-                {biometryLoading ? (
-                  <div className="w-5 h-5 border-2 border-violet-400/30 border-t-violet-600 rounded-full animate-spin" />
-                ) : (
-                  <Icon name={biometryType === 'Face ID' ? 'scan' : 'fingerprint'} className="w-5 h-5" />
-                )}
-                {biometryLoading ? 'Verificando...' : `Entrar com ${biometryType}`}
-              </button>
-            )}
-
-            {showBiometricButton && (
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex-1 h-px bg-slate-200" />
-                <span className="text-xs text-slate-400 font-medium">ou entre com email</span>
-                <div className="flex-1 h-px bg-slate-200" />
-              </div>
-            )}
 
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
@@ -233,7 +134,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading || biometryLoading}
+                disabled={loading}
                 className="btn-primary flex items-center justify-center gap-2"
               >
                 {loading ? (
