@@ -250,11 +250,17 @@ const AppointmentCard = React.memo(function AppointmentCard({
     // Vertical: se tem 420px abaixo, abre para baixo. Senão, para cima.
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect()
-      const hasSpaceBelow = window.innerHeight - rect.bottom >= 420
+      const POPUP_H = Math.min(420, window.innerHeight * 0.8)
+      const MARGIN = 8
+      const hasSpaceBelow = window.innerHeight - rect.bottom >= POPUP_H + MARGIN
       setPopupTop(hasSpaceBelow)
       const x = isLeftHalf ? rect.right + 4 : rect.left - 292
-      const y = hasSpaceBelow ? rect.top : rect.bottom - 420
-      setPopupPos({ x: Math.max(4, x), y: Math.max(4, y) })
+      // Garante que o popup nunca saia da viewport (nem em cima nem embaixo)
+      let y = hasSpaceBelow
+        ? rect.top
+        : rect.bottom - POPUP_H
+      y = Math.max(MARGIN, Math.min(y, window.innerHeight - POPUP_H - MARGIN))
+      setPopupPos({ x: Math.max(4, x), y })
     }
     setShowPreview(true)
     setUseSheet(isMobile)
