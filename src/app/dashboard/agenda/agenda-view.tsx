@@ -120,6 +120,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
   const [popupMaxH, setPopupMaxH] = useState<number | undefined>(undefined)
 
+  const isMobile = useIsMobile()
+  const [useSheet, setUseSheet] = useState(false)
+
   // Permite rolar a página com o mouse sobre o popup (quando o popup não tem scroll próprio)
   useEffect(() => {
     if (!showPreview || useSheet) return
@@ -149,9 +152,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
     return () => el.removeEventListener('wheel', onWheel)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPreview, useSheet, popupBottom])
-
-  const isMobile = useIsMobile()
-  const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
   const router = useRouter()
 
