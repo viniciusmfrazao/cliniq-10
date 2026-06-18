@@ -654,10 +654,29 @@ const AppointmentCard = React.memo(function AppointmentCard({
         <ModalPortal>
           <div
             ref={popupRef}
-            className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
+            onWheel={(e) => {
+              const el = e.currentTarget
+              const canScrollInternally = el.scrollHeight > el.clientHeight
+              if (canScrollInternally) return // deixa o popup rolar normalmente
+              // popup não rola → repassa o scroll pro container da página
+              e.preventDefault()
+              const scrollable = document.scrollingElement || document.documentElement
+              // procura um ancestral scrollável da agenda (caso o scroll não seja o window)
+              let node: HTMLElement | null = el.parentElement
+              while (node) {
+                const oy = getComputedStyle(node).overflowY
+                if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) {
+                  node.scrollBy({ top: e.deltaY })
+                  return
+                }
+                node = node.parentElement
+              }
+              scrollable.scrollBy({ top: e.deltaY })
+            }}
+            className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4"
             style={popupBottom !== null
-              ? { left: popupPos?.x ?? 0, bottom: popupBottom, zIndex: 9999, maxHeight: popupMaxH ? `${popupMaxH}px` : '92vh' }
-              : { left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999, maxHeight: '92vh' }
+              ? { left: popupPos?.x ?? 0, bottom: popupBottom, zIndex: 9999, maxHeight: popupMaxH ? `${popupMaxH}px` : '92vh', overflowY: 'auto' }
+              : { left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999, maxHeight: '92vh', overflowY: 'auto' }
             }
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
