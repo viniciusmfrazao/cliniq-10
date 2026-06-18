@@ -64,24 +64,25 @@ jobs:
 
       - name: Decode keystore
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/clinike-release.keystore
-          ls -lh android/clinike-release.keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/clinike-release.keystore
+          ls -lh android/app/clinike-release.keystore
 
       - name: Create keystore.properties
         run: |
           cat > android/keystore.properties << PROPS
-          storeFile=clinike-release.keystore
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          PROPS
-          echo "keystore.properties criado"
+storeFile=../app/clinike-release.keystore
+storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+PROPS
+          echo "keystore.properties criado:"
+          cat android/keystore.properties
 
       - name: Build release AAB
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle_build.log
+          ./gradlew bundleRelease --no-daemon --stacktrace --warning-mode all 2>&1 | tee /tmp/gradle_build.log
           test ${PIPESTATUS[0]} -eq 0
 
       - name: Upload gradle log
