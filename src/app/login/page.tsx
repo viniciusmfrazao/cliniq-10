@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -21,14 +21,6 @@ export default function LoginPage() {
     saveCredentials,
     authenticateWithBiometry,
   } = useBiometric()
-
-  // Tenta login por biometria automaticamente ao abrir o app
-  useEffect(() => {
-    if (biometryAvailable && biometryHasCredentials) {
-      handleBiometricLogin()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [biometryAvailable, biometryHasCredentials])
 
   async function handleBiometricLogin() {
     const credentials = await authenticateWithBiometry()
