@@ -68,15 +68,19 @@ jobs:
           ls -lh android/app/clinike-release.keystore
 
       - name: Create keystore.properties
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          cat > android/keystore.properties << PROPS
-storeFile=../app/clinike-release.keystore
-storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-PROPS
+          cat > android/keystore.properties << EOF
+storeFile=app/clinike-release.keystore
+storePassword=${STORE_PASSWORD}
+keyAlias=${KEY_ALIAS}
+keyPassword=${KEY_PASSWORD}
+EOF
           echo "keystore.properties criado:"
-          cat android/keystore.properties
+          cat android/keystore.properties | sed 's/Password=.*/Password=***/'
 
       - name: Build release AAB
         run: |
