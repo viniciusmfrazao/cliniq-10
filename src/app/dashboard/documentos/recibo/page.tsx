@@ -15,6 +15,13 @@ type Patient = {
 type Clinic = {
   name: string
   cnpj?: string
+  settings?: {
+    responsible?: string
+    address?: string
+    phone?: string
+    cnpj?: string
+    hours?: string
+  }
 }
 
 export default function ReciboPage() {
@@ -63,7 +70,7 @@ export default function ReciboPage() {
         .limit(500),
       supabase
         .from('clinics')
-        .select('name, cnpj')
+        .select('name, cnpj, settings')
         .eq('id', userData.clinic_id)
         .single()
     ])
@@ -435,8 +442,21 @@ export default function ReciboPage() {
             <div className="recibo">
               {/* Header */}
               <div className="text-center border-b-2 border-slate-300 pb-4 mb-4">
-                <h1 className="text-2xl font-bold text-slate-900">RECIBO</h1>
-                <p className="text-xs text-slate-500 mt-1">Nº {numeroRecibo}</p>
+                <h1 className="text-2xl font-bold text-slate-900">{clinic?.name || 'RECIBO'}</h1>
+                {(clinic?.settings?.responsible) && (
+                  <p className="text-xs text-slate-600 mt-0.5">{clinic.settings.responsible}</p>
+                )}
+                {(clinic?.settings?.cnpj || clinic?.cnpj) && (
+                  <p className="text-xs text-slate-500">CNPJ: {clinic?.settings?.cnpj || clinic?.cnpj}</p>
+                )}
+                {clinic?.settings?.address && (
+                  <p className="text-xs text-slate-500">{clinic.settings.address}</p>
+                )}
+                {clinic?.settings?.phone && (
+                  <p className="text-xs text-slate-500">Tel: {clinic.settings.phone}</p>
+                )}
+                <p className="text-sm font-semibold text-slate-700 mt-2">RECIBO</p>
+                <p className="text-xs text-slate-500">Nº {numeroRecibo}</p>
               </div>
 
               {/* Valor em destaque */}
@@ -476,8 +496,10 @@ export default function ReciboPage() {
                 <div className="flex-1 text-center">
                   <div className="border-t border-slate-400 pt-2">
                     <p className="text-xs text-slate-600">Assinatura do Recebedor</p>
-                    <p className="text-xs text-slate-500 mt-1">{clinic?.name}</p>
-                    {clinic?.cnpj && <p className="text-xs text-slate-400">CNPJ: {clinic.cnpj}</p>}
+                    <p className="text-xs text-slate-500 mt-1">{clinic?.settings?.responsible || clinic?.name}</p>
+                    {(clinic?.settings?.cnpj || clinic?.cnpj) && (
+                      <p className="text-xs text-slate-400">CNPJ: {clinic?.settings?.cnpj || clinic?.cnpj}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex-1 text-center">
