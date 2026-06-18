@@ -273,17 +273,21 @@ const AppointmentCard = React.memo(function AppointmentCard({
       }
       x = Math.max(MARGIN, Math.min(x, window.innerWidth - POPUP_W - MARGIN))
 
-      // Se o card está na metade de baixo da tela → ancora pela base (cresce pra cima)
-      const inLowerHalf = rect.top > window.innerHeight / 2
+      // Só ancora pela base se o card estiver bem perto do fim da tela (últimos 30%)
+      const inLowerHalf = rect.top > window.innerHeight * 0.70
       if (inLowerHalf) {
         // bottom = distância da base do popup até a base da viewport
         const bottom = window.innerHeight - rect.bottom
-        setPopupPos({ x, y: -1 }) // y=-1 sinaliza modo "bottom"
+        // altura máxima = do topo da tela até a base do popup
+        const maxH = window.innerHeight - bottom - MARGIN
+        setPopupPos({ x, y: -1 })
         setPopupBottom(Math.max(MARGIN, bottom))
+        setPopupMaxH(maxH)
         setPopupTop(false)
       } else {
         setPopupPos({ x, y: Math.max(MARGIN, rect.top) })
         setPopupBottom(null)
+        setPopupMaxH(undefined)
         setPopupTop(true)
       }
     }
@@ -652,7 +656,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
             ref={popupRef}
             className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
             style={popupBottom !== null
-              ? { left: popupPos?.x ?? 0, bottom: popupBottom, zIndex: 9999, maxHeight: '92vh' }
+              ? { left: popupPos?.x ?? 0, bottom: popupBottom, zIndex: 9999, maxHeight: popupMaxH ? `${popupMaxH}px` : '92vh' }
               : { left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999, maxHeight: '92vh' }
             }
             onMouseEnter={handleMouseEnter}
