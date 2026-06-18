@@ -146,7 +146,7 @@ export default function LoginPage() {
       {/* Right Panel */}
       <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 via-white to-slate-100">
         <div className="w-full max-w-md">
-          <div className="lg:hidden text-center mb-10">
+          <div className="lg:hidden text-center mb-10 pt-10">
             <img src="/logo.svg" alt="Clinike" className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-xl" />
             <h1 className="text-3xl font-black text-slate-900">Clinike</h1>
             <p className="text-slate-500 text-sm mt-1">Simples como deve ser</p>
@@ -169,7 +169,7 @@ export default function LoginPage() {
                 {biometryLoading ? (
                   <div className="w-5 h-5 border-2 border-violet-400/30 border-t-violet-600 rounded-full animate-spin" />
                 ) : (
-                  <span className="text-2xl">{biometryType === 'Face ID' ? '🔐' : '👆'}</span>
+                  <Icon name={biometryType === 'Face ID' ? 'scan' : 'fingerprint'} className="w-5 h-5" />
                 )}
                 {biometryLoading ? 'Verificando...' : `Entrar com ${biometryType}`}
               </button>
