@@ -28,12 +28,15 @@ export default function LoginPage() {
     await doLogin(credentials.email, credentials.password)
   }
 
+  const [showBioModal, setShowBioModal] = useState(false)
+  const [pendingCreds, setPendingCreds] = useState<{email:string; password:string} | null>(null)
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    await doLogin(email, password, true)
+    await doLogin(email, password)
   }
 
-  async function doLogin(em: string, pw: string, saveAfter = false) {
+  async function doLogin(em: string, pw: string, skipModal = false) {
     setLoading(true)
     setError('')
     const supabase = createClient()
@@ -45,9 +48,26 @@ export default function LoginPage() {
       return
     }
 
-    // Salva credenciais para biometria no próximo acesso
-    if (saveAfter) saveCredentials(em, pw)
+    // Se veio do login manual, biometria disponível e ainda não tem credenciais salvas
+    // → mostra modal perguntando se quer ativar
+    if (!skipModal && biometryAvailable && !biometryHasCredentials) {
+      setPendingCreds({ email: em, password: pw })
+      setShowBioModal(true)
+      setLoading(false)
+      return
+    }
 
+    window.location.href = '/dashboard'
+  }
+
+  function handleBioModalYes() {
+    if (pendingCreds) saveCredentials(pendingCreds.email, pendingCreds.password)
+    setShowBioModal(false)
+    window.location.href = '/dashboard'
+  }
+
+  function handleBioModalNo() {
+    setShowBioModal(false)
     window.location.href = '/dashboard'
   }
 
@@ -55,6 +75,37 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
+
+      {/* Modal de ativação do Face ID */}
+      {showBioModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-6">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
+            <div className="text-5xl mb-4">
+              {biometryType === 'Face ID' ? '🔐' : '👆'}
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">
+              Ativar {biometryType}?
+            </h3>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+              Nas próximas vezes, você pode entrar no Clinike usando {biometryType} — sem digitar email e senha.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleBioModalYes}
+                className="btn-primary"
+              >
+                Sim, ativar {biometryType}
+              </button>
+              <button
+                onClick={handleBioModalNo}
+                className="text-sm text-slate-500 hover:text-slate-700 py-2 transition-colors"
+              >
+                Não, continuar sem biometria
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Left Panel */}
       <div className="hidden lg:flex flex-1 relative items-center justify-center p-12" style={{ background: 'linear-gradient(135deg, #1E1041 0%, #3730A3 50%, #6366F1 100%)' }}>
         <div className="absolute inset-0 overflow-hidden">
