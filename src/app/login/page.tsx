@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { useBiometric } from '@/hooks/useBiometric'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -12,13 +13,39 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
+  const {
+    isAvailable: biometryAvailable,
+    hasCredentials: biometryHasCredentials,
+    isLoading: biometryLoading,
+    biometryType,
+    saveCredentials,
+    authenticateWithBiometry,
+  } = useBiometric()
+
+  // Tenta login por biometria automaticamente ao abrir o app
+  useEffect(() => {
+    if (biometryAvailable && biometryHasCredentials) {
+      handleBiometricLogin()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [biometryAvailable, biometryHasCredentials])
+
+  async function handleBiometricLogin() {
+    const credentials = await authenticateWithBiometry()
+    if (!credentials) return
+    await doLogin(credentials.email, credentials.password)
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
+    await doLogin(email, password, true)
+  }
+
+  async function doLogin(em: string, pw: string, saveAfter = false) {
     setLoading(true)
     setError('')
-
     const supabase = createClient()
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: em, password: pw })
 
     if (signInError) {
       setError('Email ou senha incorretos.')
@@ -26,9 +53,13 @@ export default function LoginPage() {
       return
     }
 
-    // Reload completo garante que o servidor lê o novo cookie
+    // Salva credenciais para biometria no próximo acesso
+    if (saveAfter) saveCredentials(em, pw)
+
     window.location.href = '/dashboard'
   }
+
+  const showBiometricButton = biometryAvailable && biometryHasCredentials
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
@@ -84,6 +115,31 @@ export default function LoginPage() {
               <p className="text-slate-500 mt-2">Entre para acessar sua clínica</p>
             </div>
 
+            {/* Botão de biometria */}
+            {showBiometricButton && (
+              <button
+                type="button"
+                onClick={handleBiometricLogin}
+                disabled={biometryLoading || loading}
+                className="w-full mb-6 flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl border-2 border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 font-semibold transition-colors disabled:opacity-60"
+              >
+                {biometryLoading ? (
+                  <div className="w-5 h-5 border-2 border-violet-400/30 border-t-violet-600 rounded-full animate-spin" />
+                ) : (
+                  <span className="text-2xl">{biometryType === 'Face ID' ? '🔐' : '👆'}</span>
+                )}
+                {biometryLoading ? 'Verificando...' : `Entrar com ${biometryType}`}
+              </button>
+            )}
+
+            {showBiometricButton && (
+              <div className="flex items-center gap-3 mb-6">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-xs text-slate-400 font-medium">ou entre com email</span>
+                <div className="flex-1 h-px bg-slate-200" />
+              </div>
+            )}
+
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
                 <label className="label">Email</label>
@@ -134,7 +190,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || biometryLoading}
                 className="btn-primary flex items-center justify-center gap-2"
               >
                 {loading ? (
