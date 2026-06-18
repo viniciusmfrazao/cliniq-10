@@ -113,6 +113,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [showPayment, setShowPayment] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
+  const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
+  const [popupTop, setPopupTop] = useState(true)
+  const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
 
   // Reposiciona o popup verticalmente após renderizar com a altura real do conteúdo
   useEffect(() => {
@@ -126,9 +129,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
   // só roda quando o popup aparece/muda de card
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPreview, popupPos?.x])
-  const [popupSide, setPopupSide] = useState<'left' | 'right'>('right')
-  const [popupTop, setPopupTop] = useState(true)
-  const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
   const isMobile = useIsMobile()
   const [useSheet, setUseSheet] = useState(false)
   const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
