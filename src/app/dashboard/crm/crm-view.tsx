@@ -505,7 +505,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
             title="O que significa cada cor, badge e estágio"
           >
             <span>📖</span>
-            <span className="hidden sm:inline">Como ler</span>
+            <span className="hidden sm:inline">Como usar</span>
           </button>
           <button
             onClick={() => setShowSettings(true)}
@@ -536,7 +536,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           <p className="text-xs text-slate-500">Total Leads</p>
         </button>
         
-        {stats.humanReview > 0 && (
+        {evaActive && stats.humanReview > 0 && (
           <button
             onClick={() => setFilter(filter === 'human_review' ? 'all' : 'human_review')}
             className={`card p-3 text-left bg-gradient-to-br from-rose-50 to-pink-50 transition-all ${filter === 'human_review' ? 'ring-2 ring-rose-400' : 'hover:from-rose-100 hover:to-pink-100'}`}
@@ -806,7 +806,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   // Atendimento humano (Eva escalou). Se ativo, NAO mostra
                   // followup (humano cuida agora) — o getFollowupBadge ja
                   // retorna null nesse caso.
-                  const humanReview = lead.needs_human_review
+                  const humanReview = (evaActive && lead.needs_human_review)
                     ? HUMAN_REVIEW_REASONS[lead.human_review_reason ?? ''] ?? { label: 'Atendimento', emoji: '🚨' }
                     : null
 
@@ -1677,7 +1677,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
 }
 
 /**
- * Modal "Como ler o CRM" — referência visual de cores, badges e estágios.
+ * Modal "Como usar o CRM" — referência visual de cores, badges e estágios.
  * Aparece quando o admin/secretaria clica no botao 📖 do header. Vale tanto
  * como onboarding pra membros novos quanto como cola pra quem esquece o
  * que cada termo significa.
