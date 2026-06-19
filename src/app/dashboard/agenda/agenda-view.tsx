@@ -655,8 +655,13 @@ const AppointmentCard = React.memo(function AppointmentCard({
         <ModalPortal>
           <div
             ref={popupRef}
-            className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto max-h-[80vh]"
-            style={{ left: popupPos?.x ?? 0, top: popupPos?.y ?? 100, zIndex: 9999 }}
+            className="fixed w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 overflow-y-auto"
+            style={{
+              left: popupPos?.x ?? 0,
+              top: popupPos?.y ?? 100,
+              zIndex: 9999,
+              maxHeight: `calc(100vh - ${(popupPos?.y ?? 100) + 8}px)`,
+            }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
