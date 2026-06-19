@@ -25,6 +25,8 @@ type Props = {
   evaPauseUntil?: string | null
   /** Eva ativa na clínica. Quando false, não mostra banners de follow-up automático. */
   evaActive?: boolean
+  /** Chamado quando algo muda (criar/concluir follow-up) para o CRM pai recarregar. */
+  onUpdate?: () => void
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -53,7 +55,7 @@ function formatRelativeTime(dateStr: string): string {
   return `em ${m}min`
 }
 
-export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt, evaFollowupCount, evaPauseUntil, evaActive = true }: Props) {
+export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt, evaFollowupCount, evaPauseUntil, evaActive = true, onUpdate }: Props) {
   const [tab, setTab] = useState<'followups' | 'contacts'>('followups')
   const [followups, setFollowups] = useState<Followup[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -116,6 +118,7 @@ export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt,
       setForm({ scheduled_at: '', type: 'whatsapp', note: '' })
       setShowForm(false)
       await loadFollowups()
+      onUpdate?.()
     } catch {
       setSaveError('Erro de conexão ao salvar. Tente novamente.')
     } finally { setSaving(false) }
@@ -129,6 +132,7 @@ export default function LeadFollowupPanel({ leadId, leadName, evaNextFollowupAt,
     })
     await loadFollowups()
     await loadContacts()
+    onUpdate?.()
   }
 
   async function handleSaveContact() {
