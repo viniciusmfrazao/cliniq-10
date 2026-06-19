@@ -8,6 +8,9 @@ import AppProviders from '@/components/layout/AppProviders'
 import WhatsappHealthBanner from '@/components/layout/WhatsappHealthBanner'
 import WhatsappHealthBannerWrapper from '@/components/layout/WhatsappHealthBannerWrapper'
 
+// Rota autenticada: nunca cachear/ISR — evita vazamento de sessão entre usuários
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardLayout({ children, searchParams }: { children: React.ReactNode, searchParams?: { admin?: string } }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
