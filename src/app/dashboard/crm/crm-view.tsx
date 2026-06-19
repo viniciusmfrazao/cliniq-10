@@ -245,6 +245,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [filter, setFilter] = useState<string>('all')
   const [showSettings, setShowSettings] = useState(false)
   const [showLegend, setShowLegend] = useState(false)
+  const [showBell, setShowBell] = useState(false)
   // Drag & drop nativo HTML5 — usado pra mover lead entre colunas do Kanban
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null)
   const [draggingFromStage, setDraggingFromStage] = useState<string | null>(null)
@@ -499,6 +500,73 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           <p className="text-sm text-slate-500 mt-0.5">Gerencie seus leads e oportunidades</p>
         </div>
         <div className="flex items-center gap-2">
+          {(() => {
+            // pendências: followup manual vencido + contato pendente (next_contact_at vencido)
+            const now = new Date()
+            const pendentes = leads.filter(l => {
+              const mf = manualFollowups[l.id]
+              const mfDue = mf && new Date(mf) <= now
+              const ncDue = l.next_contact_at && new Date(l.next_contact_at) <= now
+              return mfDue || ncDue
+            })
+            const count = pendentes.length
+            return (
+              <div className="relative">
+                <button
+                  onClick={() => setShowBell(v => !v)}
+                  className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Pendências de contato e follow-up"
+                >
+                  <Icon name="bell" className="w-5 h-5" />
+                  {count > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
+                </button>
+                {showBell && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowBell(false)} />
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 max-h-96 overflow-y-auto">
+                      <div className="sticky top-0 bg-white border-b border-slate-100 px-4 py-3">
+                        <p className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                          🔔 Pendências
+                          {count > 0 && <span className="text-xs font-normal text-slate-500">({count})</span>}
+                        </p>
+                      </div>
+                      {count === 0 ? (
+                        <div className="px-4 py-8 text-center text-sm text-slate-400">
+                          Nenhuma pendência por agora 🎉
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-50">
+                          {pendentes.map(l => {
+                            const mf = manualFollowups[l.id]
+                            const isFollowup = mf && new Date(mf) <= now
+                            return (
+                              <button
+                                key={l.id}
+                                onClick={() => { setSelectedLead(l); setShowBell(false) }}
+                                className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="font-medium text-slate-800 text-sm truncate">{l.name}</p>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${isFollowup ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {isFollowup ? '📅 Follow-up' : '⏰ Contato'}
+                                  </span>
+                                </div>
+                                {l.phone && <p className="text-xs text-slate-400 mt-0.5">{l.phone}</p>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })()}
           <button
             onClick={() => setShowLegend(true)}
             className="px-3 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors flex items-center gap-1.5"
