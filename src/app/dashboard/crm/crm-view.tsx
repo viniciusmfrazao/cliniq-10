@@ -284,6 +284,17 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinicId])
+
+  // Os contadores de follow-up ("em 6 min") e o status "pendente" dependem só
+  // da passagem do tempo — não há evento de banco para o realtime captar.
+  // Por isso atualizamos a tela periodicamente (a cada 60s).
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh()
+    }, 60000)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [draggingFromStage, setDraggingFromStage] = useState<string | null>(null)
   const [hoverStage, setHoverStage] = useState<string | null>(null)
 
