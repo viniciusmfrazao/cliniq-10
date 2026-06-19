@@ -359,7 +359,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     warmLeads: leads.filter(l => l.ai_priority === 'warm').length,
     coldLeads: leads.filter(l => l.ai_priority === 'cold').length,
     estimatedValue: leads.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
-    pendingContact: leads.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date()).length,
+    pendingContact: leads.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() }).length,
     // Atendimento humano (Eva escalou)
     humanReview: leads.filter(l => l.needs_human_review === true).length,
     // Followup buckets (Eva aguardando resposta) — 5 estagios
@@ -393,7 +393,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
         : filter === 'hot' || filter === 'warm' || filter === 'cold'
           ? leadsForLine.filter(l => l.ai_priority === filter)
           : filter === 'pending_contact'
-            ? leadsForLine.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
+            ? leadsForLine.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() })
             : filter === 'followup_all'
               ? leadsForLine.filter(isInFollowup)
               : isFollowupFilter(filter)
@@ -424,7 +424,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
       : filter === 'hot' || filter === 'warm' || filter === 'cold'
         ? leadsForLine.filter(l => l.ai_priority === filter)
         : filter === 'pending_contact'
-          ? leadsForLine.filter(l => l.next_contact_at && new Date(l.next_contact_at) <= new Date())
+          ? leadsForLine.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() })
           : filter === 'followup_all'
             ? leadsForLine.filter(isInFollowup)
             : isFollowupFilter(filter)
@@ -537,13 +537,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
         </div>
         <div className="flex items-center gap-2">
           {(() => {
-            // pendências: followup manual vencido + contato pendente (next_contact_at vencido)
+            // pendências: follow-up manual vencido e não concluído
             const now = new Date()
             const pendentes = leads.filter(l => {
               const mf = manualFollowups[l.id]
-              const mfDue = mf && new Date(mf) <= now
-              const ncDue = l.next_contact_at && new Date(l.next_contact_at) <= now
-              return mfDue || ncDue
+              return mf && new Date(mf) <= now
             })
             const count = pendentes.length
             return (
@@ -890,7 +888,10 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   const tempKey = calcTemperatura(lead)
                   const aiPriority = tempKey ? AI_PRIORITY_CONFIG[tempKey as keyof typeof AI_PRIORITY_CONFIG] : null
                   const tempIsManual = !lead.ai_priority && !!tempKey
-                  const needsContact = lead.next_contact_at && new Date(lead.next_contact_at) <= new Date()
+                  // "Contato pendente" = follow-up manual vencido e não concluído.
+                  // (manualFollowups já vem filtrado por done_at IS NULL do servidor)
+                  const mfDate = manualFollowups[lead.id]
+                  const needsContact = mfDate ? new Date(mfDate) <= new Date() : false
                   const followup = evaActive ? getFollowupBadge(lead) : null
                   const manualFollowup = getManualFollowupBadge(manualFollowups[lead.id], lead.status)
                   const followupClass =
@@ -1202,6 +1203,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           stages={STAGES}
           onClose={() => setSelectedLead(null)}
           onUpdate={() => { setSelectedLead(null); router.refresh() }}
+          onFollowupChange={() => router.refresh()}
           evaActive={evaActive}
         />
       )}
@@ -1357,7 +1359,7 @@ function NewLeadModal({ clinicId, procedures, users, sources, onClose, onSuccess
 }
 
 // Modal de Detalhes do Lead
-function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, onUpdate, evaActive = true }: {
+function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, onUpdate, onFollowupChange, evaActive = true }: {
   lead: Lead
   procedures: { id: string; name: string }[]
   users: { id: string; name: string }[]
@@ -1365,6 +1367,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
   stages: { id: string; label: string; color: string; order: number }[]
   onClose: () => void
   onUpdate: () => void
+  onFollowupChange?: () => void
   evaActive?: boolean
 }) {
   const supabase = createClient()
@@ -1570,7 +1573,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
               </div>
 
               {/* Follow-ups e Histórico de Contatos */}
-              <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} evaActive={evaActive} />
+              <LeadFollowupPanel leadId={lead.id} leadName={lead.name} evaNextFollowupAt={lead.eva_next_followup_at} evaFollowupCount={lead.eva_followup_count} evaPauseUntil={lead.eva_pause_until} evaActive={evaActive} onUpdate={onFollowupChange} />
 
               {/* Contato Rápido */}
               <div className="flex gap-2">
