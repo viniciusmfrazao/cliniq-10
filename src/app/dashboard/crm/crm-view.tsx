@@ -1833,8 +1833,14 @@ function LegendModal({ onClose, evaActive = true }: { onClose: () => void; evaAc
               <div className="p-4 rounded-xl bg-violet-50 border border-violet-100">
                 <p className="text-sm font-semibold text-violet-900 mb-1">O que é o CRM?</p>
                 <p className="text-xs text-violet-700 leading-relaxed">
-                  O CRM é o <strong>controle de todos os leads</strong> (pessoas que entraram em contato com a clínica). Aqui você vê em qual etapa cada pessoa está, faz follow-ups, anota observações e converte leads em pacientes.
+                  O CRM é o <strong>controle de todos os leads</strong> da clínica — toda pessoa que entrou em contato e ainda não virou paciente. Aqui você acompanha em que etapa cada um está, agenda lembretes de contato (follow-ups), anota tudo e transforma leads em pacientes.
                 </p>
+              </div>
+
+              <div className={`p-3 rounded-xl border text-xs leading-relaxed ${evaActive ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-sky-50 border-sky-100 text-sky-800'}`}>
+                {evaActive
+                  ? <><strong>🤖 Sua clínica usa a Eva.</strong> A recepcionista virtual responde os leads no WhatsApp automaticamente. Você entra quando ela pede ajuda (cards com borda rosa) e para acompanhar o funil.</>
+                  : <><strong>✋ Atendimento manual.</strong> Nesta clínica, todo o atendimento aos leads é feito pela sua equipe. O CRM te ajuda a não esquecer ninguém: organiza os contatos, agenda follow-ups e avisa quando é hora de falar com cada lead.</>}
               </div>
 
               <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">O passo a passo do dia</p>
@@ -1842,7 +1848,8 @@ function LegendModal({ onClose, evaActive = true }: { onClose: () => void; evaAc
                 {[
                   { n: '1', t: 'Chegou um lead novo', d: evaActive ? 'Aparece na coluna Novo Lead. A Eva já responde automaticamente pelo WhatsApp.' : 'Aparece na coluna Novo Lead. Entre em contato pelo WhatsApp para iniciar o atendimento.' },
                   { n: '2', t: 'Conversa em andamento', d: evaActive ? 'Quando o lead responde, ele vai para Em Conversa. Fique de olho nos cards com borda rosa — esses a Eva pausou e precisam de você.' : 'Conforme você conversa, mova o lead para Em Conversa. Todo o atendimento é feito por você.' },
-                  { n: '3', t: 'Agendou', d: 'Mova o card para Agendado quando marcar a consulta ou procedimento.' },
+                  { n: '3', t: 'Agende um follow-up', d: 'Não conseguiu fechar na hora? Agende um lembrete de retorno (ex: "ligar amanhã às 14h"). O sistema te avisa quando chegar a hora.' },
+                  { n: '4', t: 'Marcou consulta', d: 'Mova o card para Agendado quando marcar a consulta ou procedimento.' },
                   { n: '✓', t: 'Virou paciente!', d: 'Clique em Converter em Paciente dentro do card. O lead sai do funil e vira paciente da clínica.' },
                 ].map(s => (
                   <div key={s.n} className="flex gap-3 items-start">
@@ -1856,7 +1863,7 @@ function LegendModal({ onClose, evaActive = true }: { onClose: () => void; evaAc
               </div>
 
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-800">
-                <strong>⚡ Rotina diária:</strong> abra o CRM toda manhã e confira o <strong>sininho 🔔</strong> no topo — ele mostra todos os follow-ups que estão na hora de fazer.
+                <strong>⚡ Rotina diária:</strong> abra o CRM toda manhã e confira o <strong>sininho 🔔</strong> no topo — ele mostra todos os follow-ups que estão na hora de fazer. Sino zerado = tudo em dia!
               </div>
             </div>
           )}
@@ -1907,16 +1914,38 @@ function LegendModal({ onClose, evaActive = true }: { onClose: () => void; evaAc
             <div className="space-y-5">
               <div className="p-4 rounded-xl bg-sky-50 border border-sky-100">
                 <p className="text-sm font-semibold text-sky-900 mb-1">O que é follow-up?</p>
-                <p className="text-xs text-sky-700 leading-relaxed">É o <strong>lembrete de voltar a falar com um lead</strong> num horário marcado. Por exemplo: "ligar para a Maria amanhã às 14h".</p>
+                <p className="text-xs text-sky-700 leading-relaxed">É o <strong>lembrete de voltar a falar com um lead</strong> num horário marcado. Por exemplo: "ligar para a Maria amanhã às 14h". O CRM guarda esse compromisso e te avisa na hora certa, pra você nunca esquecer de retornar um contato.</p>
+              </div>
+
+              {/* Ciclo visual */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <p className="text-xs font-semibold text-slate-700 mb-3">🔄 O ciclo do follow-up</p>
+                <div className="flex items-center justify-between gap-1 text-center">
+                  {[
+                    { e: '📅', t: 'Você agenda', c: 'text-violet-600' },
+                    { e: '⏳', t: 'Aguarda a hora', c: 'text-slate-400' },
+                    { e: '🔔', t: 'Vence: vira pendente', c: 'text-amber-600' },
+                    { e: '✓', t: 'Você conclui', c: 'text-emerald-600' },
+                  ].map((s, i, arr) => (
+                    <div key={s.t} className="flex items-center flex-1">
+                      <div className="flex flex-col items-center gap-1 flex-1">
+                        <span className="text-xl">{s.e}</span>
+                        <span className={`text-[10px] font-medium leading-tight ${s.c}`}>{s.t}</span>
+                      </div>
+                      {i < arr.length - 1 && <span className="text-slate-300 text-xs">→</span>}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-3">
                 <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">📅 Como agendar um follow-up</p>
                 {[
-                  { n: '1', d: 'Abra o card do lead e vá na aba Follow-ups → clique em + Agendar follow-up' },
-                  { n: '2', d: 'Escolha a data e a hora, o canal (WhatsApp, ligação…) e uma observação opcional. Clique em Salvar.' },
-                  { n: '3', d: 'Quando chegar a hora, o lead aparece no sininho 🔔 e o card mostra "Contato pendente!"' },
-                  { n: '4', d: 'Depois de falar com o lead, abra o card e marque o follow-up como concluído (✓). Aí ele some das pendências.' },
+                  { n: '1', d: 'Clique no card do lead para abrir os detalhes.' },
+                  { n: '2', d: 'Vá na aba Follow-ups e clique em + Agendar follow-up.' },
+                  { n: '3', d: 'Escolha a data e a hora, o canal (WhatsApp, ligação, e-mail…) e escreva uma observação opcional (ex: "perguntar sobre o parcelamento"). Clique em Salvar.' },
+                  { n: '4', d: 'Quando chegar a hora marcada, o lead aparece no sininho 🔔 e o card mostra "Contato pendente!" com a borda amarela.' },
+                  { n: '5', d: 'Depois de falar com o lead, abra o card e marque o follow-up como concluído (✓). Ele some das pendências na hora.' },
                 ].map(s => (
                   <div key={s.n} className="flex gap-2 items-start p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600">
                     <span className="font-bold text-violet-600 flex-shrink-0">{s.n}.</span><p>{s.d}</p>
@@ -1929,18 +1958,18 @@ function LegendModal({ onClose, evaActive = true }: { onClose: () => void; evaAc
                 <p className="text-xs text-slate-500">No topo da tela, ao lado de "Como usar", o sino mostra o número de follow-ups que estão na hora de fazer. Clique nele para ver a lista e ir direto no lead.</p>
                 <div className="flex gap-3 items-center p-3 bg-white rounded-lg border border-slate-200 text-xs">
                   <span className="text-base">⏰</span>
-                  <div><span className="font-medium text-amber-600">Contato pendente!</span> — passou da hora marcada e ainda não foi feito.</div>
+                  <div><span className="font-medium text-amber-600">Contato pendente!</span> — passou da hora marcada e ainda não foi feito. Aparece no card e conta no sino.</div>
                 </div>
                 <div className="flex gap-3 items-center p-3 bg-white rounded-lg border border-slate-200 text-xs">
                   <span className="text-base">✓</span>
-                  <div><span className="font-medium text-emerald-600">Concluído</span> — você marcou como feito. Some do sino e do card automaticamente.</div>
+                  <div><span className="font-medium text-emerald-600">Concluído</span> — você marcou como feito. Some do sino, do card e do contador automaticamente.</div>
                 </div>
               </div>
 
               {evaActive && (
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">🤖 Follow-up automático (Eva)</p>
-                  <p className="text-xs text-slate-500">Quando o lead para de responder, a Eva manda lembretes automáticos em sequência. O card mostra quanto falta para o próximo: <em>"Followup Eva · em 3h"</em>.</p>
+                  <p className="text-xs text-slate-500">Quando o lead para de responder, a Eva manda lembretes automáticos em sequência, sozinha. O card mostra quanto falta para o próximo: <em>"Followup Eva · em 3h"</em>. Você não precisa fazer nada — mas pode assumir quando quiser.</p>
                 </div>
               )}
 
