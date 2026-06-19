@@ -126,9 +126,10 @@ export default async function CRMPage() {
   const clinicModules: string[] = (await supabase.from('clinics').select('settings').eq('id', userData?.clinic_id || '').single()).data?.settings?.active_modules || []
   const hasEvaModule = clinicModules.length === 0 || clinicModules.includes('eva_ia')
   const evaPaused = hasEvaModule && waInstance?.auto_reply_enabled === false
-  // Eva "ativa" = clínica tem o módulo E auto-resposta não está desligada.
-  // Quando inativa, não anunciamos followup automático da Eva (ela não vai agir).
-  const evaActive = hasEvaModule && waInstance?.auto_reply_enabled !== false
+  // Eva "ativa" = tem módulo E existe instância WhatsApp com auto-resposta LIGADA.
+  // Sem instância configurada (auto_reply_enabled null) a Eva não age → tratamos como inativa.
+  // Quando inativa, não anunciamos followup automático da Eva nem o card de atendimento humano.
+  const evaActive = hasEvaModule && waInstance?.auto_reply_enabled === true
 
   return (
     <CRMView

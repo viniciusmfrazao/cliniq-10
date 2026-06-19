@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -248,6 +248,42 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [showBell, setShowBell] = useState(false)
   // Drag & drop nativo HTML5 — usado pra mover lead entre colunas do Kanban
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null)
+
+  // Realtime: atualiza o CRM automaticamente quando leads ou follow-ups mudam.
+  // Canal com nome fixo (evita duplicação no reconnect). Refresh com debounce.
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!clinicId) return
+    let destroyed = false
+
+    const scheduleRefresh = () => {
+      if (destroyed) return
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = setTimeout(() => {
+        if (!destroyed) router.refresh()
+      }, 800)
+    }
+
+    const channelName = `crm:${clinicId}`
+    try { supabase.removeChannel(supabase.channel(channelName)) } catch { /* noop */ }
+
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'leads', filter: `clinic_id=eq.${clinicId}` },
+        () => scheduleRefresh())
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'lead_followups', filter: `clinic_id=eq.${clinicId}` },
+        () => scheduleRefresh())
+      .subscribe()
+
+    return () => {
+      destroyed = true
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+      try { supabase.removeChannel(channel) } catch { /* noop */ }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinicId])
   const [draggingFromStage, setDraggingFromStage] = useState<string | null>(null)
   const [hoverStage, setHoverStage] = useState<string | null>(null)
 
