@@ -116,8 +116,8 @@ export default function BrazilCopa() {
       {/* Bandeira SVG do Brasil no canto inferior direito */}
       <div style={{
         position: 'fixed',
-        bottom: 16,
-        right: 16,
+        top: 12,
+        right: 12,
         zIndex: 99997,
         pointerEvents: 'none',
         animation: 'copaFadeIn 1.5s ease forwards',
@@ -172,7 +172,7 @@ export default function BrazilCopa() {
 
       <style>{`
         @keyframes copaFadeIn {
-          from { opacity: 0; transform: translateY(10px); }
+          from { opacity: 0; transform: translateY(-10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
