@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import BrazilCopa from '@/components/BrazilCopa'
 import PWAProvider from '@/components/PWAProvider'
 
 export const metadata: Metadata = {
@@ -101,6 +102,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider>{children}</ThemeProvider>
+        <BrazilCopa />
         <PWAProvider />
       </body>
     </html>
