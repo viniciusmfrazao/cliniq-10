@@ -3,8 +3,8 @@
 import { useEffect, useRef } from 'react'
 
 /**
- * BrazilCopa — enfeites da Copa do Mundo 2026 🇧🇷
- * Confetes leves nas cores do Brasil + bandeirinha no canto.
+ * BrazilCopa — Copa do Mundo 2026 🇧🇷
+ * Confetes leves + bandeira SVG no canto.
  * Remover após a Copa (julho 2026).
  */
 export default function BrazilCopa() {
@@ -25,7 +25,6 @@ export default function BrazilCopa() {
     }
     window.addEventListener('resize', onResize)
 
-    // Cores da seleção brasileira
     const colors = ['#009c3b', '#ffdf00', '#002776', '#ffffff', '#009c3b', '#ffdf00']
 
     type Piece = {
@@ -51,8 +50,8 @@ export default function BrazilCopa() {
     }))
 
     let animId: number
-    let startTime = Date.now()
-    const DURATION = 12000 // 12s e para
+    const startTime = Date.now()
+    const DURATION = 12000
 
     function draw() {
       if (!ctx || !canvas) return
@@ -65,7 +64,6 @@ export default function BrazilCopa() {
         return
       }
 
-      // fade out nos últimos 3s
       const fadeRatio = elapsed > DURATION - 3000
         ? 1 - (elapsed - (DURATION - 3000)) / 3000
         : 1
@@ -75,18 +73,15 @@ export default function BrazilCopa() {
         p.wobble += p.wobbleSpeed
         p.angle += p.angleSpeed
         p.x += Math.sin(p.wobble) * 0.6
-
         if (p.y > canvas.height + 10) {
           p.y = -10
           p.x = Math.random() * canvas.width
         }
-
         ctx.save()
         ctx.translate(p.x, p.y)
         ctx.rotate(p.angle)
         ctx.globalAlpha = p.opacity * fadeRatio
         ctx.fillStyle = p.color
-
         if (p.shape === 'circle') {
           ctx.beginPath()
           ctx.arc(0, 0, p.r, 0, Math.PI * 2)
@@ -101,7 +96,6 @@ export default function BrazilCopa() {
     }
 
     draw()
-
     return () => {
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', onResize)
@@ -110,46 +104,75 @@ export default function BrazilCopa() {
 
   return (
     <>
-      {/* Canvas de confetes */}
       <canvas
         ref={canvasRef}
         style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'none',
-          zIndex: 99998,
+          position: 'fixed', top: 0, left: 0,
+          width: '100%', height: '100%',
+          pointerEvents: 'none', zIndex: 99998,
         }}
       />
 
-      {/* Bandeirinha discreta no canto superior direito */}
+      {/* Bandeira SVG do Brasil no canto inferior direito */}
       <div style={{
         position: 'fixed',
-        top: 12,
-        right: 12,
+        bottom: 16,
+        right: 16,
         zIndex: 99997,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        background: 'rgba(0,0,0,0.55)',
-        borderRadius: 20,
-        padding: '4px 10px 4px 6px',
-        backdropFilter: 'blur(6px)',
         pointerEvents: 'none',
         animation: 'copaFadeIn 1.5s ease forwards',
+        filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.35))',
       }}>
-        <span style={{ fontSize: 18, lineHeight: 1 }}>🇧🇷</span>
-        <span style={{ color: '#ffdf00', fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
-          VAI BRASIL!
-        </span>
-        <span style={{ fontSize: 13 }}>🏆</span>
+        {/* Bandeira Brasil 72x50px */}
+        <svg width="72" height="50" viewBox="0 0 720 504" xmlns="http://www.w3.org/2000/svg">
+          {/* Fundo verde */}
+          <rect width="720" height="504" fill="#009c3b"/>
+          {/* Losango amarelo */}
+          <polygon points="360,36 684,252 360,468 36,252" fill="#ffdf00"/>
+          {/* Círculo azul */}
+          <circle cx="360" cy="252" r="140" fill="#002776"/>
+          {/* Faixa branca */}
+          <path d="M220,290 Q360,220 500,290" stroke="white" strokeWidth="26" fill="none"/>
+          {/* Estrelas (simplificadas) */}
+          {[
+            [250,200],[300,168],[360,155],[420,168],[470,200],
+            [230,252],[490,252],[250,304],[470,304],[360,320],
+            [300,340],[420,340],[360,358],
+          ].map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r="10" fill="white"/>
+          ))}
+          {/* Texto ORDEM E PROGRESSO */}
+          <text
+            x="360" y="298"
+            textAnchor="middle"
+            fontSize="28"
+            fontFamily="Arial, sans-serif"
+            fontWeight="bold"
+            fill="#009c3b"
+            letterSpacing="2"
+          >
+            ORDEM E PROGRESSO
+          </text>
+        </svg>
+
+        {/* Badge Copa */}
+        <div style={{
+          marginTop: 4,
+          textAlign: 'center',
+          background: 'rgba(0,0,0,0.6)',
+          borderRadius: 8,
+          padding: '2px 8px',
+          backdropFilter: 'blur(4px)',
+        }}>
+          <span style={{ color: '#ffdf00', fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>
+            🏆 COPA 2026
+          </span>
+        </div>
       </div>
 
       <style>{`
         @keyframes copaFadeIn {
-          from { opacity: 0; transform: translateY(-8px); }
+          from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
