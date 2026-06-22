@@ -199,6 +199,41 @@ function isLidPhone(phone: string): boolean {
 }
 
 /**
+ * Resolve telefone real a partir de um @lid consultando /chat/findContacts.
+ * Retorna o telefone real (ex: "5534984017766") ou null se não encontrar.
+ */
+async function resolveLidToPhone(args: {
+  instanceName: string
+  lid: string
+  evolutionUrl: string
+  apiKey: string
+}): Promise<string | null> {
+  try {
+    const r = await fetch(
+      `${args.evolutionUrl}/chat/findContacts/${encodeURIComponent(args.instanceName)}`,
+      {
+        method: 'POST',
+        headers: { apikey: args.apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ where: {} }),
+      }
+    )
+    if (!r.ok) return null
+    const contacts = await r.json() as Array<{ id?: string; pushName?: string }>
+    // Procura contato com @lid correspondente
+    // O lid vem sem sufixo, ex: "274555901882530"
+    for (const c of contacts) {
+      if (c.id?.startsWith(args.lid + '@') || c.id === args.lid + '@lid') {
+        const phone = jidToPhone(c.id)
+        if (phone) return phone
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Tenta extrair a nota NPS (1-5) de uma mensagem de texto.
  *
  * Formatos aceitos:
@@ -427,12 +462,32 @@ export async function POST(
       case 'messages_upsert': {
         const key = (data as { key?: { remoteJid?: string; fromMe?: boolean; id?: string } }).key
         const fromMe = key?.fromMe === true
-        // Resolve telefone do remoteJid. Para @lid (iOS privacy mode), retorna
-        // identificador sintético lid_<num> — Eva não responde para esses.
-        const phone = resolvePhone(key?.remoteJid)
-        const parsed = pickMessageDetails((data as { message?: unknown }).message)
+        // Resolve telefone do remoteJid. Para @lid, tenta buscar telefone real via findContacts.
+        let phone = resolvePhone(key?.remoteJid)
         const pushName = (data as { pushName?: string }).pushName
         const messageId = key?.id
+
+        // Se phone é lid_, tenta resolver para telefone real via Evolution API
+        if (phone && isLidPhone(phone)) {
+          const settings = await getSettings(['evolution_url', 'evolution_master_key'])
+          if (settings.evolution_url && settings.evolution_master_key) {
+            const lidNum = phone.slice(4) // remove "lid_"
+            const resolved = await resolveLidToPhone({
+              instanceName: instance,
+              lid: lidNum,
+              evolutionUrl: settings.evolution_url.replace(/\/$/, ''),
+              apiKey: settings.evolution_master_key,
+            })
+            if (resolved) {
+              phone = resolved
+              debugTrace.push(`lid resolved: ${lidNum} → ${resolved}`)
+            } else {
+              debugTrace.push(`lid not resolved: ${lidNum} (mantendo lid_)`)
+            }
+          }
+        }
+
+        const parsed = pickMessageDetails((data as { message?: unknown }).message)
 
         debugTrace.push(
           `parsed: phone=${phone ?? 'null'} kind=${parsed.kind} fromMe=${fromMe} pushName=${pushName ?? 'null'}`,
