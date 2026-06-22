@@ -475,7 +475,7 @@ async function sendViaEvolution(payload: IncomingPayload, ctx: DonnaContext, tex
     },
     body: JSON.stringify({
       number: payload.phone,
-      text,
+      textMessage: { text },
     }),
   });
   if (!r.ok) return { ok: false, error: r.error || `status=${r.status}` };
