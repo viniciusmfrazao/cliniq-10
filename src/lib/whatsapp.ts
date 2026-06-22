@@ -157,14 +157,20 @@ async function resolveInstance(
       }
     }
     if (data.status !== 'connected') {
-      return {
-        ok: false,
-        error: {
+      // TOLERÂNCIA: se o status no DB está errado (cron derrubou equivocadamente),
+      // ainda tentamos enviar. Evolution vai retornar erro real se estiver desconectado.
+      // Só bloqueamos se status for 'pending' (nunca configurado) ou 'qr_pending'.
+      if (data.status === 'pending' || data.status === 'qr_pending') {
+        return {
           ok: false,
-          code: 'not_connected',
-          error: `Numero ${opts.instanceName} nao esta conectado (status: ${data.status})`,
-        },
+          error: {
+            ok: false,
+            code: 'not_connected',
+            error: `Numero ${opts.instanceName} nao esta conectado (status: ${data.status})`,
+          },
+        }
       }
+      // disconnected/error: tenta mesmo assim
     }
     return {
       ok: true,
@@ -195,7 +201,7 @@ async function resolveInstance(
     }
   }
 
-  const connected = list.filter(r => r.status === 'connected')
+  const connected = list.filter(r => r.status === 'connected' || r.status === 'disconnected' || r.status === 'error')
   if (connected.length === 0) {
     return {
       ok: false,
