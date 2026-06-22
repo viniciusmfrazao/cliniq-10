@@ -426,7 +426,7 @@ export default function OrcamentosTab({
                   disabled={gerando}
                   className="text-xs text-violet-600 hover:text-violet-700 font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                 >
-                  <Icon name="refreshCw" className="w-3 h-3" />
+                  <Icon name="refresh" className="w-3 h-3" />
                   Gerar outra
                 </button>
               </div>
