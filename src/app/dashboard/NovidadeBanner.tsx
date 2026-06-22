@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
-const STORAGE_KEY = 'clinike_novidade_alerta_despesas_v1'
+const STORAGE_KEY = 'clinike_novidade_orcamento_ia_v1'
 const EXPIRA_EM_DIAS = 3
 
 export default function NovidadeBanner() {
@@ -32,7 +32,7 @@ export default function NovidadeBanner() {
     <div className="relative bg-gradient-to-r from-violet-500 to-purple-600 rounded-2xl p-4 md:p-5 text-white shadow-lg shadow-violet-500/20 mb-2">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <span className="text-xl">🔔</span>
+          <span className="text-xl">✨</span>
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -41,17 +41,17 @@ export default function NovidadeBanner() {
             </span>
           </div>
           <p className="font-semibold text-sm md:text-base">
-            Agora você pode receber lembretes de boletos a vencer!
+            Orçamento Campeão: mensagens personalizadas com IA!
           </p>
           <p className="text-white/80 text-xs md:text-sm mt-1">
-            Configure o alerta de despesas e receba uma mensagem no WhatsApp todo dia às 8h com os pagamentos que estão vencendo.
+            Ao enviar um orçamento pelo WhatsApp, a IA gera automaticamente uma mensagem personalizada para cada paciente — com o nome, o procedimento e o contexto dela. Você edita e envia com um clique.
           </p>
           <Link
-            href="/dashboard/config/automacoes"
+            href="/dashboard/pacientes"
             onClick={fechar}
             className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-white text-violet-600 rounded-xl text-sm font-semibold hover:bg-violet-50 transition-colors"
           >
-            Ir para Automações
+            Ver pacientes
             <Icon name="chevronRight" className="w-4 h-4" />
           </Link>
         </div>
