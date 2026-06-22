@@ -162,12 +162,28 @@ function previewFor(kind: ParsedKind, caption: string | null): string {
 
 function jidToPhone(jid: string | undefined | null): string | null {
   if (!jid) return null
-  // Ignorar formato @lid — identificador interno do WhatsApp Business (v1.8.2)
-  // nao e um numero de telefone real
+  // @lid é um identificador interno do WhatsApp Business — não contém telefone
+  // Caller deve usar body.sender como fallback nesses casos
   if (jid.endsWith('@lid')) return null
   const cleaned = jid.split('@')[0]
   // Evolution às vezes manda formato "55349xxxxxxx:1" pra device — limpamos
   return cleaned.replace(/[^0-9]/g, '') || null
+}
+
+/**
+ * Resolve o telefone a partir de remoteJid OU do campo sender do body.
+ *
+ * Versões novas do Evolution (com WhatsApp Business) mandam remoteJid no
+ * formato @lid (identificador interno do WA, sem telefone). Nesse caso o
+ * campo `sender` do body tem o JID real com @s.whatsapp.net.
+ *
+ * Prioridade: remoteJid → sender → null
+ */
+function resolvePhone(
+  remoteJid: string | undefined | null,
+  sender: string | undefined | null,
+): string | null {
+  return jidToPhone(remoteJid) ?? jidToPhone(sender)
 }
 
 /**
@@ -396,7 +412,9 @@ export async function POST(
       case 'messages_upsert': {
         const key = (data as { key?: { remoteJid?: string; fromMe?: boolean; id?: string } }).key
         const fromMe = key?.fromMe === true
-        const phone = jidToPhone(key?.remoteJid)
+        // Versões novas do Evolution mandam remoteJid como @lid (sem telefone real).
+        // Usamos body.sender como fallback — ele sempre vem com @s.whatsapp.net.
+        const phone = resolvePhone(key?.remoteJid, body.sender)
         const parsed = pickMessageDetails((data as { message?: unknown }).message)
         const pushName = (data as { pushName?: string }).pushName
         const messageId = key?.id
