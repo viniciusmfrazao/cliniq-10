@@ -66,6 +66,7 @@ export default function OrcamentosTab({
   const [mensagemGerada, setMensagemGerada] = useState('')
   const [gerando, setGerando] = useState(false)
   const [sending, setSending] = useState(false)
+  const [erroGeracao, setErroGeracao] = useState<string | null>(null)
 
   function addItem() {
     setForm(p => ({ ...p, itens: [...p.itens, { descricao: '', quantidade: 1, valor_unitario: 0 }] }))
