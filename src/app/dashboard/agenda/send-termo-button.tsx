@@ -120,7 +120,7 @@ export default function SendTermoButton({
         ) : (
           <Icon name={done ? 'check' : 'file'} className="w-3 h-3" />
         )}
-        {done ? 'Enviado' : 'Termo'}
+        {done ? 'Enviado' : 'Documentos'}
       </button>
 
       {/* Picker de templates */}
