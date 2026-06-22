@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * POST /api/orcamento/send
  * Envia orçamento pelo WhatsApp da clínica.
- * Body: { orcamentoId: string }
+ * Body: { orcamentoId: string, mensagemCustom?: string }
+ * Se mensagemCustom for fornecida, usa ela em vez de montar a mensagem padrão.
  */
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -22,10 +25,10 @@ export async function POST(req: NextRequest) {
 
   const clinicId = userRow.clinic_id as string
 
-  let body: { orcamentoId?: string }
+  let body: { orcamentoId?: string; mensagemCustom?: string }
   try { body = await req.json() } catch { return NextResponse.json({ ok: false, error: 'json_invalido' }, { status: 400 }) }
 
-  const { orcamentoId } = body
+  const { orcamentoId, mensagemCustom } = body
   if (!orcamentoId) return NextResponse.json({ ok: false, error: 'orcamentoId_obrigatorio' }, { status: 400 })
 
   const svc = createServiceClient()
@@ -44,29 +47,32 @@ export async function POST(req: NextRequest) {
   const phone = (patient?.phone || '').trim()
   if (!phone) return NextResponse.json({ ok: false, error: 'paciente_sem_telefone' }, { status: 400 })
 
-  // Buscar nome da clínica
-  const { data: clinic } = await svc.from('clinics').select('name').eq('id', clinicId).maybeSingle()
-  const clinicName = clinic?.name || 'nossa clínica'
-  const firstName = (patient.name || '').split(' ')[0]
+  let message: string
 
-  // Calcular total
-  const itens = (orc.orcamento_itens || []) as any[]
-  const total = itens.reduce((acc: number, i: any) => acc + (i.quantidade * i.valor_unitario), 0)
-  const itensText = itens.map((i: any) =>
-    `• ${i.descricao} (${i.quantidade}x) — ${fmt(i.quantidade * i.valor_unitario)}`
-  ).join('\n')
-
-  const validoAte = orc.valido_ate
-    ? `\nVálido até: ${new Date(orc.valido_ate + 'T12:00:00').toLocaleDateString('pt-BR')}`
-    : ''
-
-  const message =
-    `Olá ${firstName}! 😊\n\n` +
-    `Segue o orçamento da ${clinicName}:\n\n` +
-    `*${orc.titulo}*\n\n` +
-    `${itensText}\n\n` +
-    `*Total: ${fmt(total)}*${validoAte}\n\n` +
-    `Qualquer dúvida, estamos à disposição! 🤍`
+  if (mensagemCustom && mensagemCustom.trim()) {
+    // Usa a mensagem editada/gerada pela IA
+    message = mensagemCustom.trim()
+  } else {
+    // Fallback: monta mensagem padrão
+    const { data: clinic } = await svc.from('clinics').select('name').eq('id', clinicId).maybeSingle()
+    const clinicName = clinic?.name || 'nossa clínica'
+    const firstName = (patient.name || '').split(' ')[0]
+    const itens = (orc.orcamento_itens || []) as any[]
+    const totalValor = itens.reduce((acc: number, i: any) => acc + (i.quantidade * i.valor_unitario), 0)
+    const itensText = itens.map((i: any) =>
+      `• ${i.descricao} (${i.quantidade}x) — ${fmt(i.quantidade * i.valor_unitario)}`
+    ).join('\n')
+    const validoAte = orc.valido_ate
+      ? `\nVálido até: ${new Date(orc.valido_ate + 'T12:00:00').toLocaleDateString('pt-BR')}`
+      : ''
+    message =
+      `Olá ${firstName}! 😊\n\n` +
+      `Segue o orçamento da ${clinicName}:\n\n` +
+      `*${orc.titulo}*\n\n` +
+      `${itensText}\n\n` +
+      `*Total: ${fmt(totalValor)}*${validoAte}\n\n` +
+      `Qualquer dúvida, estamos à disposição! 🤍`
+  }
 
   const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
 
@@ -74,7 +80,7 @@ export async function POST(req: NextRequest) {
   await svc.from('orcamentos').update({
     whatsapp_sent_at: new Date().toISOString(),
     whatsapp_sent_by: userRow.id,
-  }).eq('id', orcamentoId).then(() => {})
+  }).eq('id', orcamentoId)
 
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error, sent: 'link_only' })
