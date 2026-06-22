@@ -275,7 +275,7 @@ export async function sendWhatsappMessage(args: {
   return postEvolution(
     `${r.data.baseUrl}/message/sendText/${r.data.instanceName}`,
     r.data.apiKey,
-    { number: normalizePhone(phone), text: message },
+    { number: normalizePhone(phone), textMessage: { text: message } },
   )
 }
 
