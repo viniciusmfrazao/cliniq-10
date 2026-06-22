@@ -162,6 +162,9 @@ function previewFor(kind: ParsedKind, caption: string | null): string {
 
 function jidToPhone(jid: string | undefined | null): string | null {
   if (!jid) return null
+  // Ignorar formato @lid — identificador interno do WhatsApp Business (v1.8.2)
+  // nao e um numero de telefone real
+  if (jid.endsWith('@lid')) return null
   const cleaned = jid.split('@')[0]
   // Evolution às vezes manda formato "55349xxxxxxx:1" pra device — limpamos
   return cleaned.replace(/[^0-9]/g, '') || null
