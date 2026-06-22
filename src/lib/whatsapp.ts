@@ -6,23 +6,9 @@ export type SendResult =
   | { ok: false; error: string; code: 'not_configured' | 'not_connected' | 'evolution_error' | 'unknown' }
 
 export function normalizePhone(raw: string): string {
-  // lid_ phones: envia para o JID @lid diretamente
-  if (raw.startsWith('lid_')) {
-    return raw.slice(4) + '@lid'
-  }
   let p = raw.replace(/\D/g, '')
   if (!p.startsWith('55')) p = '55' + p
   return p
-}
-
-export function isValidPhone(raw: string): boolean {
-  // lid_ phones são válidos para envio via Evolution
-  if (raw.startsWith('lid_')) return true
-  const p = normalizePhone(raw)
-  if (!/^55\d{10,11}$/.test(p)) return false
-  const ddd = parseInt(p.slice(2, 4), 10)
-  if (ddd < 11 || ddd > 99) return false
-  return true
 }
 
 /**
@@ -152,20 +138,14 @@ async function resolveInstance(
       }
     }
     if (data.status !== 'connected') {
-      // TOLERÂNCIA: se o status no DB está errado (cron derrubou equivocadamente),
-      // ainda tentamos enviar. Evolution vai retornar erro real se estiver desconectado.
-      // Só bloqueamos se status for 'pending' (nunca configurado) ou 'qr_pending'.
-      if (data.status === 'pending' || data.status === 'qr_pending') {
-        return {
+      return {
+        ok: false,
+        error: {
           ok: false,
-          error: {
-            ok: false,
-            code: 'not_connected',
-            error: `Numero ${opts.instanceName} nao esta conectado (status: ${data.status})`,
-          },
-        }
+          code: 'not_connected',
+          error: `Numero ${opts.instanceName} nao esta conectado (status: ${data.status})`,
+        },
       }
-      // disconnected/error: tenta mesmo assim
     }
     return {
       ok: true,
@@ -196,7 +176,7 @@ async function resolveInstance(
     }
   }
 
-  const connected = list.filter(r => r.status === 'connected' || r.status === 'disconnected' || r.status === 'error')
+  const connected = list.filter(r => r.status === 'connected')
   if (connected.length === 0) {
     return {
       ok: false,
@@ -289,22 +269,13 @@ export async function sendWhatsappMessage(args: {
   assignedTo?: string | null
 }): Promise<SendResult> {
   const { clinicId, phone, message, purpose, instanceName, assignedTo } = args
-
-  if (!isValidPhone(phone)) {
-    return {
-      ok: false,
-      code: 'evolution_error',
-      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
-    }
-  }
-
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
   return postEvolution(
     `${r.data.baseUrl}/message/sendText/${r.data.instanceName}`,
     r.data.apiKey,
-    { number: normalizePhone(phone), textMessage: { text: message } },
+    { number: normalizePhone(phone), text: message },
   )
 }
 
@@ -327,15 +298,6 @@ export async function sendWhatsappImage(args: {
     clinicId, phone, media, mimetype, caption, fileName,
     purpose, instanceName, assignedTo,
   } = args
-
-  if (!isValidPhone(phone)) {
-    return {
-      ok: false,
-      code: 'evolution_error',
-      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
-    }
-  }
-
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
@@ -366,15 +328,6 @@ export async function sendWhatsappAudio(args: {
   assignedTo?: string | null
 }): Promise<SendResult> {
   const { clinicId, phone, audio, purpose, instanceName, assignedTo } = args
-
-  if (!isValidPhone(phone)) {
-    return {
-      ok: false,
-      code: 'evolution_error',
-      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
-    }
-  }
-
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
