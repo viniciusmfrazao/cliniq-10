@@ -162,9 +162,17 @@ function previewFor(kind: ParsedKind, caption: string | null): string {
 
 function jidToPhone(jid: string | undefined | null): string | null {
   if (!jid) return null
-  const cleaned = jid.split('@')[0]
-  // Evolution às vezes manda formato "55349xxxxxxx:1" pra device — limpamos
-  return cleaned.replace(/[^0-9]/g, '') || null
+  // Remove sufixo @s.whatsapp.net, @g.us, etc.
+  const withoutDomain = jid.split('@')[0]
+  // Remove sufixo de device ":N" (ex: 5534991805722:5 -> 5534991805722)
+  const withoutDevice = withoutDomain.split(':')[0]
+  // Remove qualquer caractere não numérico
+  const digits = withoutDevice.replace(/[^0-9]/g, '')
+  if (!digits) return null
+  // Números BR válidos: 10-13 dígitos (com ou sem 55 + DDD + número)
+  // Se tiver mais de 13 dígitos provavelmente é ID de grupo ou formato inválido
+  if (digits.length > 13) return null
+  return digits
 }
 
 /**
