@@ -1,5 +1,6 @@
 // ============================================================================
 // Edge Function: eva-process
+// v2026-06-22-fix-textmessage
 //
 // Endpoint chamado pelo Next.js (route /api/webhooks/evolution/[instance])
 // quando a flag eva_engine = 'edge'. Faz tudo que o n8n fazia:
