@@ -478,7 +478,9 @@ export async function atualizarNomeLead(
     return `Nao consegui atualizar o nome no sistema (${r.error || 'erro desconhecido'}), mas continue conversando normalmente.`;
   }
 
-  return `NOME_REGISTRADO: "${novo}". Agora escreva IMEDIATAMENTE uma mensagem curta de WhatsApp cumprimentando pelo nome e dando continuidade à conversa (ex: perguntar o procedimento, comentar sobre o interesse dela ou oferecer horários se já souber o interesse). NAO chame nenhuma outra tool. NAO mencione que registrou o nome. Escreva SÓ o texto final da mensagem.`;
+  // Retorno simples — não instrui o Claude a escrever mensagem (evita segunda call)
+  // O modelo já sabe continuar naturalmente após registrar o nome.
+  return `Nome "${novo}" registrado com sucesso.`;
 }
 
 // ─── escalar_humano ────────────────────────────────────────────────────────
