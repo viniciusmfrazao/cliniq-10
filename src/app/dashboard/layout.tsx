@@ -65,10 +65,6 @@ export default async function DashboardLayout({ children, searchParams }: { chil
             trialDaysLeft={trialDaysLeft}
             userId={user.id}
           />
-          <div className="bg-amber-500 text-white text-center text-sm font-semibold py-2 px-4 flex items-center justify-center gap-2">
-            <span>🔧</span>
-            <span>A integração do WhatsApp está em manutenção. Será reestabelecida o quanto antes. Pedimos desculpas pelo transtorno.</span>
-          </div>
           <WhatsappHealthBannerWrapper>
             <WhatsappHealthBanner
               clinicId={userData.clinic_id}
