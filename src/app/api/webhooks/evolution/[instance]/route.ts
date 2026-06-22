@@ -162,75 +162,9 @@ function previewFor(kind: ParsedKind, caption: string | null): string {
 
 function jidToPhone(jid: string | undefined | null): string | null {
   if (!jid) return null
-  // @lid é um identificador interno do WhatsApp Business — não contém telefone
-  if (jid.endsWith('@lid')) return null
   const cleaned = jid.split('@')[0]
   // Evolution às vezes manda formato "55349xxxxxxx:1" pra device — limpamos
   return cleaned.replace(/[^0-9]/g, '') || null
-}
-
-/**
- * Resolve o telefone a partir de remoteJid.
- *
- * Versões novas do WhatsApp (iOS 2.24+) usam @lid (Linked ID) em vez de
- * @s.whatsapp.net. Nesses casos não temos o telefone real no payload.
- * Retornamos um identificador sintético "lid_<numero>" para que a conversa
- * ainda apareça no painel, mas Eva NÃO vai responder (sem telefone real).
- *
- * NUNCA usar body.sender como fallback: ele é sempre o número da própria
- * instância (dono), não o do contato.
- */
-function resolvePhone(remoteJid: string | undefined | null): string | null {
-  const direct = jidToPhone(remoteJid)
-  if (direct) return direct
-
-  // @lid: sem telefone real — identificador sintético para o painel
-  if (remoteJid?.endsWith('@lid')) {
-    const lidNum = remoteJid.split('@')[0]
-    return `lid_${lidNum}`
-  }
-
-  return null
-}
-
-/** Retorna true se o phone é um identificador sintético @lid (sem telefone real) */
-function isLidPhone(phone: string): boolean {
-  return phone.startsWith('lid_')
-}
-
-/**
- * Resolve telefone real a partir de um @lid consultando /chat/findContacts.
- * Retorna o telefone real (ex: "5534984017766") ou null se não encontrar.
- */
-async function resolveLidToPhone(args: {
-  instanceName: string
-  lid: string
-  evolutionUrl: string
-  apiKey: string
-}): Promise<string | null> {
-  try {
-    const r = await fetch(
-      `${args.evolutionUrl}/chat/findContacts/${encodeURIComponent(args.instanceName)}`,
-      {
-        method: 'POST',
-        headers: { apikey: args.apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ where: {} }),
-      }
-    )
-    if (!r.ok) return null
-    const contacts = await r.json() as Array<{ id?: string; pushName?: string }>
-    // Procura contato com @lid correspondente
-    // O lid vem sem sufixo, ex: "274555901882530"
-    for (const c of contacts) {
-      if (c.id?.startsWith(args.lid + '@') || c.id === args.lid + '@lid') {
-        const phone = jidToPhone(c.id)
-        if (phone) return phone
-      }
-    }
-    return null
-  } catch {
-    return null
-  }
 }
 
 /**
@@ -441,13 +375,10 @@ export async function POST(
           updates.connected_at = new Date().toISOString()
           updates.qr_code = null
           updates.qr_expires_at = null
-          // Quando conecta, o JID vem em data.wuid ou data.ownerJid.
-          // Versões novas da Evolution mandam esses campos como @lid (sem telefone).
-          // Fallback: usar body.sender que sempre vem com @s.whatsapp.net.
+          // Quando conecta, o JID vem em data.wuid ou data.profilePictureUrl etc
           const phoneFromJid =
             jidToPhone((data as { wuid?: string }).wuid) ??
-            jidToPhone((data as { ownerJid?: string }).ownerJid) ??
-            jidToPhone(body.sender)
+            jidToPhone((data as { ownerJid?: string }).ownerJid)
           if (phoneFromJid) updates.phone_number = phoneFromJid
         }
         // Multi-numero: atualiza so a instance que recebeu o evento
@@ -462,32 +393,10 @@ export async function POST(
       case 'messages_upsert': {
         const key = (data as { key?: { remoteJid?: string; fromMe?: boolean; id?: string } }).key
         const fromMe = key?.fromMe === true
-        // Resolve telefone do remoteJid. Para @lid, tenta buscar telefone real via findContacts.
-        let phone = resolvePhone(key?.remoteJid)
+        const phone = jidToPhone(key?.remoteJid)
+        const parsed = pickMessageDetails((data as { message?: unknown }).message)
         const pushName = (data as { pushName?: string }).pushName
         const messageId = key?.id
-
-        // Se phone é lid_, tenta resolver para telefone real via Evolution API
-        if (phone && isLidPhone(phone)) {
-          const settings = await getSettings(['evolution_url', 'evolution_master_key'])
-          if (settings.evolution_url && settings.evolution_master_key) {
-            const lidNum = phone.slice(4) // remove "lid_"
-            const resolved = await resolveLidToPhone({
-              instanceName: instance,
-              lid: lidNum,
-              evolutionUrl: settings.evolution_url.replace(/\/$/, ''),
-              apiKey: settings.evolution_master_key,
-            })
-            if (resolved) {
-              phone = resolved
-              debugTrace.push(`lid resolved: ${lidNum} → ${resolved}`)
-            } else {
-              debugTrace.push(`lid not resolved: ${lidNum} (mantendo lid_)`)
-            }
-          }
-        }
-
-        const parsed = pickMessageDetails((data as { message?: unknown }).message)
 
         debugTrace.push(
           `parsed: phone=${phone ?? 'null'} kind=${parsed.kind} fromMe=${fromMe} pushName=${pushName ?? 'null'}`,
@@ -511,7 +420,7 @@ export async function POST(
         // Ignorar grupos de WhatsApp e números inválidos
         // Números BR válidos: até 13 dígitos (55 + DDD + 9 dígitos)
         // Grupos têm IDs com 20+ dígitos
-        if (key?.remoteJid?.endsWith('@g.us') || (phone && !isLidPhone(phone) && phone.length > 20)) {
+        if (key?.remoteJid?.endsWith('@g.us') || phone.length > 20) {
           debugTrace.push(`skip: grupo ou numero invalido (${phone})`)
           break
         }
