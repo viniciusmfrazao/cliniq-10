@@ -1,6 +1,5 @@
 // ============================================================================
 // Edge Function: eva-process
-// v2026-06-22-fix-textmessage
 //
 // Endpoint chamado pelo Next.js (route /api/webhooks/evolution/[instance])
 // quando a flag eva_engine = 'edge'. Faz tudo que o n8n fazia:
@@ -476,7 +475,7 @@ async function sendViaEvolution(payload: IncomingPayload, ctx: DonnaContext, tex
     },
     body: JSON.stringify({
       number: payload.phone,
-      textMessage: { text },
+      text,
     }),
   });
   if (!r.ok) return { ok: false, error: r.error || `status=${r.status}` };
@@ -1112,7 +1111,6 @@ Deno.serve(async (req) => {
         finalText = retryText;
         toolsUsed = [...toolsUsed, 'consultar_agenda', ...retry.steps.filter(s => s.toolName).map(s => s.toolName)];
         agendamentoCriado = toolsUsed.includes('criar_agendamento') || appointmentCreated;
-        bookingRecovered = true; // CAMADA 1.1 interceptou frase de fuga — métrica correta
         conv.errors.push('[camada1.1] frase de fuga interceptada — agenda consultada e resposta refeita com horarios reais');
       }
     } catch (e) {
@@ -1238,10 +1236,7 @@ Deno.serve(async (req) => {
   }).catch(() => {}); // fire-and-forget, nunca bloqueia
 
   // Atualizar memória emocional de forma assíncrona (não bloqueia resposta)
-  // Throttle: roda apenas a cada 4 mensagens do assistente para reduzir custo de API.
-  // O perfil emocional não muda a cada mensagem — atualizar com menos frequência é suficiente.
-  const assistantTurnCount = history.filter(m => m.role === 'assistant').length;
-  if (history.length >= 2 && finalText && assistantTurnCount % 4 === 0) {
+  if (history.length >= 2 && finalText) {
     updateEmotionalMemory(payload, history, finalText).catch(e =>
       console.warn('[eva] erro ao atualizar emotional memory:', e)
     );
