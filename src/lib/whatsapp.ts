@@ -6,25 +6,20 @@ export type SendResult =
   | { ok: false; error: string; code: 'not_configured' | 'not_connected' | 'evolution_error' | 'unknown' }
 
 export function normalizePhone(raw: string): string {
+  // lid_ phones: envia para o JID @lid diretamente
+  if (raw.startsWith('lid_')) {
+    return raw.slice(4) + '@lid'
+  }
   let p = raw.replace(/\D/g, '')
   if (!p.startsWith('55')) p = '55' + p
   return p
 }
 
-/**
- * Valida se um telefone (raw ou já normalizado) é um número brasileiro válido.
- *
- * Formato esperado após normalização: 55 + DDD (2 dígitos) + número (8 ou 9 dígitos)
- * = 13 dígitos (celular 9 dígitos) ou 12 dígitos (fixo 8 dígitos).
- *
- * IDs de usuário do Facebook/Instagram (ex: 159712721031297) têm 15+ dígitos
- * e são rejeitados aqui com mensagem clara.
- */
 export function isValidPhone(raw: string): boolean {
+  // lid_ phones são válidos para envio via Evolution
+  if (raw.startsWith('lid_')) return true
   const p = normalizePhone(raw)
-  // Deve começar com 55 e ter 12 (fixo) ou 13 (celular) dígitos
   if (!/^55\d{10,11}$/.test(p)) return false
-  // DDD válido: 11–99
   const ddd = parseInt(p.slice(2, 4), 10)
   if (ddd < 11 || ddd > 99) return false
   return true
