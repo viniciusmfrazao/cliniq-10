@@ -394,10 +394,13 @@ export async function POST(
           updates.connected_at = new Date().toISOString()
           updates.qr_code = null
           updates.qr_expires_at = null
-          // Quando conecta, o JID vem em data.wuid ou data.profilePictureUrl etc
+          // Quando conecta, o JID vem em data.wuid ou data.ownerJid.
+          // Versões novas da Evolution mandam esses campos como @lid (sem telefone).
+          // Fallback: usar body.sender que sempre vem com @s.whatsapp.net.
           const phoneFromJid =
             jidToPhone((data as { wuid?: string }).wuid) ??
-            jidToPhone((data as { ownerJid?: string }).ownerJid)
+            jidToPhone((data as { ownerJid?: string }).ownerJid) ??
+            jidToPhone(body.sender)
           if (phoneFromJid) updates.phone_number = phoneFromJid
         }
         // Multi-numero: atualiza so a instance que recebeu o evento
