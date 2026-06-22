@@ -283,18 +283,25 @@ export async function setInstanceWebhook(args: {
   instanceName: string
   webhookUrl: string
 }): Promise<FetchResult<unknown>> {
+  // IMPORTANTE: Evolution API v1.x exige formato FLAT com snake_case.
+  // Formato nested { webhook: { ... } } com camelCase NAO funciona nesta versao
+  // e faz o webhook ser ignorado silenciosamente, quebrando CONNECTION_UPDATE
+  // e impedindo o app de saber quando a instancia conecta.
   return evolutionFetch(
     `/webhook/set/${encodeURIComponent(args.instanceName)}`,
     {
       method: 'POST',
       body: JSON.stringify({
-        webhook: {
-          enabled: true,
-          url: args.webhookUrl,
-          webhookByEvents: false,
-          webhookBase64: false,
-          events: ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE'],
-        },
+        url: args.webhookUrl,
+        webhook_by_events: false,
+        webhook_base64: false,
+        events: [
+          'MESSAGES_UPSERT',
+          'MESSAGES_UPDATE',
+          'CONNECTION_UPDATE',
+          'QRCODE_UPDATED',
+          'CONTACTS_UPSERT',
+        ],
       }),
     }
   )
