@@ -7,14 +7,13 @@ import { ensureWebhookHealthy, getConnectionState } from '@/lib/evolution'
  *
  * Roda 4x por hora (a cada 15min). Pra cada clinic_whatsapp:
  *  1. Confere o webhook salvo na Evolution vs URL esperada (NEXT_PUBLIC_APP_URL).
- *     Se diferente, AUTO-CORRIGE chamando setInstanceWebhook.
+ *     Se diferente, AUTO-CORRIGE chamando setInstanceWebhook (essa eh a causa
+ *     classica de "WhatsApp parou de receber mensagens" apos mudanca de dominio).
  *  2. Chama getConnectionState pra detectar phantom session / instance sumida.
  *
- * IMPORTANTE: Algumas versões da Evolution API retornam state='close' mesmo
- * quando a instância está recebendo mensagens ativamente (bug conhecido v1.x).
- * Por isso, antes de marcar como disconnected, verificamos se houve eventos
- * de webhook nos últimos 10 minutos. Se sim, confiamos nos eventos e ignoramos
- * o getConnectionState.
+ * Resultados sao gravados em clinic_whatsapp.* (health_warning, health_reason,
+ * webhook_actual_url, webhook_expected_url, webhook_last_fixed_at) pro banner
+ * exibir alerta E pra debug em historico.
  *
  * Auth: Header Authorization: Bearer ${CRON_SECRET}.
  */
@@ -33,8 +32,6 @@ type Row = {
 
 const STALE_HOURS = 24
 const STALE_MS = STALE_HOURS * 60 * 60 * 1000
-// Se houve evento de webhook nos últimos 10 min, a instância está ativa
-const RECENT_EVENT_MS = 10 * 60 * 1000
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -49,6 +46,7 @@ export async function GET(req: NextRequest) {
 
   const svc = createServiceClient()
 
+  // So checa quem ja foi configurado (status diferente de pending e tem instance_name)
   const { data: rows, error } = await svc
     .from('clinic_whatsapp')
     .select('id, clinic_id, instance_name, webhook_token, status, last_event_at, health_warning, role_inbound, role_outbound_automation')
@@ -70,7 +68,6 @@ export async function GET(req: NextRequest) {
     webhook_drift_fixed: 0,
     webhook_drift_failed: 0,
     skipped: 0,
-    protected_by_recent_events: 0,
     errors: [] as Array<{ clinic_id: string; error: string }>,
   }
 
@@ -82,31 +79,10 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // PROTEÇÃO PRINCIPAL: se a instância recebeu eventos de webhook nos últimos
-    // 10 minutos, ela está definitivamente ativa. Algumas versões da Evolution
-    // retornam state='close' no getConnectionState mesmo com conexão ativa.
-    // Nesses casos, confiamos nos eventos e NÃO alteramos o status.
-    const lastEventMs = r.last_event_at ? new Date(r.last_event_at).getTime() : 0
-    const hasRecentEvents = lastEventMs > 0 && (nowMs - lastEventMs) < RECENT_EVENT_MS
-
-    if (hasRecentEvents) {
-      // Garante que o status está como 'connected' e remove warnings espúrios
-      const updates: Record<string, unknown> = {
-        health_checked_at: new Date().toISOString(),
-      }
-      if (r.status !== 'connected') {
-        updates.status = 'connected'
-        updates.health_warning = false
-        updates.health_reason = null
-      }
-      await svc.from('clinic_whatsapp').update(updates).eq('id', r.id)
-      summary.healthy++
-      summary.protected_by_recent_events++
-      continue
-    }
-
     // ---------------------------------------------------------------
     // Etapa 1: drift check da URL do webhook
+    // (so faz sentido se a instance ainda existe — abaixo pulamos
+    //  caso o connectionState retorne 404)
     // ---------------------------------------------------------------
     let webhookActual: string | null = null
     let webhookExpected: string | null = null
@@ -136,7 +112,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ---------------------------------------------------------------
-    // Etapa 2: connection state probe (só para instâncias sem eventos recentes)
+    // Etapa 2: connection state probe
     // ---------------------------------------------------------------
     const probe = await getConnectionState(r.instance_name)
 
@@ -171,6 +147,7 @@ export async function GET(req: NextRequest) {
           nextStatus = 'connected'
         }
 
+        
         // Instancia outbound-only: nao recebe msgs, nao verificar stale
         if (r.role_inbound === false || (r.role_outbound_automation === true && !r.role_inbound)) {
           summary.healthy++
@@ -195,7 +172,8 @@ export async function GET(req: NextRequest) {
     }
 
     // ---------------------------------------------------------------
-    // Etapa 3: drift do webhook tem prioridade no banner
+    // Etapa 3: drift do webhook tem prioridade no banner se aconteceu
+    // (o admin precisa saber, mesmo que ja tenhamos auto-corrigido)
     // ---------------------------------------------------------------
     if (webhookFixed) {
       nextWarning = true
