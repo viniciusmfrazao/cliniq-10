@@ -375,17 +375,15 @@ export async function ensureWebhookHealthy(args: {
   const expectedUrl = buildWebhookUrl(args.instanceName, args.webhookToken)
   const info = await getWebhookInfo(args.instanceName)
   if (!info.ok) {
-    // Nao conseguiu ler — pode ser instance nova/404. Tenta setar mesmo assim.
-    const set = await setInstanceWebhook({
-      instanceName: args.instanceName,
-      webhookUrl: expectedUrl,
-    })
+    // Nao conseguiu ler o webhook — pode ser instabilidade temporaria da Evolution.
+    // NAO assumir drift: sem leitura confirmada, nao ha evidencia de URL errada.
+    // Retornar sem drift para evitar falso positivo no banner.
     return {
       actualUrl: null,
       expectedUrl,
-      drift: true,
-      fixed: set.ok,
-      error: info.error,
+      drift: false,
+      fixed: false,
+      error: null,
     }
   }
 
