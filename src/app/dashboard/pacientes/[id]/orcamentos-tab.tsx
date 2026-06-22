@@ -66,6 +66,7 @@ export default function OrcamentosTab({
   const [mensagemGerada, setMensagemGerada] = useState('')
   const [gerando, setGerando] = useState(false)
   const [sending, setSending] = useState(false)
+  const [erroGeracao, setErroGeracao] = useState<string | null>(null)
 
   function addItem() {
     setForm(p => ({ ...p, itens: [...p.itens, { descricao: '', quantidade: 1, valor_unitario: 0 }] }))
@@ -127,6 +128,7 @@ export default function OrcamentosTab({
     const msgPadrao = `Olá ${patientName.split(' ')[0]}! 😊\n\nSegue o orçamento da ${clinicName}:\n\n*${orc.titulo}*\n\n${itensText}\n\n*Total: ${fmt(t)}*${orc.valido_ate ? `\nVálido até: ${new Date(orc.valido_ate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}\n\nQualquer dúvida, estamos à disposição! 🤍`
     setMensagemGerada(msgPadrao)
     setSendModal({ orc })
+    setErroGeracao(null)
     // Gerar mensagem com IA automaticamente
     setGerando(true)
     try {
@@ -149,6 +151,7 @@ export default function OrcamentosTab({
   async function gerarNovamente() {
     if (!sendModal) return
     setGerando(true)
+    setErroGeracao(null)
     try {
       const res = await fetch('/api/orcamento/gerar-mensagem', {
         method: 'POST',
@@ -156,9 +159,13 @@ export default function OrcamentosTab({
         body: JSON.stringify({ orcamentoId: sendModal.orc.id }),
       })
       const data = await res.json()
-      if (data.ok && data.mensagem) setMensagemGerada(data.mensagem)
+      if (data.ok && data.mensagem) {
+        setMensagemGerada(data.mensagem)
+      } else {
+        setErroGeracao('Não foi possível gerar a mensagem. Edite manualmente.')
+      }
     } catch {
-      // mantém atual
+      setErroGeracao('Erro de conexão. Edite a mensagem manualmente.')
     } finally {
       setGerando(false)
     }
@@ -442,6 +449,9 @@ export default function OrcamentosTab({
                   placeholder="Gerando mensagem..."
                 />
                 <p className="text-xs text-slate-400 mt-1">Edite livremente antes de enviar.</p>
+                {erroGeracao && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">⚠️ {erroGeracao}</p>
+                )}
               </div>
             </div>
 
