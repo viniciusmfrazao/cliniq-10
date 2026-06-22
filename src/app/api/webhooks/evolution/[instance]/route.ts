@@ -163,7 +163,6 @@ function previewFor(kind: ParsedKind, caption: string | null): string {
 function jidToPhone(jid: string | undefined | null): string | null {
   if (!jid) return null
   // @lid é um identificador interno do WhatsApp Business — não contém telefone
-  // Caller deve usar body.sender como fallback nesses casos
   if (jid.endsWith('@lid')) return null
   const cleaned = jid.split('@')[0]
   // Evolution às vezes manda formato "55349xxxxxxx:1" pra device — limpamos
@@ -171,19 +170,32 @@ function jidToPhone(jid: string | undefined | null): string | null {
 }
 
 /**
- * Resolve o telefone a partir de remoteJid OU do campo sender do body.
+ * Resolve o telefone a partir de remoteJid.
  *
- * Versões novas do Evolution (com WhatsApp Business) mandam remoteJid no
- * formato @lid (identificador interno do WA, sem telefone). Nesse caso o
- * campo `sender` do body tem o JID real com @s.whatsapp.net.
+ * Versões novas do WhatsApp (iOS 2.24+) usam @lid (Linked ID) em vez de
+ * @s.whatsapp.net. Nesses casos não temos o telefone real no payload.
+ * Retornamos um identificador sintético "lid_<numero>" para que a conversa
+ * ainda apareça no painel, mas Eva NÃO vai responder (sem telefone real).
  *
- * Prioridade: remoteJid → sender → null
+ * NUNCA usar body.sender como fallback: ele é sempre o número da própria
+ * instância (dono), não o do contato.
  */
-function resolvePhone(
-  remoteJid: string | undefined | null,
-  sender: string | undefined | null,
-): string | null {
-  return jidToPhone(remoteJid) ?? jidToPhone(sender)
+function resolvePhone(remoteJid: string | undefined | null): string | null {
+  const direct = jidToPhone(remoteJid)
+  if (direct) return direct
+
+  // @lid: sem telefone real — identificador sintético para o painel
+  if (remoteJid?.endsWith('@lid')) {
+    const lidNum = remoteJid.split('@')[0]
+    return `lid_${lidNum}`
+  }
+
+  return null
+}
+
+/** Retorna true se o phone é um identificador sintético @lid (sem telefone real) */
+function isLidPhone(phone: string): boolean {
+  return phone.startsWith('lid_')
 }
 
 /**
@@ -415,9 +427,9 @@ export async function POST(
       case 'messages_upsert': {
         const key = (data as { key?: { remoteJid?: string; fromMe?: boolean; id?: string } }).key
         const fromMe = key?.fromMe === true
-        // Versões novas do Evolution mandam remoteJid como @lid (sem telefone real).
-        // Usamos body.sender como fallback — ele sempre vem com @s.whatsapp.net.
-        const phone = resolvePhone(key?.remoteJid, body.sender)
+        // Resolve telefone do remoteJid. Para @lid (iOS privacy mode), retorna
+        // identificador sintético lid_<num> — Eva não responde para esses.
+        const phone = resolvePhone(key?.remoteJid)
         const parsed = pickMessageDetails((data as { message?: unknown }).message)
         const pushName = (data as { pushName?: string }).pushName
         const messageId = key?.id
@@ -444,7 +456,7 @@ export async function POST(
         // Ignorar grupos de WhatsApp e números inválidos
         // Números BR válidos: até 13 dígitos (55 + DDD + 9 dígitos)
         // Grupos têm IDs com 20+ dígitos
-        if (key?.remoteJid?.endsWith('@g.us') || phone.length > 20) {
+        if (key?.remoteJid?.endsWith('@g.us') || (phone && !isLidPhone(phone) && phone.length > 20)) {
           debugTrace.push(`skip: grupo ou numero invalido (${phone})`)
           break
         }
@@ -741,6 +753,12 @@ export async function POST(
           if (row.auto_reply_enabled === false) {
             evaShouldSkip = 'auto_reply_off'
             debugTrace.push('eva skip: auto_reply_enabled=false')
+          }
+
+          // @lid: sem telefone real — Eva não pode enviar resposta
+          if (evaShouldSkip === false && isLidPhone(phone)) {
+            evaShouldSkip = 'inbound_disabled'
+            debugTrace.push('eva skip: @lid contact sem telefone real (iOS privacy mode)')
           }
 
           // Multi-número: só a linha com "Eva atende mensagens recebidas" dispara a Eva.
