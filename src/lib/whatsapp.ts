@@ -12,6 +12,25 @@ export function normalizePhone(raw: string): string {
 }
 
 /**
+ * Valida se um telefone (raw ou já normalizado) é um número brasileiro válido.
+ *
+ * Formato esperado após normalização: 55 + DDD (2 dígitos) + número (8 ou 9 dígitos)
+ * = 13 dígitos (celular 9 dígitos) ou 12 dígitos (fixo 8 dígitos).
+ *
+ * IDs de usuário do Facebook/Instagram (ex: 159712721031297) têm 15+ dígitos
+ * e são rejeitados aqui com mensagem clara.
+ */
+export function isValidPhone(raw: string): boolean {
+  const p = normalizePhone(raw)
+  // Deve começar com 55 e ter 12 (fixo) ou 13 (celular) dígitos
+  if (!/^55\d{10,11}$/.test(p)) return false
+  // DDD válido: 11–99
+  const ddd = parseInt(p.slice(2, 4), 10)
+  if (ddd < 11 || ddd > 99) return false
+  return true
+}
+
+/**
  * Remove parametros tipo "; codecs=opus" do mimetype.
  * Bucket Storage compara `allowed_mime_types` por match exato.
  */
@@ -269,6 +288,15 @@ export async function sendWhatsappMessage(args: {
   assignedTo?: string | null
 }): Promise<SendResult> {
   const { clinicId, phone, message, purpose, instanceName, assignedTo } = args
+
+  if (!isValidPhone(phone)) {
+    return {
+      ok: false,
+      code: 'evolution_error',
+      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
+    }
+  }
+
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
@@ -298,6 +326,15 @@ export async function sendWhatsappImage(args: {
     clinicId, phone, media, mimetype, caption, fileName,
     purpose, instanceName, assignedTo,
   } = args
+
+  if (!isValidPhone(phone)) {
+    return {
+      ok: false,
+      code: 'evolution_error',
+      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
+    }
+  }
+
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
@@ -328,6 +365,15 @@ export async function sendWhatsappAudio(args: {
   assignedTo?: string | null
 }): Promise<SendResult> {
   const { clinicId, phone, audio, purpose, instanceName, assignedTo } = args
+
+  if (!isValidPhone(phone)) {
+    return {
+      ok: false,
+      code: 'evolution_error',
+      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
+    }
+  }
+
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
