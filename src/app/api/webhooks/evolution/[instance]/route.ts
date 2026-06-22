@@ -755,12 +755,6 @@ export async function POST(
             debugTrace.push('eva skip: auto_reply_enabled=false')
           }
 
-          // @lid: sem telefone real — Eva não pode enviar resposta
-          if (evaShouldSkip === false && isLidPhone(phone)) {
-            evaShouldSkip = 'inbound_disabled'
-            debugTrace.push('eva skip: @lid contact sem telefone real (iOS privacy mode)')
-          }
-
           // Multi-número: só a linha com "Eva atende mensagens recebidas" dispara a Eva.
           if (evaShouldSkip === false && row.role_inbound === false) {
             evaShouldSkip = 'inbound_disabled'
