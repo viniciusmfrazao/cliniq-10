@@ -54,6 +54,7 @@ type Props = {
   pacientes: { id: string; name: string }[]
   procedimentos: { id: string; name: string; price: number }[]
   profissionais: { id: string; name: string }[]
+  taxasPagamento: TaxaPag[]
   clinicId: string
   userId: string
 }
@@ -66,29 +67,44 @@ const FORMAS = [
 
 const BANDEIRAS = ['Visa', 'Mastercard', 'Amex, Elo, outros']
 
-const TAXAS: Record<string, number> = {
-  'Pix': 0,
-  'Dinheiro': 0,
-  'Débito': 1.5,
-  'Crédito 1x': 3.5,
-  'Crédito 2x': 5.0,
-  'Crédito 3x': 6.5,
-  'Crédito 4x': 7.5,
-  'Crédito 5x': 8.5,
-  'Crédito 6x': 9.5,
-  'Crédito 7x': 10.5,
-  'Crédito 8x': 11.5,
-  'Crédito 9x': 12.5,
-  'Crédito 10x': 13.5,
-  'Crédito 11x': 14.5,
-  'Crédito 12x': 15.5,
+// Mapeamento: label do form → chave no banco (taxas_pagamento.forma)
+const FORMA_PARA_KEY: Record<string, string> = {
+  'Pix': 'pix', 'Dinheiro': 'dinheiro', 'Débito': 'debito',
+  'Crédito 1x': 'credito_1x', 'Crédito 2x': 'credito_2x', 'Crédito 3x': 'credito_3x',
+  'Crédito 4x': 'credito_4x', 'Crédito 5x': 'credito_5x', 'Crédito 6x': 'credito_6x',
+  'Crédito 7x': 'credito_7x', 'Crédito 8x': 'credito_8x', 'Crédito 9x': 'credito_9x',
+  'Crédito 10x': 'credito_10x', 'Crédito 11x': 'credito_11x', 'Crédito 12x': 'credito_12x',
+}
+
+// Mapeamento: label da bandeira → chaves candidatas no banco
+const BANDEIRA_PARA_KEY: Record<string, string[]> = {
+  'Visa': ['visa'],
+  'Mastercard': ['master'],
+  'Amex, Elo, outros': ['amex', 'elo'],
+}
+
+type TaxaPag = { forma: string; bandeira: string; taxa_percentual: number }
+
+function getTaxaPct(taxasPagamento: TaxaPag[], forma: string, bandeira: string): number {
+  const formaKey = FORMA_PARA_KEY[forma]
+  if (!formaKey || formaKey === 'pix' || formaKey === 'dinheiro') return 0
+  const bandeiraKeys = BANDEIRA_PARA_KEY[bandeira] || []
+  // 1. Tenta match específico pela bandeira selecionada
+  for (const bKey of bandeiraKeys) {
+    const t = taxasPagamento.find(t => t.forma === formaKey && t.bandeira === bKey)
+    if (t) return Number(t.taxa_percentual)
+  }
+  // 2. Fallback para 'todas' (taxa padrão sem especificação de bandeira)
+  const todas = taxasPagamento.find(t => t.forma === formaKey && t.bandeira === 'todas')
+  if (todas) return Number(todas.taxa_percentual)
+  return 0
 }
 
 function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
 
-export default function EntradaForm({ pacientes, procedimentos, profissionais, clinicId, userId }: Props) {
+export default function EntradaForm({ pacientes, procedimentos, profissionais, taxasPagamento, clinicId, userId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -107,7 +123,7 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, c
   const [valorBruto, setValorBruto] = useState('')
   const [observacoes, setObservacoes] = useState('')
 
-  const taxaPct = TAXAS[forma] || 0
+  const taxaPct = getTaxaPct(taxasPagamento, forma, bandeira)
   const valorNum = parseFloat(valorBruto) || 0
   const valorTaxa = valorNum * (taxaPct / 100)
   const valorLiquido = valorNum - valorTaxa
