@@ -71,6 +71,7 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
         .from('saidas')
         .select('data, valor, categoria_dre')
         .eq('clinic_id', clinicId)
+        .eq('pago', true)
         .gte('data', startOfMonth)
         .lte('data', endOfMonth)
     ])
@@ -82,7 +83,7 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
 
   const receitaBruta = entradas.reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
   const taxas = entradas.reduce((s, e) => s + Number(e.valor_taxa || 0), 0)
-  const receitaLiquida = receitaBruta - taxas
+  const receitaLiquida = entradas.reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
 
   const despesasPorCategoria = saidas.reduce((acc, s) => {
     const cat = s.categoria_dre || 'Outros'
