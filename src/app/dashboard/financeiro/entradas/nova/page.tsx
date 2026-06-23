@@ -31,6 +31,11 @@ export default async function NovaEntradaPage() {
     .in('role', ['doctor', 'esthetician', 'admin'])
     .order('name')
 
+  const { data: taxasPagamento } = await supabase
+    .from('taxas_pagamento')
+    .select('forma, bandeira, taxa_percentual')
+    .eq('clinic_id', clinicId)
+
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3">
@@ -47,6 +52,7 @@ export default async function NovaEntradaPage() {
         pacientes={pacientes || []}
         procedimentos={procedimentos || []}
         profissionais={profissionais || []}
+        taxasPagamento={taxasPagamento || []}
         clinicId={clinicId}
         userId={user!.id}
       />
