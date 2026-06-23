@@ -104,7 +104,7 @@ export default async function FinanceiroPage() {
             <span className="md:hidden">{fmtCompact(receitaHoje)}</span>
             <span className="hidden md:inline">{fmt(receitaHoje)}</span>
           </p>
-          <p className="text-xs md:text-sm text-slate-500 truncate">Receita hoje</p>
+          <p className="text-xs md:text-sm text-slate-500 truncate">Receita bruta hoje</p>
         </div>
 
         <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
@@ -117,7 +117,7 @@ export default async function FinanceiroPage() {
             <span className="md:hidden">{fmtCompact(receitaMes)}</span>
             <span className="hidden md:inline">{fmt(receitaMes)}</span>
           </p>
-          <p className="text-xs md:text-sm text-slate-500 truncate">Receita do mês</p>
+          <p className="text-xs md:text-sm text-slate-500 truncate">Receita bruta do mês</p>
         </div>
 
         <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
