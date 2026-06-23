@@ -87,6 +87,7 @@ const PROFESSIONAL_COLORS = [
 // Componente de Card de Agendamento com preview e ações rápidas
 const AppointmentCard = React.memo(function AppointmentCard({ 
   apt, 
+  clinicId,
   onStatusChange,
   onCheckIn,
   onDragStart,
@@ -96,6 +97,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   totalColumns = 1
 }: { 
   apt: Appointment
+  clinicId: string
   onStatusChange: (id: string, status: string) => void
   onCheckIn: (id: string) => void
   onDragStart?: (e: React.DragEvent, apt: Appointment) => void
@@ -233,10 +235,37 @@ const AppointmentCard = React.memo(function AppointmentCard({
   async function saveSinal() {
     if (!valorSinal || parseFloat(valorSinal) <= 0) return
     setSavingSinal(true)
+    const valor = parseFloat(valorSinal)
+
+    // 1. Atualizar o agendamento
     await supabaseCard.from('appointments').update({
-      valor_sinal: parseFloat(valorSinal),
+      valor_sinal: valor,
       forma_pagamento_sinal: formaPgSinal,
     }).eq('id', apt.id)
+
+    // 2. Registrar no financeiro (idempotente: remove entrada anterior do sinal se houver)
+    const obsIdentifier = `Sinal - ${apt.id}`
+    const dataVenda = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
+    await supabaseCard.from('entradas').delete()
+      .eq('clinic_id', clinicId)
+      .eq('observacoes', obsIdentifier)
+    await supabaseCard.from('entradas').insert({
+      clinic_id: clinicId,
+      data_venda: dataVenda,
+      paciente_id: apt.patients?.id || null,
+      paciente_nome: apt.patients?.name || 'Paciente',
+      procedimento_nome: apt.appointment_procedures?.[0]?.procedure_name || apt.procedures?.name || null,
+      profissional_id: apt.professional_id || null,
+      profissional_nome: apt.professional?.name || null,
+      forma_pagamento: formaPgSinal,
+      valor_bruto: valor,
+      taxa_percentual: 0,
+      valor_taxa: 0,
+      valor_liquido: valor,
+      n_parcelas: 1,
+      observacoes: obsIdentifier,
+    })
+
     setSavingSinal(false)
     setSinalSalvo(true)
     setShowSinal(false)
@@ -1477,6 +1506,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                             >
                               <AppointmentCard
                                 apt={apt}
+                                clinicId={clinicId}
                                 onStatusChange={handleStatusChange}
                                 onCheckIn={handleCheckIn}
                                 onDragStart={handleDragStart}
@@ -1620,6 +1650,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                                 <AppointmentCard
                                   key={apt.id}
                                   apt={apt}
+                                  clinicId={clinicId}
                                   onStatusChange={handleStatusChange}
                                   onCheckIn={handleCheckIn}
                                   onDragStart={handleDragStart}
