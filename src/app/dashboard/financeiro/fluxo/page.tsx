@@ -22,6 +22,7 @@ export default async function FluxoPage() {
     .from('saidas')
     .select('data, valor, categoria_dre')
     .eq('clinic_id', clinicId)
+    .eq('pago', true)
     .gte('data', `${year}-01-01`)
     .lte('data', `${year}-12-31`)
 
