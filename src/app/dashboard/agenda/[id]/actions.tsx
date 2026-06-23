@@ -63,10 +63,33 @@ export default function AppointmentActions({
   async function saveSinal() {
     if (!valorSinal || parseFloat(valorSinal) <= 0) return
     startSavingSinal(async () => {
+      const valor = parseFloat(valorSinal)
+
+      // 1. Atualizar o agendamento
       await supabase.from('appointments').update({
-        valor_sinal: parseFloat(valorSinal),
+        valor_sinal: valor,
         forma_pagamento_sinal: formaPgSinal,
       }).eq('id', appointment.id)
+
+      // 2. Registrar no financeiro (idempotente: remove entrada anterior do sinal se houver)
+      const obsIdentifier = `Sinal - ${appointment.id}`
+      const dataVenda = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
+      await supabase.from('entradas').delete()
+        .eq('clinic_id', clinicId)
+        .eq('observacoes', obsIdentifier)
+      await supabase.from('entradas').insert({
+        clinic_id: clinicId,
+        data_venda: dataVenda,
+        paciente_id: appointment.patient_id || null,
+        forma_pagamento: formaPgSinal,
+        valor_bruto: valor,
+        taxa_percentual: 0,
+        valor_taxa: 0,
+        valor_liquido: valor,
+        n_parcelas: 1,
+        observacoes: obsIdentifier,
+      })
+
       setSinalSalvo(true)
       setShowSinal(false)
       router.refresh()
