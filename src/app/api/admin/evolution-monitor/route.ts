@@ -32,15 +32,19 @@ export async function GET() {
     const instances = Array.isArray(raw) ? raw : []
 
     const summary = instances.map((i: {
-      instance?: { instanceName?: string; status?: string; owner?: string }
+      instance?: { instanceName?: string; status?: string; connectionStatus?: string; owner?: string }
       instanceName?: string
+      name?: string
       status?: string
-    }) => ({
-      name: i.instance?.instanceName ?? i.instanceName ?? '',
-      status: i.instance?.status ?? i.status ?? 'unknown',
-      owner: i.instance?.owner ?? '',
-      connected: (i.instance?.status ?? i.status) === 'open',
-    }))
+      connectionStatus?: string
+      owner?: string
+    }) => {
+      const name = i.instance?.instanceName ?? i.instanceName ?? i.name ?? ''
+      const rawStatus = i.instance?.connectionStatus ?? i.instance?.status ?? i.connectionStatus ?? i.status ?? 'unknown'
+      const owner = i.instance?.owner ?? i.owner ?? ''
+      const connected = rawStatus === 'open'
+      return { name, status: rawStatus, owner, connected }
+    })
 
     const connected = summary.filter((i: { connected: boolean }) => i.connected).length
     const total = summary.length
