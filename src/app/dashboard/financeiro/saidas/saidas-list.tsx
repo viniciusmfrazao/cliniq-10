@@ -151,7 +151,7 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
     setMarcando(s.id)
     const { error } = await supabase
       .from('saidas')
-      .update({ pago: true, data: hoje })
+      .update({ pago: true })
       .eq('id', s.id)
     setMarcando(null)
     if (error) {
