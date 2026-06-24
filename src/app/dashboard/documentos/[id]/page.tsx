@@ -147,6 +147,36 @@ export default async function DocumentoDetalhePage({ params }: { params: { id: s
           </div>
         </div>
 
+        {/* Respostas Sim/Não */}
+        {questions.filter((q: any) => q.text?.trim()).length > 0 && (
+          <div className="card p-6">
+            <h2 className="font-semibold text-slate-900 mb-4">Respostas do paciente</h2>
+            <div className="space-y-2">
+              {questions.filter((q: any) => q.text?.trim()).map((q: any) => {
+                const resp = questionAnswers[q.id]
+                return (
+                  <div key={q.id} className="flex items-center justify-between py-2 px-4 bg-slate-50 rounded-xl">
+                    <span className="text-sm text-slate-700 flex-1">{q.text}</span>
+                    {resp ? (
+                      <span className={`ml-4 px-3 py-1 rounded-full text-xs font-bold flex-shrink-0 ${
+                        resp === 'sim'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {resp === 'sim' ? '✓ Sim' : '✗ Não'}
+                      </span>
+                    ) : (
+                      <span className="ml-4 px-3 py-1 rounded-full text-xs font-medium bg-slate-200 text-slate-400 flex-shrink-0">
+                        Não respondida
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Signature */}
         {doc.signature_data && (
           <div className="card p-6">
