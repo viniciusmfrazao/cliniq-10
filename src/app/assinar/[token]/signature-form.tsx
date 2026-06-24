@@ -3,9 +3,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
+type Question = { id: string; text: string }
+
 type Doc = {
   id: string
   content: string
+  questions?: Question[]
 }
 
 export default function SignatureForm({ doc, token }: { doc: Doc; token: string }) {
@@ -14,6 +17,10 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
   const [loading, setLoading] = useState(false)
   const [agreed, setAgreed] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
+  const [answers, setAnswers] = useState<Record<string, 'sim' | 'nao'>>({})
+
+  const questions = doc.questions?.filter(q => q.text.trim()) || []
+  const allAnswered = questions.length === 0 || questions.every(q => answers[q.id])
   const [isDrawing, setIsDrawing] = useState(false)
   const [success, setSuccess] = useState(false)
 
@@ -94,7 +101,7 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
   }
 
   const handleSubmit = async () => {
-    if (!agreed || !hasSignature) return
+    if (!agreed || !hasSignature || !allAnswered) return
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -109,6 +116,7 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           signature: signatureData,
+          question_answers: answers,
         }),
       })
 
@@ -151,6 +159,47 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
           {doc.content}
         </div>
       </div>
+
+      {/* Perguntas Sim/Não */}
+      {questions.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="bg-violet-50 px-6 py-4 border-b border-violet-100">
+            <h2 className="font-semibold text-violet-900">Perguntas de consentimento</h2>
+            <p className="text-xs text-violet-600 mt-0.5">Responda todas as perguntas antes de assinar</p>
+          </div>
+          <div className="p-6 space-y-4">
+            {questions.map((q) => (
+              <div key={q.id} className="space-y-2">
+                <p className="text-sm font-medium text-slate-800">{q.text}</p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'sim' }))}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                      answers[q.id] === 'sim'
+                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-300'
+                    }`}
+                  >
+                    ✓ Sim
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'nao' }))}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                      answers[q.id] === 'nao'
+                        ? 'bg-red-500 border-red-500 text-white shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-red-300'
+                    }`}
+                  >
+                    ✗ Não
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Agreement checkbox */}
       <label className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm cursor-pointer">
@@ -201,9 +250,9 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
       {/* Submit button */}
       <button
         onClick={handleSubmit}
-        disabled={!agreed || !hasSignature || loading}
+        disabled={!agreed || !hasSignature || !allAnswered || loading}
         className={`w-full py-4 rounded-xl text-white font-semibold text-lg transition-all ${
-          agreed && hasSignature
+          agreed && hasSignature && allAnswered
             ? 'bg-gradient-to-r from-violet-500 to-pink-500 hover:shadow-lg hover:scale-[1.02]'
             : 'bg-slate-300 cursor-not-allowed'
         }`}
