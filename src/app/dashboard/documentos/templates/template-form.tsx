@@ -117,20 +117,22 @@ export default function TemplateForm({ clinicId, template }: Props) {
       }
       
       if (template) {
-        await supabase
+        const { error } = await supabase
           .from('document_templates')
           .update({ ...dataToSave, updated_at: new Date().toISOString() })
           .eq('id', template.id)
+        if (error) throw error
       } else {
-        await supabase
+        const { error } = await supabase
           .from('document_templates')
           .insert({ ...dataToSave, clinic_id: clinicId })
+        if (error) throw error
       }
 
       router.push('/dashboard/documentos/templates')
       router.refresh()
-    } catch {
-      alert('Erro ao salvar template')
+    } catch (err: any) {
+      alert('Erro ao salvar template: ' + (err?.message || JSON.stringify(err)))
     } finally {
       setLoading(false)
     }
