@@ -13,11 +13,18 @@ export default async function DocumentoDetalhePage({ params }: { params: { id: s
 
   const { data: doc } = await supabase
     .from('documents_sent')
-    .select('*, patients(name, email, phone), users(name)')
+    .select('*, patients(name, email, phone), users(name), document_templates(questions)')
     .eq('id', id)
     .maybeSingle()
 
   if (!doc) redirect('/dashboard/documentos')
+
+  // Fallback: se o doc não tiver perguntas salvas, usa as do template
+  const questions: { id: string; text: string }[] =
+    (doc.questions && (doc.questions as any[]).length > 0)
+      ? doc.questions as any[]
+      : ((doc as any).document_templates?.questions || [])
+  const questionAnswers: Record<string, 'sim' | 'nao'> = (doc as any).question_answers || {}
 
   const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
     pending: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Aguardando assinatura' },
