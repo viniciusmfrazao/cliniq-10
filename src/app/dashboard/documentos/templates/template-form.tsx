@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { parseSupabaseError } from '@/lib/error-messages'
 
+type Question = { id: string; text: string }
 
 type Props = {
   clinicId: string
@@ -18,6 +19,7 @@ type Props = {
     theme_color?: string
     image_url?: string | null
     requires_signature?: boolean
+    questions?: Question[]
   }
 }
 
@@ -46,6 +48,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [imagePreview, setImagePreview] = useState<string>(template?.image_url || '')
   const [loading, setLoading] = useState(false)
+  const [questions, setQuestions] = useState<Question[]>(template?.questions || [])
   const [form, setForm] = useState({
     name: template?.name || '',
     description: template?.description || '',
@@ -60,6 +63,18 @@ export default function TemplateForm({ clinicId, template }: Props) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  function addQuestion() {
+    setQuestions(prev => [...prev, { id: crypto.randomUUID(), text: '' }])
+  }
+
+  function updateQuestion(id: string, text: string) {
+    setQuestions(prev => prev.map(q => q.id === id ? { ...q, text } : q))
+  }
+
+  function removeQuestion(id: string) {
+    setQuestions(prev => prev.filter(q => q.id !== id))
+  }
 
   async function handleImageUpload(file: File) {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
@@ -92,11 +107,13 @@ export default function TemplateForm({ clinicId, template }: Props) {
     setLoading(true)
 
     try {
+      const validQuestions = questions.filter(q => q.text.trim())
       const dataToSave = {
         ...form,
         content: form.category === 'anamnese' ? 'ANAMNESE_FORM' : form.content,
         image_url: form.image_url || null,
         requires_signature: form.requires_signature,
+        questions: validQuestions,
       }
       
       if (template) {
@@ -238,6 +255,68 @@ export default function TemplateForm({ clinicId, template }: Props) {
               placeholder="Digite o conteudo do documento aqui..."
               required
             />
+
+            {/* ── Perguntas Sim/Não ── */}
+            <div className="mt-4 p-4 bg-violet-50 border border-violet-200 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-violet-800">Perguntas Sim / Não</p>
+                  <p className="text-xs text-violet-600 mt-0.5">
+                    O paciente responderá antes de assinar o documento
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addQuestion}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded-lg hover:bg-violet-700 transition-colors"
+                >
+                  <Icon name="plus" className="w-3.5 h-3.5" />
+                  Adicionar
+                </button>
+              </div>
+
+              {questions.length === 0 && (
+                <p className="text-xs text-violet-400 text-center py-2">
+                  Nenhuma pergunta adicionada. Clique em "Adicionar" para incluir.
+                </p>
+              )}
+
+              {questions.map((q, i) => (
+                <div key={q.id} className="flex items-center gap-2">
+                  <span className="text-xs text-violet-400 font-mono w-5 text-right flex-shrink-0">{i + 1}.</span>
+                  <input
+                    type="text"
+                    value={q.text}
+                    onChange={e => updateQuestion(q.id, e.target.value)}
+                    placeholder="Ex: Autoriza o uso de fotos para fins educacionais?"
+                    className="flex-1 px-3 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeQuestion(q.id)}
+                    className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                  >
+                    <Icon name="x" className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              {questions.length > 0 && (
+                <div className="flex items-center gap-2 pt-1 border-t border-violet-100">
+                  <div className="flex gap-3 text-xs text-violet-500">
+                    <span className="flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full border-2 border-emerald-400 flex items-center justify-center text-[10px] font-bold text-emerald-600">S</span>
+                      Sim
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full border-2 border-red-400 flex items-center justify-center text-[10px] font-bold text-red-600">N</span>
+                      Não
+                    </span>
+                  </div>
+                  <span className="text-xs text-violet-400">— opções que o paciente verá</span>
+                </div>
+              )}
+            </div>
 
             {/* Toggle — pedir assinatura */}
             <div className="mt-4 flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
