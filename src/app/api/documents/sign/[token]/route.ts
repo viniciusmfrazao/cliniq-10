@@ -46,7 +46,7 @@ export async function POST(
   try {
     const { token } = params
     const body = await request.json()
-    const { signature } = body
+    const { signature, question_answers } = body
 
     if (!signature) {
       return NextResponse.json({ error: 'Assinatura obrigatória' }, { status: 400 })
@@ -88,6 +88,7 @@ export async function POST(
         signature_ip: clientIp,
         signature_user_agent: userAgent,
         signature_country: country,
+        question_answers: question_answers || {},
       })
       .eq('id', doc.id)
 
