@@ -162,9 +162,6 @@ function previewFor(kind: ParsedKind, caption: string | null): string {
 
 function jidToPhone(jid: string | undefined | null): string | null {
   if (!jid) return null
-  // Ignorar formato @lid — identificador interno do WhatsApp Business (v1.8.2)
-  // nao e um numero de telefone real
-  if (jid.endsWith('@lid')) return null
   const cleaned = jid.split('@')[0]
   // Evolution às vezes manda formato "55349xxxxxxx:1" pra device — limpamos
   return cleaned.replace(/[^0-9]/g, '') || null
@@ -314,9 +311,11 @@ export async function POST(
   }
 
   // Instância de saída pura (role_outbound_automation=true, role_inbound=false)
-  // Mensagens vindas dessas instâncias são automações enviadas pelo sistema
-  // Não devem criar leads, aparecer no CRM nem no WhatsApp
-  if (row.role_outbound_automation === true && row.role_inbound === false) {
+  // Mensagens de clientes não devem criar leads, aparecer no CRM nem disparar Eva.
+  // MAS connection_update e qrcode_updated precisam passar para que o número
+  // consiga ser conectado e ter o phone_number salvo no banco.
+  if (row.role_outbound_automation === true && row.role_inbound === false
+      && event === 'messages_upsert') {
     return NextResponse.json({ ok: true, skipped: 'outbound_only_instance' })
   }
 
