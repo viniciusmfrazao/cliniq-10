@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, memo } from 'react'
+import { createPortal } from 'react-dom'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
 
@@ -27,6 +28,8 @@ type Props = {
 }
 
 const DocumentViewModal = memo(function DocumentViewModal({ documentId, onClose }: Props) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
   const [doc, setDoc] = useState<DocumentDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const printRef = useRef<HTMLDivElement>(null)
@@ -99,7 +102,9 @@ const DocumentViewModal = memo(function DocumentViewModal({ documentId, onClose 
 
   const isSigned = doc?.status === 'signed'
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
@@ -255,7 +260,7 @@ const DocumentViewModal = memo(function DocumentViewModal({ documentId, onClose 
         </div>
       </div>
     </div>
-  )
+  , document.body)
 })
 
 export default DocumentViewModal
