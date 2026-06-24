@@ -56,6 +56,7 @@ export default async function PatientCentralPage({
     applicationsCountResult,
     activeAppointmentResult,
     packagesCountResult,
+    documentsCountResult,
   ] = await Promise.all([
     supabase.from('patients').select('*').eq('id', id).maybeSingle(),
     supabase.from('medical_records').select('*').eq('patient_id', id).maybeSingle(),
@@ -89,6 +90,10 @@ export default async function PatientCentralPage({
       .select('id', { count: 'exact', head: true })
       .eq('patient_id', id)
       .eq('status', 'active'),
+    supabase
+      .from('documents_sent')
+      .select('id', { count: 'exact', head: true })
+      .eq('patient_id', id),
   ])
 
   const activeAppointment = activeAppointmentResult.data
@@ -122,6 +127,7 @@ export default async function PatientCentralPage({
     anamneses: anamnesesCountResult.count || 0,
     injetaveis: applicationsCountResult.count || 0,
     pacotes: packagesCountResult.count || 0,
+    documentos: documentsCountResult.count || 0,
   }
 
   const age = patient.birth_date
