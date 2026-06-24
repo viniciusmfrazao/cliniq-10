@@ -250,6 +250,6 @@ const DocumentViewModal = memo(function DocumentViewModal({ documentId, onClose 
       </div>
     </div>
   )
-}
+})
 
 export default DocumentViewModal
