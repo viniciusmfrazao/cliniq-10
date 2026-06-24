@@ -16,7 +16,7 @@ export async function GET(
     const { token } = params
     const { data: doc, error } = await getAdmin()
       .from('documents_sent')
-      .select('*, patients(name), clinics(name)')
+      .select('*, patients(name), clinics(name), document_templates(questions)')
       .eq('sign_token', token)
       .maybeSingle()
 
@@ -32,7 +32,13 @@ export async function GET(
         .eq('id', doc.id)
     }
 
-    return NextResponse.json(doc)
+    // Se o documento foi enviado antes da feature de perguntas existir,
+    // usa as perguntas do template como fallback
+    const questions = (doc.questions && doc.questions.length > 0)
+      ? doc.questions
+      : (doc as any).document_templates?.questions || []
+
+    return NextResponse.json({ ...doc, questions })
   } catch (error) {
     console.error('Error fetching document:', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
@@ -46,7 +52,7 @@ export async function POST(
   try {
     const { token } = params
     const body = await request.json()
-    const { signature } = body
+    const { signature, question_answers } = body
 
     if (!signature) {
       return NextResponse.json({ error: 'Assinatura obrigatória' }, { status: 400 })
@@ -88,6 +94,7 @@ export async function POST(
         signature_ip: clientIp,
         signature_user_agent: userAgent,
         signature_country: country,
+        question_answers: question_answers || {},
       })
       .eq('id', doc.id)
 
