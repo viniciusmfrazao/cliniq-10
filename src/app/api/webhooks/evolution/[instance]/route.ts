@@ -219,13 +219,16 @@ async function logWebhook(args: {
   query?: Record<string, string>
 }) {
   try {
+    // Body só é salvo para erros — logs de sucesso não precisam do payload completo
+    // Isso evita acúmulo de GBs de dados desnecessários no banco
+    const isSuccess = args.statusCode >= 200 && args.statusCode < 300
     await args.svc.from('evolution_webhook_logs').insert({
       instance: args.instance,
       event: args.event ?? null,
       status_code: args.statusCode,
       error: args.error ?? null,
-      body: args.body ?? null,
-      headers: args.headers ?? null,
+      body: isSuccess ? null : (args.body ?? null),
+      headers: isSuccess ? null : (args.headers ?? null),
       query: args.query ?? null,
     })
   } catch (e) {
