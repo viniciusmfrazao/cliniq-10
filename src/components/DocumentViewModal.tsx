@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, memo } from 'react'
+import { createPortal } from 'react-dom'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
 
@@ -16,6 +17,8 @@ type DocumentDetail = {
   signature_ip: string | null
   signature_user_agent: string | null
   signature_country: string | null
+  questions?: { id: string; text: string }[] | null
+  question_answers?: Record<string, 'sim' | 'nao'> | null
   patients: { name: string; phone: string | null } | null
 }
 
@@ -24,7 +27,9 @@ type Props = {
   onClose: () => void
 }
 
-export default function DocumentViewModal({ documentId, onClose }: Props) {
+const DocumentViewModal = memo(function DocumentViewModal({ documentId, onClose }: Props) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
   const [doc, setDoc] = useState<DocumentDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const printRef = useRef<HTMLDivElement>(null)
@@ -34,14 +39,28 @@ export default function DocumentViewModal({ documentId, onClose }: Props) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
+  // Apenas overflow:hidden — position:fixed no body quebra fixed do modal
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
   useEffect(() => {
     supabase
       .from('documents_sent')
-      .select('*, patients(name, phone)')
+      .select('*, patients(name, phone), document_templates(questions)')
       .eq('id', documentId)
       .single()
       .then(({ data }) => {
-        setDoc(data)
+        if (data) {
+          // Fallback: se o doc não tiver perguntas salvas, usa as do template
+          const questions = (data.questions && (data.questions as any[]).length > 0)
+            ? data.questions
+            : (data as any).document_templates?.questions || []
+          setDoc({ ...data, questions })
+        } else {
+          setDoc(data)
+        }
         setLoading(false)
       })
   }, [documentId])
@@ -83,11 +102,13 @@ export default function DocumentViewModal({ documentId, onClose }: Props) {
 
   const isSigned = doc?.status === 'signed'
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+  if (!mounted) return null
 
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ transform: "translateZ(0)" }}>
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <div>
@@ -133,6 +154,36 @@ export default function DocumentViewModal({ documentId, onClose }: Props) {
                 className="doc-content text-slate-800 text-sm leading-relaxed whitespace-pre-wrap font-serif"
                 dangerouslySetInnerHTML={{ __html: doc.content?.replace(/\n/g, '<br>') || '' }}
               />
+
+              {/* Respostas Sim/Não */}
+              {doc.questions && doc.questions.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3">Respostas do paciente</h3>
+                  <div className="space-y-2">
+                    {doc.questions.filter(q => q.text.trim()).map(q => {
+                      const resp = doc.question_answers?.[q.id]
+                      return (
+                        <div key={q.id} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
+                          <span className="text-sm text-slate-700 flex-1">{q.text}</span>
+                          {resp ? (
+                            <span className={`ml-3 px-2.5 py-0.5 rounded-full text-xs font-bold flex-shrink-0 ${
+                              resp === 'sim'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              {resp === 'sim' ? '✓ Sim' : '✗ Não'}
+                            </span>
+                          ) : (
+                            <span className="ml-3 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-500 flex-shrink-0">
+                              Sem resposta
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Assinatura */}
               {isSigned && (
@@ -209,5 +260,7 @@ export default function DocumentViewModal({ documentId, onClose }: Props) {
         </div>
       </div>
     </div>
-  )
-}
+  , document.body)
+})
+
+export default DocumentViewModal
