@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
 import DocumentViewModal from '@/components/DocumentViewModal'
@@ -47,6 +47,7 @@ export default function DocumentosAtendimento({
   const [showPicker, setShowPicker] = useState(false)
   const [sending, setSending] = useState<string | null>(null)
   const [viewingDoc, setViewingDoc] = useState<string | null>(null)
+  const handleCloseModal = useCallback(() => setViewingDoc(null), [])
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -224,7 +225,7 @@ export default function DocumentosAtendimento({
       {viewingDoc && (
         <DocumentViewModal
           documentId={viewingDoc}
-          onClose={() => setViewingDoc(null)}
+          onClose={handleCloseModal}
         />
       )}
     </div>
