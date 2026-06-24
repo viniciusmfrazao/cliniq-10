@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, memo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
 
@@ -26,7 +26,7 @@ type Props = {
   onClose: () => void
 }
 
-export default function DocumentViewModal({ documentId, onClose }: Props) {
+const DocumentViewModal = memo(function DocumentViewModal({ documentId, onClose }: Props) {
   const [doc, setDoc] = useState<DocumentDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const printRef = useRef<HTMLDivElement>(null)
@@ -251,3 +251,5 @@ export default function DocumentViewModal({ documentId, onClose }: Props) {
     </div>
   )
 }
+
+export default DocumentViewModal
