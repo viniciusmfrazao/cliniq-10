@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
       appointment_id: appointmentId || null,
       name: template.name,
       content: filledContent,
+      questions: (template as any).questions || [],
       status: template.requires_signature !== false ? 'pending' : 'sent',
       sent_by: userRow.id,
       sign_token: token,
