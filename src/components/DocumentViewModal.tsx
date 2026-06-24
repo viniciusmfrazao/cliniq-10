@@ -39,11 +39,19 @@ export default function DocumentViewModal({ documentId, onClose }: Props) {
   useEffect(() => {
     supabase
       .from('documents_sent')
-      .select('*, patients(name, phone)')
+      .select('*, patients(name, phone), document_templates(questions)')
       .eq('id', documentId)
       .single()
       .then(({ data }) => {
-        setDoc(data)
+        if (data) {
+          // Fallback: se o doc não tiver perguntas salvas, usa as do template
+          const questions = (data.questions && (data.questions as any[]).length > 0)
+            ? data.questions
+            : (data as any).document_templates?.questions || []
+          setDoc({ ...data, questions })
+        } else {
+          setDoc(data)
+        }
         setLoading(false)
       })
   }, [documentId])
