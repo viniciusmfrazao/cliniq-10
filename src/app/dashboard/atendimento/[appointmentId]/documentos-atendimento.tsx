@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
 import DocumentViewModal from '@/components/DocumentViewModal'
@@ -38,7 +38,7 @@ type Props = {
   clinicId: string
 }
 
-export default function DocumentosAtendimento({
+const DocumentosAtendimento = memo(function DocumentosAtendimento({
   patientId, patientName, patientPhone, appointmentId, procedureName, clinicId
 }: Props) {
   const toast = useToast()
@@ -230,4 +230,6 @@ export default function DocumentosAtendimento({
       )}
     </div>
   )
-}
+})
+
+export default DocumentosAtendimento
