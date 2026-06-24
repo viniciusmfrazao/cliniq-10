@@ -12,6 +12,8 @@ const SECOES = [
   { id: 'saude',         label: 'Saúde Geral',              desc: 'Doenças, cirurgias, queloides' },
   { id: 'outras',        label: 'Outras Condições',         desc: 'Implantes, herpes, distúrbios' },
   { id: 'mulheres',      label: 'Exclusivo Mulheres',       desc: 'Gravidez, lactação' },
+  { id: 'imagem',        label: 'Autoriza Uso de Imagem',    desc: 'Pergunta se paciente autoriza fotos/vídeos' },
+  { id: 'filmagem',      label: 'Aceita Filmagem',            desc: 'Pergunta se paciente aceita ser filmado na clínica' },
   { id: 'queixa',        label: 'Principal Queixa',         desc: 'Áreas de interesse e observações' },
 ]
 
