@@ -16,6 +16,8 @@ type DocumentDetail = {
   signature_ip: string | null
   signature_user_agent: string | null
   signature_country: string | null
+  questions?: { id: string; text: string }[] | null
+  question_answers?: Record<string, 'sim' | 'nao'> | null
   patients: { name: string; phone: string | null } | null
 }
 
@@ -133,6 +135,36 @@ export default function DocumentViewModal({ documentId, onClose }: Props) {
                 className="doc-content text-slate-800 text-sm leading-relaxed whitespace-pre-wrap font-serif"
                 dangerouslySetInnerHTML={{ __html: doc.content?.replace(/\n/g, '<br>') || '' }}
               />
+
+              {/* Respostas Sim/Não */}
+              {doc.questions && doc.questions.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3">Respostas do paciente</h3>
+                  <div className="space-y-2">
+                    {doc.questions.filter(q => q.text.trim()).map(q => {
+                      const resp = doc.question_answers?.[q.id]
+                      return (
+                        <div key={q.id} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
+                          <span className="text-sm text-slate-700 flex-1">{q.text}</span>
+                          {resp ? (
+                            <span className={`ml-3 px-2.5 py-0.5 rounded-full text-xs font-bold flex-shrink-0 ${
+                              resp === 'sim'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              {resp === 'sim' ? '✓ Sim' : '✗ Não'}
+                            </span>
+                          ) : (
+                            <span className="ml-3 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-500 flex-shrink-0">
+                              Sem resposta
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Assinatura */}
               {isSigned && (
