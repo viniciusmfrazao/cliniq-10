@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendWhatsappMessage, sendWhatsappImage } from '@/lib/whatsapp'
 
 /**
  * POST /api/documento/send-from-template
@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
       appointment_id: appointmentId || null,
       name: template.name,
       content: filledContent,
+      questions: (template as any).questions || [],
       status: template.requires_signature !== false ? 'pending' : 'sent',
       sent_by: userRow.id,
       sign_token: token,
@@ -167,41 +168,18 @@ export async function POST(req: NextRequest) {
   // 1. Se houver anexo, envia PRIMEIRO (o paciente vê o documento antes da mensagem)
   if (hasAttachment) {
     try {
-      // Buscar instância de AUTOMAÇÃO (não a da Eva/manual)
-      const { data: waData } = await svc
-        .from('clinic_whatsapp')
-        .select('instance_name')
-        .eq('clinic_id', clinicId)
-        .eq('status', 'connected')
-        .eq('role_outbound_automation', true)
-        .limit(1)
-        .maybeSingle()
-
-      const { data: evSettings } = await svc
-        .from('app_settings')
-        .select('key, value')
-        .in('key', ['evolution_url', 'evolution_master_key'])
-
-      const evUrl = evSettings?.find((s: any) => s.key === 'evolution_url')?.value
-      const evKey = evSettings?.find((s: any) => s.key === 'evolution_master_key')?.value
-      const instance = waData?.instance_name
-
-      if (evUrl && evKey && instance) {
-        const fileName = isPdf
-          ? (template.name ? `${template.name}.pdf` : 'documento.pdf')
-          : undefined
-        await fetch(`${evUrl}/message/sendMedia/${instance}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': evKey },
-          body: JSON.stringify({
-            number: phone.replace(/\D/g, '').replace(/^(?!55)/, '55'),
-            mediatype: isPdf ? 'document' : 'image',
-            media: fileUrl,
-            caption: '',
-            ...(fileName ? { fileName } : {}),
-          }),
-        })
-      }
+      const fileName = isPdf
+        ? (template.name ? `${template.name}.pdf` : 'documento.pdf')
+        : undefined
+      await sendWhatsappImage({
+        clinicId,
+        phone,
+        media: fileUrl,
+        mimetype: isPdf ? 'application/pdf' : 'image/jpeg',
+        caption: '',
+        fileName,
+        purpose: 'automation',
+      })
     } catch (e) {
       console.error('Erro ao enviar anexo do template:', e)
     }
