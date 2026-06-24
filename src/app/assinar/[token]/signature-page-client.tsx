@@ -9,6 +9,7 @@ type DocumentData = {
   content: string
   status: string
   signed_at?: string
+  questions?: { id: string; text: string }[]
   patients: { name: string }
   clinics: { name: string }
 }
