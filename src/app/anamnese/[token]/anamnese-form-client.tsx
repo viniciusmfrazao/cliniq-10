@@ -798,6 +798,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               </div>
             </div>
 
+            {secoesAtivas.includes('filmagem') && (
             <div className="mb-5">
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Aceita filmar sua experiência na clínica?</p>
               <div className="flex flex-col gap-2">
@@ -806,6 +807,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <Choice group="filmado" value="Não" selected={responses.filmado === 'Não'} onClick={() => selectSingle('filmado', 'Não')} />
               </div>
             </div>
+            )}
 
             <div>
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Onde você conheceu nossa clínica?</p>
