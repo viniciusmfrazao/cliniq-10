@@ -572,5 +572,17 @@ export const TOOLS = [
       required: ['procedimento'],
     },
   },
+  {
+    name: 'agendar_retorno_lead',
+    description: "Use quando a paciente informar que vai retornar o contato em uma data ou prazo especifico: 'te chamo depois do dia 10', 'entro em contato semana que vem', 'falo contigo depois do feriado', 'me liga no mes que vem', etc. Pausa os follow-ups automaticos ate essa data para nao incomodar a paciente antes da hora.",
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        data_retorno: { type: 'string', description: 'Data em que a paciente disse que vai retornar, no formato YYYY-MM-DD. Interprete a data mencionada na conversa considerando o contexto atual.' },
+        observacao: { type: 'string', description: 'O que a paciente disse literalmente (opcional, para registro no CRM).' },
+      },
+      required: ['data_retorno'],
+    },
+  },
 ];
 
