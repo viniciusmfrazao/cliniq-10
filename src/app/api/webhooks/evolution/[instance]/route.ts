@@ -941,7 +941,7 @@ export async function POST(
                       : 'figurinha'
 
             const autoReply =
-              parsed.kind === 'sticker' || parsed.kind === 'audio'
+              parsed.kind === 'audio'
                 ? null // audio: Eva transcreve e responde. sticker: não precisa de resposta
                 : `Recebi sua ${mediaLabel}! Ainda não consigo analisar este tipo de arquivo aqui. ` +
                   `Já estou avisando alguém da nossa equipe pra te responder com cuidado, tá? 💜`
