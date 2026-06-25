@@ -103,6 +103,16 @@ function getFollowupBadge(
  * Mostra se está atrasado e há quanto tempo, ou quanto falta.
  * scheduledAt é um timestamp ISO com timezone (instante absoluto).
  */
+function getRetornoBadge(lead: Lead): { label: string } | null {
+  if (!lead.eva_pause_until) return null
+  if (lead.status === 'converted' || lead.status === 'lost') return null
+  const pauseDate = new Date(lead.eva_pause_until)
+  if (pauseDate <= new Date()) return null
+  const day = pauseDate.getUTCDate().toString().padStart(2, '0')
+  const month = (pauseDate.getUTCMonth() + 1).toString().padStart(2, '0')
+  return { label: `Retorno ${day}/${month}` }
+}
+
 function getManualFollowupBadge(
   scheduledAt: string | undefined,
   status: string,
@@ -380,6 +390,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     followup48h: leads.filter(l => followupBucket(l) === 'fu_48h').length,
     followup5d: leads.filter(l => followupBucket(l) === 'fu_5d').length,
     followup10d: leads.filter(l => followupBucket(l) === 'fu_10d').length,
+    retornoAgendado: leads.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date()).length,
   }
 
   const isFollowupFilter = (f: string) =>
@@ -399,6 +410,8 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const filteredLeads =
     filter === 'all'
       ? leadsForLine
+      : filter === 'retorno_agendado'
+        ? leadsForLine.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date())
       : filter === 'human_review'
         ? leadsForLine.filter(l => l.needs_human_review === true)
         : filter === 'hot' || filter === 'warm' || filter === 'cold'
@@ -430,7 +443,9 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
   // Agrupar por stage para Kanban (respeita os filtros especiais)
   const leadsForKanban =
-    filter === 'human_review'
+    filter === 'retorno_agendado'
+      ? leadsForLine.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date())
+      : filter === 'human_review'
       ? leadsForLine.filter(l => l.needs_human_review === true)
       : filter === 'hot' || filter === 'warm' || filter === 'cold'
         ? leadsForLine.filter(l => l.ai_priority === filter)
@@ -866,6 +881,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
               {stats.followup10d > 0 && <option value="fu_10d">⏰ Última chance · 10d ({stats.followup10d})</option>}
             </optgroup>
           )}
+          {stats.retornoAgendado > 0 && (
+            <optgroup label="Retorno agendado">
+              <option value="retorno_agendado">📅 Retorno agendado ({stats.retornoAgendado})</option>
+            </optgroup>
+          )}
         </select>
       </div>
 
@@ -904,6 +924,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   const mfDate = manualFollowups[lead.id]
                   const needsContact = mfDate ? new Date(mfDate) <= new Date() : false
                   const followup = evaActive ? getFollowupBadge(lead) : null
+                  const retorno = getRetornoBadge(lead)
                   const manualFollowup = getManualFollowupBadge(manualFollowups[lead.id], lead.status)
                   const followupClass =
                     followup?.tone === 'darkred'
@@ -977,6 +998,15 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                               {lead.human_review_details}
                             </p>
                           )}
+                        </div>
+                      )}
+                      {retorno && !followup && (
+                        <div
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border mb-2 bg-blue-50 text-blue-700 border-blue-200"
+                          title="Paciente retorna nesta data — follow-ups pausados até lá"
+                        >
+                          <span>📅</span>
+                          <span className="font-medium">{retorno.label}</span>
                         </div>
                       )}
                       {followup && (
