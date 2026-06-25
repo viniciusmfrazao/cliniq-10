@@ -892,6 +892,60 @@ export interface ToolExecutionResult {
   meta?: Record<string, unknown>;
 }
 
+// ── agendar_retorno_lead ────────────────────────────────────────────────────
+
+/**
+ * Pausa os follow-ups automáticos até a data que a paciente informou.
+ * Exemplo: "te chamo depois do dia 10" → pausa até 10/07 às 9h.
+ * O cron de follow-up respeita eva_pause_until e não dispara antes disso.
+ */
+export async function agendarRetornoLead(
+  args: { data_retorno: string; observacao?: string },
+  ctx: DonnaContext,
+  _payload: IncomingPayload,
+  env: ToolEnv,
+): Promise<string> {
+  const { data_retorno, observacao } = args;
+  if (!ctx.leadId) return 'Lead não identificado — não foi possível agendar o retorno.';
+
+  // Validar formato YYYY-MM-DD
+  const match = data_retorno.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return `Data inválida: "${data_retorno}". Use o formato YYYY-MM-DD.`;
+
+  const [, y, m, d] = match;
+  const year = parseInt(y), month = parseInt(m), day = parseInt(d);
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return `Data inválida: "${data_retorno}".`;
+  }
+
+  // Não aceitar datas no passado
+  const hoje = new Date();
+  const dataAlvo = new Date(year, month - 1, day);
+  if (dataAlvo < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())) {
+    return `A data ${formatarDataBR(data_retorno)} já passou. Confirme a data correta com a paciente.`;
+  }
+
+  // Montar ISO às 9h BRT (UTC-3) para o cron disparar no período correto
+  const pauseUntil = `${data_retorno}T12:00:00.000Z`; // 9h BRT = 12h UTC
+
+  const h = sbHeaders(env);
+  const { SUPABASE_URL: url } = { SUPABASE_URL: env.supabaseUrl };
+
+  const res = await fetchJson(`${url}/rest/v1/leads?id=eq.${ctx.leadId}`, {
+    method: 'PATCH',
+    headers: { ...h, Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      eva_pause_until: pauseUntil,
+      eva_next_followup_at: pauseUntil, // cron vai disparar no dia certo
+    }),
+  });
+
+  const dataBR = formatarDataBR(data_retorno);
+  const obs = observacao ? ` (${observacao})` : '';
+  return `Retorno agendado para ${dataBR}${obs}. Follow-ups pausados até essa data.`;
+}
+
+
 export async function executeToolByName(
   name: string,
   input: Record<string, unknown>,
@@ -927,6 +981,10 @@ export async function executeToolByName(
     }
     case 'enviar_fotos_resultado': {
       const r = await enviarFotosResultado(input as any, ctx, payload, env, imagesSentProcedures ?? new Set<string>());
+      return { resultStr: r };
+    }
+    case 'agendar_retorno_lead': {
+      const r = await agendarRetornoLead(input as any, ctx, payload, env);
       return { resultStr: r };
     }
     default:
