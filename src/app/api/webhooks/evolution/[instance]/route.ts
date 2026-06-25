@@ -898,17 +898,21 @@ export async function POST(
           // Excecao: imagem/video/documento COM caption nao-vazio. Nesse caso
           // a Eva consegue responder a duvida do caption (ela nao precisa ver
           // a imagem em si, so o texto que veio junto).
+          // Sticker: cortesia social — ignorar silenciosamente sem escalar nem responder
+          if (parsed.kind === 'sticker') {
+            debugTrace.push('sticker recebido — ignorado silenciosamente (sem escalação)')
+            return new Response(JSON.stringify({ ok: true, skipped: 'sticker_ignored' }), { status: 200 })
+          }
+
           const isMediaToEscalate =
             (parsed.kind === 'audio' ||
               parsed.kind === 'image' ||
               parsed.kind === 'video' ||
-              parsed.kind === 'document' ||
-              parsed.kind === 'sticker') &&
+              parsed.kind === 'document') &&
             // audio com transcrição bem-sucedida: Eva responde normalmente, não escala
             !(parsed.kind === 'audio' && transcription) &&
             // pra image/video/document: so escala se NAO tem caption util
             (parsed.kind === 'audio' ||
-              parsed.kind === 'sticker' ||
               !(parsed.text && parsed.text.trim().length >= 3))
 
           // Anti-duplicata: checar se já mandou auto-reply de mídia para este phone nos últimos 30s
