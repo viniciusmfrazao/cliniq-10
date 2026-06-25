@@ -16,6 +16,8 @@ type Saida = {
   fornecedor: string | null
   valor: number
   forma_pagamento: string | null
+  is_recurring?: boolean
+  recurrence_id?: string | null
 }
 
 type Props = {
@@ -37,7 +39,6 @@ function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
 
-/** Retorna quantos dias faltam pro vencimento (negativo = atrasado) */
 function diasParaVencer(dataVenc: string): number {
   const hoje = todayBR()
   const diff = new Date(dataVenc).getTime() - new Date(hoje).getTime()
@@ -46,30 +47,32 @@ function diasParaVencer(dataVenc: string): number {
 
 function VencimentoBadge({ dataVenc }: { dataVenc: string }) {
   const dias = diasParaVencer(dataVenc)
-  if (dias < 0) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-        ⚠️ {Math.abs(dias)}d atrasado
-      </span>
-    )
-  }
-  if (dias === 0) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-        🔔 Vence hoje
-      </span>
-    )
-  }
-  if (dias <= 7) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-600">
-        ⏰ {dias}d para vencer
-      </span>
-    )
-  }
+  if (dias < 0) return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+      ⚠️ {Math.abs(dias)}d atrasado
+    </span>
+  )
+  if (dias === 0) return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+      🔔 Vence hoje
+    </span>
+  )
+  if (dias <= 7) return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-600">
+      ⏰ {dias}d para vencer
+    </span>
+  )
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
       📅 {parseDateBR(dataVenc)}
+    </span>
+  )
+}
+
+function RecorrenteBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">
+      🔁 Fixa
     </span>
   )
 }
@@ -82,17 +85,15 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
   const [aba, setAba] = useState<'lancadas' | 'a_pagar'>('lancadas')
   const [deleting, setDeleting] = useState<string | null>(null)
   const [marcando, setMarcando] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; recurrenceId: string | null } | null>(null)
   const supabase = createClient()
   const toast = useToast()
   const hoje = todayBR()
 
-  // Separa lançadas vs a pagar
   const lancadas = list.filter(s => s.pago)
   const aPagar = list.filter(s => !s.pago).sort((a, b) =>
     (a.data_vencimento || '').localeCompare(b.data_vencimento || '')
   )
-
-  // Alertas urgentes (vence hoje ou atrasado)
   const urgentes = aPagar.filter(s => s.data_vencimento && diasParaVencer(s.data_vencimento) <= 0)
 
   const filteredLancadas = lancadas.filter(s => {
@@ -121,7 +122,17 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
     return acc
   }, {} as Record<string, number>)
 
-  async function handleDelete(id: string) {
+  // Abre modal de confirmação se for recorrente, senão deleta direto
+  function requestDelete(s: Saida) {
+    if (s.is_recurring && s.recurrence_id) {
+      setConfirmDelete({ id: s.id, recurrenceId: s.recurrence_id })
+    } else {
+      handleDeleteSingle(s.id)
+    }
+  }
+
+  async function handleDeleteSingle(id: string) {
+    setConfirmDelete(null)
     const removed = list.find(s => s.id === id)
     if (!removed) return
     setList(prev => prev.filter(s => s.id !== id))
@@ -147,6 +158,23 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
     }, 5200)
   }
 
+  async function handleDeleteSeries(recurrenceId: string) {
+    setConfirmDelete(null)
+    const removed = list.filter(s => s.recurrence_id === recurrenceId)
+    setList(prev => prev.filter(s => s.recurrence_id !== recurrenceId))
+    const { error } = await supabase
+      .from('saidas')
+      .delete()
+      .eq('recurrence_id', recurrenceId)
+      .eq('clinic_id', clinicId)
+    if (error) {
+      setList(prev => [...prev, ...removed].sort((a, b) => (b.data || '').localeCompare(a.data || '')))
+      toast.error('Erro ao excluir série', { description: error.message })
+    } else {
+      toast.success(`Série removida (${removed.length} lançamentos)`)
+    }
+  }
+
   async function handleMarcarPago(s: Saida) {
     setMarcando(s.id)
     const { error } = await supabase
@@ -166,7 +194,39 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Alertas urgentes — sempre visíveis */}
+      {/* Modal confirmação exclusão de série */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="font-bold text-slate-900 text-lg">Excluir despesa recorrente</h3>
+            <p className="text-slate-600 text-sm">
+              Esta é uma despesa fixa. Deseja excluir apenas este mês ou toda a série?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => handleDeleteSingle(confirmDelete.id)}
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Excluir só este mês
+              </button>
+              <button
+                onClick={() => handleDeleteSeries(confirmDelete.recurrenceId!)}
+                className="w-full px-4 py-2.5 bg-rose-600 text-white rounded-xl text-sm font-semibold hover:bg-rose-700 transition"
+              >
+                Excluir toda a série
+              </button>
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="w-full px-4 py-2.5 text-slate-500 text-sm hover:underline"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alertas urgentes */}
       {urgentes.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
           <span className="text-2xl">🚨</span>
@@ -284,7 +344,10 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                 <div key={s.id} className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-900">{s.descricao}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{s.descricao}</p>
+                        {s.is_recurring && <RecorrenteBadge />}
+                      </div>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <span className="text-xs text-slate-400">{parseDateBR(s.data)}</span>
                         <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">{s.categoria_dre || 'Outros'}</span>
@@ -293,7 +356,7 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                     </div>
                     <div className="text-right flex-shrink-0 ml-3">
                       <p className="font-bold text-rose-600">-{fmt(s.valor)}</p>
-                      <button onClick={() => handleDelete(s.id)} disabled={deleting === s.id}
+                      <button onClick={() => requestDelete(s)} disabled={deleting === s.id}
                         className="mt-1 p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition">
                         <Icon name={deleting === s.id ? 'loader' : 'trash'} className="w-3.5 h-3.5" />
                       </button>
@@ -326,7 +389,12 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                   ) : filteredLancadas.map(s => (
                     <tr key={s.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 text-sm">{parseDateBR(s.data)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-900">{s.descricao}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                        <div className="flex items-center gap-2">
+                          {s.descricao}
+                          {s.is_recurring && <RecorrenteBadge />}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs">{s.categoria_dre || 'Outros'}</span>
                       </td>
@@ -334,7 +402,7 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                       <td className="px-4 py-3 text-sm text-slate-600">{s.forma_pagamento || '-'}</td>
                       <td className="px-4 py-3 text-sm text-right font-medium text-rose-600">-{fmt(s.valor)}</td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => handleDelete(s.id)} disabled={deleting === s.id}
+                        <button onClick={() => requestDelete(s)} disabled={deleting === s.id}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50">
                           <Icon name={deleting === s.id ? 'loader' : 'trash'} className="w-4 h-4" />
                         </button>
@@ -378,7 +446,10 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                 }`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-900">{s.descricao}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{s.descricao}</p>
+                        {s.is_recurring && <RecorrenteBadge />}
+                      </div>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {s.data_vencimento && <VencimentoBadge dataVenc={s.data_vencimento} />}
                         <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">{s.categoria_dre || 'Outros'}</span>
@@ -434,7 +505,12 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                           : <span className="text-slate-400">—</span>
                         }
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-900">{s.descricao}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                        <div className="flex items-center gap-2">
+                          {s.descricao}
+                          {s.is_recurring && <RecorrenteBadge />}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs">{s.categoria_dre || 'Outros'}</span>
                       </td>
@@ -450,7 +526,7 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                           >
                             {marcando === s.id ? '...' : '✓ Marcar pago'}
                           </button>
-                          <button onClick={() => handleDelete(s.id)} disabled={deleting === s.id}
+                          <button onClick={() => requestDelete(s)} disabled={deleting === s.id}
                             className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50">
                             <Icon name={deleting === s.id ? 'loader' : 'trash'} className="w-4 h-4" />
                           </button>
