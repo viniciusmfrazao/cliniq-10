@@ -380,6 +380,15 @@ export async function GET(req: NextRequest) {
       continue
     }
 
+    // Proteção anti double-send: atualiza eva_next_followup_at imediatamente
+    // para +2h antes de chamar eva-process. Isso garante que o próximo cron
+    // (30min depois) não processe o mesmo lead de novo caso eva-process seja lento.
+    // O eva-process vai sobrescrever com o intervalo correto depois.
+    await svc
+      .from('leads')
+      .update({ eva_next_followup_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() })
+      .eq('id', lead.id)
+
     // Chama a Edge Function eva-process com isFollowup
     try {
       const r = await fetch(edgeUrl, {
