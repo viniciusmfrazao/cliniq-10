@@ -351,5 +351,5 @@ export default function SchedulesModal({ member, clinicId, onClose, onSave }: Pr
         </div>
       </div>
     </div>
-  ), document.body)
+  , document.body)
 }
