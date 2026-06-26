@@ -177,7 +177,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   )
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-4">
       {/* Toggle principal */}
       <label className="flex items-start gap-4 cursor-pointer">
         <div className="relative inline-flex items-center mt-1">
