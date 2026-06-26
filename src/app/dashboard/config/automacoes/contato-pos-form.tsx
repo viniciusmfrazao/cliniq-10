@@ -55,6 +55,7 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [testPhone, setTestPhone] = useState('')
+  const [testMsgIdx, setTestMsgIdx] = useState<number>(-1) // -1 = mensagem principal
   const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [testing, setTesting] = useState(false)
 
@@ -84,19 +85,29 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
     setSeq(seq.map((s, i) => i === idx ? { ...s, ...patch } : s))
   }
 
+  function renderTestVars(tpl: string): string {
+    return tpl
+      .replace(/\{\{primeiro_nome\}\}/g, 'Ana')
+      .replace(/\{\{nome\}\}/g, 'Ana Silva')
+      .replace(/\{\{procedimento\}\}/g, 'Botox')
+      .replace(/\{\{profissional\}\}/g, 'Dra. Ana')
+      .replace(/\{\{clinica\}\}/g, clinicName)
+  }
+
   async function sendTest() {
     if (!testPhone.trim()) {
       setTestMsg({ kind: 'err', text: 'Informe um número com DDD (ex: 5534999999999)' })
       return
     }
+    // testMsgIdx = -1 → mensagem principal; >= 0 → item da sequência
+    const tplRaw = testMsgIdx === -1 ? template : (seq[testMsgIdx]?.template ?? '')
+    if (!tplRaw.trim()) {
+      setTestMsg({ kind: 'err', text: 'A mensagem selecionada está vazia.' })
+      return
+    }
     setTesting(true); setTestMsg(null)
     try {
-      const text = template
-        .replace(/\{\{primeiro_nome\}\}/g, 'Ana')
-        .replace(/\{\{nome\}\}/g, 'Ana Silva')
-        .replace(/\{\{procedimento\}\}/g, 'Botox')
-        .replace(/\{\{profissional\}\}/g, 'Dra. Ana')
-        .replace(/\{\{clinica\}\}/g, clinicName)
+      const text = renderTestVars(tplRaw)
       const r = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -239,13 +250,33 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
           {/* Teste */}
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
             <p className="font-semibold text-sm text-slate-900 mb-1">Enviar teste pra um número</p>
-            <p className="text-xs text-slate-500 mb-3">Recomendamos testar antes de ativar.</p>
+            <p className="text-xs text-slate-500 mb-2">Selecione qual mensagem testar e informe o número.</p>
+            {/* Seletor compacto de qual mensagem testar */}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              <button
+                type="button"
+                onClick={() => setTestMsgIdx(-1)}
+                className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${testMsgIdx === -1 ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}
+              >
+                Msg principal
+              </button>
+              {seq.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setTestMsgIdx(i)}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${testMsgIdx === i ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}
+                >
+                  +{s.dias}d
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2">
               <input type="tel" value={testPhone} onChange={e => setTestPhone(e.target.value)}
                 placeholder="Ex: 5534999999999"
                 className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
               <button type="button" onClick={sendTest} disabled={testing}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium">
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium whitespace-nowrap">
                 {testing ? '...' : '📤 Enviar teste'}
               </button>
             </div>
