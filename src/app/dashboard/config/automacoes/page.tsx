@@ -28,9 +28,8 @@ export default async function AutomacoesPage() {
     supabase.from('clinic_automations').select('*').eq('clinic_id', clinicId).maybeSingle(),
     supabase
       .from('clinic_whatsapp')
-      .select('status, phone_number')
-      .eq('clinic_id', clinicId)
-      .maybeSingle(),
+      .select('status')
+      .eq('clinic_id', clinicId),
     supabase.from('clinics').select('id, name').eq('id', clinicId).maybeSingle(),
   ])
 
@@ -39,7 +38,7 @@ export default async function AutomacoesPage() {
       clinicId={clinicId}
       clinicName={clinic?.name || 'Clínica'}
       auto={automation}
-      whatsappConnected={whatsapp?.status === 'connected'}
+      whatsappConnected={(whatsapp ?? []).some((w: { status: string }) => w.status === 'connected')}
     />
   )
 }
