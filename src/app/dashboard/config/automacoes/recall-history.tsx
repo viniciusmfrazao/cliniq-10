@@ -14,6 +14,7 @@ type LogRow = {
   status: 'sent' | 'error' | 'skipped' | 'test'
   error: string | null
   message: string | null
+  step: number | null
 }
 
 type PatientLite = { id: string; name: string; phone: string | null }
@@ -40,14 +41,13 @@ export default function RecallHistory({ clinicId }: { clinicId: string }) {
       const { data: logs, error: logsErr } = await supabase
         .from('recall_messages_log')
         .select(
-          'id, patient_id, sent_at, last_visit_at, days_inactive, procedure_name, status, error, message',
+          'id, patient_id, sent_at, last_visit_at, days_inactive, procedure_name, status, error, message, step',
         )
         .eq('clinic_id', clinicId)
         .order('sent_at', { ascending: false })
-        .limit(30)
+        .limit(50)
 
       if (logsErr) {
-        // tabela pode não existir ainda (SQL não rodado)
         if (/recall_messages_log/i.test(logsErr.message)) {
           setError(
             'A tabela recall_messages_log ainda não foi criada. Rode o arquivo supabase-recall-automation.sql no SQL Editor.',
@@ -84,26 +84,21 @@ export default function RecallHistory({ clinicId }: { clinicId: string }) {
   }, [open, load])
 
   return (
-    <div className="card overflow-hidden">
+    <div className="border-t border-slate-100">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full p-5 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+        className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
       >
-        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-          <Icon name="clock" className="w-5 h-5 text-slate-600" />
-        </div>
-        <div className="flex-1">
-          <p className="font-semibold text-slate-900">Histórico de recall</p>
-          <p className="text-sm text-slate-500">Últimos pacientes contatados pra voltar</p>
-        </div>
+        <Icon name="clock" className="w-4 h-4 text-slate-400" />
+        <span className="text-sm font-medium text-slate-600">Histórico de envios</span>
         <Icon
           name="chevronRight"
-          className={`w-5 h-5 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`}
+          className={`w-4 h-4 text-slate-400 ml-auto transition-transform ${open ? 'rotate-90' : ''}`}
         />
       </button>
 
       {open && (
-        <div className="border-t border-slate-100">
+        <div>
           {loading ? (
             <div className="p-8 text-center">
               <Icon name="loader" className="w-6 h-6 text-slate-400 animate-spin mx-auto" />
@@ -115,8 +110,8 @@ export default function RecallHistory({ clinicId }: { clinicId: string }) {
           ) : rows.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-sm text-slate-500">
-                Nenhum recall ainda. O primeiro envio acontece amanhã às 10h se houver paciente
-                inativo.
+                Nenhum recall ainda. O primeiro envio acontece amanhã às 10h se houver
+                paciente inativo.
               </p>
             </div>
           ) : (
@@ -125,11 +120,15 @@ export default function RecallHistory({ clinicId }: { clinicId: string }) {
                 const badge = STATUS_BADGE[row.status]
                 const patient = patients[row.patient_id]
                 return (
-                  <div key={row.id} className="p-4 hover:bg-slate-50">
+                  <div key={row.id} className="px-6 py-3 hover:bg-slate-50">
                     <div className="flex items-start gap-3">
+                      {/* Número da etapa */}
+                      <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {row.step ?? 1}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-slate-900 truncate">
+                          <p className="font-medium text-slate-900 text-sm truncate">
                             {patient?.name || `(paciente ${row.patient_id.slice(0, 8)})`}
                           </p>
                           <span
@@ -153,7 +152,9 @@ export default function RecallHistory({ clinicId }: { clinicId: string }) {
                                 timeZone: 'America/Sao_Paulo',
                               })
                             : '—'}
-                          {row.days_inactive != null && <> · {row.days_inactive} dias atrás</>}
+                          {row.days_inactive != null && (
+                            <> · {row.days_inactive} dias atrás</>
+                          )}
                           {row.procedure_name && <> · {row.procedure_name}</>}
                         </p>
                         {patient?.phone && (
@@ -162,11 +163,6 @@ export default function RecallHistory({ clinicId }: { clinicId: string }) {
                         {row.error && (
                           <p className="text-xs text-rose-600 mt-1 break-words">
                             Erro: {row.error}
-                          </p>
-                        )}
-                        {row.message && row.status === 'sent' && (
-                          <p className="text-xs text-slate-600 mt-1 line-clamp-2">
-                            “{row.message}”
                           </p>
                         )}
                       </div>
