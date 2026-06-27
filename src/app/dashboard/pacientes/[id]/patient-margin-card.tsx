@@ -25,7 +25,7 @@ export default async function PatientMarginCard({
 
   const appointmentIds = appointments.map((a) => a.id)
 
-  // 2. Receitas dos atendimentos (entradas pagas vinculadas)
+  // 2. Receitas dos atendimentos
   const { data: entradas } = await supabase
     .from('entradas')
     .select('valor_liquido, appointment_id')
@@ -37,64 +37,76 @@ export default async function PatientMarginCard({
     .select('appointment_id, quantity, products(cost_price)')
     .in('appointment_id', appointmentIds)
 
-  // 4. Saídas da clínica com subcategoria para rateio
-  const now = new Date()
-  const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-  const mesFim = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+  // 4. Meses distintos com atendimentos do paciente
+  const months = [...new Set(appointments.map((a) => a.start_time.substring(0, 7)))]
 
-  const { data: saidasMes } = await supabase
-    .from('saidas')
-    .select('valor, data, subcategoria, categoria_dre')
-    .eq('clinic_id', clinicId)
-    .gte('data', mesInicio)
-    .lte('data', mesFim)
+  // 5. Para cada mês: buscar saídas e total de atendimentos da clínica naquele mês
+  type MonthData = {
+    custoFixoPorAtendimento: number
+    aluguelPorDia: Record<string, number>
+    totalFixoMes: number
+    atendimentosMes: number
+  }
+  const monthDataMap: Record<string, MonthData> = {}
 
-  // 5. Atendimentos do mês (para rateio mensal)
-  const { count: atendimentosMes } = await supabase
-    .from('appointments')
-    .select('id', { count: 'exact', head: true })
-    .eq('clinic_id', clinicId)
-    .eq('status', 'completed')
-    .gte('start_time', mesInicio)
-    .lte('start_time', mesFim + 'T23:59:59')
+  for (const month of months) {
+    const [year, mon] = month.split('-').map(Number)
+    const mesInicio = `${month}-01`
+    const mesFim = `${month}-${new Date(year, mon, 0).getDate()}`
 
-  // Separar saídas por tipo de rateio
-  const saidasAluguelSala = (saidasMes || []).filter(s => s.subcategoria === 'aluguel_sala')
-  const saidasFixasMes = (saidasMes || []).filter(s => s.subcategoria !== 'aluguel_sala')
+    const { data: saidasMes } = await supabase
+      .from('saidas')
+      .select('valor, data, subcategoria')
+      .eq('clinic_id', clinicId)
+      .gte('data', mesInicio)
+      .lte('data', mesFim)
 
-  // Total fixo mensal (aluguel_mensal + demais despesas) ÷ atendimentos do mês
-  const totalFixoMes = saidasFixasMes.reduce((s, r) => s + Number(r.valor), 0)
-  const custoFixoPorAtendimento = atendimentosMes && atendimentosMes > 0
-    ? totalFixoMes / atendimentosMes
-    : 0
+    const { count: atendimentosMes } = await supabase
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .in('status', ['completed', 'realizado'])
+      .gte('start_time', mesInicio + 'T00:00:00')
+      .lte('start_time', mesFim + 'T23:59:59')
 
-  // Agrupar aluguel de sala por dia → valor ÷ atendimentos do dia
-  const aluguelPorDia: Record<string, number> = {}
-  for (const s of saidasAluguelSala) {
-    aluguelPorDia[s.data] = (aluguelPorDia[s.data] || 0) + Number(s.valor)
+    const sala = (saidasMes || []).filter((s) => s.subcategoria === 'aluguel_sala')
+    const fixas = (saidasMes || []).filter((s) => s.subcategoria !== 'aluguel_sala')
+
+    const totalFixo = fixas.reduce((s, r) => s + Number(r.valor), 0)
+    const n = atendimentosMes || 0
+
+    const aluguelPorDia: Record<string, number> = {}
+    for (const s of sala) {
+      aluguelPorDia[s.data] = (aluguelPorDia[s.data] || 0) + Number(s.valor)
+    }
+
+    monthDataMap[month] = {
+      custoFixoPorAtendimento: n > 0 ? totalFixo / n : 0,
+      aluguelPorDia,
+      totalFixoMes: totalFixo,
+      atendimentosMes: n,
+    }
   }
 
-  // Atendimentos por dia (para rateio da sala)
-  const diasComSala = Object.keys(aluguelPorDia)
+  // 6. Dias com aluguel_sala: buscar total de atendimentos daquele dia
+  const allDaysWithSala = [
+    ...new Set(
+      Object.values(monthDataMap).flatMap((m) => Object.keys(m.aluguelPorDia))
+    ),
+  ]
   const atendsPorDia: Record<string, number> = {}
-  for (const dia of diasComSala) {
+  for (const dia of allDaysWithSala) {
     const { count } = await supabase
       .from('appointments')
       .select('id', { count: 'exact', head: true })
       .eq('clinic_id', clinicId)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'realizado'])
       .gte('start_time', dia + 'T00:00:00')
       .lte('start_time', dia + 'T23:59:59')
     atendsPorDia[dia] = count || 1
   }
 
-  // Custo de sala rateado por dia
-  const custSalaPorDia: Record<string, number> = {}
-  for (const dia of diasComSala) {
-    custSalaPorDia[dia] = aluguelPorDia[dia] / atendsPorDia[dia]
-  }
-
-  // ── Cálculo por atendimento ──────────────────────────────────────────
+  // 7. Construir mapa por atendimento usando dados do mês correto
   type AptSummary = {
     id: string
     date: string
@@ -108,14 +120,22 @@ export default async function PatientMarginCard({
 
   const aptMap: Record<string, AptSummary> = {}
   for (const apt of appointments) {
-    const dia = apt.start_time.split('T')[0]
+    const dia = apt.start_time.substring(0, 10)
+    const month = apt.start_time.substring(0, 7)
+    const md = monthDataMap[month]
+
+    const custoSala = md
+      ? (md.aluguelPorDia[dia] || 0) / (atendsPorDia[dia] || 1)
+      : 0
+    const custoFixo = md ? md.custoFixoPorAtendimento : 0
+
     aptMap[apt.id] = {
       id: apt.id,
       date: apt.start_time,
       receita: 0,
       custoEstoque: 0,
-      custoSala: custSalaPorDia[dia] || 0,
-      custoFixo: custoFixoPorAtendimento,
+      custoSala,
+      custoFixo,
       margem: 0,
       margemPct: 0,
     }
@@ -129,7 +149,11 @@ export default async function PatientMarginCard({
 
   for (const up of usedProducts || []) {
     if (up.appointment_id && aptMap[up.appointment_id]) {
-      const cost = Number((Array.isArray(up.products) ? (up.products[0] as { cost_price: number } | null)?.cost_price : (up.products as { cost_price: number } | null)?.cost_price) || 0)
+      const cost = Number(
+        (Array.isArray(up.products)
+          ? (up.products[0] as { cost_price: number } | null)?.cost_price
+          : (up.products as { cost_price: number } | null)?.cost_price) || 0
+      )
       aptMap[up.appointment_id].custoEstoque += cost * up.quantity
     }
   }
@@ -141,7 +165,7 @@ export default async function PatientMarginCard({
     return { ...a, margem, margemPct }
   })
 
-  // ── Totais ────────────────────────────────────────────────────────────
+  // 8. Totais
   const totReceita = apts.reduce((s, a) => s + a.receita, 0)
   const totEstoque = apts.reduce((s, a) => s + a.custoEstoque, 0)
   const totSala = apts.reduce((s, a) => s + a.custoSala, 0)
@@ -149,8 +173,18 @@ export default async function PatientMarginCard({
   const totMargem = totReceita - totEstoque - totSala - totFixo
   const totMargemPct = totReceita > 0 ? (totMargem / totReceita) * 100 : 0
 
-  const margemColor = totMargemPct >= 50 ? 'text-emerald-600' : totMargemPct >= 20 ? 'text-amber-600' : 'text-red-600'
-  const margemBg = totMargemPct >= 50 ? 'bg-emerald-50 border-emerald-200' : totMargemPct >= 20 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+  const margemColor =
+    totMargemPct >= 50
+      ? 'text-emerald-600'
+      : totMargemPct >= 20
+      ? 'text-amber-600'
+      : 'text-red-600'
+  const margemBg =
+    totMargemPct >= 50
+      ? 'bg-emerald-50 border-emerald-200'
+      : totMargemPct >= 20
+      ? 'bg-amber-50 border-amber-200'
+      : 'bg-red-50 border-red-200'
 
   const temSala = totSala > 0
   const temFixo = totFixo > 0
@@ -197,13 +231,19 @@ export default async function PatientMarginCard({
         <p className="text-xs font-semibold text-slate-500 uppercase">Por atendimento</p>
         {apts.slice(0, 5).map((a) => {
           const pct = a.margemPct
-          const color = pct >= 50 ? 'text-emerald-600' : pct >= 20 ? 'text-amber-600' : 'text-red-600'
+          const color =
+            pct >= 50 ? 'text-emerald-600' : pct >= 20 ? 'text-amber-600' : 'text-red-600'
           return (
-            <div key={a.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl gap-2">
+            <div
+              key={a.id}
+              className="flex items-center justify-between p-3 bg-slate-50 rounded-xl gap-2"
+            >
               <div className="min-w-0">
                 <p className="text-xs text-slate-500">
                   {new Date(a.date).toLocaleDateString('pt-BR', {
-                    day: '2-digit', month: 'short', year: 'numeric',
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
                     timeZone: 'America/Sao_Paulo',
                   })}
                 </p>
@@ -228,17 +268,17 @@ export default async function PatientMarginCard({
       <div className="mt-4 p-3 bg-slate-50 rounded-xl space-y-1">
         {temSala && (
           <p className="text-xs text-slate-400">
-            🏠 Aluguel de sala rateado por dia de atendimento
+            🏠 Aluguel de sala rateado por dia de atendimento (mês a mês)
           </p>
         )}
         {temFixo && (
           <p className="text-xs text-slate-400">
-            📊 Fixos: {fmt(custoFixoPorAtendimento)}/atend. ({atendimentosMes} atend. no mês · {fmt(totalFixoMes)} em saídas)
+            📊 Custos fixos rateados pelo mês de cada atendimento
           </p>
         )}
         {!temSala && !temFixo && (
           <p className="text-xs text-slate-400">
-            Nenhum custo fixo lançado este mês. Lance em Financeiro → Saídas.
+            Nenhum custo fixo lançado nos meses deste paciente. Lance em Financeiro → Saídas.
           </p>
         )}
       </div>
