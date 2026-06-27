@@ -78,6 +78,132 @@ function RecorrenteBadge() {
   )
 }
 
+
+function EditSaidaModal({
+  saida,
+  onSave,
+  onClose,
+}: {
+  saida: Saida
+  onSave: (updated: Saida) => void
+  onClose: () => void
+}) {
+  const supabase = createClient()
+  const toast = useToast()
+  const [saving, setSaving] = useState(false)
+
+  const [data, setData] = useState(saida.data || '')
+  const [descricao, setDescricao] = useState(saida.descricao || '')
+  const [categoria, setCategoria] = useState(saida.categoria_dre || '')
+  const [subcategoria, setSubcategoria] = useState(saida.subcategoria || '')
+  const [fornecedor, setFornecedor] = useState(saida.fornecedor || '')
+  const [valor, setValor] = useState(String(saida.valor || ''))
+  const [forma, setForma] = useState(saida.forma_pagamento || '')
+
+  async function handleSave() {
+    const v = parseFloat(valor) || 0
+    if (v <= 0) { toast.error('Valor deve ser maior que zero'); return }
+    if (!descricao.trim()) { toast.error('Descrição obrigatória'); return }
+
+    setSaving(true)
+    const { error } = await supabase.from('saidas').update({
+      data,
+      descricao: descricao.trim(),
+      categoria_dre: categoria || null,
+      subcategoria: subcategoria || null,
+      fornecedor: fornecedor.trim() || null,
+      valor: v,
+      forma_pagamento: forma || null,
+    }).eq('id', saida.id)
+    setSaving(false)
+
+    if (error) {
+      toast.error('Erro ao salvar', { description: error.message })
+      return
+    }
+
+    toast.success('Saída atualizada')
+    onSave({ ...saida, data, descricao, categoria_dre: categoria || null, subcategoria: subcategoria || null, fornecedor: fornecedor || null, valor: v, forma_pagamento: forma || null })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="font-bold text-slate-900">Editar Saída</h2>
+            <p className="text-sm text-slate-500 mt-0.5">{saida.descricao}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+            <Icon name="x" className="w-4 h-4 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="p-5 overflow-y-auto space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Data</label>
+              <input type="date" value={data} onChange={e => setData(e.target.value)} className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Valor (R$)</label>
+              <input type="number" min={0} step={0.01} value={valor}
+                onChange={e => setValor(e.target.value)} className="input w-full text-sm" />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Descrição</label>
+            <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)} className="input w-full text-sm" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Categoria DRE</label>
+              <select value={categoria} onChange={e => setCategoria(e.target.value)} className="input w-full text-sm">
+                <option value="">Sem categoria</option>
+                {CATEGORIAS_DRE.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Subcategoria</label>
+              <select value={subcategoria} onChange={e => setSubcategoria(e.target.value)} className="input w-full text-sm">
+                <option value="">Nenhuma</option>
+                <option value="aluguel_sala">🏠 Aluguel de sala</option>
+                <option value="aluguel_mensal">🏢 Aluguel mensal</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Fornecedor</label>
+              <input type="text" value={fornecedor} onChange={e => setFornecedor(e.target.value)} className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Forma de pagamento</label>
+              <input type="text" value={forma} onChange={e => setForma(e.target.value)} placeholder="Ex: PIX, transferência" className="input w-full text-sm" />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 border-t border-slate-100 flex gap-3 flex-shrink-0">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 export default function SaidasList({ saidas: initial, clinicId }: Props) {
   const [list, setList] = useState(initial)
   const [search, setSearch] = useState('')
@@ -87,6 +213,7 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [marcando, setMarcando] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; recurrenceId: string | null } | null>(null)
+  const [editSaida, setEditSaida] = useState<Saida | null>(null)
   const supabase = createClient()
   const toast = useToast()
   const hoje = todayBR()
@@ -193,8 +320,19 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
     }
   }
 
+  function handleSaveEditSaida(updated: Saida) {
+    setList(prev => prev.map(s => s.id === updated.id ? updated : s))
+  }
+
   return (
     <div className="space-y-4">
+      {editSaida && (
+        <EditSaidaModal
+          saida={editSaida}
+          onSave={handleSaveEditSaida}
+          onClose={() => setEditSaida(null)}
+        />
+      )}
       {/* Modal confirmação exclusão de série */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -363,10 +501,16 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                     </div>
                     <div className="text-right flex-shrink-0 ml-3">
                       <p className="font-bold text-rose-600">-{fmt(s.valor)}</p>
-                      <button onClick={() => requestDelete(s)} disabled={deleting === s.id}
-                        className="mt-1 p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition">
-                        <Icon name={deleting === s.id ? 'loader' : 'trash'} className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1 mt-1">
+                        <button onClick={() => setEditSaida(s)}
+                          className="p-1.5 text-violet-400 hover:bg-violet-50 rounded-lg transition">
+                          <Icon name="edit" className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => requestDelete(s)} disabled={deleting === s.id}
+                          className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition">
+                          <Icon name={deleting === s.id ? 'loader' : 'trash'} className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -415,10 +559,18 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                       <td className="px-4 py-3 text-sm text-slate-600">{s.forma_pagamento || '-'}</td>
                       <td className="px-4 py-3 text-sm text-right font-medium text-rose-600">-{fmt(s.valor)}</td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => requestDelete(s)} disabled={deleting === s.id}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50">
-                          <Icon name={deleting === s.id ? 'loader' : 'trash'} className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => setEditSaida(s)}
+                            className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
+                            title="Editar">
+                            <Icon name="edit" className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => requestDelete(s)} disabled={deleting === s.id}
+                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
+                            title="Excluir">
+                            <Icon name={deleting === s.id ? 'loader' : 'trash'} className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
