@@ -156,10 +156,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
 
   const saveEdit = async (up: UsedProduct) => {
     if (editQuantity < 1) return
-    if (editQuantity === up.quantity) {
-      cancelEdit()
-      return
-    }
 
     setEditSaving(true)
     log.info('Editando quantidade do produto', { usedId: up.id, oldQty: up.quantity, newQty: editQuantity })
