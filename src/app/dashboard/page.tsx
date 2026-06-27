@@ -1,3 +1,4 @@
+// rebuild: 2026-06-27 19:47:41
 import { createClient } from '@/lib/supabase/server'
 import { parseDateBR } from '@/lib/datetime'
 import Link from 'next/link'
