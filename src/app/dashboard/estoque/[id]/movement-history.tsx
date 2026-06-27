@@ -13,7 +13,6 @@ type Movement = {
   new_stock: number
   reason: string | null
   created_at: string
-  users: { name: string } | null
   patients: { name: string } | null
   product_id: string
 }
@@ -265,7 +264,7 @@ export default function MovementHistory({ movements: initialMovements, clinicId 
                   )}
                   <p className="text-xs text-slate-400 mt-1">
                     {new Date(m.created_at).toLocaleString('pt-BR')}
-                    {m.users?.name && ` • ${m.users.name}`}
+                    
                   </p>
                 </>
               )}
