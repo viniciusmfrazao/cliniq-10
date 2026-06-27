@@ -130,7 +130,7 @@ export default async function PatientMarginCard({
 
   for (const up of usedProducts || []) {
     if (up.appointment_id && aptMap[up.appointment_id]) {
-      const cost = Number((up.products as { cost_price: number } | null)?.cost_price || 0)
+      const cost = Number((Array.isArray(up.products) ? (up.products[0] as { cost_price: number } | null)?.cost_price : (up.products as { cost_price: number } | null)?.cost_price) || 0)
       aptMap[up.appointment_id].custoEstoque += cost * up.quantity
     }
   }
