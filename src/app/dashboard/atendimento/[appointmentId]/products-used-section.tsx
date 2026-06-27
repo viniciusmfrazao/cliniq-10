@@ -39,11 +39,13 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
   const [saving, setSaving] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState('')
   const [quantity, setQuantity] = useState(1)
+  const [quantityDraft, setQuantityDraft] = useState('1')
   const [searchTerm, setSearchTerm] = useState('')
 
   // Estado de edição
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editQuantity, setEditQuantity] = useState(1)
+  const [editQtyDraft, setEditQtyDraft] = useState('1')
   const [editSaving, setEditSaving] = useState(false)
 
   const supabase = createBrowserClient(
@@ -130,6 +132,7 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
       setUsedProducts([...usedProducts, usedRecord])
       setSelectedProduct('')
       setQuantity(1)
+      setQuantityDraft('1')
       setShowForm(false)
       router.refresh()
     } catch (err) {
@@ -143,6 +146,7 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
   const startEdit = (up: UsedProduct) => {
     setEditingId(up.id)
     setEditQuantity(up.quantity)
+    setEditQtyDraft(String(up.quantity))
   }
 
   const cancelEdit = () => {
@@ -337,8 +341,9 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
                   <input
                     type="number"
                     min="1"
-                    value={quantity}
-                    onChange={e => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    value={quantityDraft}
+                    onChange={e => { setQuantityDraft(e.target.value); setQuantity(Math.max(1, parseInt(e.target.value) || 1)) }}
+                    onBlur={() => setQuantityDraft(String(Math.max(1, quantity)))}
                     className="w-16 h-8 px-2 text-center bg-white border border-slate-200 rounded-lg text-sm"
                   />
                   <button
@@ -391,8 +396,9 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
                     <input
                       type="number"
                       min="1"
-                      value={editQuantity}
-                      onChange={e => setEditQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      value={editQtyDraft}
+                      onChange={e => { setEditQtyDraft(e.target.value); setEditQuantity(Math.max(1, parseInt(e.target.value) || 1)) }}
+                      onBlur={() => setEditQtyDraft(String(Math.max(1, editQuantity)))}
                       className="w-14 h-7 px-1 text-center bg-white border border-slate-200 rounded-lg text-sm"
                     />
                     <button
