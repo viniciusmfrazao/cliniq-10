@@ -438,7 +438,7 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
                         className="p-1.5 hover:bg-violet-50 rounded-lg text-violet-500 transition-colors"
                         title="Editar quantidade"
                       >
-                        <Icon name="pencil" className="w-4 h-4" />
+                        <Icon name="edit" className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => removeProduct(up.id, up.product_id, up.quantity)}
