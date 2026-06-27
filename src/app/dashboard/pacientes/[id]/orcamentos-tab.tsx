@@ -254,9 +254,9 @@ export default function OrcamentosTab({
                   <input type="number" value={item.quantidade} min={1}
                     onChange={e => updateItem(i, 'quantidade', Number(e.target.value))}
                     className="col-span-2 px-3 py-2 border border-slate-200 rounded-lg text-sm text-center dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500" />
-                  <input type="number" value={item.valor_unitario} min={0} step={0.01}
-                    onChange={e => updateItem(i, 'valor_unitario', Number(e.target.value))}
-                    placeholder="R$ 0,00"
+                  <input type="number" value={item.valor_unitario || ''} min={0} step={0.01}
+                    onChange={e => updateItem(i, 'valor_unitario', e.target.value === '' ? 0 : Number(e.target.value))}
+                    placeholder="0,00"
                     className="col-span-3 px-3 py-2 border border-slate-200 rounded-lg text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500" />
                   <button onClick={() => removeItem(i)} className="col-span-1 flex justify-center text-slate-400 hover:text-red-500">
                     <Icon name="x" className="w-4 h-4" />
