@@ -47,6 +47,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
   const [valor, setValor] = useState('')
   const [forma, setForma] = useState('Pix')
   const [observacoes, setObservacoes] = useState('')
+  const [subcategoria, setSubcategoria] = useState('')
   const [temVencimento, setTemVencimento] = useState(false)
   const [dataVencimento, setDataVencimento] = useState('')
 
@@ -85,6 +86,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
           pago: false, // todas ficam como "a pagar" por padrão
           descricao: descricao.trim(),
           categoria_dre: categoria || null,
+          subcategoria: subcategoria || null,
           fornecedor: fornecedor.trim() || null,
           valor: valorNum,
           forma_pagamento: forma,
@@ -111,6 +113,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
         pago: !isPagamentoFuturo,
         descricao: descricao.trim(),
         categoria_dre: categoria || null,
+        subcategoria: subcategoria || null,
         fornecedor: fornecedor.trim() || null,
         valor: valorNum,
         forma_pagamento: forma,
@@ -193,6 +196,31 @@ export default function SaidaForm({ clinicId, userId }: Props) {
             </p>
           )}
         </div>
+
+        {categoria === 'Despesas Administrativas' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de aluguel</label>
+            <select
+              value={subcategoria}
+              onChange={e => setSubcategoria(e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+            >
+              <option value="">Nenhum (despesa administrativa comum)</option>
+              <option value="aluguel_sala">Aluguel de sala (rateado por dia)</option>
+              <option value="aluguel_mensal">Aluguel mensal (rateado por mês)</option>
+            </select>
+            {subcategoria === 'aluguel_sala' && (
+              <p className="mt-2 text-sm text-slate-500 bg-amber-50 rounded-lg px-3 py-2">
+                💡 O custo será dividido pelos atendimentos realizados neste dia.
+              </p>
+            )}
+            {subcategoria === 'aluguel_mensal' && (
+              <p className="mt-2 text-sm text-slate-500 bg-blue-50 rounded-lg px-3 py-2">
+                💡 O custo será dividido pelos atendimentos do mês.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
