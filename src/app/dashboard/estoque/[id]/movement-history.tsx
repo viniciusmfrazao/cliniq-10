@@ -28,6 +28,7 @@ export default function MovementHistory({ movements: initialMovements, clinicId 
   const [movements, setMovements] = useState(initialMovements)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editQty, setEditQty] = useState(1)
+  const [editQtyDraft, setEditQtyDraft] = useState('1')
   const [editReason, setEditReason] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -48,12 +49,14 @@ export default function MovementHistory({ movements: initialMovements, clinicId 
   const startEdit = (m: Movement) => {
     setEditingId(m.id)
     setEditQty(m.quantity)
+    setEditQtyDraft(String(m.quantity))
     setEditReason(m.reason || '')
   }
 
   const cancelEdit = () => {
     setEditingId(null)
     setEditQty(1)
+    setEditQtyDraft('1')
     setEditReason('')
   }
 
