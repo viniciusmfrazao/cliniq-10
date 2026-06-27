@@ -245,7 +245,7 @@ export default function MovementHistory({ movements: initialMovements, clinicId 
                         className="p-1 hover:bg-violet-100 rounded text-violet-500 transition-colors"
                         title="Editar"
                       >
-                        <Icon name="pencil" className="w-3.5 h-3.5" />
+                        <Icon name="edit" className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => deleteMovement(m)}
