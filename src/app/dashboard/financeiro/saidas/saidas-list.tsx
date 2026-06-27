@@ -13,6 +13,7 @@ type Saida = {
   pago: boolean
   descricao: string
   categoria_dre: string | null
+  subcategoria: string | null
   fornecedor: string | null
   valor: number
   forma_pagamento: string | null
@@ -351,6 +352,12 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <span className="text-xs text-slate-400">{parseDateBR(s.data)}</span>
                         <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">{s.categoria_dre || 'Outros'}</span>
+                        {s.subcategoria === 'aluguel_sala' && (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">🏠 Aluguel de sala</span>
+                        )}
+                        {s.subcategoria === 'aluguel_mensal' && (
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">🏢 Aluguel mensal</span>
+                        )}
                         {s.fornecedor && <span className="text-xs text-slate-500">{s.fornecedor}</span>}
                       </div>
                     </div>
@@ -397,6 +404,12 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs">{s.categoria_dre || 'Outros'}</span>
+                        {s.subcategoria === 'aluguel_sala' && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs">🏠 Aluguel de sala</span>
+                        )}
+                        {s.subcategoria === 'aluguel_mensal' && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs">🏢 Aluguel mensal</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">{s.fornecedor || '-'}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{s.forma_pagamento || '-'}</td>
@@ -453,6 +466,12 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {s.data_vencimento && <VencimentoBadge dataVenc={s.data_vencimento} />}
                         <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">{s.categoria_dre || 'Outros'}</span>
+                        {s.subcategoria === 'aluguel_sala' && (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">🏠 Aluguel de sala</span>
+                        )}
+                        {s.subcategoria === 'aluguel_mensal' && (
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">🏢 Aluguel mensal</span>
+                        )}
                         {s.fornecedor && <span className="text-xs text-slate-500">{s.fornecedor}</span>}
                       </div>
                     </div>
@@ -513,6 +532,12 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs">{s.categoria_dre || 'Outros'}</span>
+                        {s.subcategoria === 'aluguel_sala' && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs">🏠 Aluguel de sala</span>
+                        )}
+                        {s.subcategoria === 'aluguel_mensal' && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs">🏢 Aluguel mensal</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">{s.fornecedor || '-'}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{s.forma_pagamento || '-'}</td>
