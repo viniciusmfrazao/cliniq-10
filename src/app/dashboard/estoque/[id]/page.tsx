@@ -21,7 +21,7 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
 
   const { data: movements } = await supabase
     .from('stock_movements')
-    .select('*, users(name), patients(name)')
+    .select('*, patients(name)')
     .eq('product_id', id)
     .order('created_at', { ascending: false })
     .limit(20)
