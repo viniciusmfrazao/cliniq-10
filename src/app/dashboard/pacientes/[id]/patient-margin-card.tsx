@@ -18,7 +18,7 @@ export default async function PatientMarginCard({
     .from('appointments')
     .select('id, start_time')
     .eq('patient_id', patientId)
-    .eq('status', 'completed')
+    .in('status', ['completed', 'realizado'])
     .order('start_time', { ascending: false })
 
   if (!appointments || appointments.length === 0) return null
@@ -160,7 +160,7 @@ export default async function PatientMarginCard({
     <div className="card p-5">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
-          <Icon name="trending-up" className="w-4 h-4 text-violet-600" />
+          <Icon name="trendingUp" className="w-4 h-4 text-violet-600" />
         </div>
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Rentabilidade do paciente</h2>
