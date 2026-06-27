@@ -4,6 +4,7 @@ import AttendanceHeader from './attendance-header'
 import MedicalRecordSection from './medical-record-section'
 import InjectableMapSection from './injectable-map-section'
 import ProductsUsedSection from './products-used-section'
+import RoomCostCard from './room-cost-card'
 import ReturnScheduler from './return-scheduler'
 import { Suspense } from 'react'
 import AnamneseSummaryCard from '@/components/anamnese/AnamneseSummaryCard'
@@ -266,6 +267,9 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               products={productsForMap || []}
               usedProducts={usedProducts || []}
             />
+
+            {/* Custo da sala */}
+            <RoomCostCard appointmentId={appointmentId} initialCost={appointment.room_cost || 0} />
 
           </div>
         </div>
