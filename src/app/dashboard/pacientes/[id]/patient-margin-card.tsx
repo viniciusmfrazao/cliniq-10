@@ -28,9 +28,8 @@ export default async function PatientMarginCard({
   // 2. Receitas dos atendimentos (entradas pagas vinculadas)
   const { data: entradas } = await supabase
     .from('entradas')
-    .select('valor, appointment_id')
+    .select('valor_liquido, appointment_id')
     .in('appointment_id', appointmentIds)
-    .eq('pago', true)
 
   // 3. Produtos usados com custo
   const { data: usedProducts } = await supabase
@@ -124,7 +123,7 @@ export default async function PatientMarginCard({
 
   for (const e of entradas || []) {
     if (e.appointment_id && aptMap[e.appointment_id]) {
-      aptMap[e.appointment_id].receita += Number(e.valor)
+      aptMap[e.appointment_id].receita += Number(e.valor_liquido)
     }
   }
 
