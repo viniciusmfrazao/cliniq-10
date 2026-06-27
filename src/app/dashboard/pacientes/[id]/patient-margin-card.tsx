@@ -16,7 +16,7 @@ export default async function PatientMarginCard({
   // 1. Atendimentos concluídos do paciente
   const { data: appointments } = await supabase
     .from('appointments')
-    .select('id, start_time, room_cost')
+    .select('id, start_time')
     .eq('patient_id', patientId)
     .eq('status', 'completed')
     .order('start_time', { ascending: false })
@@ -25,7 +25,7 @@ export default async function PatientMarginCard({
 
   const appointmentIds = appointments.map((a) => a.id)
 
-  // 2. Receitas dos atendimentos (entradas vinculadas)
+  // 2. Receitas dos atendimentos (entradas pagas vinculadas)
   const { data: entradas } = await supabase
     .from('entradas')
     .select('valor, appointment_id')
@@ -38,32 +38,64 @@ export default async function PatientMarginCard({
     .select('appointment_id, quantity, products(cost_price)')
     .in('appointment_id', appointmentIds)
 
-  // 4. Custo fixo rateado do mês atual
+  // 4. Saídas da clínica com subcategoria para rateio
   const now = new Date()
   const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
   const mesFim = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
-  const [{ data: fixosMes }, { count: atendimentosMes }] = await Promise.all([
-    supabase
-      .from('saidas')
-      .select('valor')
-      .eq('clinic_id', clinicId)
-      .gte('data', mesInicio)
-      .lte('data', mesFim),
-    supabase
+  const { data: saidasMes } = await supabase
+    .from('saidas')
+    .select('valor, data, subcategoria, categoria_dre')
+    .eq('clinic_id', clinicId)
+    .gte('data', mesInicio)
+    .lte('data', mesFim)
+
+  // 5. Atendimentos do mês (para rateio mensal)
+  const { count: atendimentosMes } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .eq('status', 'completed')
+    .gte('start_time', mesInicio)
+    .lte('start_time', mesFim + 'T23:59:59')
+
+  // Separar saídas por tipo de rateio
+  const saidasAluguelSala = (saidasMes || []).filter(s => s.subcategoria === 'aluguel_sala')
+  const saidasFixasMes = (saidasMes || []).filter(s => s.subcategoria !== 'aluguel_sala')
+
+  // Total fixo mensal (aluguel_mensal + demais despesas) ÷ atendimentos do mês
+  const totalFixoMes = saidasFixasMes.reduce((s, r) => s + Number(r.valor), 0)
+  const custoFixoPorAtendimento = atendimentosMes && atendimentosMes > 0
+    ? totalFixoMes / atendimentosMes
+    : 0
+
+  // Agrupar aluguel de sala por dia → valor ÷ atendimentos do dia
+  const aluguelPorDia: Record<string, number> = {}
+  for (const s of saidasAluguelSala) {
+    aluguelPorDia[s.data] = (aluguelPorDia[s.data] || 0) + Number(s.valor)
+  }
+
+  // Atendimentos por dia (para rateio da sala)
+  const diasComSala = Object.keys(aluguelPorDia)
+  const atendsPorDia: Record<string, number> = {}
+  for (const dia of diasComSala) {
+    const { count } = await supabase
       .from('appointments')
       .select('id', { count: 'exact', head: true })
       .eq('clinic_id', clinicId)
       .eq('status', 'completed')
-      .gte('start_time', mesInicio)
-      .lte('start_time', mesFim + 'T23:59:59'),
-  ])
+      .gte('start_time', dia + 'T00:00:00')
+      .lte('start_time', dia + 'T23:59:59')
+    atendsPorDia[dia] = count || 1
+  }
 
-  const totalFixosMes = (fixosMes || []).reduce((s, r) => s + Number(r.valor), 0)
-  const custoFixoPorAtendimento =
-    atendimentosMes && atendimentosMes > 0 ? totalFixosMes / atendimentosMes : 0
+  // Custo de sala rateado por dia
+  const custSalaPorDia: Record<string, number> = {}
+  for (const dia of diasComSala) {
+    custSalaPorDia[dia] = aluguelPorDia[dia] / atendsPorDia[dia]
+  }
 
-  // ── Cálculos por atendimento ──────────────────────────────────────────
+  // ── Cálculo por atendimento ──────────────────────────────────────────
   type AptSummary = {
     id: string
     date: string
@@ -76,14 +108,14 @@ export default async function PatientMarginCard({
   }
 
   const aptMap: Record<string, AptSummary> = {}
-
   for (const apt of appointments) {
+    const dia = apt.start_time.split('T')[0]
     aptMap[apt.id] = {
       id: apt.id,
       date: apt.start_time,
       receita: 0,
       custoEstoque: 0,
-      custoSala: Number(apt.room_cost || 0),
+      custoSala: custSalaPorDia[dia] || 0,
       custoFixo: custoFixoPorAtendimento,
       margem: 0,
       margemPct: 0,
@@ -118,19 +150,11 @@ export default async function PatientMarginCard({
   const totMargem = totReceita - totEstoque - totSala - totFixo
   const totMargemPct = totReceita > 0 ? (totMargem / totReceita) * 100 : 0
 
-  const margemColor =
-    totMargemPct >= 50
-      ? 'text-emerald-600'
-      : totMargemPct >= 20
-        ? 'text-amber-600'
-        : 'text-red-600'
+  const margemColor = totMargemPct >= 50 ? 'text-emerald-600' : totMargemPct >= 20 ? 'text-amber-600' : 'text-red-600'
+  const margemBg = totMargemPct >= 50 ? 'bg-emerald-50 border-emerald-200' : totMargemPct >= 20 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
 
-  const margemBg =
-    totMargemPct >= 50
-      ? 'bg-emerald-50 border-emerald-200'
-      : totMargemPct >= 20
-        ? 'bg-amber-50 border-amber-200'
-        : 'bg-red-50 border-red-200'
+  const temSala = totSala > 0
+  const temFixo = totFixo > 0
 
   return (
     <div className="card p-5">
@@ -155,7 +179,9 @@ export default async function PatientMarginCard({
           <p className="text-sm font-bold text-slate-700">{fmt(totEstoque)}</p>
         </div>
         <div className="p-3 bg-slate-50 rounded-xl">
-          <p className="text-xs text-slate-500 mb-1">Sala + fixos</p>
+          <p className="text-xs text-slate-500 mb-1">
+            {temSala && !temFixo ? 'Aluguel sala' : temFixo && !temSala ? 'Custos fixos' : 'Sala + fixos'}
+          </p>
           <p className="text-sm font-bold text-slate-700">{fmt(totSala + totFixo)}</p>
         </div>
         <div className={`p-3 rounded-xl border ${margemBg}`}>
@@ -178,9 +204,7 @@ export default async function PatientMarginCard({
               <div className="min-w-0">
                 <p className="text-xs text-slate-500">
                   {new Date(a.date).toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
+                    day: '2-digit', month: 'short', year: 'numeric',
                     timeZone: 'America/Sao_Paulo',
                   })}
                 </p>
@@ -201,9 +225,24 @@ export default async function PatientMarginCard({
         )}
       </div>
 
-      <p className="text-xs text-slate-400 mt-4">
-        * Custo fixo rateado: {fmt(custoFixoPorAtendimento)}/atendimento ({atendimentosMes} atend. no mês · {fmt(totalFixosMes)} em saídas)
-      </p>
+      {/* Legenda do rateio */}
+      <div className="mt-4 p-3 bg-slate-50 rounded-xl space-y-1">
+        {temSala && (
+          <p className="text-xs text-slate-400">
+            🏠 Aluguel de sala rateado por dia de atendimento
+          </p>
+        )}
+        {temFixo && (
+          <p className="text-xs text-slate-400">
+            📊 Fixos: {fmt(custoFixoPorAtendimento)}/atend. ({atendimentosMes} atend. no mês · {fmt(totalFixoMes)} em saídas)
+          </p>
+        )}
+        {!temSala && !temFixo && (
+          <p className="text-xs text-slate-400">
+            Nenhum custo fixo lançado este mês. Lance em Financeiro → Saídas.
+          </p>
+        )}
+      </div>
     </div>
   )
 }
