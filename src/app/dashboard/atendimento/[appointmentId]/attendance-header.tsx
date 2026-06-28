@@ -163,10 +163,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
       .select('id, name, price')
       .eq('clinic_id', clinicId)
       .order('name')
-    const seen = new Set<string>()
-    const procs = (procsData || [])
-      .map(p => ({ ...p, price: Number(p.price) || 0 }))
-      .filter(p => { if (seen.has(p.name)) return false; seen.add(p.name); return true })
+    const procs = (procsData || []).map(p => ({ ...p, price: Number(p.price) || 0 }))
     setClinicProcs(procs)
 
     // Buscar procedimentos já vinculados ao agendamento
