@@ -133,6 +133,12 @@ function pickMessageDetails(message: unknown): ParsedMessage {
     }
   }
 
+  // Resposta de botão interativo (Evolution API / Baileys sendButtons)
+  const btns = m.buttonsResponseMessage as Record<string, unknown> | undefined
+  if (btns && typeof btns.selectedDisplayText === 'string') {
+    return { ...empty, kind: 'text', text: btns.selectedDisplayText }
+  }
+
   return empty
 }
 
