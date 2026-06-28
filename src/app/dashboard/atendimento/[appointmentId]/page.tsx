@@ -31,7 +31,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
 
   const { data: appointment } = await supabase
     .from('appointments')
-    .select(`*, room_cost, valor_cobrado, patients(*), procedures(name, duration_minutes, price)`)
+    .select(`*, valor_cobrado, patients(*), procedures(name, duration_minutes, price)`)
     .eq('id', appointmentId)
     .maybeSingle()
 
