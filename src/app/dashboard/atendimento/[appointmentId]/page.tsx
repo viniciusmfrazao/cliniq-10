@@ -4,7 +4,6 @@ import AttendanceHeader from './attendance-header'
 import MedicalRecordSection from './medical-record-section'
 import InjectableMapSection from './injectable-map-section'
 import ProductsUsedSection from './products-used-section'
-import ValorCobrancaSection from './valor-cobranca-section'
 import ReturnScheduler from './return-scheduler'
 import { Suspense } from 'react'
 import AnamneseSummaryCard from '@/components/anamnese/AnamneseSummaryCard'
@@ -268,12 +267,6 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               usedProducts={usedProducts || []}
             />
 
-            {/* Valor do atendimento — vai para o pagamento */}
-            <ValorCobrancaSection
-              appointmentId={appointmentId}
-              procedurePrice={procedure?.price ?? null}
-              initialValorCobrado={appointment.valor_cobrado ?? null}
-            />
 
           </div>
         </div>
