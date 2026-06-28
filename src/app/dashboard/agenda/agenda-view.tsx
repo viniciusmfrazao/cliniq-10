@@ -75,6 +75,7 @@ const STATUS_CONFIG: Record<string, { bg: string; text: string; border: string; 
   completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', label: 'Realizado' },
   cancelled: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Cancelado' },
   no_show: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Não compareceu' },
+  rescheduling: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', label: 'Reagendamento' },
 }
 
 const PROFESSIONAL_COLORS = [
@@ -369,6 +370,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
     { value: 'completed', label: 'Realizado' },
     { value: 'no_show', label: 'Não compareceu' },
     { value: 'cancelled', label: 'Cancelado' },
+    { value: 'rescheduling', label: 'Reagendamento' },
   ]
 
   return (
