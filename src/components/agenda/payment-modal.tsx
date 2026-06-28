@@ -21,7 +21,7 @@ type Props = {
   procedureId: string | null
   professionalId: string | null
   professionalName: string
-  valorCobrado: number | null
+  valorCobrado?: number | null
   onClose: () => void
   onSuccess: () => void
 }
