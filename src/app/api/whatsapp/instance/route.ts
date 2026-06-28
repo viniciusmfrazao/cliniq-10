@@ -145,6 +145,11 @@ export async function POST(req: NextRequest) {
         { status: 502 },
       )
     }
+    // Configurar webhook na instância recém-criada
+    const wh = await setInstanceWebhook({ instanceName, webhookUrl })
+    if (!wh.ok) {
+      console.warn('[whatsapp/instance] setInstanceWebhook falhou na criação:', wh.error)
+    }
     liveState = 'connecting'
   }
 
