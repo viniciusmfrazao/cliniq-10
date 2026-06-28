@@ -31,11 +31,18 @@ export default async function PatientMarginCard({
     .select('valor_liquido, appointment_id')
     .in('appointment_id', appointmentIds)
 
-  // 3. Produtos usados com custo
+  // 3a. Produtos usados via appointment_products
   const { data: usedProducts } = await supabase
     .from('appointment_products')
     .select('appointment_id, quantity, products(cost_price)')
     .in('appointment_id', appointmentIds)
+
+  // 3b. Produtos usados via mapa de injetáveis (stock_movements)
+  const { data: stockMovements } = await supabase
+    .from('stock_movements')
+    .select('appointment_id, quantity, products(cost_price)')
+    .in('appointment_id', appointmentIds)
+    .eq('type', 'saida')
 
   // 4. Meses distintos com atendimentos do paciente
   const months = [...new Set(appointments.map((a) => a.start_time.substring(0, 7)))]
@@ -147,6 +154,7 @@ export default async function PatientMarginCard({
     }
   }
 
+  // Custo de appointment_products
   for (const up of usedProducts || []) {
     if (up.appointment_id && aptMap[up.appointment_id]) {
       const cost = Number(
@@ -155,6 +163,18 @@ export default async function PatientMarginCard({
           : (up.products as { cost_price: number } | null)?.cost_price) || 0
       )
       aptMap[up.appointment_id].custoEstoque += cost * up.quantity
+    }
+  }
+
+  // Custo de stock_movements (injetáveis via mapa)
+  for (const sm of stockMovements || []) {
+    if (sm.appointment_id && aptMap[sm.appointment_id]) {
+      const cost = Number(
+        (Array.isArray(sm.products)
+          ? (sm.products[0] as { cost_price: number } | null)?.cost_price
+          : (sm.products as { cost_price: number } | null)?.cost_price) || 0
+      )
+      aptMap[sm.appointment_id].custoEstoque += cost * sm.quantity
     }
   }
 
