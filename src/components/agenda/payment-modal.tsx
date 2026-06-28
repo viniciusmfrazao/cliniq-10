@@ -21,6 +21,7 @@ type Props = {
   procedureId: string | null
   professionalId: string | null
   professionalName: string
+  valorCobrado: number | null
   onClose: () => void
   onSuccess: () => void
 }
@@ -30,7 +31,7 @@ const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', 
 
 function uid() { return Math.random().toString(36).slice(2) }
 
-export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, onClose, onSuccess }: Props) {
+export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, onClose, onSuccess }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const [taxas, setTaxas] = useState<Taxa[]>([])
@@ -71,7 +72,8 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       setProcs(procList)
 
       const total = procList.reduce((s, p) => s + p.price, 0)
-      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: total, parcelas: 1, taxa: 0, liquido: total }])
+      const initialValor = valorCobrado !== null ? valorCobrado : total
+      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
 
       // Débitos pendentes
       if (patientId) {
@@ -203,6 +205,17 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
             <div className="text-center py-8 text-slate-400">Carregando...</div>
           ) : (
             <>
+              {/* Gratuito notice */}
+              {valorCobrado === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2 items-center">
+                  <span className="text-lg">✓</span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-700">Sem cobrança neste atendimento</p>
+                    <p className="text-xs text-amber-600">A profissional definiu valor R$ 0. Confirme para registrar sem gerar dívida.</p>
+                  </div>
+                </div>
+              )}
+
               {/* Procedimentos */}
               <div className="bg-slate-50 rounded-xl p-3">
                 <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Procedimentos</p>
