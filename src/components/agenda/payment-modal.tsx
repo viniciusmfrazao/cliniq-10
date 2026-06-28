@@ -116,7 +116,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
   const totalProcs = procs.reduce((s, p) => s + p.price, 0)
   const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valor, 0)
-  const totalDever = totalProcs + totalDebitos
+  // Use valor_cobrado set by professional if available, otherwise fall back to procedure price
+  const baseTotal = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : totalProcs
+  const totalDever = baseTotal + totalDebitos
   const totalPago = splits.reduce((s, p) => s + p.valor, 0)
   const totalLiquido = splits.reduce((s, p) => s + p.liquido, 0)
   const saldo = Math.max(0, totalDever - totalPago)
