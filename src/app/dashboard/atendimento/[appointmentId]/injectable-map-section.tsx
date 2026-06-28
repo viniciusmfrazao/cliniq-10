@@ -77,9 +77,6 @@ export default function InjectableMapSection({ patient, appointmentId, products,
   const [isMarkingMode, setIsMarkingMode] = useState(false)
   
   // Modo manual (entrada direta de unidades)
-  const [manualMode, setManualMode] = useState(false)
-  const [manualUnits, setManualUnits] = useState('')
-  const [manualNotes, setManualNotes] = useState('')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -342,28 +339,6 @@ export default function InjectableMapSection({ patient, appointmentId, products,
         
         {/* Tabs: Mapa / Manual */}
         <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
-          <button
-            onClick={() => { setManualMode(false); setIsMarkingMode(false) }}
-            className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
-              !manualMode 
-                ? 'bg-white text-violet-700 shadow-sm' 
-                : 'text-slate-600 hover:text-slate-800'
-            }`}
-          >
-            <Icon name="edit" className="w-4 h-4 inline mr-1" />
-            Marcar no Mapa
-          </button>
-          <button
-            onClick={() => { setManualMode(true); setIsMarkingMode(false) }}
-            className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
-              manualMode 
-                ? 'bg-white text-violet-700 shadow-sm' 
-                : 'text-slate-600 hover:text-slate-800'
-            }`}
-          >
-            <Icon name="edit3" className="w-4 h-4 inline mr-1" />
-            Entrada Manual
-          </button>
         </div>
       </div>
 
@@ -375,22 +350,6 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           </div>
         )}
 
-        {/* === MODO MANUAL === */}
-        {manualMode ? (
-          <div className="space-y-4">
-            <div className="p-4 bg-gradient-to-br from-violet-50 to-pink-50 rounded-xl space-y-4">
-              <p className="text-sm text-slate-600">
-                Informe diretamente a quantidade de unidades utilizadas
-              </p>
-
-              {/* Seletor de Produto */}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Produto *</label>
-                {products.length === 0 ? (
-                  <p className="text-sm text-amber-600 p-2 bg-amber-50 rounded-lg">
-                    Cadastre produtos no estoque primeiro
-                  </p>
-                ) : (
                   <select
                     value={activeProduct}
                     onChange={e => setActiveProduct(e.target.value)}
@@ -559,7 +518,6 @@ export default function InjectableMapSection({ patient, appointmentId, products,
               <p className="text-xs text-violet-600">{unitsPerClick}U por clique</p>
             </div>
           </div>
-        )}
 
         {/* Mapa */}
         <div className={`relative rounded-xl overflow-hidden ${
