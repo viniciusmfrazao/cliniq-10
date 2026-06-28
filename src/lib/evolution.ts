@@ -153,11 +153,11 @@ export async function createInstance(args: {
   instanceName: string
   webhookUrl: string
 }): Promise<FetchResult<CreateInstanceResult>> {
-  // v1.x nao aceita "integration" nem webhook aninhado — apenas instanceName + qrcode.
-  // O webhook e configurado separadamente via /webhook/set apos a criacao.
+  // Inclui integration para compatibilidade com v2.x (v1.x ignora o campo)
   const body = {
     instanceName: args.instanceName,
     qrcode: true,
+    integration: 'WHATSAPP-BAILEYS',
   }
   const r = await evolutionFetch<CreateInstanceResult>('/instance/create', {
     method: 'POST',
