@@ -225,6 +225,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
         await supabase.from('appointment_procedures').insert(
           selectedProcs.map(p => ({
             appointment_id: appointment.id,
+            clinic_id: clinicId,
             procedure_id: p.id,
             procedure_name: p.name,
             price: p.price,
