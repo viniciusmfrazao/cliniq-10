@@ -72,7 +72,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       setProcs(procList)
 
       const total = procList.reduce((s, p) => s + p.price, 0)
-      const initialValor = valorCobrado !== null ? valorCobrado : total
+      const initialValor = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : total
       setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
 
       // Débitos pendentes
