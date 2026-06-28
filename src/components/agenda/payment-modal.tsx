@@ -326,7 +326,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   <div className="flex justify-between text-sm text-red-500 pb-1.5 border-b border-slate-200"><span>Débitos selecionados</span><span>{fmt(totalDebitos)}</span></div>
                 </>}
                 <div className="flex justify-between text-sm font-bold text-slate-900"><span>Total a pagar</span><span>{fmt(totalDever)}</span></div>
-                <div className="flex justify-between text-sm text-slate-500"><span>Total pago</span><span className="font-semibold">{fmt(totalPago)}</span></div>
                 <div className="flex justify-between text-sm text-slate-500"><span>Total líquido</span><span className="font-semibold text-emerald-600">{fmt(totalLiquido)}</span></div>
 
               </div>
