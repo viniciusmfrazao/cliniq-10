@@ -125,7 +125,7 @@ export default async function PatientMarginCard({
     const md = monthDataMap[month]
     const custoSala = md ? (md.aluguelPorDia[dia] || 0) / (atendsPorDia[dia] || 1) : 0
     const custoFixo = md ? md.custoFixoPorAtendimento + custoSala : 0
-    const procName = (apt.procedures as { name: string } | null)?.name || 'Atendimento'
+    const procName = (apt.procedures as unknown as { name: string } | null)?.name || 'Atendimento'
 
     aptMap[apt.id] = { id: apt.id, date: apt.start_time, procedureName: procName, receita: 0, custoEstoque: 0, custoFixo }
   }
