@@ -205,8 +205,8 @@ export async function probeInstance(
       },
     }
   }
-  // 404 ou mensagem de "does not exist" -> instance ainda não existe
-  if (r.status === 404 || /not found|does not exist|not exists/i.test(r.error)) {
+  // 404/400 ou mensagem de "does not exist" -> instance ainda não existe
+  if (r.status === 404 || r.status === 400 || /not found|does not exist|not exists|Bad Request/i.test(r.error)) {
     return { ok: true, data: { exists: false } }
   }
   return r
