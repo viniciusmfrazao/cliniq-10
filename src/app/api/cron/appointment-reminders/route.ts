@@ -381,7 +381,7 @@ export async function GET(req: NextRequest) {
       buttons: [
         { id: 'confirm', text: '✅ Confirmar' },
         { id: 'cancel', text: '❌ Cancelar' },
-        { id: 'not_me', text: '🤔 Não sou eu' },
+        { id: 'reschedule', text: '🔄 Reagendar' },
       ],
       purpose: 'automation',
       instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
