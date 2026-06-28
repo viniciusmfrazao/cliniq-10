@@ -213,15 +213,15 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Procedimentos</p>
                 <div className="space-y-1.5">
                   {procs.map(p => (
-                    <div key={p.id} className="flex justify-between items-center">
+                    <div key={p.id} className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
                       <span className="text-sm text-slate-700">{p.name}</span>
-                      <span className="text-sm font-semibold text-slate-900">{p.price > 0 ? fmt(p.price) : '—'}</span>
                     </div>
                   ))}
-                  {procs.length > 1 && totalProcs > 0 && (
-                    <div className="flex justify-between pt-1.5 border-t border-slate-200">
-                      <span className="text-sm font-semibold text-slate-700">Total procedimentos</span>
-                      <span className="text-sm font-bold text-slate-900">{fmt(totalProcs)}</span>
+                  {(valorCobrado !== null && valorCobrado !== undefined) && (
+                    <div className="flex justify-between pt-1.5 border-t border-slate-200 mt-1">
+                      <span className="text-xs text-slate-500">Valor definido pela profissional</span>
+                      <span className="text-sm font-bold text-violet-600">{fmt(valorCobrado)}</span>
                     </div>
                   )}
                 </div>
