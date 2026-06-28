@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
 
 /**
  * GET /api/cron/appointment-reminder-2h
@@ -38,14 +38,22 @@ function renderTemplate(template: string, vars: Record<string, string>): string 
     .replace(/\{\{\s*data\s*\}\}/g, vars.data)
     .replace(/\{\{\s*hora\s*\}\}/g, vars.hora)
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
+    .replace(/\{\{\s*endereco\s*\}\}/g, vars.endereco ?? '')
 }
 
-const DEFAULT_TEMPLATE_2H = `Oi {{primeiro_nome}}! Passando pra lembrar que daqui a pouco é o seu horário na {{clinica}} 🕐
+const DEFAULT_TEMPLATE_2H = `Oi {{primeiro_nome}}! Passando pra lembrar que daqui a pouco é o seu horário na *{{clinica}}* 🕐
 
-🗓 Hoje às {{hora}} com {{profissional}}
-📍 Rua Roosevelt de Oliveira, 305 - Centro
+🗓 Hoje às *{{hora}}* com {{profissional}}{{#if endereco}}
+📍 {{endereco}}{{/if}}
 
 Te esperamos! 💕`
+
+// Renderiza {{#if endereco}}...{{/if}} (bloco condicional simples)
+function renderConditional(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, inner) =>
+    vars[key] ? inner.replace(`{{${key}}}`, vars[key]) : ''
+  )
+}
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -80,7 +88,7 @@ export async function GET(req: NextRequest) {
          { data: patients }, { data: profs }, { data: procs }] = await Promise.all([
     svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h').in('clinic_id', clinicIds),
     svc.from('clinic_whatsapp').select('clinic_id, instance_name, status, is_default, role_outbound_automation').in('clinic_id', clinicIds),
-    svc.from('clinics').select('id, name').in('id', clinicIds),
+    svc.from('clinics').select('id, name, settings').in('id', clinicIds),
     patientIds.length ? svc.from('patients').select('id, name, phone').in('id', patientIds) : { data: [] },
     professionalIds.length ? svc.from('users').select('id, name').in('id', professionalIds) : { data: [] },
     procedureIds.length ? svc.from('procedures').select('id, name').in('id', procedureIds) : { data: [] },
@@ -95,6 +103,7 @@ export async function GET(req: NextRequest) {
   }
   const autoMap = new Map((automations || []).map((a: any) => [a.clinic_id, a]))
   const clinicMap = new Map((clinics || []).map((c: any) => [c.id, c.name]))
+  const clinicSettingsMap = new Map((clinics || []).map((c: any) => [c.id, c.settings as Record<string, unknown> | null | undefined]))
   const patientMap = new Map((patients || []).map((p: any) => [p.id, p]))
   const profMap = new Map((profs || []).map((u: any) => [u.id, u.name]))
   const procMap = new Map((procs || []).map((pr: any) => [pr.id, pr.name]))
@@ -118,16 +127,20 @@ export async function GET(req: NextRequest) {
     if (!patient?.phone) { summary.skipped++; continue }
 
     const dt = formatBrazilDateTime(app.start_time)
-    const text = renderTemplate(template, {
+    const clinicName2h = clinicMap.get(app.clinic_id) || 'Clínica'
+    const endereco2h = String((clinicSettingsMap.get(app.clinic_id) as any)?.address ?? '')
+    const rawText = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
-      clinica: clinicMap.get(app.clinic_id) || 'Clínica',
+      clinica: clinicName2h,
       profissional: profMap.get(app.professional_id) || 'sua profissional',
       procedimento: procMap.get(app.procedure_id) || 'seu atendimento',
       data: dt.date,
       hora: dt.time,
       dia_semana: dt.weekday,
+      endereco: endereco2h,
     })
+    const text = renderConditional(rawText, { endereco: endereco2h })
 
     // Lock idempotente
     const { error: errLock } = await svc
@@ -138,13 +151,30 @@ export async function GET(req: NextRequest) {
 
     if (errLock) { summary.errors.push(`lock ${app.id}: ${errLock.message}`); continue }
 
-    const result = await sendWhatsappMessage({
+    // Envia como botões (CONFIRMAR / CANCELAR / NÃO SOU EU).
+    // Fallback para texto se Evolution não suportar botões na instância.
+    let result = await sendWhatsappButtons({
       clinicId: app.clinic_id,
       phone: patient.phone,
-      message: text,
+      body: text.replace(/\n{3,}/g, '\n\n').trim(),
+      footer: clinicName2h,
+      buttons: [
+        { id: 'confirm', text: '✅ Confirmar' },
+        { id: 'cancel', text: '❌ Cancelar' },
+        { id: 'not_me', text: '🤔 Não sou eu' },
+      ],
       purpose: 'automation',
       instanceName: wa.instance_name,
     })
+    if (!result.ok) {
+      result = await sendWhatsappMessage({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        message: text + '\n\nResponda *Confirmar* ou *Cancelar*.',
+        purpose: 'automation',
+        instanceName: wa.instance_name,
+      })
+    }
 
     if (result.ok) {
       summary.sent++
