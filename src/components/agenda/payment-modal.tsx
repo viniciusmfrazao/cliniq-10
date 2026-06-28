@@ -124,7 +124,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   async function save() {
     setSaving(true)
     try {
-      const hoje = new Date().toISOString().split('T')[0]
+      // Data no fuso horário do Brasil (UTC-3) para evitar virada de dia UTC
+      const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+        .split('/').reverse().join('-')
 
       // Entradas por procedimento
       for (const proc of procs) {
