@@ -43,6 +43,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   const [procSearch, setProcSearch] = useState('')
   const [valorDraft, setValorDraft] = useState('')
   const [loadingProcs, setLoadingProcs] = useState(false)
+  const [allProcNames, setAllProcNames] = useState<string>(procedure?.name || 'Atendimento')
   const [showReschedule, setShowReschedule] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState(
     new Date(appointment.start_time).toISOString().split('T')[0]
@@ -51,6 +52,20 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
     new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
   )
   const [savingReschedule, setSavingReschedule] = useState(false)
+
+  // Fetch all procedures linked to this appointment on mount
+  useEffect(() => {
+    supabase
+      .from('appointment_procedures')
+      .select('procedure_name')
+      .eq('appointment_id', appointment.id)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setAllProcNames(data.map(p => p.procedure_name).join(' + '))
+        }
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointment.id])
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -233,6 +248,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
       if (error) { alert(`Erro ao finalizar: ${error.message}`); throw error }
 
+      setAllProcNames(selectedProcs.map(p => p.name).join(' + ') || allProcNames)
       setStatus('completed')
       router.refresh()
       router.push('/dashboard/agenda')
@@ -390,7 +406,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
                 <button onClick={() => setShowReschedule(v => !v)}
                   className="flex items-center gap-1 text-xs md:text-sm text-slate-500 hover:text-violet-600 transition-colors group">
                   <span>
-                    {procedure?.name || 'Atendimento'} • {new Date(appointment.start_time).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })} às {new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                    {allProcNames} • {new Date(appointment.start_time).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })} às {new Date(appointment.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                   </span>
                   <Icon name="edit" className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </button>
