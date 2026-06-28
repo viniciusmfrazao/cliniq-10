@@ -308,6 +308,49 @@ export async function sendWhatsappMessage(args: {
 }
 
 /**
+ * Envia mensagem interativa com botões de resposta via Evolution API.
+ * Usado nos lembretes D-1 e 2h para permitir CONFIRMAR / CANCELAR / NÃO SOU EU.
+ * Quando o paciente toca um botão, a resposta chega como texto via webhook
+ * e é interceptada pela Eva antes de chamar o Claude.
+ *
+ * Fallback automático: se a Evolution não suportar botões (Personal WA sem
+ * WhatsApp Business API), retorna erro — o caller decide se tenta text.
+ */
+export async function sendWhatsappButtons(args: {
+  clinicId: string
+  phone: string
+  /** Corpo principal da mensagem (aceita markdown WA: *negrito*, _itálico_). */
+  body: string
+  /** Texto pequeno abaixo dos botões (ex: nome da clínica). */
+  footer?: string
+  /** Max 3 botões. */
+  buttons: Array<{ id: string; text: string }>
+  purpose?: SendPurpose
+  instanceName?: string
+  assignedTo?: string | null
+}): Promise<SendResult> {
+  const { clinicId, phone, body, footer, buttons, purpose, instanceName, assignedTo } = args
+  const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
+  if (!r.ok) return r.error
+
+  return postEvolution(
+    `${r.data.baseUrl}/message/sendButtons/${r.data.instanceName}`,
+    r.data.apiKey,
+    {
+      number: normalizePhone(phone),
+      title: body,
+      footer: footer ?? '',
+      buttons: buttons.slice(0, 3).map((b) => ({
+        buttonId: b.id,
+        buttonText: { displayText: b.text },
+        type: 1,
+      })),
+      headerType: 1,
+    },
+  )
+}
+
+/**
  * Envia uma imagem (com caption opcional) via Evolution API.
  * `media` aceita base64 puro (sem o prefixo data:) ou URL pública.
  */
