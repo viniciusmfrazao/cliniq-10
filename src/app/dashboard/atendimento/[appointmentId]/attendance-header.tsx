@@ -141,24 +141,39 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
 
   const finishAttendance = async () => {
     setLoadingProcs(true)
-    const { data } = await supabase
+
+    // Buscar procedimentos da clínica (sem duplicatas por nome)
+    const { data: procsData } = await supabase
       .from('procedures')
       .select('id, name, price')
       .eq('clinic_id', clinicId)
       .order('name')
-    const procs = (data || []).map(p => ({ ...p, price: Number(p.price) || 0 }))
+    const seen = new Set<string>()
+    const procs = (procsData || [])
+      .map(p => ({ ...p, price: Number(p.price) || 0 }))
+      .filter(p => { if (seen.has(p.name)) return false; seen.add(p.name); return true })
     setClinicProcs(procs)
 
-    // Pre-select the appointment's procedure
-    const defaultId = appointment.procedure_id
-    const defaultSelected = defaultId ? [defaultId] : []
-    setSelectedIds(defaultSelected)
+    // Buscar procedimentos já vinculados ao agendamento
+    const { data: aptProcs } = await supabase
+      .from('appointment_procedures')
+      .select('procedure_id')
+      .eq('appointment_id', appointment.id)
 
-    // Pre-fill value with selected procedure's price
-    const defaultPrice = defaultId
-      ? (procs.find(p => p.id === defaultId)?.price ?? procedure?.price ?? 0)
-      : (procedure?.price ?? 0)
-    setValorDraft(String(defaultPrice))
+    let selectedProcIds: string[] = []
+    if (aptProcs && aptProcs.length > 0) {
+      // Usar os já vinculados
+      selectedProcIds = aptProcs.map(ap => ap.procedure_id).filter(Boolean) as string[]
+    } else if (appointment.procedure_id) {
+      // Fallback: procedimento principal do agendamento
+      selectedProcIds = [appointment.procedure_id]
+    }
+    setSelectedIds(selectedProcIds)
+
+    // Valor = soma dos procedimentos selecionados
+    const selected = procs.filter(p => selectedProcIds.includes(p.id))
+    const total = selected.reduce((s, p) => s + p.price, 0) || procedure?.price || 0
+    setValorDraft(String(total))
     setProcSearch('')
     setLoadingProcs(false)
     setShowFinishModal(true)
