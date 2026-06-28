@@ -33,7 +33,9 @@ export async function middleware(request: NextRequest) {
   // Verifica se tem qualquer cookie de auth válido
   const authCookie = AUTH_COOKIE_NAMES.map(name => request.cookies.get(name)).find(Boolean)
   if (!authCookie) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const redirect = NextResponse.redirect(new URL('/login', request.url))
+    redirect.headers.set('Cache-Control', 'private, no-store')
+    return redirect
   }
 
   let response = NextResponse.next({ request })
@@ -69,9 +71,15 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
 
   if (!session) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const redirect = NextResponse.redirect(new URL('/login', request.url))
+    redirect.headers.set('Cache-Control', 'private, no-store')
+    return redirect
   }
 
+  // CRÍTICO: respostas autenticadas podem carregar um Set-Cookie com o token
+  // renovado pelo @supabase/ssr. Sem este header, a CDN da Vercel pode cachear
+  // a resposta e entregar o cookie de um usuário para outro (sessão trocada).
+  response.headers.set('Cache-Control', 'private, no-store')
   return response
 }
 
