@@ -147,41 +147,6 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
             onChange={(e) => setForm((prev) => ({ ...prev, trial_ends_at: e.target.value }))}
             className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           />
-          <div className="flex gap-2 mt-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                const d = new Date()
-                d.setFullYear(d.getFullYear() + 10)
-                setForm((prev) => ({ ...prev, trial_ends_at: d.toISOString().slice(0, 10) }))
-              }}
-              className="text-xs px-3 py-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 transition"
-            >
-              ✅ Converter para Ativa
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const base = form.trial_ends_at ? new Date(form.trial_ends_at) : new Date()
-                base.setDate(base.getDate() + 30)
-                setForm((prev) => ({ ...prev, trial_ends_at: base.toISOString().slice(0, 10) }))
-              }}
-              className="text-xs px-3 py-1 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 transition"
-            >
-              +30 dias
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const d = new Date()
-                d.setDate(d.getDate() - 1)
-                setForm((prev) => ({ ...prev, trial_ends_at: d.toISOString().slice(0, 10) }))
-              }}
-              className="text-xs px-3 py-1 rounded-full bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:text-red-400 transition"
-            >
-              🚫 Bloquear acesso
-            </button>
-          </div>
         </div>
       </div>
 

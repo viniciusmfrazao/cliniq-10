@@ -15,6 +15,7 @@ import OdontogramTab from './odontogram-tab'
 import DocumentosTab from './documentos-tab'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 import AnamnesePresencialButton from './anamnese-presencial-button'
+import PatientMarginCard from './patient-margin-card'
 
 /**
  * Central do Paciente.
@@ -252,6 +253,13 @@ export default async function PatientCentralPage({
             <Suspense fallback={<TabSkeleton />}>
               {userData?.clinic_id && (
                 <OrcamentosTabServer patientId={id} clinicId={userData.clinic_id} patient={patient} />
+              )}
+            </Suspense>
+          </div>
+          <div className="mt-6">
+            <Suspense fallback={<TabSkeleton />}>
+              {userData?.clinic_id && (
+                <PatientMarginCard patientId={id} clinicId={userData.clinic_id} />
               )}
             </Suspense>
           </div>

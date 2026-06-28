@@ -21,6 +21,7 @@ type Props = {
   procedureId: string | null
   professionalId: string | null
   professionalName: string
+  valorCobrado?: number | null
   onClose: () => void
   onSuccess: () => void
 }
@@ -30,7 +31,7 @@ const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', 
 
 function uid() { return Math.random().toString(36).slice(2) }
 
-export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, onClose, onSuccess }: Props) {
+export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, onClose, onSuccess }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const [taxas, setTaxas] = useState<Taxa[]>([])
@@ -41,6 +42,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [showAddProc, setShowAddProc] = useState(false)
+  const [allClinicProcs, setAllClinicProcs] = useState<ProcItem[]>([])
+  const [procSearch, setProcSearch] = useState('')
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -71,7 +75,20 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       setProcs(procList)
 
       const total = procList.reduce((s, p) => s + p.price, 0)
-      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: total, parcelas: 1, taxa: 0, liquido: total }])
+      const initialValor = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : total
+      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
+
+      // Todos os procedimentos da clínica (para adicionar no pagamento)
+      const { data: clinicProcsData } = await supabase
+        .from('procedures')
+        .select('id, name, price')
+        .eq('clinic_id', clinicId)
+        .order('name')
+      setAllClinicProcs((clinicProcsData || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        price: Number(p.price) || 0,
+      })))
 
       // Débitos pendentes
       if (patientId) {
@@ -114,7 +131,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
   const totalProcs = procs.reduce((s, p) => s + p.price, 0)
   const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valor, 0)
-  const totalDever = totalProcs + totalDebitos
+  // Use valor_cobrado set by professional if available, otherwise fall back to procedure price
+  const baseTotal = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : totalProcs
+  const totalDever = baseTotal + totalDebitos
   const totalPago = splits.reduce((s, p) => s + p.valor, 0)
   const totalLiquido = splits.reduce((s, p) => s + p.liquido, 0)
   const saldo = Math.max(0, totalDever - totalPago)
@@ -122,7 +141,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   async function save() {
     setSaving(true)
     try {
-      const hoje = new Date().toISOString().split('T')[0]
+      // Data no fuso horário do Brasil (UTC-3) para evitar virada de dia UTC
+      const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+        .split('/').reverse().join('-')
 
       // Entradas por procedimento
       for (const proc of procs) {
@@ -141,6 +162,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
             valor_bruto: val, taxa_percentual: s.taxa,
             valor_taxa: taxa, valor_liquido: liquido,
             n_parcelas: s.parcelas, observacoes: obs || null,
+            appointment_id: appointmentId,
           })
         }
       }
@@ -152,19 +174,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
           data_pagamento: hoje,
         }).eq('id', d.id)
         if (error) console.error('Erro ao quitar débito:', error)
-      }
-
-      // Novo saldo devedor
-      if (saldo > 0.01 && patientId) {
-        await supabase.from('debitos').insert({
-          clinic_id: clinicId,
-          paciente_id: patientId,
-          paciente_nome: patientName,
-          valor: saldo,
-          descricao: `Saldo devedor — ${procs.map(p => p.name).join(' + ')}`,
-          data_vencimento: hoje,
-          status: 'pendente',
-        })
       }
 
       // Marcar pagamento
@@ -203,24 +212,78 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
             <div className="text-center py-8 text-slate-400">Carregando...</div>
           ) : (
             <>
+              {/* Gratuito notice */}
+              {valorCobrado === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2 items-center">
+                  <span className="text-lg">✓</span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-700">Sem cobrança neste atendimento</p>
+                    <p className="text-xs text-amber-600">A profissional definiu valor R$ 0. Confirme para registrar sem gerar dívida.</p>
+                  </div>
+                </div>
+              )}
+
               {/* Procedimentos */}
               <div className="bg-slate-50 rounded-xl p-3">
                 <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Procedimentos</p>
                 <div className="space-y-1.5">
                   {procs.map(p => (
-                    <div key={p.id} className="flex justify-between items-center">
+                    <div key={p.id} className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
                       <span className="text-sm text-slate-700">{p.name}</span>
-                      <span className="text-sm font-semibold text-slate-900">{p.price > 0 ? fmt(p.price) : '—'}</span>
                     </div>
                   ))}
-                  {procs.length > 1 && totalProcs > 0 && (
-                    <div className="flex justify-between pt-1.5 border-t border-slate-200">
-                      <span className="text-sm font-semibold text-slate-700">Total procedimentos</span>
-                      <span className="text-sm font-bold text-slate-900">{fmt(totalProcs)}</span>
+                  {(valorCobrado !== null && valorCobrado !== undefined) && (
+                    <div className="flex justify-between pt-1.5 border-t border-slate-200 mt-1">
+                      <span className="text-xs text-slate-500">Valor definido pela profissional</span>
+                      <span className="text-sm font-bold text-violet-600">{fmt(valorCobrado)}</span>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Adicionar procedimento */}
+              <button
+                onClick={() => setShowAddProc(v => !v)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-violet-500 hover:text-violet-700 border border-dashed border-violet-200 hover:border-violet-400 rounded-xl transition-colors"
+              >
+                <span className="text-base leading-none">+</span> Adicionar procedimento
+              </button>
+              {showAddProc && (
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar procedimento..."
+                    value={procSearch}
+                    onChange={e => setProcSearch(e.target.value)}
+                    className="input w-full text-sm"
+                  />
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {allClinicProcs
+                      .filter(p => !procSearch || p.name.toLowerCase().includes(procSearch.toLowerCase()))
+                      .map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setProcs(prev => [...prev, p])
+                            if (valorCobrado === null || valorCobrado === undefined) {
+                              setSplits(prev => prev.map((s, i) =>
+                                i === 0 ? { ...s, valor: s.valor + p.price, liquido: (s.valor + p.price) * (1 - s.taxa / 100) } : s
+                              ))
+                            }
+                            setShowAddProc(false)
+                            setProcSearch('')
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white text-sm text-left transition-colors"
+                        >
+                          <span className="text-slate-700">{p.name}</span>
+                          <span className="text-slate-500 text-xs ml-2">{p.price > 0 ? fmt(p.price) : 'Gratuito'}</span>
+                        </button>
+                      ))
+                    }
+                  </div>
+                </div>
+              )}
 
               {/* Débitos pendentes */}
               {debitos.length > 0 && (
@@ -321,24 +384,11 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   <div className="flex justify-between text-sm text-red-500 pb-1.5 border-b border-slate-200"><span>Débitos selecionados</span><span>{fmt(totalDebitos)}</span></div>
                 </>}
                 <div className="flex justify-between text-sm font-bold text-slate-900"><span>Total a pagar</span><span>{fmt(totalDever)}</span></div>
-                <div className="flex justify-between text-sm text-slate-500"><span>Total pago</span><span className="font-semibold">{fmt(totalPago)}</span></div>
                 <div className="flex justify-between text-sm text-slate-500"><span>Total líquido</span><span className="font-semibold text-emerald-600">{fmt(totalLiquido)}</span></div>
-                {saldo > 0.01 && (
-                  <div className="flex justify-between text-sm pt-1.5 border-t border-slate-200">
-                    <span className="text-red-500 font-medium">Saldo devedor</span>
-                    <span className="font-bold text-red-600">{fmt(saldo)}</span>
-                  </div>
-                )}
+
               </div>
 
-              {saldo > 0.01 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2">
-                  <Icon name="alertTriangle" className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700">
-                    O saldo de <strong>{fmt(saldo)}</strong> será criado automaticamente em <strong>Devedores</strong>.
-                  </p>
-                </div>
-              )}
+
 
               <div>
                 <label className="text-xs text-slate-500 mb-1 block">Observações</label>

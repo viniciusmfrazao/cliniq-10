@@ -21,7 +21,7 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
 
   const { data: movements } = await supabase
     .from('stock_movements')
-    .select('*, users(name), patients(name)')
+    .select('*, patients(name)')
     .eq('product_id', id)
     .order('created_at', { ascending: false })
     .limit(20)
@@ -132,9 +132,10 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
         {/* Historico */}
         <div className="card p-6">
           <h2 className="text-sm font-semibold text-slate-900 mb-4">Historico de Movimentacoes</h2>
-          <MovementHistory movements={movements || []} />
+          <MovementHistory movements={movements || []} clinicId={product.clinic_id} />
         </div>
       </div>
     </div>
   )
 }
+

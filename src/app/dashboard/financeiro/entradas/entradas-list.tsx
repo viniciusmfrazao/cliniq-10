@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
 import { todayBR } from '@/lib/datetime'
 import { useToast } from '@/components/ui/Toast'
@@ -32,7 +33,6 @@ function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
 
-// Primeiro e último dia do mês atual
 function primeiroDiaMes() {
   return todayBR().slice(0, 7) + '-01'
 }
@@ -43,12 +43,165 @@ function ultimoDiaMes() {
   return `${y}-${String(m).padStart(2,'0')}-${String(ultimo).padStart(2,'0')}`
 }
 
+const FORMAS = ['pix', 'dinheiro', 'credito', 'debito']
+const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', credito: 'Crédito', debito: 'Débito' }
+
+function EditEntradaModal({
+  entrada,
+  onSave,
+  onClose,
+}: {
+  entrada: Entrada
+  onSave: (updated: Entrada) => void
+  onClose: () => void
+}) {
+  const supabase = createClient()
+  const toast = useToast()
+  const [saving, setSaving] = useState(false)
+
+  const [data, setData] = useState(entrada.data_venda)
+  const [paciente, setPaciente] = useState(entrada.paciente_nome || '')
+  const [procedimento, setProcedimento] = useState(entrada.procedimento_nome || '')
+  const [profissional, setProfissional] = useState(entrada.profissional_nome || '')
+  const [forma, setForma] = useState(entrada.forma_pagamento || 'pix')
+  const [bandeira, setBandeira] = useState(entrada.bandeira || '')
+  const [bruto, setBruto] = useState(String(entrada.valor_bruto || ''))
+  const [liquido, setLiquido] = useState(String(entrada.valor_liquido || ''))
+
+  // Ao mudar bruto, recalcula liquido mantendo mesma taxa
+  function handleBrutoChange(val: string) {
+    setBruto(val)
+    const vb = parseFloat(val) || 0
+    const taxa = Number(entrada.taxa_percentual) || 0
+    // taxa pode estar em % (ex: 2) ou decimal (0.02) — preservamos a lógica existente
+    const liq = taxa > 1
+      ? Math.round(vb * (1 - taxa / 100) * 100) / 100
+      : Math.round(vb * (1 - taxa) * 100) / 100
+    setLiquido(String(liq))
+  }
+
+  async function handleSave() {
+    const vb = parseFloat(bruto) || 0
+    const vl = parseFloat(liquido) || 0
+    if (vb <= 0) { toast.error('Valor bruto deve ser maior que zero'); return }
+
+    setSaving(true)
+    const { error } = await supabase.from('entradas').update({
+      data_venda: data,
+      paciente_nome: paciente,
+      procedimento_nome: procedimento,
+      profissional_nome: profissional,
+      forma_pagamento: forma,
+      bandeira: bandeira || null,
+      valor_bruto: vb,
+      valor_liquido: vl,
+      valor_taxa: Math.round((vb - vl) * 100) / 100,
+    }).eq('id', entrada.id)
+    setSaving(false)
+
+    if (error) {
+      toast.error('Erro ao salvar', { description: error.message })
+      return
+    }
+
+    toast.success('Entrada atualizada')
+    onSave({ ...entrada, data_venda: data, paciente_nome: paciente, procedimento_nome: procedimento, profissional_nome: profissional, forma_pagamento: forma, bandeira: bandeira || null, valor_bruto: vb, valor_liquido: vl })
+    onClose()
+  }
+
+  const modal = (
+    <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="font-bold text-slate-900">Editar Entrada</h2>
+            <p className="text-sm text-slate-500 mt-0.5">{entrada.paciente_nome}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+            <Icon name="x" className="w-4 h-4 text-slate-400" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 overflow-y-auto space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Data</label>
+              <input type="date" value={data} onChange={e => setData(e.target.value)} className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Forma de pagamento</label>
+              <select value={forma} onChange={e => setForma(e.target.value)} className="input w-full text-sm">
+                {FORMAS.map(f => <option key={f} value={f}>{FORMA_LABEL[f]}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {(forma === 'credito' || forma === 'debito') && (
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Bandeira</label>
+              <input type="text" value={bandeira} onChange={e => setBandeira(e.target.value)} placeholder="Ex: Visa, Mastercard" className="input w-full text-sm" />
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Paciente</label>
+            <input type="text" value={paciente} onChange={e => setPaciente(e.target.value)} className="input w-full text-sm" />
+          </div>
+
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Procedimento</label>
+            <input type="text" value={procedimento} onChange={e => setProcedimento(e.target.value)} className="input w-full text-sm" />
+          </div>
+
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Profissional</label>
+            <input type="text" value={profissional} onChange={e => setProfissional(e.target.value)} className="input w-full text-sm" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Valor bruto (R$)</label>
+              <input type="number" min={0} step={0.01} value={bruto}
+                onChange={e => handleBrutoChange(e.target.value)}
+                className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Valor líquido (R$)</label>
+              <input type="number" min={0} step={0.01} value={liquido}
+                onChange={e => setLiquido(e.target.value)}
+                className="input w-full text-sm" />
+              <p className="text-xs text-slate-400 mt-1">Ajuste manualmente se necessário</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-slate-100 flex gap-3 flex-shrink-0">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  return createPortal(modal, document.body)
+}
+
 export default function EntradasList({ entradas, clinicId }: Props) {
   const [list, setList] = useState(entradas)
   const [search, setSearch] = useState('')
   const [dataInicio, setDataInicio] = useState(primeiroDiaMes())
   const [dataFim, setDataFim] = useState(ultimoDiaMes())
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [editEntry, setEditEntry] = useState<Entrada | null>(null)
   const [isPending, startTransition] = useTransition()
   const supabase = createClient()
   const toast = useToast()
@@ -120,12 +273,23 @@ export default function EntradasList({ entradas, clinicId }: Props) {
     }, 5200)
   }
 
+  function handleSaveEdit(updated: Entrada) {
+    setList(prev => prev.map(e => e.id === updated.id ? updated : e))
+  }
+
   return (
     <div className="space-y-4">
+      {editEntry && (
+        <EditEntradaModal
+          entrada={editEntry}
+          onSave={handleSaveEdit}
+          onClose={() => setEditEntry(null)}
+        />
+      )}
+
       {/* Filtros */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
         <div className="flex flex-col md:flex-row gap-3">
-          {/* Busca textual */}
           <div className="flex-1 relative">
             <Icon name="search" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -136,30 +300,17 @@ export default function EntradasList({ entradas, clinicId }: Props) {
               className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"
             />
           </div>
-
-          {/* Filtro de período */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
               <Icon name="calendar" className="w-4 h-4 text-slate-400 flex-shrink-0" />
-              <input
-                type="date"
-                value={dataInicio}
-                onChange={e => setDataInicio(e.target.value)}
-                className="bg-transparent text-sm text-slate-700 focus:outline-none w-32"
-              />
+              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+                className="bg-transparent text-sm text-slate-700 focus:outline-none w-32" />
               <span className="text-slate-400 text-sm">até</span>
-              <input
-                type="date"
-                value={dataFim}
-                onChange={e => setDataFim(e.target.value)}
-                className="bg-transparent text-sm text-slate-700 focus:outline-none w-32"
-              />
+              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+                className="bg-transparent text-sm text-slate-700 focus:outline-none w-32" />
             </div>
-            <button
-              onClick={buscar}
-              disabled={isPending}
-              className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition disabled:opacity-60 text-sm"
-            >
+            <button onClick={buscar} disabled={isPending}
+              className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition disabled:opacity-60 text-sm">
               {isPending ? <LoadingSpinner size="sm" /> : <Icon name="search" className="w-4 h-4" />}
               Filtrar
             </button>
@@ -234,10 +385,16 @@ export default function EntradasList({ entradas, clinicId }: Props) {
                 <div className="text-right flex-shrink-0 ml-3">
                   <p className="font-bold text-emerald-600">{fmt(e.valor_liquido)}</p>
                   <p className="text-xs text-slate-400">{fmt(e.valor_bruto)} bruto</p>
-                  <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
-                    className="mt-1 p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition">
-                    <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center justify-end gap-1 mt-1">
+                    <button onClick={() => setEditEntry(e)}
+                      className="p-1.5 text-violet-400 hover:bg-violet-50 rounded-lg transition">
+                      <Icon name="edit" className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
+                      className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition">
+                      <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -272,24 +429,16 @@ export default function EntradasList({ entradas, clinicId }: Props) {
                     <td className="px-4 py-3 text-sm">
                       {new Date(e.data_venda + 'T12:00:00').toLocaleDateString('pt-BR')}
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                      {e.paciente_nome || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {e.procedimento_nome || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {e.profissional_nome || '-'}
-                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-slate-900">{e.paciente_nome || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{e.procedimento_nome || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{e.profissional_nome || '-'}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs">
                         {e.forma_pagamento}
                         {e.bandeira && ` (${e.bandeira})`}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">
-                      {fmt(e.valor_bruto)}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">{fmt(e.valor_bruto)}</td>
                     <td className="px-4 py-3 text-sm text-right">
                       <span className="text-emerald-600 font-medium">{fmt(e.valor_liquido)}</span>
                       {e.taxa_percentual > 0 && (
@@ -297,13 +446,18 @@ export default function EntradasList({ entradas, clinicId }: Props) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => handleDelete(e.id)}
-                        disabled={deleting === e.id}
-                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
-                      >
-                        <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => setEditEntry(e)}
+                          className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
+                          title="Editar">
+                          <Icon name="edit" className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
+                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
+                          title="Excluir">
+                          <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

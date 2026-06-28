@@ -22,6 +22,12 @@ const ROLES = [
   { value: 'custom', label: '+ Outro (digite abaixo)' },
 ]
 
+// Roles que já são profissionais por natureza — não precisam do campo extra
+const PROFESSIONAL_ROLES = ['doctor', 'dentist', 'biomedic', 'nurse', 'esthetician', 'physiotherapist', 'nutritionist', 'psychologist']
+
+// Roles administrativos que podem TAMBÉM atender pacientes
+const ADMIN_ROLES = ['admin', 'manager', 'receptionist', 'financial', 'viewer', 'assistant', 'comercial', 'custom']
+
 export default function InviteForm({ clinicId }: { clinicId: string }) {
   const router = useRouter()
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'receptionist', customRole: '', professional_role: '' })
@@ -42,6 +48,14 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
       const finalRole = form.role === 'custom' ? form.customRole.toLowerCase().replace(/\s+/g, '_') : form.role
       const finalRoleLabel = form.role === 'custom' ? form.customRole : ROLES.find(r => r.value === form.role)?.label || form.role
 
+      // Se o role já é profissional, usar ele mesmo como professional_role
+      // Garante que médicos, esteticistas etc. apareçam na agenda sem precisar
+      // de campo extra
+      const effectiveProfessionalRole =
+        PROFESSIONAL_ROLES.includes(form.role)
+          ? finalRole
+          : (form.professional_role || null)
+
       const response = await fetch('/api/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,7 +65,7 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
           password: form.password,
           role: finalRole,
           roleLabel: finalRoleLabel,
-          professional_role: form.professional_role || null,
+          professional_role: effectiveProfessionalRole,
           clinicId,
         }),
       })
@@ -150,7 +164,8 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
         </div>
       )}
 
-      {['admin', 'manager', 'receptionist', 'financial', 'viewer', 'assistant'].includes(form.role) && (
+      {/* Campo extra só para roles administrativos que podem também atender */}
+      {ADMIN_ROLES.includes(form.role) && (
         <div>
           <label className="label">Também atende pacientes como? <span className="text-slate-400 font-normal">(opcional)</span></label>
           <select
@@ -169,6 +184,13 @@ export default function InviteForm({ clinicId }: { clinicId: string }) {
           </select>
           <p className="text-xs text-slate-500 mt-1">Se selecionado, aparecerá como profissional disponível na agenda.</p>
         </div>
+      )}
+
+      {/* Informativo para roles profissionais */}
+      {PROFESSIONAL_ROLES.includes(form.role) && (
+        <p className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+          ✅ Este membro aparecerá automaticamente como profissional disponível na agenda.
+        </p>
       )}
       
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}

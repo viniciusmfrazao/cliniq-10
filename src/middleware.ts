@@ -79,8 +79,6 @@ export async function middleware(request: NextRequest) {
   // CRÍTICO: respostas autenticadas podem carregar um Set-Cookie com o token
   // renovado pelo @supabase/ssr. Sem este header, a CDN da Vercel pode cachear
   // a resposta e entregar o cookie de um usuário para outro (sessão trocada).
-  // O @supabase/ssr só passa esses headers automaticamente a partir da v0.10.0;
-  // estamos na 0.5.x, então setamos manualmente.
   response.headers.set('Cache-Control', 'private, no-store')
   return response
 }

@@ -55,8 +55,5 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-
-	<key>NSFaceIDUsageDescription</key>
-	<string>Use o Face ID para entrar no Clinike com segurança</string>
 </dict>
 </plist>

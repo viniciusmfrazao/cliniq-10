@@ -8,6 +8,7 @@ import {
   cleanMimeType,
   extFromMime,
   sendWhatsappMessage,
+  sendWhatsappButtons,
 } from '@/lib/whatsapp'
 
 /**
@@ -131,6 +132,12 @@ function pickMessageDetails(message: unknown): ParsedMessage {
       fileName: null,
       inlineBase64: typeof stk.base64 === 'string' ? stk.base64 : null,
     }
+  }
+
+  // Resposta de botão interativo (Evolution API / Baileys sendButtons)
+  const btns = m.buttonsResponseMessage as Record<string, unknown> | undefined
+  if (btns && typeof btns.selectedDisplayText === 'string') {
+    return { ...empty, kind: 'text', text: btns.selectedDisplayText }
   }
 
   return empty
@@ -712,7 +719,8 @@ export async function POST(
             | 'pause_until'
             | 'human_review'
             | 'media_escalated'
-            | 'anti_dup_30s' = false
+            | 'anti_dup_30s'
+            | 'button_handled' = false
           // Janela do anti-eco do NPS: 5 min depois da nota, Eva fica calada
           const NPS_COOLDOWN_MS = 5 * 60 * 1000
           let npsCooldownUntil: string | null = null
@@ -748,6 +756,92 @@ export async function POST(
             data: patientResRaw.data?.[0] ?? null,
             error: patientResRaw.error,
           }
+
+          // ─── Resposta de botão de confirmação D-1 / 2h ──────────────────────────
+          // Roda ANTES de qualquer verificação da Eva — funciona para números de
+          // automação com auto_reply_enabled=false onde Eva não atende.
+          //
+          // CONFIRMAR → appointment.status = 'confirmed'
+          // CANCELAR  → appointment.status = 'cancelled'
+          // NÃO SOU EU → needs_human_review=true, motivo='reagendamento'
+          if (parsed.kind === 'text' && parsed.text) {
+            const btnNorm = parsed.text.trim()
+              .normalize('NFD').replace(/[̀-ͯ]/g, '')
+              .replace(/[^\p{L}\s]/gu, '').trim().toUpperCase()
+
+            const isConfirmar  = btnNorm === 'CONFIRMAR'
+            const isCancelar   = btnNorm === 'CANCELAR'
+            const isReagendar  = btnNorm === 'REAGENDAR'
+
+            if ((isConfirmar || isCancelar || isReagendar) && patientRes.data?.id) {
+              try {
+                const { data: aptData } = await svc
+                  .from('appointments')
+                  .select('id, start_time, status')
+                  .eq('patient_id', patientRes.data.id)
+                  .eq('clinic_id', clinicId)
+                  .in('status', ['scheduled', 'confirmed', 'pending_confirmation'])
+                  .gte('start_time', new Date().toISOString())
+                  .order('start_time', { ascending: true })
+                  .limit(1)
+
+                const apt = aptData?.[0]
+                const patFirst = (pushName || '').trim().split(/\s+/)[0] || ''
+
+                if (apt) {
+                  if (isConfirmar) {
+                    await svc.from('appointments').update({
+                      status: 'confirmed',
+                      confirmed_at: new Date().toISOString(),
+                    }).eq('id', apt.id)
+
+                    const dt = new Date(apt.start_time)
+                    const dateStr = dt.toLocaleDateString('pt-BR', {
+                      timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: 'long',
+                    })
+                    const timeStr = dt.toLocaleTimeString('pt-BR', {
+                      timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+                    })
+                    const msg = patFirst
+                      ? `${patFirst}, presença confirmada! ✅
+
+Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
+                      : `Presença confirmada! ✅
+
+Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
+                    void sendWhatsappMessage({ clinicId, phone, message: msg, instanceName: instance, purpose: 'automation' })
+                    void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'button_confirmar', status: 'ok', details: { appointment_id: apt.id } })
+
+                  } else if (isCancelar) {
+                    await svc.from('appointments').update({ status: 'cancelled' }).eq('id', apt.id)
+
+                    const msg = patFirst
+                      ? `${patFirst}, agendamento cancelado. Quando quiser remarcar, é só nos chamar! 💜`
+                      : `Agendamento cancelado. Quando quiser remarcar, é só nos chamar! 💜`
+                    void sendWhatsappMessage({ clinicId, phone, message: msg, instanceName: instance, purpose: 'automation' })
+                    void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'button_cancelar', status: 'ok', details: { appointment_id: apt.id } })
+
+                  } else if (isReagendar) {
+                    // Marca o agendamento como reagendamento na agenda
+                    await svc.from('appointments').update({ status: 'rescheduling' }).eq('id', apt.id)
+
+                    const msg = patFirst
+                      ? `${patFirst}, entendido! Nossa equipe entrará em contato para remarcar. 💜`
+                      : `Entendido! Nossa equipe entrará em contato para remarcar. 💜`
+                    void sendWhatsappMessage({ clinicId, phone, message: msg, instanceName: instance, purpose: 'automation' })
+                    void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'button_reagendar', status: 'ok', details: { appointment_id: apt.id } })
+                  }
+
+                  // Em todos os casos: Eva não precisa responder
+                  evaShouldSkip = 'button_handled'
+                }
+              } catch (btnErr) {
+                internalErrors.push(`button_reply: ${btnErr instanceof Error ? btnErr.message : String(btnErr)}`)
+                // fallthrough — Eva responde normalmente se der erro aqui
+              }
+            }
+          }
+          // ─────────────────────────────────────────────────────────────────
 
           // Captura automática de resposta NPS — só pra texto de pacientes
           if (patientRes.data && parsed.kind === 'text' && parsed.text) {

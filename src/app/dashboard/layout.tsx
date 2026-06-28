@@ -8,9 +8,6 @@ import AppProviders from '@/components/layout/AppProviders'
 import WhatsappHealthBanner from '@/components/layout/WhatsappHealthBanner'
 import WhatsappHealthBannerWrapper from '@/components/layout/WhatsappHealthBannerWrapper'
 
-// Rota autenticada: nunca cachear/ISR — evita vazamento de sessão entre usuários
-export const dynamic = 'force-dynamic'
-
 export default async function DashboardLayout({ children, searchParams }: { children: React.ReactNode, searchParams?: { admin?: string } }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,16 +32,13 @@ export default async function DashboardLayout({ children, searchParams }: { chil
   }
 
   // Run clinic and users queries in PARALLEL (much faster!)
-  const svc = createServiceClient()
-  const [clinicResult, usersResult, noticeResult] = await Promise.all([
+  const [clinicResult, usersResult] = await Promise.all([
     supabase.from('clinics').select('name, trial_ends_at, settings').eq('id', userData.clinic_id).single(),
-    supabase.from('users').select('id, name, role').eq('clinic_id', userData.clinic_id).order('name'),
-    svc.from('app_settings').select('value').eq('key', 'global_notice').maybeSingle(),
+    supabase.from('users').select('id, name, role').eq('clinic_id', userData.clinic_id).order('name')
   ])
 
   const clinic = clinicResult.data
   const clinicUsers = usersResult.data
-  const globalNotice = (noticeResult.data as { value?: string } | null)?.value || null
   const activeModules = clinic?.settings?.active_modules || []
   const userPermissions: string[] = Array.isArray(userData?.permissions) ? userData.permissions as string[] : []
 
@@ -74,12 +68,6 @@ export default async function DashboardLayout({ children, searchParams }: { chil
               role={userData?.role || 'viewer'}
             />
           </WhatsappHealthBannerWrapper>
-          {globalNotice && (
-            <div className="bg-blue-600 text-white text-sm px-4 py-2.5 flex items-start gap-2">
-              <span className="mt-0.5 flex-shrink-0">📢</span>
-              <span>{globalNotice}</span>
-            </div>
-          )}
           <main className="flex-1 overflow-y-auto overflow-x-hidden pl-safe pr-safe overscroll-none">
             <div className="px-4 py-4 md:px-8 md:py-6 pb-28 md:pb-6 max-w-full">{children}</div>
           </main>

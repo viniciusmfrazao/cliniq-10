@@ -39,7 +39,14 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
   const [saving, setSaving] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState('')
   const [quantity, setQuantity] = useState(1)
+  const [quantityDraft, setQuantityDraft] = useState('1')
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Estado de edição
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editQuantity, setEditQuantity] = useState(1)
+  const [editQtyDraft, setEditQtyDraft] = useState('1')
+  const [editSaving, setEditSaving] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -76,7 +83,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
     log.info('Adicionando produto usado', { productId: selectedProduct, quantity, appointmentId })
 
     try {
-      // 1. Registrar produto usado no atendimento
       const { data: usedRecord, error: insertError } = await supabase
         .from('appointment_products')
         .insert({
@@ -92,7 +98,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
         throw insertError
       }
 
-      // 2. Atualizar estoque (descontar imediatamente)
       const newStock = product.current_stock - quantity
 
       const { error: stockError } = await supabase
@@ -105,7 +110,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
         throw stockError
       }
 
-      // 3. Registrar movimentação
       await supabase.from('stock_movements').insert({
         clinic_id: clinicId,
         product_id: selectedProduct,
@@ -125,10 +129,10 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
         estoqueNovo: newStock
       })
 
-      // Atualizar lista local
       setUsedProducts([...usedProducts, usedRecord])
       setSelectedProduct('')
       setQuantity(1)
+      setQuantityDraft('1')
       setShowForm(false)
       router.refresh()
     } catch (err) {
@@ -139,11 +143,90 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
     }
   }
 
+  const startEdit = (up: UsedProduct) => {
+    setEditingId(up.id)
+    setEditQuantity(up.quantity)
+    setEditQtyDraft(String(up.quantity))
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditQuantity(1)
+  }
+
+  const saveEdit = async (up: UsedProduct) => {
+    if (editQuantity < 1) return
+
+    setEditSaving(true)
+    log.info('Editando quantidade do produto', { usedId: up.id, oldQty: up.quantity, newQty: editQuantity })
+
+    try {
+      // Buscar estoque atual do produto
+      const { data: productData } = await supabase
+        .from('products')
+        .select('current_stock')
+        .eq('id', up.product_id)
+        .single()
+
+      if (!productData) throw new Error('Produto não encontrado')
+
+      const diff = editQuantity - up.quantity // positivo = mais saída, negativo = devolução parcial
+
+      if (diff > 0 && diff > productData.current_stock) {
+        alert(`Estoque insuficiente! Disponível: ${productData.current_stock}`)
+        setEditSaving(false)
+        return
+      }
+
+      const newStock = productData.current_stock - diff
+
+      // Atualizar quantidade no atendimento
+      const { error: updateError } = await supabase
+        .from('appointment_products')
+        .update({ quantity: editQuantity })
+        .eq('id', up.id)
+
+      if (updateError) throw updateError
+
+      // Ajustar estoque
+      await supabase
+        .from('products')
+        .update({ current_stock: newStock })
+        .eq('id', up.product_id)
+
+      // Registrar movimentação de ajuste
+      await supabase.from('stock_movements').insert({
+        clinic_id: clinicId,
+        product_id: up.product_id,
+        type: diff > 0 ? 'saida' : 'entrada',
+        quantity: Math.abs(diff),
+        previous_stock: productData.current_stock,
+        new_stock: newStock,
+        reason: `Ajuste de quantidade no atendimento`,
+        appointment_id: appointmentId,
+        patient_id: patientId
+      })
+
+      log.info('Quantidade editada com sucesso', { diff, estoqueNovo: newStock })
+
+      // Atualizar lista local
+      setUsedProducts(usedProducts.map(p =>
+        p.id === up.id ? { ...p, quantity: editQuantity } : p
+      ))
+      cancelEdit()
+      router.refresh()
+    } catch (err) {
+      log.error('Erro ao editar quantidade', err)
+      alert('Erro ao editar quantidade.')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   const removeProduct = async (usedId: string, productId: string, qty: number) => {
     if (!confirm('Remover este produto? O estoque será devolvido.')) return
 
     try {
-      // Buscar estoque atual
       const { data: product } = await supabase
         .from('products')
         .select('current_stock')
@@ -152,7 +235,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
 
       if (!product) return
 
-      // Devolver ao estoque
       const newStock = product.current_stock + qty
 
       await supabase
@@ -160,7 +242,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
         .update({ current_stock: newStock })
         .eq('id', productId)
 
-      // Registrar movimentação de devolução
       await supabase.from('stock_movements').insert({
         clinic_id: clinicId,
         product_id: productId,
@@ -172,7 +253,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
         appointment_id: appointmentId
       })
 
-      // Remover registro
       await supabase.from('appointment_products').delete().eq('id', usedId)
 
       setUsedProducts(usedProducts.filter(p => p.id !== usedId))
@@ -202,7 +282,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
         {/* Formulário para adicionar */}
         {showForm && (
           <div className="p-4 bg-slate-50 rounded-xl space-y-3">
-            {/* Busca */}
             <div>
               <input
                 type="text"
@@ -213,7 +292,6 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
               />
             </div>
 
-            {/* Lista de produtos por categoria */}
             <div className="max-h-48 overflow-y-auto space-y-3">
               {Object.entries(productsByCategory).map(([category, prods]) => (
                 <div key={category}>
@@ -246,13 +324,12 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
               )}
             </div>
 
-            {/* Quantidade */}
             {selectedProduct && (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-slate-600">Quantidade:</span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    onClick={() => { const v = Math.max(1, quantity - 1); setQuantity(v); setQuantityDraft(String(v)) }}
                     className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300"
                   >
                     -
@@ -260,12 +337,13 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
                   <input
                     type="number"
                     min="1"
-                    value={quantity}
-                    onChange={e => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    value={quantityDraft}
+                    onChange={e => { setQuantityDraft(e.target.value); setQuantity(Math.max(1, parseInt(e.target.value) || 1)) }}
+                    onBlur={() => setQuantityDraft(String(Math.max(1, quantity)))}
                     className="w-16 h-8 px-2 text-center bg-white border border-slate-200 rounded-lg text-sm"
                   />
                   <button
-                    onClick={() => setQuantity(quantity + 1)}
+                    onClick={() => { const v = quantity + 1; setQuantity(v); setQuantityDraft(String(v)) }}
                     className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300"
                   >
                     +
@@ -298,31 +376,85 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
         ) : (
           <div className="space-y-2">
             {usedProducts.map(up => (
-              <div key={up.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-slate-900">
-                    {(up.products as { name: string } | null)?.name || 'Produto'}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {up.quantity} {(up.products as { unit: string } | null)?.unit || 'un'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => removeProduct(up.id, up.product_id, up.quantity)}
-                  className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
-                >
-                  <Icon name="trash" className="w-4 h-4" />
-                </button>
+              <div key={up.id} className="p-3 bg-slate-50 rounded-lg">
+                {editingId === up.id ? (
+                  /* Modo edição */
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-slate-900 flex-1 text-sm">
+                      {(up.products as { name: string } | null)?.name || 'Produto'}
+                    </p>
+                    <button
+                      onClick={() => { const v = Math.max(1, editQuantity - 1); setEditQuantity(v); setEditQtyDraft(String(v)) }}
+                      className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300 text-sm"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editQtyDraft}
+                      onChange={e => { setEditQtyDraft(e.target.value); setEditQuantity(Math.max(1, parseInt(e.target.value) || 1)) }}
+                      onBlur={() => setEditQtyDraft(String(Math.max(1, editQuantity)))}
+                      className="w-14 h-7 px-1 text-center bg-white border border-slate-200 rounded-lg text-sm"
+                    />
+                    <button
+                      onClick={() => { const v = editQuantity + 1; setEditQuantity(v); setEditQtyDraft(String(v)) }}
+                      className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300 text-sm"
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={() => saveEdit(up)}
+                      disabled={editSaving}
+                      className="px-3 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50"
+                    >
+                      {editSaving ? '...' : 'Salvar'}
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors"
+                    >
+                      <Icon name="x" className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  /* Modo visualização */
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-slate-900">
+                        {(up.products as { name: string } | null)?.name || 'Produto'}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {up.quantity} {(up.products as { unit: string } | null)?.unit || 'un'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => startEdit(up)}
+                        className="p-1.5 hover:bg-violet-50 rounded-lg text-violet-500 transition-colors"
+                        title="Editar quantidade"
+                      >
+                        <Icon name="edit" className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => removeProduct(up.id, up.product_id, up.quantity)}
+                        className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
+                        title="Remover produto"
+                      >
+                        <Icon name="trash" className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
 
-        {/* Info */}
         <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-xl">
           <Icon name="bell" className="w-4 h-4 text-blue-600 mt-0.5" />
           <p className="text-xs text-blue-700">
-            O estoque é descontado imediatamente ao adicionar o produto.
+            O estoque é ajustado automaticamente ao editar ou remover produtos.
           </p>
         </div>
       </div>

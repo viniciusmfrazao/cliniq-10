@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import { isSuperAdmin } from '@/lib/super-admin'
 import { getAllSettings } from '@/lib/app-settings'
 import EvolutionSettingsForm from './settings-form'
-import EvolutionMonitor from './monitor'
 
 export default async function AdminEvolutionPage() {
   if (!(await isSuperAdmin())) redirect('/dashboard')
@@ -23,9 +22,6 @@ export default async function AdminEvolutionPage() {
       </div>
 
       <EvolutionSettingsForm initial={map} />
-
-      {/* Monitor de saúde */}
-      <EvolutionMonitor />
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-800 dark:text-amber-200">
         <p className="font-semibold mb-2">⚠️ Importante</p>

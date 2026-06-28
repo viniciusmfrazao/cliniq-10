@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
 import { logEva } from '@/lib/eva-logger'
 
 /**
@@ -86,6 +86,16 @@ function firstName(full: string | null | undefined): string {
   return full.trim().split(/\s+/)[0]
 }
 
+// Template padrão — usado quando clínica não configurou template personalizado.
+// Variáveis disponíveis: {{nome}}, {{primeiro_nome}}, {{clinica}}, {{profissional}},
+// {{procedimento}}, {{data}}, {{hora}}, {{dia_semana}}, {{endereco}}.
+// Nota: {{link_confirmacao}} ainda é aceito mas é ignorado (substituído por botões).
+const DEFAULT_TEMPLATE_CONFIRMA = `Olá {{primeiro_nome}}! Falo do *{{clinica}}* e gostaria de confirmar seu agendamento marcado para *{{dia_semana}}, {{data}}*:
+
+*{{hora}}* — {{procedimento}} — {{profissional}}
+
+Podemos confirmar?`
+
 function renderTemplate(
   template: string,
   vars: {
@@ -98,6 +108,7 @@ function renderTemplate(
     hora: string
     dia_semana: string
     link_confirmacao: string
+    endereco: string
   },
 ): string {
   return template
@@ -110,6 +121,7 @@ function renderTemplate(
     .replace(/\{\{\s*hora\s*\}\}/g, vars.hora)
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
     .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao)
+    .replace(/\{\{\s*endereco\s*\}\}/g, vars.endereco)
 }
 
 type AutomationRow = {
@@ -134,7 +146,7 @@ type AppointmentRow = {
 type PatientRow = { id: string; name: string; phone: string | null }
 type UserRow = { id: string; name: string }
 type ProcedureRow = { id: string; name: string }
-type ClinicRow = { id: string; name: string }
+type ClinicRow = { id: string; name: string; settings?: Record<string, unknown> | null }
 type WaRow = { clinic_id: string; status: string }
 
 export async function GET(req: NextRequest) {
@@ -198,7 +210,7 @@ export async function GET(req: NextRequest) {
       .from('clinic_whatsapp')
       .select('clinic_id, instance_name, status, is_default, role_outbound_automation')
       .in('clinic_id', clinicIds),
-    svc.from('clinics').select('id, name').in('id', clinicIds),
+    svc.from('clinics').select('id, name, settings').in('id', clinicIds),
   ])
 
   const waByClinic = new Map<string, WaRow>()
@@ -213,8 +225,11 @@ export async function GET(req: NextRequest) {
   }
 
   const clinicNameById = new Map<string, string>()
-  for (const c of (clinicList as ClinicRow[] | null) ?? [])
+  const clinicAddressById = new Map<string, string>()
+  for (const c of (clinicList as ClinicRow[] | null) ?? []) {
     clinicNameById.set(c.id, c.name)
+    clinicAddressById.set(c.id, (c.settings as any)?.address ?? '')
+  }
 
   // 3) Carrega appointments de amanhã pra essas clínicas, ainda não confirmados
   const { data: appsRaw, error: errApps } = await svc
@@ -320,9 +335,8 @@ export async function GET(req: NextRequest) {
     const clinicName = clinicNameById.get(app.clinic_id) || 'Clínica'
 
     const dt = formatBrazilDateTime(app.start_time)
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://app.clinike.com.br'
-    const linkConfirmacao = app.confirmation_slug ? `${siteUrl}/confirmar/${app.confirmation_slug}` : `${siteUrl}/confirmar/${app.id}`
-    const text = renderTemplate(template, {
+    const endereco = clinicAddressById.get(app.clinic_id) ?? ''
+    const bodyText = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
       clinica: clinicName,
@@ -331,8 +345,9 @@ export async function GET(req: NextRequest) {
       data: dt.date,
       hora: dt.time,
       dia_semana: dt.weekday,
-      link_confirmacao: linkConfirmacao,
-    })
+      link_confirmacao: '', // não usado — substituído por botões interativos
+      endereco,
+    }).replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '')
 
     if (dryRun) {
       summary.sent++
@@ -356,17 +371,36 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    const result = await sendWhatsappMessage({
+    // Tenta enviar como mensagem com botões; fallback para texto simples
+    // se a instância não suportar (ex.: WhatsApp Personal sem Business API).
+    let result = await sendWhatsappButtons({
       clinicId: app.clinic_id,
       phone: patient.phone,
-      message: text,
+      body: bodyText,
+      footer: clinicName,
+      buttons: [
+        { id: 'confirm', text: '✅ Confirmar' },
+        { id: 'cancel', text: '❌ Cancelar' },
+        { id: 'reschedule', text: '🔄 Reagendar' },
+      ],
       purpose: 'automation',
       instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
     })
 
+    if (!result.ok) {
+      // Fallback: texto simples com instrução de resposta
+      result = await sendWhatsappMessage({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        message: bodyText + '\n\nResponda *Confirmar* ou *Cancelar*.',
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+    }
+
     if (result.ok) {
       summary.sent++
-      void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'ok', details: { appointment_id: app.id, has_link: text.includes('confirmar/') } })
+      void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'ok', details: { appointment_id: app.id, mode: 'buttons' } })
     } else {
       summary.errors.push({
         clinic_id: app.clinic_id,

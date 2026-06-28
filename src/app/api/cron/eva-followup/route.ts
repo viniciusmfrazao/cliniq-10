@@ -19,7 +19,6 @@ import { logEva } from '@/lib/eva-logger'
  *   após #5 sem resposta → marca status='lost', lost_reason='sem_resposta_18d'
  *
  * Lead com needs_human_review=true NÃO recebe follow-up (humano cuida).
- * Lead com status='scheduled' NÃO recebe follow-up (já agendou, Eva não interrompe).
  *
  * Janela de envio: 8h-21h, segunda a sábado (BRT). Domingo e madrugada
  * pulamos — a fila não anda, o lead aguarda no horário comercial seguinte.
@@ -110,7 +109,7 @@ export async function GET(req: NextRequest) {
     .select('id, clinic_id, name, phone, status, eva_followup_count, eva_next_followup_at, whatsapp_opt_in, needs_human_review, eva_pause_until')
     .lte('eva_next_followup_at', nowIso)
     .not('eva_next_followup_at', 'is', null)
-    .not('status', 'in', '(converted,lost,scheduled)')
+    .not('status', 'in', '(converted,lost)')
     .or('needs_human_review.is.null,needs_human_review.eq.false')
     .or('whatsapp_opt_in.is.null,whatsapp_opt_in.eq.true')
     .or(`eva_pause_until.is.null,eva_pause_until.lte.${nowIso}`)

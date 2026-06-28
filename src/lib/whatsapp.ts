@@ -12,6 +12,25 @@ export function normalizePhone(raw: string): string {
 }
 
 /**
+ * Valida se um telefone (raw ou já normalizado) é um número brasileiro válido.
+ *
+ * Formato esperado após normalização: 55 + DDD (2 dígitos) + número (8 ou 9 dígitos)
+ * = 13 dígitos (celular 9 dígitos) ou 12 dígitos (fixo 8 dígitos).
+ *
+ * IDs de usuário do Facebook/Instagram (ex: 159712721031297) têm 15+ dígitos
+ * e são rejeitados aqui com mensagem clara.
+ */
+export function isValidPhone(raw: string): boolean {
+  const p = normalizePhone(raw)
+  // Deve começar com 55 e ter 12 (fixo) ou 13 (celular) dígitos
+  if (!/^55\d{10,11}$/.test(p)) return false
+  // DDD válido: 11–99
+  const ddd = parseInt(p.slice(2, 4), 10)
+  if (ddd < 11 || ddd > 99) return false
+  return true
+}
+
+/**
  * Remove parametros tipo "; codecs=opus" do mimetype.
  * Bucket Storage compara `allowed_mime_types` por match exato.
  */
@@ -269,13 +288,65 @@ export async function sendWhatsappMessage(args: {
   assignedTo?: string | null
 }): Promise<SendResult> {
   const { clinicId, phone, message, purpose, instanceName, assignedTo } = args
+
+  if (!isValidPhone(phone)) {
+    return {
+      ok: false,
+      code: 'evolution_error',
+      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
+    }
+  }
+
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
   return postEvolution(
     `${r.data.baseUrl}/message/sendText/${r.data.instanceName}`,
     r.data.apiKey,
-    { number: normalizePhone(phone), text: message },
+    { number: normalizePhone(phone), textMessage: { text: message } },
+  )
+}
+
+/**
+ * Envia mensagem interativa com botões de resposta via Evolution API.
+ * Usado nos lembretes D-1 e 2h para permitir CONFIRMAR / CANCELAR / NÃO SOU EU.
+ * Quando o paciente toca um botão, a resposta chega como texto via webhook
+ * e é interceptada pela Eva antes de chamar o Claude.
+ *
+ * Fallback automático: se a Evolution não suportar botões (Personal WA sem
+ * WhatsApp Business API), retorna erro — o caller decide se tenta text.
+ */
+export async function sendWhatsappButtons(args: {
+  clinicId: string
+  phone: string
+  /** Corpo principal da mensagem (aceita markdown WA: *negrito*, _itálico_). */
+  body: string
+  /** Texto pequeno abaixo dos botões (ex: nome da clínica). */
+  footer?: string
+  /** Max 3 botões. */
+  buttons: Array<{ id: string; text: string }>
+  purpose?: SendPurpose
+  instanceName?: string
+  assignedTo?: string | null
+}): Promise<SendResult> {
+  const { clinicId, phone, body, footer, buttons, purpose, instanceName, assignedTo } = args
+  const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
+  if (!r.ok) return r.error
+
+  return postEvolution(
+    `${r.data.baseUrl}/message/sendButtons/${r.data.instanceName}`,
+    r.data.apiKey,
+    {
+      number: normalizePhone(phone),
+      title: body,
+      footer: footer ?? '',
+      buttons: buttons.slice(0, 3).map((b) => ({
+        buttonId: b.id,
+        buttonText: { displayText: b.text },
+        type: 1,
+      })),
+      headerType: 1,
+    },
   )
 }
 
@@ -298,6 +369,15 @@ export async function sendWhatsappImage(args: {
     clinicId, phone, media, mimetype, caption, fileName,
     purpose, instanceName, assignedTo,
   } = args
+
+  if (!isValidPhone(phone)) {
+    return {
+      ok: false,
+      code: 'evolution_error',
+      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
+    }
+  }
+
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
@@ -328,6 +408,15 @@ export async function sendWhatsappAudio(args: {
   assignedTo?: string | null
 }): Promise<SendResult> {
   const { clinicId, phone, audio, purpose, instanceName, assignedTo } = args
+
+  if (!isValidPhone(phone)) {
+    return {
+      ok: false,
+      code: 'evolution_error',
+      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
+    }
+  }
+
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 

@@ -1,9 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
-import PWAProvider from '@/components/PWAProvider'
-import MobileSplash from '@/components/MobileSplash'
 import BrazilCopa from '@/components/BrazilCopa'
+import PWAProvider from '@/components/PWAProvider'
 
 export const metadata: Metadata = {
   title: {
@@ -102,7 +101,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="antialiased">
-        <ThemeProvider><MobileSplash>{children}</MobileSplash></ThemeProvider>
+        <ThemeProvider>{children}</ThemeProvider>
         <BrazilCopa />
         <PWAProvider />
       </body>
