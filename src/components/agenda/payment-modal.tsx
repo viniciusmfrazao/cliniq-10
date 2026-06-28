@@ -145,6 +145,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
             valor_bruto: val, taxa_percentual: s.taxa,
             valor_taxa: taxa, valor_liquido: liquido,
             n_parcelas: s.parcelas, observacoes: obs || null,
+            appointment_id: appointmentId,
           })
         }
       }
