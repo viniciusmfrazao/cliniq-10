@@ -4,6 +4,8 @@ import Icon from '@/components/ui/Icon'
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
+const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`
+
 export default async function PatientMarginCard({
   patientId,
   clinicId,
@@ -16,7 +18,7 @@ export default async function PatientMarginCard({
   // 1. Atendimentos concluídos do paciente
   const { data: appointments } = await supabase
     .from('appointments')
-    .select('id, start_time')
+    .select('id, start_time, procedures(name)')
     .eq('patient_id', patientId)
     .in('status', ['completed', 'realizado'])
     .order('start_time', { ascending: false })
@@ -31,28 +33,26 @@ export default async function PatientMarginCard({
     .select('valor_liquido, appointment_id')
     .in('appointment_id', appointmentIds)
 
-  // 3a. Produtos usados via appointment_products
+  // 3a. Custo via appointment_products
   const { data: usedProducts } = await supabase
     .from('appointment_products')
     .select('appointment_id, quantity, products(cost_price)')
     .in('appointment_id', appointmentIds)
 
-  // 3b. Produtos usados via mapa de injetáveis (stock_movements)
+  // 3b. Custo via stock_movements (injetáveis pelo mapa)
   const { data: stockMovements } = await supabase
     .from('stock_movements')
     .select('appointment_id, quantity, products(cost_price)')
     .in('appointment_id', appointmentIds)
     .eq('type', 'saida')
 
-  // 4. Meses distintos com atendimentos do paciente
+  // 4. Meses distintos dos atendimentos
   const months = [...new Set(appointments.map((a) => a.start_time.substring(0, 7)))]
 
-  // 5. Para cada mês: buscar saídas e total de atendimentos da clínica naquele mês
+  // 5. Para cada mês: saídas fixas + total atendimentos da clínica
   type MonthData = {
     custoFixoPorAtendimento: number
     aluguelPorDia: Record<string, number>
-    totalFixoMes: number
-    atendimentosMes: number
   }
   const monthDataMap: Record<string, MonthData> = {}
 
@@ -78,9 +78,8 @@ export default async function PatientMarginCard({
 
     const sala = (saidasMes || []).filter((s) => s.subcategoria === 'aluguel_sala')
     const fixas = (saidasMes || []).filter((s) => s.subcategoria !== 'aluguel_sala')
-
     const totalFixo = fixas.reduce((s, r) => s + Number(r.valor), 0)
-    const n = atendimentosMes || 0
+    const n = atendimentosMes || 1
 
     const aluguelPorDia: Record<string, number> = {}
     for (const s of sala) {
@@ -88,19 +87,15 @@ export default async function PatientMarginCard({
     }
 
     monthDataMap[month] = {
-      custoFixoPorAtendimento: n > 0 ? totalFixo / n : 0,
+      custoFixoPorAtendimento: totalFixo / n,
       aluguelPorDia,
-      totalFixoMes: totalFixo,
-      atendimentosMes: n,
     }
   }
 
-  // 6. Dias com aluguel_sala: buscar total de atendimentos daquele dia
-  const allDaysWithSala = [
-    ...new Set(
-      Object.values(monthDataMap).flatMap((m) => Object.keys(m.aluguelPorDia))
-    ),
-  ]
+  // 6. Dias com aluguel de sala: buscar atendimentos do dia
+  const allDaysWithSala = [...new Set(
+    Object.values(monthDataMap).flatMap((m) => Object.keys(m.aluguelPorDia))
+  )]
   const atendsPorDia: Record<string, number> = {}
   for (const dia of allDaysWithSala) {
     const { count } = await supabase
@@ -113,104 +108,61 @@ export default async function PatientMarginCard({
     atendsPorDia[dia] = count || 1
   }
 
-  // 7. Construir mapa por atendimento usando dados do mês correto
-  type AptSummary = {
+  // 7. Montar mapa por atendimento
+  type AptRow = {
     id: string
     date: string
+    procedureName: string
     receita: number
     custoEstoque: number
-    custoSala: number
     custoFixo: number
-    margem: number
-    margemPct: number
   }
 
-  const aptMap: Record<string, AptSummary> = {}
+  const aptMap: Record<string, AptRow> = {}
   for (const apt of appointments) {
     const dia = apt.start_time.substring(0, 10)
     const month = apt.start_time.substring(0, 7)
     const md = monthDataMap[month]
+    const custoSala = md ? (md.aluguelPorDia[dia] || 0) / (atendsPorDia[dia] || 1) : 0
+    const custoFixo = md ? md.custoFixoPorAtendimento + custoSala : 0
+    const procName = (apt.procedures as { name: string } | null)?.name || 'Atendimento'
 
-    const custoSala = md
-      ? (md.aluguelPorDia[dia] || 0) / (atendsPorDia[dia] || 1)
-      : 0
-    const custoFixo = md ? md.custoFixoPorAtendimento : 0
-
-    aptMap[apt.id] = {
-      id: apt.id,
-      date: apt.start_time,
-      receita: 0,
-      custoEstoque: 0,
-      custoSala,
-      custoFixo,
-      margem: 0,
-      margemPct: 0,
-    }
+    aptMap[apt.id] = { id: apt.id, date: apt.start_time, procedureName: procName, receita: 0, custoEstoque: 0, custoFixo }
   }
 
   for (const e of entradas || []) {
-    if (e.appointment_id && aptMap[e.appointment_id]) {
+    if (e.appointment_id && aptMap[e.appointment_id])
       aptMap[e.appointment_id].receita += Number(e.valor_liquido)
-    }
   }
 
-  // Custo de appointment_products
+  const getCost = (products: unknown) =>
+    Number((Array.isArray(products)
+      ? (products[0] as { cost_price: number } | null)?.cost_price
+      : (products as { cost_price: number } | null)?.cost_price) || 0)
+
   for (const up of usedProducts || []) {
-    if (up.appointment_id && aptMap[up.appointment_id]) {
-      const cost = Number(
-        (Array.isArray(up.products)
-          ? (up.products[0] as { cost_price: number } | null)?.cost_price
-          : (up.products as { cost_price: number } | null)?.cost_price) || 0
-      )
-      aptMap[up.appointment_id].custoEstoque += cost * up.quantity
-    }
+    if (up.appointment_id && aptMap[up.appointment_id])
+      aptMap[up.appointment_id].custoEstoque += getCost(up.products) * up.quantity
   }
-
-  // Custo de stock_movements (injetáveis via mapa)
   for (const sm of stockMovements || []) {
-    if (sm.appointment_id && aptMap[sm.appointment_id]) {
-      const cost = Number(
-        (Array.isArray(sm.products)
-          ? (sm.products[0] as { cost_price: number } | null)?.cost_price
-          : (sm.products as { cost_price: number } | null)?.cost_price) || 0
-      )
-      aptMap[sm.appointment_id].custoEstoque += cost * sm.quantity
-    }
+    if (sm.appointment_id && aptMap[sm.appointment_id])
+      aptMap[sm.appointment_id].custoEstoque += getCost(sm.products) * sm.quantity
   }
 
-  const apts = Object.values(aptMap).map((a) => {
-    const totalCusto = a.custoEstoque + a.custoSala + a.custoFixo
-    const margem = a.receita - totalCusto
-    const margemPct = a.receita > 0 ? (margem / a.receita) * 100 : 0
-    return { ...a, margem, margemPct }
-  })
+  const apts = Object.values(aptMap)
 
-  // 8. Totais
+  // 8. Totais (custo fixo excluído dos cards de resumo)
   const totReceita = apts.reduce((s, a) => s + a.receita, 0)
   const totEstoque = apts.reduce((s, a) => s + a.custoEstoque, 0)
-  const totSala = apts.reduce((s, a) => s + a.custoSala, 0)
-  const totFixo = apts.reduce((s, a) => s + a.custoFixo, 0)
-  const totMargem = totReceita - totEstoque - totSala - totFixo
-  const totMargemPct = totReceita > 0 ? (totMargem / totReceita) * 100 : 0
+  const lucro = totReceita - totEstoque
+  const margemPct = totReceita > 0 ? (lucro / totReceita) * 100 : 0
 
-  const margemColor =
-    totMargemPct >= 50
-      ? 'text-emerald-600'
-      : totMargemPct >= 20
-      ? 'text-amber-600'
-      : 'text-red-600'
-  const margemBg =
-    totMargemPct >= 50
-      ? 'bg-emerald-50 border-emerald-200'
-      : totMargemPct >= 20
-      ? 'bg-amber-50 border-amber-200'
-      : 'bg-red-50 border-red-200'
-
-  const temSala = totSala > 0
-  const temFixo = totFixo > 0
+  const margemColor = margemPct >= 50 ? 'text-emerald-600' : margemPct >= 20 ? 'text-amber-600' : 'text-red-600'
+  const margemBg = margemPct >= 50 ? 'bg-emerald-50 border-emerald-200' : margemPct >= 20 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
 
   return (
     <div className="card p-5">
+      {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
           <Icon name="trendingUp" className="w-4 h-4 text-violet-600" />
@@ -221,7 +173,7 @@ export default async function PatientMarginCard({
         </div>
       </div>
 
-      {/* Cards de resumo */}
+      {/* Cards de resumo — sem custo fixo */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <div className="p-3 bg-emerald-50 rounded-xl">
           <p className="text-xs text-slate-500 mb-1">Receita total</p>
@@ -232,76 +184,65 @@ export default async function PatientMarginCard({
           <p className="text-sm font-bold text-slate-700">{fmt(totEstoque)}</p>
         </div>
         <div className="p-3 bg-slate-50 rounded-xl">
-          <p className="text-xs text-slate-500 mb-1">
-            {temSala && !temFixo ? 'Aluguel sala' : temFixo && !temSala ? 'Custos fixos' : 'Sala + fixos'}
-          </p>
-          <p className="text-sm font-bold text-slate-700">{fmt(totSala + totFixo)}</p>
+          <p className="text-xs text-slate-500 mb-1">Lucro bruto</p>
+          <p className={`text-sm font-bold ${lucro >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(lucro)}</p>
         </div>
         <div className={`p-3 rounded-xl border ${margemBg}`}>
-          <p className="text-xs text-slate-500 mb-1">Margem estimada</p>
-          <p className={`text-sm font-bold ${margemColor}`}>
-            {fmt(totMargem)}{' '}
-            <span className="text-xs font-medium">({totMargemPct.toFixed(0)}%)</span>
-          </p>
+          <p className="text-xs text-slate-500 mb-1">Margem</p>
+          <p className={`text-sm font-bold ${margemColor}`}>{margemPct.toFixed(0)}%</p>
+          <p className="text-xs text-slate-400">receita − estoque</p>
         </div>
       </div>
 
-      {/* Detalhe por atendimento */}
+      {/* Por atendimento */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold text-slate-500 uppercase">Por atendimento</p>
-        {apts.slice(0, 5).map((a) => {
-          const pct = a.margemPct
-          const color =
-            pct >= 50 ? 'text-emerald-600' : pct >= 20 ? 'text-amber-600' : 'text-red-600'
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Por atendimento</p>
+        {apts.map((a) => {
+          const lucroApt = a.receita - a.custoEstoque
+          const pct = a.receita > 0 ? (lucroApt / a.receita) * 100 : 0
+          const color = pct >= 50 ? 'text-emerald-600' : pct >= 20 ? 'text-amber-600' : 'text-red-600'
+
           return (
-            <div
-              key={a.id}
-              className="flex items-center justify-between p-3 bg-slate-50 rounded-xl gap-2"
-            >
-              <div className="min-w-0">
-                <p className="text-xs text-slate-500">
-                  {new Date(a.date).toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                    timeZone: 'America/Sao_Paulo',
-                  })}
-                </p>
-                <p className="text-xs text-slate-400">
-                  Receita {fmt(a.receita)} · Custos {fmt(a.custoEstoque + a.custoSala + a.custoFixo)}
+            <div key={a.id} className="p-3 bg-slate-50 rounded-xl space-y-2">
+              {/* Linha 1: data + procedimento */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-700">
+                    {new Date(a.date).toLocaleDateString('pt-BR', {
+                      day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Sao_Paulo'
+                    })}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">{a.procedureName}</p>
+                </div>
+                <p className={`text-sm font-bold whitespace-nowrap ${color}`}>
+                  {fmt(lucroApt)} <span className="text-xs">({fmtPct(pct)})</span>
                 </p>
               </div>
-              <p className={`text-sm font-bold whitespace-nowrap ${color}`}>
-                {fmt(a.margem)} <span className="text-xs">({pct.toFixed(0)}%)</span>
-              </p>
+
+              {/* Linha 2: receita | estoque | fixo */}
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <p className="text-slate-400">Receita</p>
+                  <p className="font-semibold text-slate-700">{fmt(a.receita)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400">Estoque</p>
+                  <p className="font-semibold text-slate-700">{fmt(a.custoEstoque)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400">Fixos (ref.)</p>
+                  <p className="font-semibold text-slate-400">{fmt(a.custoFixo)}</p>
+                </div>
+              </div>
             </div>
           )
         })}
-        {apts.length > 5 && (
-          <p className="text-xs text-slate-400 text-center pt-1">
-            + {apts.length - 5} atendimentos anteriores
-          </p>
-        )}
       </div>
 
-      {/* Legenda do rateio */}
-      <div className="mt-4 p-3 bg-slate-50 rounded-xl space-y-1">
-        {temSala && (
-          <p className="text-xs text-slate-400">
-            🏠 Aluguel de sala rateado por dia de atendimento (mês a mês)
-          </p>
-        )}
-        {temFixo && (
-          <p className="text-xs text-slate-400">
-            📊 Custos fixos rateados pelo mês de cada atendimento
-          </p>
-        )}
-        {!temSala && !temFixo && (
-          <p className="text-xs text-slate-400">
-            Nenhum custo fixo lançado nos meses deste paciente. Lance em Financeiro → Saídas.
-          </p>
-        )}
-      </div>
+      {/* Legenda */}
+      <p className="mt-3 text-xs text-slate-400">
+        📊 Fixos são informativos — rateados pelo mês e total de atendimentos da clínica naquele mês
+      </p>
     </div>
   )
 }
