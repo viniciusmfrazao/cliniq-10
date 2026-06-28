@@ -40,6 +40,7 @@ type Appointment = {
   procedure_id: string | null
   checked_in_at: string | null
   payment_registered_at: string | null
+  valor_cobrado: number | null
   valor_sinal: number | null
   forma_pagamento_sinal: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
@@ -1001,6 +1002,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
           procedureId={apt.procedure_id || null}
           professionalId={apt.professional_id || null}
           professionalName={apt.professional?.name || ''}
+          valorCobrado={apt.valor_cobrado ?? null}
           onClose={() => setShowPayment(false)}
           onSuccess={() => { setShowPayment(false) }}
         />
