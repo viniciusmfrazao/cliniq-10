@@ -42,6 +42,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [showAddProc, setShowAddProc] = useState(false)
+  const [allClinicProcs, setAllClinicProcs] = useState<ProcItem[]>([])
+  const [procSearch, setProcSearch] = useState('')
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -74,6 +77,18 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       const total = procList.reduce((s, p) => s + p.price, 0)
       const initialValor = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : total
       setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
+
+      // Todos os procedimentos da clínica (para adicionar no pagamento)
+      const { data: clinicProcsData } = await supabase
+        .from('procedures')
+        .select('id, name, price')
+        .eq('clinic_id', clinicId)
+        .order('name')
+      setAllClinicProcs((clinicProcsData || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        price: Number(p.price) || 0,
+      })))
 
       // Débitos pendentes
       if (patientId) {
@@ -226,6 +241,49 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   )}
                 </div>
               </div>
+
+              {/* Adicionar procedimento */}
+              <button
+                onClick={() => setShowAddProc(v => !v)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-violet-500 hover:text-violet-700 border border-dashed border-violet-200 hover:border-violet-400 rounded-xl transition-colors"
+              >
+                <span className="text-base leading-none">+</span> Adicionar procedimento
+              </button>
+              {showAddProc && (
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar procedimento..."
+                    value={procSearch}
+                    onChange={e => setProcSearch(e.target.value)}
+                    className="input w-full text-sm"
+                  />
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {allClinicProcs
+                      .filter(p => !procSearch || p.name.toLowerCase().includes(procSearch.toLowerCase()))
+                      .map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setProcs(prev => [...prev, p])
+                            if (valorCobrado === null || valorCobrado === undefined) {
+                              setSplits(prev => prev.map((s, i) =>
+                                i === 0 ? { ...s, valor: s.valor + p.price, liquido: (s.valor + p.price) * (1 - s.taxa / 100) } : s
+                              ))
+                            }
+                            setShowAddProc(false)
+                            setProcSearch('')
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white text-sm text-left transition-colors"
+                        >
+                          <span className="text-slate-700">{p.name}</span>
+                          <span className="text-slate-500 text-xs ml-2">{p.price > 0 ? fmt(p.price) : 'Gratuito'}</span>
+                        </button>
+                      ))
+                    }
+                  </div>
+                </div>
+              )}
 
               {/* Débitos pendentes */}
               {debitos.length > 0 && (
