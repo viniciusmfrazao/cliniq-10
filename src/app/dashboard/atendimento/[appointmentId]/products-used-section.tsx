@@ -329,7 +329,7 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
                 <span className="text-sm text-slate-600">Quantidade:</span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    onClick={() => { const v = Math.max(1, quantity - 1); setQuantity(v); setQuantityDraft(String(v)) }}
                     className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300"
                   >
                     -
@@ -343,7 +343,7 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
                     className="w-16 h-8 px-2 text-center bg-white border border-slate-200 rounded-lg text-sm"
                   />
                   <button
-                    onClick={() => setQuantity(quantity + 1)}
+                    onClick={() => { const v = quantity + 1; setQuantity(v); setQuantityDraft(String(v)) }}
                     className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300"
                   >
                     +
@@ -384,7 +384,7 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
                       {(up.products as { name: string } | null)?.name || 'Produto'}
                     </p>
                     <button
-                      onClick={() => setEditQuantity(Math.max(1, editQuantity - 1))}
+                      onClick={() => { const v = Math.max(1, editQuantity - 1); setEditQuantity(v); setEditQtyDraft(String(v)) }}
                       className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300 text-sm"
                     >
                       -
@@ -398,7 +398,7 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
                       className="w-14 h-7 px-1 text-center bg-white border border-slate-200 rounded-lg text-sm"
                     />
                     <button
-                      onClick={() => setEditQuantity(editQuantity + 1)}
+                      onClick={() => { const v = editQuantity + 1; setEditQuantity(v); setEditQtyDraft(String(v)) }}
                       className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300 text-sm"
                     >
                       +
