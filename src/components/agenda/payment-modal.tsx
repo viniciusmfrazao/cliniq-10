@@ -323,12 +323,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 <div className="flex justify-between text-sm font-bold text-slate-900"><span>Total a pagar</span><span>{fmt(totalDever)}</span></div>
                 <div className="flex justify-between text-sm text-slate-500"><span>Total pago</span><span className="font-semibold">{fmt(totalPago)}</span></div>
                 <div className="flex justify-between text-sm text-slate-500"><span>Total líquido</span><span className="font-semibold text-emerald-600">{fmt(totalLiquido)}</span></div>
-                {saldo > 0.01 && (
-                  <div className="flex justify-between text-sm pt-1.5 border-t border-slate-200">
-                    <span className="text-red-500 font-medium">Saldo devedor</span>
-                    <span className="font-bold text-red-600">{fmt(saldo)}</span>
-                  </div>
-                )}
+
               </div>
 
 
