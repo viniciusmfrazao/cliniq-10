@@ -156,19 +156,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         if (error) console.error('Erro ao quitar débito:', error)
       }
 
-      // Novo saldo devedor
-      if (saldo > 0.01 && patientId) {
-        await supabase.from('debitos').insert({
-          clinic_id: clinicId,
-          paciente_id: patientId,
-          paciente_nome: patientName,
-          valor: saldo,
-          descricao: `Saldo devedor — ${procs.map(p => p.name).join(' + ')}`,
-          data_vencimento: hoje,
-          status: 'pendente',
-        })
-      }
-
       // Marcar pagamento
       await supabase.from('appointments')
         .update({ payment_registered_at: new Date().toISOString() })
@@ -344,14 +331,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 )}
               </div>
 
-              {saldo > 0.01 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2">
-                  <Icon name="alertTriangle" className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700">
-                    O saldo de <strong>{fmt(saldo)}</strong> será criado automaticamente em <strong>Devedores</strong>.
-                  </p>
-                </div>
-              )}
+
 
               <div>
                 <label className="text-xs text-slate-500 mb-1 block">Observações</label>
