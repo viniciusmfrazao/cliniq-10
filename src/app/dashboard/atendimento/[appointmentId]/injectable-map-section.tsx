@@ -7,8 +7,6 @@ import Icon from '@/components/ui/Icon'
 import FaceMap from '@/components/ui/FaceMap'
 import { createLogger } from '@/lib/logger'
 import { todayBR } from '@/lib/datetime'
-import { parseSupabaseError } from '@/lib/error-messages'
-
 
 const log = createLogger('InjectableMap')
 
@@ -48,11 +46,10 @@ type Props = {
 }
 
 const PRODUCT_COLORS = [
-  '#8b5cf6', '#ec4899', '#f97316', '#10b981', 
+  '#8b5cf6', '#ec4899', '#f97316', '#10b981',
   '#3b82f6', '#ef4444', '#eab308', '#6366f1',
 ]
 
-// Detectar região baseado na posição Y
 const detectRegion = (y: number): string => {
   if (y < 20) return 'Testa'
   if (y < 30) return 'Glabela'
@@ -70,20 +67,15 @@ export default function InjectableMapSection({ patient, appointmentId, products,
   const [points, setPoints] = useState<Point[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
-  // Configuração atual (produto e unidades por clique)
   const [activeProduct, setActiveProduct] = useState<string>('')
   const [unitsPerClick, setUnitsPerClick] = useState(1)
   const [isMarkingMode, setIsMarkingMode] = useState(false)
-  
-  // Modo manual (entrada direta de unidades)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Cores por produto
   const productColorMap = new Map<string, string>()
   const getProductColor = (productId: string) => {
     if (!productColorMap.has(productId)) {
@@ -92,57 +84,34 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     return productColorMap.get(productId) || PRODUCT_COLORS[0]
   }
 
-  // Converter coordenadas
   const toSvgCoords = (x: number, y: number) => ({
     x: (x / 100) * 300,
     y: (y / 100) * 400
   })
 
-  // Clique no mapa - adiciona ponto direto (sem modal)
   const handleMapClick = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!isMarkingMode || !activeProduct) return
     if (!svgRef.current) return
-
     const rect = svgRef.current.getBoundingClientRect()
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
-
     const product = products.find(p => p.id === activeProduct)
     if (!product) return
-
     const region = detectRegion(y)
-    
     const newPoint: Point = {
       id: `p-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      x,
-      y,
-      region,
+      x, y, region,
       product_id: activeProduct,
       product_name: product.name,
       units: unitsPerClick
     }
-
     setPoints(prev => [...prev, newPoint])
   }
 
-  // Remover último ponto (Ctrl+Z)
-  const undoLastPoint = () => {
-    setPoints(prev => prev.slice(0, -1))
-  }
+  const undoLastPoint = () => setPoints(prev => prev.slice(0, -1))
+  const clearAllPoints = () => { if (points.length > 0 && confirm('Limpar todos os pontos?')) setPoints([]) }
+  const removePoint = (id: string) => setPoints(prev => prev.filter(p => p.id !== id))
 
-  // Limpar todos os pontos
-  const clearAllPoints = () => {
-    if (points.length > 0 && confirm('Limpar todos os pontos?')) {
-      setPoints([])
-    }
-  }
-
-  // Remover ponto específico
-  const removePoint = (id: string) => {
-    setPoints(prev => prev.filter(p => p.id !== id))
-  }
-
-  // Totais
   const totalUnits = points.reduce((acc, p) => acc + p.units, 0)
   const productSummary = points.reduce((acc, p) => {
     if (!acc[p.product_id]) {
@@ -153,170 +122,63 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     return acc
   }, {} as Record<string, { name: string; units: number; points: number; color: string }>)
 
-  // Salvar entrada manual (sem marcar pontos no mapa)
-  const saveManualEntry = async () => {
-    const units = parseInt(manualUnits)
-    if (!activeProduct || !units || units <= 0) {
-      alert('Selecione um produto e informe a quantidade de unidades')
-      return
-    }
-
-    setSaving(true)
-    setError(null)
-    
-    const product = products.find(p => p.id === activeProduct)
-    console.log('=== SALVANDO ENTRADA MANUAL ===')
-    console.log('Produto:', product?.name, 'Unidades:', units)
-
-    try {
-      const productType = product?.category?.toLowerCase().includes('preenchimento') || 
-                         product?.category?.toLowerCase().includes('filler') 
-                         ? 'filler' : 'toxin'
-
-      const { data: application, error: appError } = await supabase
-        .from('injectable_applications')
-        .insert({
-          clinic_id: clinicId,
-          patient_id: patient.id,
-          appointment_id: appointmentId,
-          product_id: activeProduct,
-          product_name: product?.name || 'Produto',
-          product_brand: product?.brand || null,
-          total_units: units,
-          stock_deducted: false,
-          application_date: todayBR(),
-          type: productType,
-          notes: manualNotes || null
-        })
-        .select()
-        .single()
-
-      if (appError) {
-        console.error('Erro ao salvar entrada manual:', appError)
-        alert(`Erro: ${appError.message}`)
-        setError(appError.message)
-        return
-      }
-
-      console.log('Entrada manual salva!', application?.id)
-      alert(`✓ ${units} unidades de ${product?.name} registradas com sucesso!`)
-      
-      setManualUnits('')
-      setManualNotes('')
-      setManualMode(false)
-      router.refresh()
-    } catch (err) {
-      console.error('Erro:', err)
-      alert('Erro ao salvar. Veja o console.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // Salvar aplicações (com pontos no mapa)
   const saveInjections = async () => {
     if (points.length === 0) return
-    
     setSaving(true)
     setError(null)
-    
-    console.log('=== INICIANDO SALVAMENTO ===')
-    console.log('Pontos:', points.length)
-    console.log('Clinic ID:', clinicId)
-    console.log('Patient ID:', patient.id)
-    console.log('Appointment ID:', appointmentId)
-
     try {
-      // Agrupar por produto
       const byProduct = points.reduce((acc, p) => {
         if (!acc[p.product_id]) acc[p.product_id] = []
         acc[p.product_id].push(p)
         return acc
       }, {} as Record<string, Point[]>)
 
-      console.log('Produtos agrupados:', Object.keys(byProduct).length)
-
       for (const [productId, productPoints] of Object.entries(byProduct)) {
         const product = products.find(p => p.id === productId)
         const totalProductUnits = productPoints.reduce((a, p) => a + p.units, 0)
+        const productType = product?.category?.toLowerCase().includes('preenchimento') ||
+          product?.category?.toLowerCase().includes('filler') ? 'filler' : 'toxin'
 
-        console.log('Salvando produto:', product?.name, 'Units:', totalProductUnits)
-
-        // Determinar tipo baseado na categoria do produto
-        const productType = product?.category?.toLowerCase().includes('preenchimento') || 
-                           product?.category?.toLowerCase().includes('filler') 
-                           ? 'filler' : 'toxin'
-
-        const insertData = {
-          clinic_id: clinicId,
-          patient_id: patient.id,
-          appointment_id: appointmentId,
-          product_id: productId,
-          product_name: product?.name || 'Produto',
-          product_brand: product?.brand || null,
-          total_units: totalProductUnits,
-          stock_deducted: false,
-          application_date: todayBR(),
-          type: productType
-        }
-
-        console.log('Dados para inserir:', JSON.stringify(insertData, null, 2))
-
-        // Criar aplicação
         const { data: application, error: appError } = await supabase
           .from('injectable_applications')
-          .insert(insertData)
+          .insert({
+            clinic_id: clinicId,
+            patient_id: patient.id,
+            appointment_id: appointmentId,
+            product_id: productId,
+            product_name: product?.name || 'Produto',
+            product_brand: product?.brand || null,
+            total_units: totalProductUnits,
+            stock_deducted: false,
+            application_date: todayBR(),
+            type: productType
+          })
           .select()
           .single()
 
         if (appError) {
-          console.error('=== ERRO AO SALVAR APLICAÇÃO ===')
-          console.error('Código:', appError.code)
-          console.error('Mensagem:', appError.message)
-          console.error('Detalhes:', appError.details)
-          console.error('Hint:', appError.hint)
-          
-          const errorMsg = `ERRO: ${appError.code} - ${appError.message}\nDetalhes: ${appError.details || 'N/A'}\nDica: ${appError.hint || 'N/A'}`
-          setError(errorMsg)
-          alert(errorMsg)
-          throw new Error(errorMsg)
+          setError(appError.message)
+          throw new Error(appError.message)
         }
 
-        console.log('=== APLICAÇÃO CRIADA ===', application?.id)
-
-        // Criar pontos (usando x_position e y_position como na tabela)
-        const pointsData = productPoints.map(p => ({
-          application_id: application.id,
-          zone: p.region || detectRegion(p.y),
-          x_position: p.x,
-          y_position: p.y,
-          units: p.units
-        }))
-
-        const { error: pointsError } = await supabase
-          .from('injectable_points')
-          .insert(pointsData)
-
-        if (pointsError) {
-          console.error('Erro ao criar pontos:', pointsError)
-          setError(`Erro ao salvar pontos: ${pointsError.message}`)
-        } else {
-          console.log('Pontos criados com sucesso:', pointsData.length)
-        }
+        await supabase.from('injectable_points').insert(
+          productPoints.map(p => ({
+            application_id: application.id,
+            zone: p.region || detectRegion(p.y),
+            x_position: p.x,
+            y_position: p.y,
+            units: p.units
+          }))
+        )
       }
 
-      log.info('Todas as aplicações salvas com sucesso')
       setPoints([])
       setIsMarkingMode(false)
       router.refresh()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido ao salvar aplicações'
-      log.error('Falha ao salvar aplicações', err, {
-        appointmentId,
-        patientId: patient.id,
-        totalPoints: points.length
-      })
-      setError(errorMessage)
+      const msg = err instanceof Error ? err.message : 'Erro ao salvar'
+      log.error('Falha ao salvar aplicações', err)
+      setError(msg)
     } finally {
       setSaving(false)
     }
@@ -328,12 +190,10 @@ export default function InjectableMapSection({ patient, appointmentId, products,
     <div className="card overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-slate-100">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           <h3 className="font-semibold text-slate-900">Registro de Injetáveis</h3>
           {points.length > 0 && (
-            <span className="text-lg font-bold text-violet-600">
-              {totalUnits}U
-            </span>
+            <span className="text-lg font-bold text-violet-600">{totalUnits}U</span>
           )}
         </div>
       </div>
@@ -357,7 +217,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
             )}
           </div>
 
-          {/* Seletor de Produto */}
+          {/* Seletor de produto */}
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Produto</label>
             {products.length === 0 ? (
@@ -369,7 +229,6 @@ export default function InjectableMapSection({ patient, appointmentId, products,
                 value={activeProduct}
                 onChange={e => setActiveProduct(e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:border-violet-500 outline-none"
-                disabled={isMarkingMode && points.length > 0}
               >
                 <option value="">Selecione o produto...</option>
                 {products.map(p => (
@@ -382,31 +241,22 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           </div>
 
           {/* Unidades por clique */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Unidades por ponto</label>
-            <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5, 10].map(n => (
+          {activeProduct && (
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-slate-600 whitespace-nowrap">Unidades por clique</label>
+              <div className="flex items-center gap-2">
                 <button
-                  key={n}
-                  onClick={() => setUnitsPerClick(n)}
-                  className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
-                    unitsPerClick === n 
-                      ? 'bg-violet-600 text-white' 
-                      : 'bg-white border border-slate-200 text-slate-700 hover:border-violet-300'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-              <input
-                type="number"
-                min="1"
-                value={unitsPerClick}
-                onChange={e => setUnitsPerClick(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-16 h-10 px-2 bg-white border border-slate-200 rounded-lg text-sm text-center font-semibold focus:border-violet-500 outline-none"
-              />
+                  onClick={() => setUnitsPerClick(Math.max(1, unitsPerClick - 1))}
+                  className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300"
+                >-</button>
+                <span className="w-8 text-center text-sm font-bold text-slate-900">{unitsPerClick}</span>
+                <button
+                  onClick={() => setUnitsPerClick(unitsPerClick + 1)}
+                  className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-violet-300"
+                >+</button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Botão de modo */}
           <button
@@ -421,15 +271,9 @@ export default function InjectableMapSection({ patient, appointmentId, products,
             }`}
           >
             {isMarkingMode ? (
-              <>
-                <Icon name="x" className="w-4 h-4" />
-                Parar marcação
-              </>
+              <><Icon name="x" className="w-4 h-4" />Parar marcação</>
             ) : (
-              <>
-                <Icon name="edit" className="w-4 h-4" />
-                Iniciar marcação
-              </>
+              <><Icon name="edit" className="w-4 h-4" />Iniciar marcação</>
             )}
           </button>
         </div>
@@ -437,41 +281,30 @@ export default function InjectableMapSection({ patient, appointmentId, products,
         {/* Info do produto ativo */}
         {activeProductData && isMarkingMode && (
           <div className="flex items-center gap-3 p-3 bg-violet-50 rounded-xl">
-            <span 
-              className="w-4 h-4 rounded-full" 
-              style={{ backgroundColor: getProductColor(activeProduct) }}
-            />
+            <span className="w-4 h-4 rounded-full" style={{ backgroundColor: getProductColor(activeProduct) }} />
             <div className="flex-1">
               <p className="text-sm font-semibold text-violet-900">{activeProductData.name}</p>
               <p className="text-xs text-violet-600">{unitsPerClick}U por clique</p>
             </div>
           </div>
+        )}
 
         {/* Mapa */}
-        <div className={`relative rounded-xl overflow-hidden ${
-          isMarkingMode ? 'ring-2 ring-violet-500 ring-offset-2' : ''
-        }`}>
+        <div className={`relative rounded-xl overflow-hidden ${isMarkingMode ? 'ring-2 ring-violet-500 ring-offset-2' : ''}`}>
           <div className="bg-gradient-to-b from-slate-50 to-slate-100 p-4">
-            <FaceMap 
-              ref={svgRef} 
-              onClick={handleMapClick} 
+            <FaceMap
+              ref={svgRef}
+              onClick={handleMapClick}
               showRegions={true}
               gender={patient.gender === 'M' ? 'male' : 'female'}
             >
               {/* Pontos existentes (salvos) */}
-              {currentInjections.flatMap(inj => 
+              {currentInjections.flatMap(inj =>
                 inj.injectable_points?.map((p, i) => {
                   const coords = toSvgCoords(p.x_position, p.y_position)
                   return (
                     <g key={`saved-${inj.id}-${i}`}>
-                      <circle 
-                        cx={coords.x} 
-                        cy={coords.y} 
-                        r="8" 
-                        fill="#64748b" 
-                        stroke="white" 
-                        strokeWidth="2"
-                      />
+                      <circle cx={coords.x} cy={coords.y} r="8" fill="#64748b" stroke="white" strokeWidth="2" />
                       <text x={coords.x} y={coords.y + 3} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">
                         {p.units}
                       </text>
@@ -479,25 +312,17 @@ export default function InjectableMapSection({ patient, appointmentId, products,
                   )
                 })
               )}
-
               {/* Pontos novos (não salvos) */}
               {points.map((point) => {
                 const coords = toSvgCoords(point.x, point.y)
                 const color = getProductColor(point.product_id)
                 return (
                   <g key={point.id}>
-                    <circle 
-                      cx={coords.x} 
-                      cy={coords.y} 
-                      r="10" 
-                      fill={color}
-                      stroke="white" 
-                      strokeWidth="2"
+                    <circle
+                      cx={coords.x} cy={coords.y} r="10"
+                      fill={color} stroke="white" strokeWidth="2"
                       className="cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removePoint(point.id)
-                      }}
+                      onClick={(e) => { e.stopPropagation(); removePoint(point.id) }}
                     />
                     <text x={coords.x} y={coords.y + 4} textAnchor="middle" fontSize="10" fill="white" fontWeight="bold">
                       {point.units}
@@ -512,7 +337,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
           {!isMarkingMode && products.length > 0 && (
             <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
               <p className="text-sm text-slate-500 font-medium">
-                Selecione um produto e clique em "Iniciar marcação"
+                Selecione um produto e clique em &quot;Iniciar marcação&quot;
               </p>
             </div>
           )}
@@ -526,8 +351,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
                 onClick={undoLastPoint}
                 className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors flex items-center gap-1"
               >
-                <Icon name="arrowLeft" className="w-3 h-3" />
-                Desfazer
+                <Icon name="arrowLeft" className="w-3 h-3" />Desfazer
               </button>
               <button
                 onClick={clearAllPoints}
@@ -536,9 +360,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
                 Limpar tudo
               </button>
             </div>
-            <span className="text-xs text-slate-500">
-              Clique em um ponto para removê-lo
-            </span>
+            <span className="text-xs text-slate-500">Clique em um ponto para removê-lo</span>
           </div>
         )}
 
@@ -570,7 +392,6 @@ export default function InjectableMapSection({ patient, appointmentId, products,
                 O estoque será descontado ao finalizar o atendimento
               </p>
             </div>
-
             <button
               onClick={saveInjections}
               disabled={saving}
@@ -579,14 +400,12 @@ export default function InjectableMapSection({ patient, appointmentId, products,
               {saving ? (
                 <span className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
               ) : (
-                <>
-                  <Icon name="check" className="w-4 h-4" />
-                  Salvar {points.length} pontos ({totalUnits}U)
-                </>
+                <><Icon name="check" className="w-4 h-4" />Salvar {points.length} pontos ({totalUnits}U)</>
               )}
             </button>
           </>
         )}
+
         {/* Aplicações já salvas */}
         {currentInjections.length > 0 && (
           <div className="pt-4 border-t border-slate-100">
