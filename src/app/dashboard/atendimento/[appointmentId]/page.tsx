@@ -4,6 +4,7 @@ import AttendanceHeader from './attendance-header'
 import MedicalRecordSection from './medical-record-section'
 import InjectableMapSection from './injectable-map-section'
 import ProductsUsedSection from './products-used-section'
+import ValorCobrancaSection from './valor-cobranca-section'
 import ReturnScheduler from './return-scheduler'
 import { Suspense } from 'react'
 import AnamneseSummaryCard from '@/components/anamnese/AnamneseSummaryCard'
@@ -31,7 +32,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
 
   const { data: appointment } = await supabase
     .from('appointments')
-    .select(`*, room_cost, patients(*), procedures(name, duration_minutes, price)`)
+    .select(`*, room_cost, valor_cobrado, patients(*), procedures(name, duration_minutes, price)`)
     .eq('id', appointmentId)
     .maybeSingle()
 
@@ -265,6 +266,13 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               clinicId={userData?.clinic_id || ''}
               products={productsForMap || []}
               usedProducts={usedProducts || []}
+            />
+
+            {/* Valor do atendimento — vai para o pagamento */}
+            <ValorCobrancaSection
+              appointmentId={appointmentId}
+              procedurePrice={procedure?.price ?? null}
+              initialValorCobrado={appointment.valor_cobrado ?? null}
             />
 
           </div>
