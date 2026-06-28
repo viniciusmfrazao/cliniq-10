@@ -769,11 +769,11 @@ export async function POST(
               .normalize('NFD').replace(/[̀-ͯ]/g, '')
               .replace(/[^\p{L}\s]/gu, '').trim().toUpperCase()
 
-            const isConfirmar = btnNorm === 'CONFIRMAR'
-            const isCancelar  = btnNorm === 'CANCELAR'
-            const isNaoSouEu  = btnNorm === 'NAO SOU EU'
+            const isConfirmar  = btnNorm === 'CONFIRMAR'
+            const isCancelar   = btnNorm === 'CANCELAR'
+            const isReagendar  = btnNorm === 'REAGENDAR'
 
-            if ((isConfirmar || isCancelar || isNaoSouEu) && patientRes.data?.id) {
+            if ((isConfirmar || isCancelar || isReagendar) && patientRes.data?.id) {
               try {
                 const { data: aptData } = await svc
                   .from('appointments')
@@ -821,19 +821,15 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
                     void sendWhatsappMessage({ clinicId, phone, message: msg, instanceName: instance, purpose: 'automation' })
                     void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'button_cancelar', status: 'ok', details: { appointment_id: apt.id } })
 
-                  } else if (isNaoSouEu) {
-                    // Marca para revisão humana — motivo: reagendamento
-                    await svc.from('leads').update({
-                      needs_human_review: true,
-                      human_review_reason: 'reagendamento',
-                      human_review_at: new Date().toISOString(),
-                      human_review_details: 'Paciente clicou em "NÃO SOU EU" no lembrete. Verificar e reagendar.',
-                    })
-                      .eq('clinic_id', clinicId)
-                      .eq('phone', phone)
+                  } else if (isReagendar) {
+                    // Marca o agendamento como reagendamento na agenda
+                    await svc.from('appointments').update({ status: 'rescheduling' }).eq('id', apt.id)
 
-                    void sendWhatsappMessage({ clinicId, phone, message: 'Entendido! Vou encaminhar para nossa equipe remarcar. 💜', instanceName: instance, purpose: 'automation' })
-                    void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'button_nao_sou_eu', status: 'ok', details: { appointment_id: apt.id } })
+                    const msg = patFirst
+                      ? `${patFirst}, entendido! Nossa equipe entrará em contato para remarcar. 💜`
+                      : `Entendido! Nossa equipe entrará em contato para remarcar. 💜`
+                    void sendWhatsappMessage({ clinicId, phone, message: msg, instanceName: instance, purpose: 'automation' })
+                    void logEva({ clinic_id: clinicId, phone, source: 'webhook', event: 'button_reagendar', status: 'ok', details: { appointment_id: apt.id } })
                   }
 
                   // Em todos os casos: Eva não precisa responder
