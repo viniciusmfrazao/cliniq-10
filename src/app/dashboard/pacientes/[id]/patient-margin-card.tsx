@@ -63,7 +63,7 @@ export default async function PatientMarginCard({
 
     const { data: saidasMes } = await supabase
       .from('saidas')
-      .select('valor, data, subcategoria')
+      .select('valor, data, subcategoria, categoria_dre')
       .eq('clinic_id', clinicId)
       .gte('data', mesInicio)
       .lte('data', mesFim)
@@ -77,7 +77,11 @@ export default async function PatientMarginCard({
       .lte('start_time', mesFim + 'T23:59:59')
 
     const sala = (saidasMes || []).filter((s) => s.subcategoria === 'aluguel_sala')
-    const fixas = (saidasMes || []).filter((s) => s.subcategoria !== 'aluguel_sala')
+    // Exclui CMV/Insumos do rateio — já contabilizado no custo de estoque
+    const fixas = (saidasMes || []).filter((s) =>
+      s.subcategoria !== 'aluguel_sala' &&
+      s.categoria_dre !== 'CMV / Insumos'
+    )
     const totalFixo = fixas.reduce((s, r) => s + Number(r.valor), 0)
     const n = atendimentosMes || 1
 
