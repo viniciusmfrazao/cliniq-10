@@ -291,19 +291,19 @@ export const GUIDES: GuideRole[] = [
         color: 'from-emerald-500 to-teal-500',
       },
       {
-        title: 'Lance cada entrada na hora',
+        title: 'Registre entradas pelo pagamento na agenda',
         description:
-          'Em Entradas → Nova: paciente, procedimento, forma de pagamento. Cartão? Bandeira e parcelas. Pix? Confirmação. O sistema calcula taxa e líquido.',
-        tip: 'Lance no mesmo dia — fica mais fácil que tentar reconstruir depois.',
-        icon: 'plus',
-        href: '/dashboard/financeiro/entradas/nova',
+          'A forma correta é pelo botão "Registrar Pagamento" no popup do agendamento. O sistema vincula automaticamente ao paciente e atendimento. Informe apenas a forma de pagamento e o valor. Para corrigir, vá em Financeiro → Entradas, clique no lápis e edite.',
+        tip: 'Entradas lançadas pela agenda vinculam ao atendimento automaticamente — isso alimenta a rentabilidade do paciente.',
+        icon: 'dollar',
+        href: '/dashboard/agenda',
         color: 'from-teal-500 to-cyan-500',
       },
       {
-        title: 'Registre as saídas',
+        title: 'Registre as saídas com categoria certa',
         description:
-          'Aluguel, fornecedores, marketing, salários — tudo em Saídas → Nova. Categoria certa = relatórios fiéis e DRE confiável.',
-        tip: 'Crie categorias bem específicas (não só "Diversos").',
+          'Toda despesa vai em Saídas → Nova. Categorias: Administrativas (aluguel, luz), Pessoal (salários), Marketing, Impostos. Para aluguel de sala por procedimento use a subcategoria "Aluguel de sala" — o custo é rateado por atendimento do dia. Nunca use CMV / Insumos para compra de produtos: esses entram pelo estoque e geram dupla contagem.',
+        tip: 'CMV / Insumos é excluído do rateio de fixos por paciente — o custo de produto já é calculado automaticamente pelo estoque.',
         icon: 'minus',
         href: '/dashboard/financeiro/saidas/nova',
         color: 'from-cyan-500 to-blue-500',
@@ -343,6 +343,15 @@ export const GUIDES: GuideRole[] = [
         icon: 'award',
         href: '/dashboard/financeiro/historico-paciente',
         color: 'from-pink-500 to-rose-500',
+      },
+      {
+        title: 'Entenda a rentabilidade de cada paciente',
+        description:
+          'Na ficha de cada paciente há o card Rentabilidade. Ele mostra: Receita total (pagamentos registrados via agenda), Custo estoque (produtos usados × custo de compra), Lucro bruto (receita − estoque) e Margem %. Por atendimento aparece também os Fixos (ref.) — custos fixos da clínica rateados pelo número de atendimentos do mês. CMV / Insumos não entra no rateio pois já está no custo de estoque.',
+        tip: 'Margem negativa pode indicar pagamento não registrado — verifique em Financeiro → Entradas se o pagamento foi lançado corretamente.',
+        icon: 'trendingUp',
+        href: '/dashboard/pacientes',
+        color: 'from-violet-500 to-purple-500',
       },
     ],
   },
