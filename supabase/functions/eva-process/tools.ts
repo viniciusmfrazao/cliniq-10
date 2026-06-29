@@ -207,7 +207,13 @@ export async function criarAgendamento(args: {
   leadConvertedId?: string | null;
   patientId?: string | null;
 }> {
-  const { professionals, procedures, history, patient } = ctx;
+  const { professionals: allProfessionals, procedures, history, patient } = ctx;
+  // Excluir agendas de recursos (Cursos, Aparelhos) — não são profissionais atendentes
+  const NON_BOOKABLE = ['curso', 'aparelho', 'equipamento'];
+  const professionals = allProfessionals.filter(p => {
+    const n = p.name.toLowerCase();
+    return !NON_BOOKABLE.some(kw => n.includes(kw));
+  });
   const validProfIds = new Set<string>(professionals.map((p) => p.id));
 
   // 1) Validar/resolver professional_id
