@@ -44,7 +44,7 @@ export default function PatientTabs({
   counts?: Partial<Record<PatientTab, number>>
 }) {
   return (
-    <div className="border-b border-slate-200 mb-6 overflow-x-auto">
+    <div className="border-b border-slate-200 mb-6 overflow-x-auto overflow-y-hidden scrollbar-hide">
       <div className="flex gap-1 min-w-max">
         {TABS.map((tab) => {
           const active = tab.id === current
