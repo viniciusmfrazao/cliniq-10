@@ -496,7 +496,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           {/* Quick Actions */}
           {(() => {
             const allActions = [
-              { label: 'Recepção', href: '/dashboard/recepcao', icon: 'userCheck', color: 'from-emerald-500 to-teal-500' },
+              { label: 'Como funciona', href: '/dashboard/como-funciona', icon: 'helpCircle', color: 'from-violet-500 to-purple-500' },
               { label: 'Estoque', href: '/dashboard/estoque', icon: 'box', color: 'from-amber-500 to-orange-500' },
               { label: 'CRM', href: '/dashboard/crm', icon: 'target', color: 'from-blue-500 to-cyan-500' },
               { label: 'Financeiro', href: '/dashboard/financeiro', icon: 'dollarSign', color: 'from-emerald-500 to-green-500' },
