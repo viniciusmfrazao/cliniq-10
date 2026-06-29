@@ -11,7 +11,6 @@ const NOVIDADES = [
   { emoji: '💳', texto: 'Valor cobrado pela profissional pré-preenchido no pagamento' },
   { emoji: '✏️', texto: 'Edição de entradas e saídas financeiras' },
   { emoji: '📊', texto: 'Rentabilidade por paciente: custo, receita e margem real' },
-  { emoji: '✅', texto: 'Botões de confirmação no WhatsApp (Confirmar / Cancelar / Reagendar)' },
   { emoji: '📦', texto: 'Edição de movimentações de estoque com ajuste automático' },
   { emoji: '🔁', texto: 'Recall multi-step: sequência de mensagens em múltiplos intervalos' },
 ]
