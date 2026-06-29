@@ -1,37 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import * as XLSX from 'xlsx'
 
-interface Row {
-  Profissional: string
-  Data: string
-  'Horário': string
-  Cliente: string
-  'Serviço(s)': string
-  Preço: number
-  Observação?: string
+interface SkippedRow {
+  name: string
+  reason: string
 }
 
 interface Result {
   total: number
   inserted: number
-  skipped: { name: string; reason: string }[]
-}
-
-function parseDate(s: string): string {
-  // "Qui, 04/12/2025" -> "2025-12-04"
-  const part = s.includes(',') ? s.split(', ')[1] : s
-  const [d, m, y] = part.trim().split('/')
-  return `${y}-${m}-${d}`
-}
-
-function parseTimes(horario: string, date: string): [string, string] {
-  const parts = horario.split(' às ')
-  const start = parts[0].trim()
-  const end = parts[1]?.trim() ?? start
-  return [`${date}T${start}:00-03:00`, `${date}T${end}:00-03:00`]
+  skipped: SkippedRow[]
 }
 
 export default function ImportarAgendamentosPage() {
@@ -41,8 +21,6 @@ export default function ImportarAgendamentosPage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState('')
-
-  const supabase = createClient()
 
   async function handleImport() {
     if (!clinicId || !professionalId || !file) {
@@ -54,72 +32,33 @@ export default function ImportarAgendamentosPage() {
     setResult(null)
 
     try {
-      // 1. Buscar pacientes e procedimentos da clínica
-      const [{ data: patients }, { data: procedures }] = await Promise.all([
-        supabase.from('patients').select('id, name').eq('clinic_id', clinicId),
-        supabase.from('procedures').select('id, name').eq('clinic_id', clinicId),
-      ])
-
-      if (!patients || !procedures) throw new Error('Erro ao buscar dados da clínica.')
-
-      // Mapas normalizados (lowercase + trim)
-      const patientMap = new Map<string, string>()
-      for (const p of patients) patientMap.set(p.name.trim().toLowerCase(), p.id)
-
-      const procedureMap = new Map<string, string>()
-      for (const p of procedures) procedureMap.set(p.name.trim().toLowerCase(), p.id)
-
-      // 2. Parse do XLSX
+      // Parse XLSX no browser
       const buffer = await file.arrayBuffer()
       const wb = XLSX.read(buffer, { type: 'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows: Row[] = XLSX.utils.sheet_to_json(ws)
+      const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws)
 
-      const toInsert: object[] = []
-      const skipped: { name: string; reason: string }[] = []
+      // Normalizar para chaves simples
+      const rows = raw.map(r => ({
+        data: String(r['Data'] ?? ''),
+        horario: String(r['Hor\u00e1rio'] ?? r['Horario'] ?? r['Horário'] ?? ''),
+        cliente: String(r['Cliente'] ?? '').trim(),
+        servico: String(r['Servi\u00e7o(s)'] ?? r['Servico(s)'] ?? r['Serviço(s)'] ?? '').trim(),
+        preco: Number(r['Pre\u00e7o'] ?? r['Preco'] ?? r['Preço'] ?? 0),
+        observacao: r['Observa\u00e7\u00e3o'] != null ? String(r['Observação'] ?? r['Observacao'] ?? '').trim() : undefined,
+      })).filter(r => r.cliente && r.data)
 
-      for (const row of rows) {
-        const clientName = String(row['Cliente'] ?? '').trim()
-        const serviceName = String(row['Serviço(s)'] ?? '').trim().split(',')[0].trim()
-        const dateStr = parseDate(String(row['Data'] ?? ''))
-        const [startTime, endTime] = parseTimes(String(row['Horário'] ?? ''), dateStr)
-        const price = Number(row['Preço'] ?? 0)
-        const notes = row['Observação'] ? String(row['Observação']).trim() : null
+      // Enviar para API route (usa service role — sem RLS)
+      const res = await fetch('/api/import-agendamentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicId, professionalId, rows }),
+      })
 
-        const patientId = patientMap.get(clientName.toLowerCase())
-        if (!patientId) {
-          skipped.push({ name: clientName, reason: 'paciente não encontrado' })
-          continue
-        }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro na API')
 
-        const procedureId = procedureMap.get(serviceName.toLowerCase()) ?? null
-
-        toInsert.push({
-          id: crypto.randomUUID(),
-          clinic_id: clinicId,
-          patient_id: patientId,
-          professional_id: professionalId,
-          procedure_id: procedureId,
-          start_time: startTime,
-          end_time: endTime,
-          status: 'completed',
-          notes,
-          price,
-          valor_cobrado: price,
-        })
-      }
-
-      // 3. Inserir em lotes de 50
-      let inserted = 0
-      const BATCH = 50
-      for (let i = 0; i < toInsert.length; i += BATCH) {
-        const batch = toInsert.slice(i, i + BATCH)
-        const { error: insertError } = await supabase.from('appointments').insert(batch)
-        if (insertError) throw new Error(`Erro no lote ${i / BATCH}: ${insertError.message}`)
-        inserted += batch.length
-      }
-
-      setResult({ total: rows.length, inserted, skipped })
+      setResult({ total: rows.length, inserted: data.inserted, skipped: data.skipped })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro desconhecido.')
     } finally {
@@ -130,9 +69,7 @@ export default function ImportarAgendamentosPage() {
   return (
     <div className="max-w-2xl mx-auto p-8 space-y-6">
       <h1 className="text-2xl font-bold">Importar Agendamentos (XLSX)</h1>
-      <p className="text-sm text-gray-500">
-        Página temporária — apagar após uso.
-      </p>
+      <p className="text-sm text-gray-500">Página temporária — apagar após uso.</p>
 
       <div className="card p-6 space-y-4">
         <div>
@@ -144,7 +81,6 @@ export default function ImportarAgendamentosPage() {
             onChange={e => setClinicId(e.target.value.trim())}
           />
         </div>
-
         <div>
           <label className="label">ID do Profissional</label>
           <input
@@ -154,7 +90,6 @@ export default function ImportarAgendamentosPage() {
             onChange={e => setProfessionalId(e.target.value.trim())}
           />
         </div>
-
         <div>
           <label className="label">Arquivo XLSX</label>
           <input
@@ -171,11 +106,7 @@ export default function ImportarAgendamentosPage() {
           </div>
         )}
 
-        <button
-          className="btn btn-primary w-full"
-          onClick={handleImport}
-          disabled={loading}
-        >
+        <button className="btn btn-primary w-full" onClick={handleImport} disabled={loading}>
           {loading ? 'Importando...' : 'Importar'}
         </button>
       </div>
