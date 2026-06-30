@@ -88,6 +88,7 @@ export default function AppointmentActions({
         valor_liquido: valor,
         n_parcelas: 1,
         observacoes: obsIdentifier,
+        appointment_id: appointment.id,
       })
 
       setSinalSalvo(true)
