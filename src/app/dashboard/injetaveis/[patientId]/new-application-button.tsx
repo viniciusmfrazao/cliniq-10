@@ -34,6 +34,13 @@ export default function NewApplicationButton({ patientId, clinicId, professional
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
+
+  // Estado para ajuste de estoque inline
+  const [adjustingProductId, setAdjustingProductId] = useState<string | null>(null)
+  const [adjustType, setAdjustType] = useState<'entrada' | 'saida' | 'ajuste'>('entrada')
+  const [adjustQty, setAdjustQty] = useState(1)
+  const [adjustReason, setAdjustReason] = useState('')
+  const [adjustSaving, setAdjustSaving] = useState(false)
   
   const [form, setForm] = useState({
     type: 'toxin',
@@ -47,21 +54,21 @@ export default function NewApplicationButton({ patientId, clinicId, professional
   const [points, setPoints] = useState<any[]>([])
 
   // Carregar produtos injetaveis do estoque
+  async function loadProducts() {
+    const { data } = await supabase
+      .from('products')
+      .select('id, name, brand, current_stock, batch_number, unit')
+      .eq('clinic_id', clinicId)
+      .eq('is_active', true)
+      .eq('category', 'injetavel')
+      .order('name')
+    
+    if (data) setProducts(data)
+  }
+
   useEffect(() => {
-    async function loadProducts() {
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, brand, current_stock, batch_number, unit')
-        .eq('clinic_id', clinicId)
-        .eq('is_active', true)
-        .eq('category', 'injetavel')
-        .gt('current_stock', 0)
-        .order('name')
-      
-      if (data) setProducts(data)
-    }
     if (open) loadProducts()
-  }, [open, clinicId, supabase])
+  }, [open, clinicId])
 
   function selectProduct(productId: string) {
     const product = products.find(p => p.id === productId)
@@ -76,11 +83,65 @@ export default function NewApplicationButton({ patientId, clinicId, professional
     }
   }
 
+  function openAdjust(productId: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    setAdjustingProductId(productId)
+    setAdjustType('entrada')
+    setAdjustQty(1)
+    setAdjustReason('')
+  }
+
+  async function saveAdjust(product: Product) {
+    if (adjustQty < 1 && adjustType !== 'ajuste') return
+    setAdjustSaving(true)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Sem autenticacao')
+
+      let newStock = product.current_stock
+      if (adjustType === 'entrada') newStock += adjustQty
+      else if (adjustType === 'saida') newStock -= adjustQty
+      else newStock = adjustQty
+
+      if (newStock < 0) {
+        alert('Estoque nao pode ficar negativo')
+        setAdjustSaving(false)
+        return
+      }
+
+      const { error } = await supabase.from('stock_movements').insert({
+        clinic_id: clinicId,
+        product_id: product.id,
+        type: adjustType,
+        quantity: adjustType === 'ajuste' ? adjustQty - product.current_stock : adjustQty,
+        previous_stock: product.current_stock,
+        new_stock: newStock,
+        reason: adjustReason || 'Ajuste via injetaveis',
+        user_id: user.id,
+      })
+
+      if (error) throw error
+
+      // Atualizar estado local do produto
+      setProducts(prev => prev.map(p =>
+        p.id === product.id ? { ...p, current_stock: newStock } : p
+      ))
+      setAdjustingProductId(null)
+    } catch (err) {
+      console.error('Erro ao ajustar estoque', err)
+      alert('Erro ao ajustar estoque.')
+    } finally {
+      setAdjustSaving(false)
+    }
+  }
+
   async function handleSubmit() {
     if (!form.product_name) return
     setLoading(true)
 
     const totalUnits = points.reduce((sum, p) => sum + (p.units || 0), 0)
+    const selectedProduct = products.find(p => p.id === form.product_id)
 
     // Criar aplicacao vinculada ao produto e atendimento
     const { data: application, error } = await supabase
@@ -98,7 +159,7 @@ export default function NewApplicationButton({ patientId, clinicId, professional
         lot_number: form.lot_number || null,
         total_units: totalUnits,
         notes: form.notes || null,
-        stock_deducted: false,
+        stock_deducted: !!form.product_id,
       })
       .select()
       .single()
@@ -125,6 +186,22 @@ export default function NewApplicationButton({ patientId, clinicId, professional
           technique: p.technique || null,
         }))
       )
+    }
+
+    // Deduzir estoque automaticamente se produto vinculado
+    if (form.product_id && selectedProduct && totalUnits > 0) {
+      const { data: { user } } = await supabase.auth.getUser()
+      const newStock = Math.max(0, selectedProduct.current_stock - totalUnits)
+      await supabase.from('stock_movements').insert({
+        clinic_id: clinicId,
+        product_id: form.product_id,
+        type: 'uso_atendimento',
+        quantity: -totalUnits,
+        previous_stock: selectedProduct.current_stock,
+        new_stock: newStock,
+        reason: `Aplicacao em paciente`,
+        user_id: user?.id,
+      })
     }
 
     setLoading(false)
@@ -157,6 +234,7 @@ export default function NewApplicationButton({ patientId, clinicId, professional
 
   const totalUnits = points.reduce((sum, p) => sum + (p.units || 0), 0)
   const selectedProduct = products.find(p => p.id === form.product_id)
+  const availableProducts = products.filter(p => p.current_stock > 0)
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -219,34 +297,133 @@ export default function NewApplicationButton({ patientId, clinicId, professional
               {/* Selecionar do Estoque */}
               {products.length > 0 && (
                 <div>
-                  <label className="label">Selecionar do Estoque</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[200px] overflow-y-auto p-1">
-                    {products.map(product => (
-                      <button
-                        key={product.id}
-                        type="button"
-                        onClick={() => selectProduct(product.id)}
-                        className={`p-3 rounded-xl border-2 text-left transition-all ${
-                          form.product_id === product.id
-                            ? 'border-purple-500 bg-purple-50'
-                            : 'border-slate-200 hover:border-purple-200'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-slate-900 text-sm">{product.name}</p>
-                          <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full">
-                            {product.current_stock} {product.unit}
-                          </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="label mb-0">Selecionar do Estoque</label>
+                    <span className="text-xs text-slate-400">{availableProducts.length} disponíveis</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[240px] overflow-y-auto p-1">
+                    {products.map(product => {
+                      const isAdjusting = adjustingProductId === product.id
+                      const isSelected = form.product_id === product.id
+                      const stockColor = product.current_stock === 0
+                        ? 'bg-red-100 text-red-700'
+                        : product.current_stock <= 3
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-emerald-100 text-emerald-700'
+
+                      return (
+                        <div key={product.id} className={`rounded-xl border-2 transition-all overflow-hidden ${
+                          isSelected ? 'border-purple-500' : 'border-slate-200'
+                        }`}>
+                          {/* Linha principal do produto */}
+                          <button
+                            type="button"
+                            onClick={() => product.current_stock > 0 && selectProduct(product.id)}
+                            disabled={product.current_stock === 0}
+                            className={`w-full p-3 text-left transition-colors ${
+                              isSelected ? 'bg-purple-50' : product.current_stock === 0 ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="font-medium text-slate-900 text-sm truncate pr-2">{product.name}</p>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stockColor}`}>
+                                  {product.current_stock} {product.unit}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => openAdjust(product.id, e)}
+                                  className="p-1 hover:bg-violet-100 rounded text-violet-500 transition-colors"
+                                  title="Ajustar estoque"
+                                >
+                                  <Icon name="edit" className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            {product.brand && (
+                              <p className="text-xs text-slate-500 mt-0.5">{product.brand}</p>
+                            )}
+                          </button>
+
+                          {/* Mini-painel de ajuste inline */}
+                          {isAdjusting && (
+                            <div className="border-t border-slate-200 bg-violet-50 p-3 space-y-2">
+                              <p className="text-xs font-semibold text-violet-700">Ajustar Estoque</p>
+                              <div className="flex gap-1">
+                                {(['entrada', 'saida', 'ajuste'] as const).map(t => (
+                                  <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => setAdjustType(t)}
+                                    className={`flex-1 py-1 px-2 rounded text-xs font-medium transition-all ${
+                                      adjustType === t
+                                        ? t === 'entrada' ? 'bg-emerald-500 text-white'
+                                          : t === 'saida' ? 'bg-red-500 text-white'
+                                          : 'bg-blue-500 text-white'
+                                        : 'bg-white border border-slate-200 text-slate-600'
+                                    }`}
+                                  >
+                                    {t === 'entrada' ? '+Entrada' : t === 'saida' ? '-Saida' : 'Ajuste'}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setAdjustQty(Math.max(0, adjustQty - 1))}
+                                  className="w-7 h-7 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-600 text-sm font-bold"
+                                >-</button>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={adjustQty}
+                                  onChange={e => setAdjustQty(Math.max(0, parseInt(e.target.value) || 0))}
+                                  className="w-14 h-7 px-1 text-center bg-white border border-slate-200 rounded text-sm"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setAdjustQty(adjustQty + 1)}
+                                  className="w-7 h-7 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-600 text-sm font-bold"
+                                >+</button>
+                                <span className="text-xs text-slate-400">
+                                  → {adjustType === 'entrada' ? product.current_stock + adjustQty
+                                    : adjustType === 'saida' ? product.current_stock - adjustQty
+                                    : adjustQty}
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                value={adjustReason}
+                                onChange={e => setAdjustReason(e.target.value)}
+                                placeholder="Motivo (opcional)"
+                                className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => saveAdjust(product)}
+                                  disabled={adjustSaving}
+                                  className="flex-1 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+                                >
+                                  {adjustSaving ? 'Salvando...' : 'Confirmar'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAdjustingProductId(null)}
+                                  className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded text-xs"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        {product.brand && (
-                          <p className="text-xs text-slate-500 mt-1">{product.brand}</p>
-                        )}
-                      </button>
-                    ))}
+                      )
+                    })}
                   </div>
                   <p className="text-xs text-slate-400 mt-2">
                     <Icon name="box" className="w-3 h-3 inline mr-1" />
-                    O estoque sera descontado ao finalizar o atendimento
+                    O estoque e descontado automaticamente ao salvar a aplicacao
                   </p>
                 </div>
               )}
