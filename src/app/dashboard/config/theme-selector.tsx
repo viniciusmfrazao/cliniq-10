@@ -47,6 +47,34 @@ const THEMES = [
     gradient: 'from-purple-500 to-fuchsia-500',
     colors: ['#A855F7', '#D946EF']
   },
+  { 
+    id: 'bordo', 
+    name: 'Bordô', 
+    description: 'Sofisticado e marcante',
+    gradient: 'from-red-950 via-red-800 to-yellow-600',
+    colors: ['#450A0A', '#7F1D1D', '#D4AF37']
+  },
+  { 
+    id: 'midnight', 
+    name: 'Meia-noite', 
+    description: 'Discreto e elegante',
+    gradient: 'from-slate-950 to-indigo-500',
+    colors: ['#0F172A', '#6366F1']
+  },
+  { 
+    id: 'coral', 
+    name: 'Coral', 
+    description: 'Alegre e acolhedor',
+    gradient: 'from-rose-400 to-amber-400',
+    colors: ['#FB7185', '#FBBF24']
+  },
+  { 
+    id: 'grafite', 
+    name: 'Grafite', 
+    description: 'Minimalista e sério',
+    gradient: 'from-slate-700 to-slate-400',
+    colors: ['#334155', '#64748B']
+  },
 ]
 
 export default function ThemeSelector() {

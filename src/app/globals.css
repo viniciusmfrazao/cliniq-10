@@ -147,7 +147,54 @@ button, [role="button"], a {
   --gradient-to: #D946EF;
   --bg-main: #FDFAFF;
   --sidebar-bg: linear-gradient(180deg, #3B0764 0%, #6B21A8 100%);
-  --card-shadow: 0 4px 20px rgba(168, 85, 247, 0.1);
+}
+
+[data-theme="bordo"] {
+  --primary: #7F1D1D;
+  --primary-light: #B91C1C;
+  --primary-dark: #450A0A;
+  --accent: #D4AF37;
+  --gradient-from: #450A0A;
+  --gradient-to: #B91C1C;
+  --bg-main: #FFFAF8;
+  --sidebar-bg: linear-gradient(180deg, #2A0505 0%, #7F1D1D 50%, #D4AF37 100%);
+  --card-shadow: 0 4px 20px rgba(127, 29, 29, 0.15);
+}
+
+[data-theme="midnight"] {
+  --primary: #1E293B;
+  --primary-light: #334155;
+  --primary-dark: #0F172A;
+  --accent: #6366F1;
+  --gradient-from: #0F172A;
+  --gradient-to: #6366F1;
+  --bg-main: #F8FAFC;
+  --sidebar-bg: linear-gradient(180deg, #020617 0%, #1E293B 100%);
+  --card-shadow: 0 4px 20px rgba(30, 41, 59, 0.15);
+}
+
+[data-theme="coral"] {
+  --primary: #FB7185;
+  --primary-light: #FDA4AF;
+  --primary-dark: #E11D48;
+  --accent: #FBBF24;
+  --gradient-from: #FB7185;
+  --gradient-to: #FBBF24;
+  --bg-main: #FFFBF7;
+  --sidebar-bg: linear-gradient(180deg, #881337 0%, #FB7185 100%);
+  --card-shadow: 0 4px 20px rgba(251, 113, 133, 0.15);
+}
+
+[data-theme="grafite"] {
+  --primary: #475569;
+  --primary-light: #64748B;
+  --primary-dark: #1E293B;
+  --accent: #0EA5E9;
+  --gradient-from: #334155;
+  --gradient-to: #64748B;
+  --bg-main: #F8FAFC;
+  --sidebar-bg: linear-gradient(180deg, #0F172A 0%, #475569 100%);
+  --card-shadow: 0 4px 20px rgba(71, 85, 105, 0.15);
 }
 
 /* ==========================================================
