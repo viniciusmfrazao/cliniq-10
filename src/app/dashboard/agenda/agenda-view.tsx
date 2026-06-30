@@ -376,7 +376,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   return (
     <div 
       ref={cardRef}
-      className="relative group h-full"
+      className="relative group h-full w-full overflow-hidden"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -1645,7 +1645,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                       return (
                         <div
                           key={idx}
-                          className={`p-1 border-l border-slate-100 min-h-[56px] ${isToday ? 'bg-purple-50/20' : ''}`}
+                          className={`p-1 border-l border-slate-100 min-h-[56px] overflow-hidden ${isToday ? 'bg-purple-50/20' : ''}`}
                           onDrop={(e) => handleDrop(e, dayStr, hour)}
                         >
                           {hourApts.length > 0 ? (
