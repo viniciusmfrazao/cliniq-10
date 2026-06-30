@@ -136,23 +136,41 @@ export async function GET(req: NextRequest) {
       const evoState = probe.data.instance?.state ?? 'unknown'
 
       if (evoState === 'close' || evoState === 'unknown') {
-        // Debounce: so trata como queda real (muda status + acende banner) se
-        // JA estavamos com esse mesmo motivo no ciclo anterior (2 leituras ruins
-        // seguidas, ~15min de intervalo). Uma leitura isolada costuma ser
-        // instabilidade momentanea da Evolution/Railway, nao queda de fato —
-        // isso causava status flapping (conectado/desconectado a cada ciclo).
-        const wasAlreadyFlagged = r.health_reason === 'evolution_state_close'
-        if (wasAlreadyFlagged) {
-          if (r.status === 'connected') {
-            nextStatus = 'disconnected'
-            summary.auto_disconnected++
+        // Sinal de vida mais confiavel que o connectionState da Evolution:
+        // se chegou mensagem/evento recente (ultimos 10min), a sessao esta
+        // viva de verdade, independente do que essa leitura de API disse.
+        // Visto em producao: connectionState retornando close/unknown
+        // persistentemente pra uma instance que o proprio painel da Evolution
+        // mostra "Connected" e que segue recebendo mensagens normalmente.
+        const lastMsRecent = r.last_event_at ? new Date(r.last_event_at).getTime() : 0
+        const recentActivity = lastMsRecent > 0 && nowMs - lastMsRecent < 10 * 60 * 1000
+
+        if (recentActivity) {
+          if (r.status !== 'connected') {
+            nextStatus = 'connected'
           }
-          nextWarning = true
-          summary.phantom_session++
+          nextWarning = false
+          nextReason = null
+          summary.healthy++
         } else {
-          summary.skipped++
+          // Debounce: so trata como queda real (muda status + acende banner) se
+          // JA estavamos com esse mesmo motivo no ciclo anterior (2 leituras ruins
+          // seguidas, ~15min de intervalo). Uma leitura isolada costuma ser
+          // instabilidade momentanea da Evolution/Railway, nao queda de fato —
+          // isso causava status flapping (conectado/desconectado a cada ciclo).
+          const wasAlreadyFlagged = r.health_reason === 'evolution_state_close'
+          if (wasAlreadyFlagged) {
+            if (r.status === 'connected') {
+              nextStatus = 'disconnected'
+              summary.auto_disconnected++
+            }
+            nextWarning = true
+            summary.phantom_session++
+          } else {
+            summary.skipped++
+          }
+          nextReason = 'evolution_state_close'
         }
-        nextReason = 'evolution_state_close'
       } else if (evoState === 'open') {
         if (r.status !== 'connected') {
           nextStatus = 'connected'
