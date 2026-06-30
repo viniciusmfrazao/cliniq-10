@@ -196,7 +196,7 @@ export default function NewApplicationButton({ patientId, clinicId, professional
         clinic_id: clinicId,
         product_id: form.product_id,
         type: 'uso_atendimento',
-        quantity: -totalUnits,
+        quantity: totalUnits,
         previous_stock: selectedProduct.current_stock,
         new_stock: newStock,
         reason: `Aplicacao em paciente`,
