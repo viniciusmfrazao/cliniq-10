@@ -69,6 +69,7 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
   }, {} as Record<string, Product[]>)
 
   const addProduct = async () => {
+    if (saving) return // guarda síncrona contra duplo clique
     if (!selectedProduct || quantity < 1) return
     
     const product = products.find(p => p.id === selectedProduct)
