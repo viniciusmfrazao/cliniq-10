@@ -390,6 +390,16 @@ export async function ensureWebhookHealthy(args: {
   }
 
   const actualUrl = extractWebhookUrl(info.data)
+
+  // Se a leitura veio OK mas nao conseguimos extrair uma url (formato de
+  // resposta diferente entre versoes da Evolution), NAO assumir drift real:
+  // isso gerava falso-positivo permanente (tentava "corrigir" um webhook que
+  // na verdade ja estava certo, e o setInstanceWebhook batia 400 sempre,
+  // reacendendo o banner vermelho a cada ciclo do cron).
+  if (actualUrl === null) {
+    return { actualUrl: null, expectedUrl, drift: false, fixed: false, error: null }
+  }
+
   const drift = !urlsMatch(actualUrl, expectedUrl)
 
   if (!drift) {

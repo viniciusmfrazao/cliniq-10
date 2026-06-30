@@ -26,6 +26,7 @@ type Row = {
   status: string
   last_event_at: string | null
   health_warning: boolean | null
+  health_reason: string | null
   role_inbound: boolean | null
   role_outbound_automation: boolean | null
 }
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   // So checa quem ja foi configurado (status diferente de pending e tem instance_name)
   const { data: rows, error } = await svc
     .from('clinic_whatsapp')
-    .select('id, clinic_id, instance_name, webhook_token, status, last_event_at, health_warning, role_inbound, role_outbound_automation')
+    .select('id, clinic_id, instance_name, webhook_token, status, last_event_at, health_warning, health_reason, role_inbound, role_outbound_automation')
     .not('instance_name', 'is', null)
     .in('status', ['connected', 'qr_pending', 'disconnected', 'error'])
 
@@ -135,13 +136,23 @@ export async function GET(req: NextRequest) {
       const evoState = probe.data.instance?.state ?? 'unknown'
 
       if (evoState === 'close' || evoState === 'unknown') {
-        if (r.status === 'connected') {
-          nextStatus = 'disconnected'
-          summary.auto_disconnected++
+        // Debounce: so trata como queda real (muda status + acende banner) se
+        // JA estavamos com esse mesmo motivo no ciclo anterior (2 leituras ruins
+        // seguidas, ~15min de intervalo). Uma leitura isolada costuma ser
+        // instabilidade momentanea da Evolution/Railway, nao queda de fato —
+        // isso causava status flapping (conectado/desconectado a cada ciclo).
+        const wasAlreadyFlagged = r.health_reason === 'evolution_state_close'
+        if (wasAlreadyFlagged) {
+          if (r.status === 'connected') {
+            nextStatus = 'disconnected'
+            summary.auto_disconnected++
+          }
+          nextWarning = true
+          summary.phantom_session++
+        } else {
+          summary.skipped++
         }
-        nextWarning = true
         nextReason = 'evolution_state_close'
-        summary.phantom_session++
       } else if (evoState === 'open') {
         if (r.status !== 'connected') {
           nextStatus = 'connected'
