@@ -55,6 +55,10 @@ export default function SaidaForm({ clinicId, userId }: Props) {
   const [isRecorrente, setIsRecorrente] = useState(false)
   const [mesesRecorrencia, setMesesRecorrencia] = useState(12)
 
+  // Parcelamento (pagamento futuro em N vezes)
+  const [isParcelado, setIsParcelado] = useState(false)
+  const [numParcelas, setNumParcelas] = useState(2)
+
   const categoriaInfo = CATEGORIAS_DRE.find(c => c.value === categoria)
   const mostrarVencimento = FORMAS_COM_VENCIMENTO.includes(forma)
   const isPagamentoFuturo = temVencimento && dataVencimento && dataVencimento > todayBR()
@@ -72,7 +76,30 @@ export default function SaidaForm({ clinicId, userId }: Props) {
 
     setLoading(true)
 
-    if (isRecorrente) {
+    if (isParcelado && isPagamentoFuturo) {
+      // Parcelamento: N lançamentos futuros, um por mês, rotulados "desc (1/N)"
+      const registros = Array.from({ length: numParcelas }, (_, i) => ({
+        clinic_id: clinicId,
+        data: addMonths(dataVencimento, i),
+        data_vencimento: addMonths(dataVencimento, i),
+        pago: false,
+        descricao: `${descricao.trim()} (${i + 1}/${numParcelas})`,
+        categoria_dre: categoria || null,
+        subcategoria: subcategoria || null,
+        fornecedor: fornecedor.trim() || null,
+        valor: valorNum,
+        forma_pagamento: forma,
+        observacoes: observacoes.trim() || null,
+        created_by: userId,
+      }))
+
+      const { error } = await supabase.from('saidas').insert(registros)
+      if (error) {
+        alert('Erro ao salvar parcelas: ' + error.message)
+        setLoading(false)
+        return
+      }
+    } else if (isRecorrente) {
       // Gerar todas as ocorrências da série
       const recurrenceId = crypto.randomUUID()
       const baseData = isPagamentoFuturo ? dataVencimento : data
@@ -258,7 +285,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
               <input
                 type="checkbox"
                 checked={temVencimento}
-                onChange={e => setTemVencimento(e.target.checked)}
+                onChange={e => { setTemVencimento(e.target.checked); if (!e.target.checked) { setIsParcelado(false) } }}
                 className="w-4 h-4 rounded accent-amber-500"
               />
               <span className="text-sm font-medium text-amber-800">
@@ -276,9 +303,64 @@ export default function SaidaForm({ clinicId, userId }: Props) {
                   className="w-full px-4 py-2.5 border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white"
                 />
                 {isPagamentoFuturo && (
-                  <p className="mt-2 text-xs text-amber-700">
-                    ⚡ Este lançamento ficará em <strong>A Pagar</strong> até você marcar como pago.
-                  </p>
+                  <>
+                    <p className="mt-2 text-xs text-amber-700">
+                      ⚡ Este lançamento ficará em <strong>A Pagar</strong> até você marcar como pago.
+                    </p>
+
+                    {/* Parcelamento */}
+                    <div className="mt-3 pt-3 border-t border-amber-200 space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isParcelado}
+                          onChange={e => { setIsParcelado(e.target.checked); setNumParcelas(2) }}
+                          className="w-4 h-4 rounded accent-amber-500"
+                        />
+                        <span className="text-sm font-medium text-amber-800">
+                          💳 Parcelado em várias vezes?
+                        </span>
+                      </label>
+                      {isParcelado && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="number"
+                              min={2}
+                              max={48}
+                              value={numParcelas}
+                              onChange={e => setNumParcelas(Number(e.target.value))}
+                              className="w-24 px-3 py-2 border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white text-center font-semibold"
+                            />
+                            <span className="text-sm text-amber-700">parcelas</span>
+                            <div className="flex gap-2">
+                              {[2, 3, 6, 10, 12].map(n => (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  onClick={() => setNumParcelas(n)}
+                                  className={`px-2.5 py-1 text-xs rounded-lg font-semibold transition ${
+                                    numParcelas === n
+                                      ? 'bg-amber-500 text-white'
+                                      : 'bg-white border border-amber-300 text-amber-700 hover:bg-amber-100'
+                                  }`}
+                                >
+                                  {n}x
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {parseFloat(valor) > 0 && (
+                            <div className="bg-amber-100 rounded-lg px-3 py-2 text-sm text-amber-800">
+                              📊 Serão criados <strong>{numParcelas} lançamentos</strong> de{' '}
+                              <strong>{fmt(parseFloat(valor))}</strong> cada, totalizando{' '}
+                              <strong>{fmt(parseFloat(valor) * numParcelas)}</strong>, com vencimentos mensais a partir de {dataVencimento ? new Date(dataVencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '...'}.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             )}
