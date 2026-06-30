@@ -124,7 +124,7 @@ export default async function PatientInjetaveisPage({ params }: { params: { pati
       </div>
 
       {/* History */}
-      <ApplicationHistory applications={applications || []} patientId={patientId} patientGender={patient.gender === 'M' ? 'male' : 'female'} />
+      <ApplicationHistory applications={applications || []} patientId={patientId} clinicId={userData?.clinic_id ?? ''} patientGender={patient.gender === 'M' ? 'male' : 'female'} />
 
       <div className="mt-8">
         <Link href="/dashboard/injetaveis" className="text-sm text-slate-500 hover:text-slate-700">
