@@ -391,12 +391,31 @@ export async function ensureWebhookHealthy(args: {
 
   const actualUrl = extractWebhookUrl(info.data)
 
-  // Se a leitura veio OK mas nao conseguimos extrair uma url (formato de
-  // resposta diferente entre versoes da Evolution), NAO assumir drift real:
-  // isso gerava falso-positivo permanente (tentava "corrigir" um webhook que
-  // na verdade ja estava certo, e o setInstanceWebhook batia 400 sempre,
-  // reacendendo o banner vermelho a cada ciclo do cron).
   if (actualUrl === null) {
+    if (info.data === null || info.data === undefined) {
+      // Evolution confirmou explicitamente que NAO ha webhook configurado
+      // (corpo da resposta e null/vazio). Isso e drift real e precisa ser
+      // corrigido — visto em producao: instance sem webhook nenhum, zero
+      // eventos chegando no app havia horas, mesmo com a sessao WhatsApp
+      // ativa e o "Connected" aparecendo no painel da Evolution.
+      const set = await setInstanceWebhook({
+        instanceName: args.instanceName,
+        webhookUrl: expectedUrl,
+      })
+      return {
+        actualUrl: null,
+        expectedUrl,
+        drift: true,
+        fixed: set.ok,
+        error: set.ok ? null : set.error,
+      }
+    }
+
+    // info.data veio como objeto/formato inesperado (nao null), so nao bateu
+    // com o schema que extractWebhookUrl reconhece. Formato pode variar entre
+    // versoes da Evolution — nao assumir drift aqui, pra evitar reacender o
+    // banner e tentar "corrigir" um webhook que na verdade ja esta certo
+    // (setInstanceWebhook batendo 400 em loop).
     return { actualUrl: null, expectedUrl, drift: false, fixed: false, error: null }
   }
 
