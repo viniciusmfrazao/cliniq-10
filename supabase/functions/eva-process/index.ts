@@ -774,6 +774,12 @@ Deno.serve(async (req) => {
   // de responder"). Só se aplica a mensagem reativa real (não follow-up, que
   // não tem uma mensagem específica do paciente pra marcar). Fire-and-forget:
   // não atrasa nem bloqueia o processamento se falhar.
+  //
+  // Loga o resultado em eva_logs (event='mark_read') em vez de engolir o erro
+  // — formato do markMessageAsRead varia entre versões da Evolution (PUT vs
+  // POST, read_messages vs readMessages), então até confirmar que funciona
+  // com a versão rodando em prod, isso dá visibilidade via /admin/eva-logs
+  // sem precisar mexer no Railway.
   if (!payload.isFollowup && payload.remoteJid && payload.readMessageId && ctx.evolution?.url && ctx.evolution?.master_key) {
     const readUrl = `${ctx.evolution.url}/chat/markMessageAsRead/${encodeURIComponent(inboundInstance || ctx.evolution.instance || '')}`;
     fetchJson(readUrl, {
@@ -782,7 +788,33 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         readMessages: [{ remoteJid: payload.remoteJid, fromMe: false, id: payload.readMessageId }],
       }),
-    }).catch(() => {});
+    }).then((r) => {
+      fetchJson(`${SUPABASE_URL}/rest/v1/rpc/insert_eva_log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({
+          p_clinic_id: payload.clinicId,
+          p_phone: payload.phone?.replace(/\D/g, '').slice(-11) ?? null,
+          p_source: 'eva-process',
+          p_event: 'mark_read',
+          p_status: r.ok ? 'ok' : 'error',
+          p_error_message: r.ok ? null : `status=${r.status} body=${JSON.stringify(r.data).slice(0, 200)}`,
+        }),
+      }).catch(() => {});
+    }).catch((e) => {
+      fetchJson(`${SUPABASE_URL}/rest/v1/rpc/insert_eva_log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({
+          p_clinic_id: payload.clinicId,
+          p_phone: payload.phone?.replace(/\D/g, '').slice(-11) ?? null,
+          p_source: 'eva-process',
+          p_event: 'mark_read',
+          p_status: 'error',
+          p_error_message: `exception: ${e instanceof Error ? e.message : String(e)}`,
+        }),
+      }).catch(() => {});
+    });
   }
 
   // 2) Cria lead se necessario
