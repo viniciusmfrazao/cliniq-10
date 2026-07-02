@@ -69,9 +69,17 @@ jobs:
         run: |
           cd android
           sed -i '1i def keystorePropertiesFile = rootProject.file("keystore.properties")\ndef keystoreProperties = new Properties()\nkeystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n' app/build.gradle
-          sed -i '/^android {/a\    signingConfigs {\n        release {\n            storeFile file("release.keystore")\n            storePassword keystoreProperties["storePassword"]\n            keyAlias keystoreProperties["keyAlias"]\n            keyPassword keystoreProperties["keyPassword"]\n        }\n    }' app/build.gradle
+          sed -i '/^android {/a\    signingConfigs {\n        release {\n            storeFile file("release.keystore")\n            storePassword keystoreProperties["storePassword"]\n            keyAlias keystoreProperties["keyAlias"]\n            keyPassword keystoreProperties["keyPassword"]\n        }\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }' app/build.gradle
           sed -i '/minifyEnabled false/i\            signingConfig signingConfigs.release' app/build.gradle
           cat app/build.gradle
+
+      - name: Accept SDK licenses and install compileSdk platform
+        run: |
+          COMPILE_SDK=$(grep -oP 'compileSdkVersion\s*=\s*\K[0-9]+' android/variables.gradle)
+          echo "compileSdkVersion detected: $COMPILE_SDK"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-$COMPILE_SDK" "build-tools;$COMPILE_SDK.0.0" || \
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-$COMPILE_SDK"
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
