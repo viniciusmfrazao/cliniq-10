@@ -530,11 +530,9 @@ async function sendViaEvolution(payload: IncomingPayload, ctx: DonnaContext, tex
     },
     body: JSON.stringify({
       number: payload.phone,
-      textMessage: { text },
-      options: {
-        delay: Math.floor(1000 + Math.random() * 2000), // "digitando..." 1-3s antes de enviar
-        presence: 'composing',
-      },
+      text,
+      delay: Math.floor(1000 + Math.random() * 2000), // "digitando..." 1-3s antes de enviar
+      presence: 'composing',
     }),
   });
   if (!r.ok) return { ok: false, error: r.error || `status=${r.status}` };
