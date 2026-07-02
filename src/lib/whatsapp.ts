@@ -274,6 +274,15 @@ async function paceAutomatedSend(instanceName: string, deadlineMs: number): Prom
   return false
 }
 
+/**
+ * Delay de "digitando..." (1-3s) antes do envio — sinal humano barato que a
+ * Evolution já suporta nativamente no próprio sendText/sendButtons (campo
+ * `delay` + `presence: 'composing'`), sem precisar de chamada separada.
+ */
+function randomTypingDelayMs(): number {
+  return Math.floor(1000 + Math.random() * 2000)
+}
+
 async function postEvolution(
   url: string,
   apiKey: string,
@@ -344,7 +353,12 @@ export async function sendWhatsappMessage(args: {
   return postEvolution(
     `${r.data.baseUrl}/message/sendText/${r.data.instanceName}`,
     r.data.apiKey,
-    { number: normalizePhone(phone), text: message },
+    {
+      number: normalizePhone(phone),
+      text: message,
+      delay: randomTypingDelayMs(),
+      presence: 'composing',
+    },
   )
 }
 
@@ -394,6 +408,8 @@ export async function sendWhatsappButtons(args: {
         type: 1,
       })),
       headerType: 1,
+      delay: randomTypingDelayMs(),
+      presence: 'composing',
     },
   )
 }

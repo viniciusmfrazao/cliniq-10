@@ -13,6 +13,15 @@ export interface IncomingPayload {
   kind?: MessageKind;
   mediaUrl?: string | null;
   messageId?: string | null;
+  /** JID completo da mensagem recebida (ex: 5511999999999@s.whatsapp.net) — usado pra marcar como lida antes de responder. */
+  remoteJid?: string | null;
+  /**
+   * ID da última mensagem do paciente pra marcar como lida (markMessageAsRead).
+   * Separado de `messageId` de propósito: `messageId` controla se o debounce
+   * roda de novo dentro do eva-process (null = pula, usado pelo eva-worker que
+   * já esperou na fila) — reusar o mesmo campo aqui duplicaria os 15s de espera.
+   */
+  readMessageId?: string | null;
   /** Se true, processa mas não envia pelo Evolution (smoke test). */
   skipSend?: boolean;
   /** True quando o cron eva-followup chama (Eva inicia o turno). */

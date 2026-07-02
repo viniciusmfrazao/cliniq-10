@@ -84,6 +84,8 @@ function validatePayload(input: unknown): { ok: true; payload: IncomingPayload }
       kind: (typeof i.kind === 'string' ? i.kind : 'text') as IncomingPayload['kind'],
       mediaUrl: typeof i.mediaUrl === 'string' ? i.mediaUrl : null,
       messageId: typeof i.messageId === 'string' ? i.messageId : null,
+      remoteJid: typeof i.remoteJid === 'string' ? i.remoteJid : null,
+      readMessageId: typeof i.readMessageId === 'string' ? i.readMessageId : null,
       skipSend: i.skipSend === true,
       isFollowup: i.isFollowup === true,
       followupStage: typeof i.followupStage === 'number' ? i.followupStage : undefined,
@@ -529,6 +531,10 @@ async function sendViaEvolution(payload: IncomingPayload, ctx: DonnaContext, tex
     body: JSON.stringify({
       number: payload.phone,
       textMessage: { text },
+      options: {
+        delay: Math.floor(1000 + Math.random() * 2000), // "digitando..." 1-3s antes de enviar
+        presence: 'composing',
+      },
     }),
   });
   if (!r.ok) return { ok: false, error: r.error || `status=${r.status}` };
@@ -762,6 +768,21 @@ Deno.serve(async (req) => {
     } else {
       ctx = { ...ctx, evolution: { ...ctx.evolution, instance: inboundInstance } };
     }
+  }
+
+  // 1.5) Marca a mensagem recebida como lida (sinal humano — "abriu e leu antes
+  // de responder"). Só se aplica a mensagem reativa real (não follow-up, que
+  // não tem uma mensagem específica do paciente pra marcar). Fire-and-forget:
+  // não atrasa nem bloqueia o processamento se falhar.
+  if (!payload.isFollowup && payload.remoteJid && payload.readMessageId && ctx.evolution?.url && ctx.evolution?.master_key) {
+    const readUrl = `${ctx.evolution.url}/chat/markMessageAsRead/${encodeURIComponent(inboundInstance || ctx.evolution.instance || '')}`;
+    fetchJson(readUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: ctx.evolution.master_key },
+      body: JSON.stringify({
+        readMessages: [{ remoteJid: payload.remoteJid, fromMe: false, id: payload.readMessageId }],
+      }),
+    }).catch(() => {});
   }
 
   // 2) Cria lead se necessario
