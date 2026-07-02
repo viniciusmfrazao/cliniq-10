@@ -127,14 +127,15 @@ Deno.serve(async (req) => {
   await Promise.all(items.map(async (item) => {
     let processedOk = false
     try {
-      // Buscar última mensagem do user para esse phone
+      // Buscar última mensagem do user para esse phone (+ metadata pra marcar como lida)
       const convResp = await fetch(
-        `${SUPABASE_URL}/rest/v1/eva_conversations?clinic_id=eq.${item.clinic_id}&phone=eq.${item.phone}&role=eq.user&order=created_at.desc&limit=1&select=content`,
+        `${SUPABASE_URL}/rest/v1/eva_conversations?clinic_id=eq.${item.clinic_id}&phone=eq.${item.phone}&role=eq.user&order=created_at.desc&limit=1&select=content,metadata`,
         { headers },
       )
 
       const convData = convResp.ok ? await convResp.json() : []
       const lastUserMsg = convData?.[0]?.content ?? ''
+      const lastMsgMeta = convData?.[0]?.metadata as { evolution_message_id?: string } | null | undefined
 
       if (!lastUserMsg) {
         // Sem mensagem pra processar — remove da fila (nao ha o que fazer)
@@ -145,6 +146,8 @@ Deno.serve(async (req) => {
 
       // Disparar eva-process. messageId=null => sem debounce (o worker ja
       // espera o process_after, entao o debounce ja foi cumprido na fila).
+      // readMessageId/remoteJid (campos separados) permitem marcar a msg
+      // como lida antes do Eva responder, sem afetar o debounce.
       const evaResp = await fetch(evaUrl, {
         method: 'POST',
         headers: {
@@ -159,6 +162,8 @@ Deno.serve(async (req) => {
           userText: lastUserMsg,
           skipSend: false,
           messageId: null,
+          readMessageId: lastMsgMeta?.evolution_message_id ?? null,
+          remoteJid: `${item.phone}@s.whatsapp.net`,
         }),
       })
 

@@ -1245,6 +1245,7 @@ async function forwardToEdgeFunction(
     clinicId: string
     instance: string
     phone: string
+    remoteJid?: string
     message: string
     pushName?: string
     kind?: ParsedKind
@@ -1281,6 +1282,7 @@ async function forwardToEdgeFunction(
         kind: payload.kind ?? 'text',
         mediaUrl: payload.mediaUrl ?? null,
         messageId: payload.messageId ?? null,
+        remoteJid: payload.remoteJid ?? null,
       }),
     })
 
