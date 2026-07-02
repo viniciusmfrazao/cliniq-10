@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
 
+export const maxDuration = 60
+
 /**
  * GET /api/cron/appointment-reminder-2h
  *

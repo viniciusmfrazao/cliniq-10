@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
 import { logEva } from '@/lib/eva-logger'
 
+export const maxDuration = 60
+
 /**
  * GET /api/cron/appointment-reminders
  *

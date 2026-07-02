@@ -1,11 +1,13 @@
 -- ============================================================================
--- pg_cron schedule: dispara o endpoint /api/cron/eva-followup a cada 30 min
+-- pg_cron schedule: dispara o endpoint /api/cron/eva-followup a cada 2 min
 --
 -- Por que isso? O plano HOBBY do Vercel limita crons a 1x/dia. O follow-up
--- automatico da Eva precisa rodar a cada ~30 min pra detectar leads que
--- chegaram nos thresholds (2h, 24h, 48h, 5d, 10d). Solucao: o Vercel cron
--- roda apenas 1x/dia (defesa) e o pg_cron do Supabase chama o endpoint
--- com a frequencia certa.
+-- automatico da Eva precisa rodar com frequencia alta pra funcionar junto
+-- com o pacer anti-ban (gap de 15-35s por instancia, ver whatsapp_pace_send):
+-- lotes pequenos (10) rodando a cada 2min evitam que o pacer descarte
+-- (rate_limited) a maior parte do lote por falta de tempo de espera.
+-- Solucao: o Vercel cron roda apenas 1x/dia (defesa) e o pg_cron do Supabase
+-- chama o endpoint com a frequencia certa.
 --
 -- IMPORTANTE: antes de rodar, substitua os placeholders abaixo:
 --   {{VERCEL_URL}} -> https://clinike.vercel.app  (sua URL de producao)
@@ -54,10 +56,14 @@ SELECT cron.unschedule('eva-followup-30min')
 WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'eva-followup-30min'
 );
+SELECT cron.unschedule('eva-followup-2min')
+WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'eva-followup-2min'
+);
 
 SELECT cron.schedule(
-  'eva-followup-30min',
-  '*/30 * * * *',           -- a cada 30 minutos
+  'eva-followup-2min',
+  '*/2 * * * *',           -- a cada 2 minutos
   $$ SELECT public.eva_followup_tick() $$
 );
 
@@ -67,11 +73,11 @@ SELECT cron.schedule(
 -- ============================================================================
 SELECT jobid, jobname, schedule, active, command
 FROM cron.job
-WHERE jobname = 'eva-followup-30min';
+WHERE jobname = 'eva-followup-2min';
 
 -- Ver historico das ultimas execucoes (apos rodar):
 -- SELECT runid, jobname, status, return_message, start_time, end_time
 -- FROM cron.job_run_details
--- WHERE jobname = 'eva-followup-30min'
+-- WHERE jobname = 'eva-followup-2min'
 -- ORDER BY start_time DESC
 -- LIMIT 10;

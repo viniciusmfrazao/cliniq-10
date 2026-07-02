@@ -41,7 +41,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
       <header
         className="md:hidden flex items-center justify-between px-4 flex-shrink-0 sticky top-0 z-40"
         style={{
-          background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+          background: 'linear-gradient(135deg, var(--gradient-from, #7C3AED), var(--gradient-to, #A78BFA))',
           paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)',
           paddingBottom: '0.35rem',
         }}
