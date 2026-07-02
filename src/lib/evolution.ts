@@ -216,6 +216,47 @@ export type ConnectionState = {
   instance?: { instanceName?: string; state?: EvolutionRawState }
 }
 
+/**
+ * Busca o numero (JID) do dono de uma instance conectada via
+ * GET /instance/fetchInstances?instanceName=X. Usado quando o
+ * connectionState diz 'open' mas o clinic_whatsapp.phone_number ainda
+ * esta null (ex: logo apos conectar via QR) — sem isso, o trigger
+ * trg_prevent_connected_without_phone reverte o status pra 'disconnected'
+ * silenciosamente (nao da erro, so nao aplica a mudanca).
+ */
+export async function fetchInstanceOwnerPhone(
+  instanceName: string
+): Promise<FetchResult<{ phoneNumber: string | null }>> {
+  const r = await evolutionFetch<unknown>(
+    `/instance/fetchInstances?instanceName=${encodeURIComponent(instanceName)}`,
+    { method: 'GET' }
+  )
+  if (!r.ok) return r
+
+  const raw = Array.isArray(r.data) ? r.data[0] : r.data
+  const obj = raw as Record<string, unknown> | undefined
+  const nested = (obj?.instance as Record<string, unknown> | undefined) ?? obj
+
+  const candidates = [
+    nested?.ownerJid,
+    nested?.owner,
+    obj?.ownerJid,
+    obj?.owner,
+    nested?.number,
+    obj?.number,
+  ]
+
+  const jidOrNumber = candidates.find((v) => typeof v === 'string' && v.length > 0) as
+    | string
+    | undefined
+
+  if (!jidOrNumber) return { ok: true, data: { phoneNumber: null } }
+
+  // "5511999999999@s.whatsapp.net" -> "5511999999999"
+  const phoneNumber = jidOrNumber.split('@')[0].replace(/\D/g, '') || null
+  return { ok: true, data: { phoneNumber } }
+}
+
 export async function getConnectionState(
   instanceName: string
 ): Promise<FetchResult<ConnectionState>> {

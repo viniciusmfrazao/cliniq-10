@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { ensureWebhookHealthy, getConnectionState } from '@/lib/evolution'
+import { ensureWebhookHealthy, getConnectionState, fetchInstanceOwnerPhone } from '@/lib/evolution'
 
 /**
  * GET /api/cron/whatsapp-health
@@ -24,6 +24,7 @@ type Row = {
   instance_name: string | null
   webhook_token: string | null
   status: string
+  phone_number: string | null
   last_event_at: string | null
   health_warning: boolean | null
   health_reason: string | null
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
   // So checa quem ja foi configurado (status diferente de pending e tem instance_name)
   const { data: rows, error } = await svc
     .from('clinic_whatsapp')
-    .select('id, clinic_id, instance_name, webhook_token, status, last_event_at, health_warning, health_reason, role_inbound, role_outbound_automation')
+    .select('id, clinic_id, instance_name, webhook_token, status, phone_number, last_event_at, health_warning, health_reason, role_inbound, role_outbound_automation')
     .not('instance_name', 'is', null)
     .in('status', ['connected', 'qr_pending', 'disconnected', 'error'])
 
@@ -120,6 +121,7 @@ export async function GET(req: NextRequest) {
     let nextStatus = r.status
     let nextWarning = false
     let nextReason: string | null = null
+    let nextPhoneNumber: string | null = null
 
     if (!probe.ok) {
       if (probe.status === 404) {
@@ -176,22 +178,35 @@ export async function GET(req: NextRequest) {
           nextStatus = 'connected'
         }
 
-        
+        // Sem phone_number, o trigger trg_prevent_connected_without_phone
+        // reverte status pra 'disconnected' silenciosamente (sem erro) —
+        // busca o numero agora se ainda nao tiver (ex: logo apos conectar
+        // via QR, antes de qualquer evento de webhook chegar).
+        if (!r.phone_number) {
+          try {
+            const owner = await fetchInstanceOwnerPhone(r.instance_name)
+            if (owner.ok && owner.data.phoneNumber) {
+              nextPhoneNumber = owner.data.phoneNumber
+            }
+          } catch {
+            // best-effort — se falhar, tenta de novo no proximo ciclo
+          }
+        }
+
         // Instancia outbound-only: nao recebe msgs, nao verificar stale
         if (r.role_inbound === false || (r.role_outbound_automation === true && !r.role_inbound)) {
           summary.healthy++
-          continue
-        }
-
-        const lastMs = r.last_event_at ? new Date(r.last_event_at).getTime() : 0
-        const ageMs = nowMs - lastMs
-
-        if (lastMs > 0 && ageMs > STALE_MS) {
-          nextWarning = true
-          nextReason = `no_events_${Math.floor(ageMs / (60 * 60 * 1000))}h`
-          summary.stale_no_events++
         } else {
-          summary.healthy++
+          const lastMs = r.last_event_at ? new Date(r.last_event_at).getTime() : 0
+          const ageMs = nowMs - lastMs
+
+          if (lastMs > 0 && ageMs > STALE_MS) {
+            nextWarning = true
+            nextReason = `no_events_${Math.floor(ageMs / (60 * 60 * 1000))}h`
+            summary.stale_no_events++
+          } else {
+            summary.healthy++
+          }
         }
       } else if (evoState === 'connecting') {
         nextStatus = 'qr_pending'
@@ -225,6 +240,7 @@ export async function GET(req: NextRequest) {
     if (webhookActual !== null) updatePayload.webhook_actual_url = webhookActual
     if (webhookExpected !== null) updatePayload.webhook_expected_url = webhookExpected
     if (webhookFixed) updatePayload.webhook_last_fixed_at = new Date().toISOString()
+    if (nextPhoneNumber) updatePayload.phone_number = nextPhoneNumber
 
     const { error: errUpd } = await svc
       .from('clinic_whatsapp')
