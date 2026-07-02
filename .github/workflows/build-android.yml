@@ -32,7 +32,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Create placeholder web output
         run: |
@@ -69,7 +69,7 @@ jobs:
         run: |
           cd android
           sed -i '1i def keystorePropertiesFile = rootProject.file("keystore.properties")\ndef keystoreProperties = new Properties()\nkeystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n' app/build.gradle
-          sed -i '/^android {/a\    signingConfigs {\n        release {\n            storeFile file("release.keystore")\n            storePassword keystoreProperties["storePassword"]\n            keyAlias keystoreProperties["keyAlias"]\n            keyPassword keystoreProperties["keyPassword"]\n        }\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }' app/build.gradle
+          sed -i '/^android {/a\    signingConfigs {\n        release {\n            storeFile file("release.keystore")\n            storePassword keystoreProperties["storePassword"]\n            keyAlias keystoreProperties["keyAlias"]\n            keyPassword keystoreProperties["keyPassword"]\n        }\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_21\n        targetCompatibility JavaVersion.VERSION_21\n    }' app/build.gradle
           sed -i '/minifyEnabled false/i\            signingConfig signingConfigs.release' app/build.gradle
           cat app/build.gradle
 
