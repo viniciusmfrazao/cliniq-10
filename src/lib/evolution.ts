@@ -324,25 +324,29 @@ export async function setInstanceWebhook(args: {
   instanceName: string
   webhookUrl: string
 }): Promise<FetchResult<unknown>> {
-  // IMPORTANTE: Evolution API v1.x exige formato FLAT com snake_case.
-  // Formato nested { webhook: { ... } } com camelCase NAO funciona nesta versao
-  // e faz o webhook ser ignorado silenciosamente, quebrando CONNECTION_UPDATE
-  // e impedindo o app de saber quando a instancia conecta.
+  // Testado direto contra a instancia em prod (02/jul/2026): a Evolution
+  // exige o objeto aninhado { webhook: { enabled, url, byEvents, base64,
+  // events } }. Formato flat (url/webhook_by_events soltos, comentario
+  // antigo dizia ser exigido em v1.x) retorna 400 "instance requires
+  // property webhook". Sem 'enabled: true' tambem da 400 separado.
   return evolutionFetch(
     `/webhook/set/${encodeURIComponent(args.instanceName)}`,
     {
       method: 'POST',
       body: JSON.stringify({
-        url: args.webhookUrl,
-        webhook_by_events: false,
-        webhook_base64: false,
-        events: [
-          'MESSAGES_UPSERT',
-          'MESSAGES_UPDATE',
-          'CONNECTION_UPDATE',
-          'QRCODE_UPDATED',
-          'CONTACTS_UPSERT',
-        ],
+        webhook: {
+          enabled: true,
+          url: args.webhookUrl,
+          byEvents: false,
+          base64: false,
+          events: [
+            'MESSAGES_UPSERT',
+            'MESSAGES_UPDATE',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED',
+            'CONTACTS_UPSERT',
+          ],
+        },
       }),
     }
   )
