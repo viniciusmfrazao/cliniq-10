@@ -256,7 +256,7 @@ async function resolveInstance(
  */
 async function paceAutomatedSend(instanceName: string, deadlineMs: number): Promise<boolean> {
   const svc = createServiceClient()
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const { data: waitSec, error } = await svc.rpc('whatsapp_pace_send', {
       p_instance_name: instanceName,
       p_min_gap_seconds: 15,
@@ -268,7 +268,10 @@ async function paceAutomatedSend(instanceName: string, deadlineMs: number): Prom
     if (Date.now() + wait * 1000 > deadlineMs) return false
     await new Promise((resolve) => setTimeout(resolve, wait * 1000))
   }
-  return true
+  // Esgotou as tentativas sem confirmar reserva (alta concorrência: muitos
+  // leads disparando quase juntos). Mais seguro adiar do que assumir que
+  // pode mandar sem reserva confirmada.
+  return false
 }
 
 async function postEvolution(

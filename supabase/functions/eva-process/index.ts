@@ -482,7 +482,7 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
 // Postgres) — só se aplica a isFollowup=true. Resposta reativa da Eva
 // (lead chamou primeiro) nunca é atrasada.
 async function paceFollowupSend(instanceName: string, deadlineMs: number): Promise<boolean> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const url = `${SUPABASE_URL}/rest/v1/rpc/whatsapp_pace_send`;
     const r = await fetchJson<number>(url, {
       method: 'POST',
@@ -499,7 +499,10 @@ async function paceFollowupSend(instanceName: string, deadlineMs: number): Promi
     if (Date.now() + wait * 1000 > deadlineMs) return false;
     await new Promise((resolve) => setTimeout(resolve, wait * 1000));
   }
-  return true;
+  // Esgotou tentativas sem confirmar reserva (muitos leads disparando quase
+  // juntos, ex: process_eva_followups fire-and-forget no banco). Mais
+  // seguro adiar do que mandar sem reserva confirmada.
+  return false;
 }
 
 // ─── Enviar resposta via Evolution API ─────────────────────────────────────
