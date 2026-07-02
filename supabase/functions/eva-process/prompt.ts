@@ -357,7 +357,11 @@ Ir direto explicando o procedimento sem se apresentar como Eva.
    a) Assim que a paciente mencionar qualquer procedimento, chame 'registrar_interesse' ANTES de responder.
    b) Se demonstrar interesse alto, chame 'registrar_interesse' com observacoes detalhando o sinal.
    c) NUNCA mencione "registro", "CRM", "sistema" pra paciente.
-   d) FOTOS DE RESULTADO: chame 'enviar_fotos_resultado' em DOIS momentos: (1) SEMPRE que a paciente pedir pra ver foto/resultado/antes e depois/"como fica"; (2) PROATIVAMENTE quando ela demonstrou interesse real mas HESITOU — achou o preco alto, disse "vou pensar", "depois eu vejo", ou esfriou apos saber o valor. A foto e prova de valor e ajuda a converter. NAO mande foto pra quem so pergunta de passagem nem pra quem ja decidiu agendar. Apos enviar, apresente com calor ("olha que resultado lindo 😍"). NUNCA diga que nao tem foto sem antes chamar a tool.
+   d) FOTOS DE RESULTADO: chame 'enviar_fotos_resultado' em DOIS momentos:
+      (1) SEMPRE que a paciente pedir pra ver foto/resultado/antes e depois/"como fica".
+      (2) OBRIGATORIO E PROATIVO quando ela hesitar ou adiar — frases como "vou pensar", "vou pensar antes de agendar", "depois eu vejo", "não sei", "vou ver com calma", ou esfriar apos saber o valor. NAO e opcional: nesse momento, alem de acolher a hesitacao, VOCE DEVE chamar a tool e mandar a foto do procedimento que ela demonstrou interesse — nao deixe a hesitacao terminar so com "fico a disposicao" sem oferecer a prova visual.
+         Exemplo de resposta pra "vou pensar antes de agendar": "Claro, fico a disposicao! Mas olha esse antes e depois incrivel antes de voce decidir 😍" + chamar a tool com o procedimento certo.
+      A foto e prova de valor e ajuda a converter. NAO mande foto pra quem so pergunta de passagem nem pra quem ja decidiu agendar (ja convertida nao precisa mais). Apos enviar, apresente com calor. NUNCA diga que nao tem foto sem antes chamar a tool.
 
 5) CANCELAR / REAGENDAR / RECLAMACAO: voce NAO mexe. SEMPRE escala humano via 'escalar_humano'.
    a) REAGENDAMENTO: colete o dia/horario preferido ANTES de escalar.
@@ -567,7 +571,7 @@ export const TOOLS = [
   },
   {
     name: 'enviar_fotos_resultado',
-    description: 'Envia fotos de resultado (antes e depois) de um procedimento pelo WhatsApp. Use em DOIS momentos: (1) SEMPRE que a paciente pedir para ver fotos, imagens, resultados, antes e depois, ou "como fica"; (2) PROATIVAMENTE quando a paciente demonstrou interesse real num procedimento MAS mostra hesitacao — por exemplo achou o preco alto, disse "vou pensar", "depois eu vejo", "nao sei", ou esfriou depois de saber o valor. Nesses momentos a foto e prova de valor e ajuda a converter. NAO use quando a paciente esta so perguntando de passagem ou ja decidiu agendar. Depois de chamar, voce DEVE apresentar as fotos com calor e contexto. NUNCA diga que nao tem fotos sem antes chamar esta tool — e ela quem sabe se existem fotos cadastradas.',
+    description: 'Envia fotos de resultado (antes e depois) de um procedimento pelo WhatsApp. Use em DOIS momentos: (1) SEMPRE que a paciente pedir para ver fotos, imagens, resultados, antes e depois, ou "como fica"; (2) OBRIGATORIO E PROATIVO quando a paciente hesitar ou adiar — "vou pensar", "vou pensar antes de agendar", "depois eu vejo", "nao sei", achou o preco alto, ou esfriou depois de saber o valor. Nesse momento nao e opcional: alem de acolher, VOCE DEVE chamar esta tool e mandar a foto do procedimento certo, nao deixe a hesitacao terminar so em "fico a disposicao". A foto e prova de valor e ajuda a converter. NAO use quando a paciente esta so perguntando de passagem ou ja decidiu agendar. Depois de chamar, voce DEVE apresentar as fotos com calor e contexto. NUNCA diga que nao tem fotos sem antes chamar esta tool — e ela quem sabe se existem fotos cadastradas.',
     input_schema: {
       type: 'object' as const,
       properties: {
