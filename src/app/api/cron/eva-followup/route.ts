@@ -6,9 +6,14 @@ import { logEva } from '@/lib/eva-logger'
 /**
  * GET /api/cron/eva-followup
  *
- * Roda a cada 30min. Pra cada lead com eva_next_followup_at <= now() (e que
+ * Roda a cada 2min (pg_cron). Pra cada lead com eva_next_followup_at <= now() (e que
  * não foi convertido nem perdido), chama a Edge Function eva-process com
  * isFollowup=true pra Eva gerar uma mensagem proativa de retomada.
+ *
+ * Lote pequeno (10) + ciclo curto (2min) em vez do antigo lote de 50 a cada
+ * 30min — cada envio passa pelo pacer anti-ban (whatsapp_pace_send, gap de
+ * 15-35s por instância), então rodar mais vezes com menos itens por vez
+ * evita que o pacer tenha que descartar (rate_limited) a maior parte do lote.
  *
  * Tempos (5 estágios):
  *   t0 (paciente parou de responder) → +2h cron envia #1 (count vira 1)
@@ -25,7 +30,9 @@ import { logEva } from '@/lib/eva-logger'
  */
 
 const TZ_BR = 'America/Sao_Paulo'
-const DEFAULT_LIMIT = 50
+const DEFAULT_LIMIT = 10
+
+export const maxDuration = 60
 
 type LeadRow = {
   id: string

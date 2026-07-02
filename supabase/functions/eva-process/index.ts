@@ -292,6 +292,7 @@ const FOLLOWUP_DELAYS_MS: Record<number, number> = {
 async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext, opts: {
   appointmentCreated: boolean;
   isFollowupRun: boolean;
+  sendDeferred?: boolean;
 }): Promise<void> {
   if (!ctx.lead?.id) return;
 
@@ -307,6 +308,24 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
       body: JSON.stringify({
         eva_followup_count: 0,
         eva_next_followup_at: null,
+      }),
+    }).catch(() => {});
+    return;
+  }
+
+  if (opts.isFollowupRun && opts.sendDeferred) {
+    // Pacer anti-ban adiou o envio (rajada na instância) — a mensagem não
+    // saiu de verdade. Não avança o estágio, só reagenda pra daqui a 5min
+    // (o próximo tick do cron eva-followup pega de novo).
+    await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        eva_next_followup_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       }),
     }).catch(() => {});
     return;
@@ -458,6 +477,31 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
   });
 }
 
+// ─── Espaçamento anti-ban pro follow-up automatico ─────────────────────────
+// Mesmo mecanismo do src/lib/whatsapp.ts (função whatsapp_pace_send no
+// Postgres) — só se aplica a isFollowup=true. Resposta reativa da Eva
+// (lead chamou primeiro) nunca é atrasada.
+async function paceFollowupSend(instanceName: string, deadlineMs: number): Promise<boolean> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const url = `${SUPABASE_URL}/rest/v1/rpc/whatsapp_pace_send`;
+    const r = await fetchJson<number>(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ p_instance_name: instanceName, p_min_gap_seconds: 15, p_max_gap_seconds: 35 }),
+    });
+    if (!r.ok) return true; // não bloqueia envio por falha no pacer
+    const wait = Number(r.data) || 0;
+    if (wait <= 0) return true;
+    if (Date.now() + wait * 1000 > deadlineMs) return false;
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+  }
+  return true;
+}
+
 // ─── Enviar resposta via Evolution API ─────────────────────────────────────
 async function sendViaEvolution(payload: IncomingPayload, ctx: DonnaContext, text: string): Promise<{ ok: boolean; error?: string }> {
   const ev = ctx.evolution;
@@ -465,6 +509,12 @@ async function sendViaEvolution(payload: IncomingPayload, ctx: DonnaContext, tex
     (typeof payload.instance === 'string' && payload.instance.trim()) || ev?.instance || '';
   if (!ev?.url || !ev?.master_key || !instanceName) {
     return { ok: false, error: 'Evolution config ausente em donna_load_context' };
+  }
+  if (payload.isFollowup) {
+    const canSend = await paceFollowupSend(instanceName, Date.now() + 50_000);
+    if (!canSend) {
+      return { ok: false, error: 'rate_limited: envio adiado, sera retentado no proximo ciclo do cron' };
+    }
   }
   const url = `${ev.url}/message/sendText/${encodeURIComponent(instanceName)}`;
   const r = await fetchJson(url, {
@@ -1197,9 +1247,15 @@ Deno.serve(async (req) => {
   if (!send.ok) errors.push(`sendEvolution: ${send.error}`);
 
   // 7) Follow-up: agenda/cancela próxima ronda do cron eva-followup
+  // Se o envio foi adiado pelo pacer anti-ban (rate_limited), NÃO avança o
+  // estágio — reagenda pra tentar de novo em poucos minutos, senão a
+  // mensagem "some" (fica salva em eva_conversations mas nunca chega no
+  // WhatsApp, e o lead pula pro próximo estágio sem nunca ter recebido este).
+  const sendDeferred = !send.ok && send.error?.startsWith('rate_limited') === true;
   await scheduleNextFollowup(payload, ctx, {
     appointmentCreated,
     isFollowupRun: payload.isFollowup === true,
+    sendDeferred,
   }).catch((e) => errors.push(`scheduleNextFollowup: ${e?.message ?? e}`));
 
   const elapsedMs = Date.now() - t0;

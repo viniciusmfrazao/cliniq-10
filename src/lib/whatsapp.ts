@@ -3,7 +3,7 @@ import { getSettings } from '@/lib/app-settings'
 
 export type SendResult =
   | { ok: true; result: unknown }
-  | { ok: false; error: string; code: 'not_configured' | 'not_connected' | 'evolution_error' | 'unknown' }
+  | { ok: false; error: string; code: 'not_configured' | 'not_connected' | 'evolution_error' | 'unknown' | 'rate_limited' }
 
 export function normalizePhone(raw: string): string {
   let p = raw.replace(/\D/g, '')
@@ -240,6 +240,37 @@ async function resolveInstance(
   }
 }
 
+/**
+ * Espaçamento anti-ban entre envios automatizados (purpose='automation') na
+ * mesma instância. Evita rajada de dezenas de mensagens em poucos minutos
+ * (padrão que mais associa a número a bloqueio no WhatsApp Web/Baileys).
+ *
+ * Usa a função atômica whatsapp_pace_send (Postgres) pra reservar o slot —
+ * seguro contra corrida entre invocações de cron simultâneas. Se o gap ainda
+ * não passou, espera (bounded pelo `deadlineMs`); se o gap for maior do que
+ * o tempo restante do budget da function, desiste e devolve `false` — o
+ * caller trata como "não enviado agora", o item fica pra ser pego no
+ * próximo ciclo do cron (mesmo padrão que já existe pra outras falhas).
+ *
+ * Gap alvo: 15-35s randomizado (evita intervalo fixo, que também é sinal de bot).
+ */
+async function paceAutomatedSend(instanceName: string, deadlineMs: number): Promise<boolean> {
+  const svc = createServiceClient()
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data: waitSec, error } = await svc.rpc('whatsapp_pace_send', {
+      p_instance_name: instanceName,
+      p_min_gap_seconds: 15,
+      p_max_gap_seconds: 35,
+    })
+    if (error) return true // não bloqueia envio por falha no pacer
+    const wait = Number(waitSec) || 0
+    if (wait <= 0) return true
+    if (Date.now() + wait * 1000 > deadlineMs) return false
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000))
+  }
+  return true
+}
+
 async function postEvolution(
   url: string,
   apiKey: string,
@@ -300,6 +331,13 @@ export async function sendWhatsappMessage(args: {
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
+  if (purpose === 'automation') {
+    const canSend = await paceAutomatedSend(r.data.instanceName, Date.now() + 50_000)
+    if (!canSend) {
+      return { ok: false, code: 'rate_limited', error: 'Envio adiado para respeitar espaçamento anti-bloqueio; será tentado no próximo ciclo.' }
+    }
+  }
+
   return postEvolution(
     `${r.data.baseUrl}/message/sendText/${r.data.instanceName}`,
     r.data.apiKey,
@@ -332,6 +370,13 @@ export async function sendWhatsappButtons(args: {
   const { clinicId, phone, body, footer, buttons, purpose, instanceName, assignedTo } = args
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
+
+  if (purpose === 'automation') {
+    const canSend = await paceAutomatedSend(r.data.instanceName, Date.now() + 50_000)
+    if (!canSend) {
+      return { ok: false, code: 'rate_limited', error: 'Envio adiado para respeitar espaçamento anti-bloqueio; será tentado no próximo ciclo.' }
+    }
+  }
 
   return postEvolution(
     `${r.data.baseUrl}/message/sendButtons/${r.data.instanceName}`,
@@ -381,6 +426,13 @@ export async function sendWhatsappImage(args: {
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
 
+  if (purpose === 'automation') {
+    const canSend = await paceAutomatedSend(r.data.instanceName, Date.now() + 50_000)
+    if (!canSend) {
+      return { ok: false, code: 'rate_limited', error: 'Envio adiado para respeitar espaçamento anti-bloqueio; será tentado no próximo ciclo.' }
+    }
+  }
+
   return postEvolution(
     `${r.data.baseUrl}/message/sendMedia/${r.data.instanceName}`,
     r.data.apiKey,
@@ -419,6 +471,13 @@ export async function sendWhatsappAudio(args: {
 
   const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
   if (!r.ok) return r.error
+
+  if (purpose === 'automation') {
+    const canSend = await paceAutomatedSend(r.data.instanceName, Date.now() + 50_000)
+    if (!canSend) {
+      return { ok: false, code: 'rate_limited', error: 'Envio adiado para respeitar espaçamento anti-bloqueio; será tentado no próximo ciclo.' }
+    }
+  }
 
   return postEvolution(
     `${r.data.baseUrl}/message/sendWhatsAppAudio/${r.data.instanceName}`,
