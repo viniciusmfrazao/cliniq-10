@@ -19,6 +19,7 @@ type Clinic = {
   users_count: number
   patients_count: number
   appointments_count: number
+  atendimentos_count: number
   active_modules: string[]
   admin: { name: string; email: string } | null
   whatsapp: { status: string; instance: string } | null
@@ -230,6 +231,10 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
                 <div>
                   <div className="font-bold text-slate-800 dark:text-white text-base">{clinic.appointments_count}</div>
                   <div>agendamentos</div>
+                </div>
+                <div>
+                  <div className="font-bold text-slate-800 dark:text-white text-base">{clinic.atendimentos_count}</div>
+                  <div>atendimentos</div>
                 </div>
               </div>
 

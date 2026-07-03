@@ -30,6 +30,8 @@ export default async function ClinicsPage() {
   // Buscar contagens por clínica individualmente (evitar truncamento do limite de 1000)
   const userCountMap: Record<string, number> = {}
   const patientCountMap: Record<string, number> = {}
+  const appointmentCountMap: Record<string, number> = {}
+  const atendimentoCountMap: Record<string, number> = {}
 
   const [adminsRes, waListRes, usersRes, ...countResults] = await Promise.all([
     svc.from('users').select('clinic_id, name, email').in('clinic_id', clinicIds).eq('role', 'admin'),
@@ -38,6 +40,8 @@ export default async function ClinicsPage() {
     ...clinicIds.flatMap(id => [
       svc.from('users').select('id', { count: 'exact', head: true }).eq('clinic_id', id).eq('active', true),
       svc.from('patients').select('id', { count: 'exact', head: true }).eq('clinic_id', id),
+      svc.from('appointments').select('id', { count: 'exact', head: true }).eq('clinic_id', id),
+      svc.from('appointments').select('id', { count: 'exact', head: true }).eq('clinic_id', id).in('status', ['completed', 'realizado']),
     ])
   ])
 
@@ -46,8 +50,10 @@ export default async function ClinicsPage() {
   const allClinicUsers = usersRes.data || []
 
   clinicIds.forEach((id, i) => {
-    userCountMap[id] = countResults[i * 2]?.count ?? 0
-    patientCountMap[id] = countResults[i * 2 + 1]?.count ?? 0
+    userCountMap[id] = countResults[i * 4]?.count ?? 0
+    patientCountMap[id] = countResults[i * 4 + 1]?.count ?? 0
+    appointmentCountMap[id] = countResults[i * 4 + 2]?.count ?? 0
+    atendimentoCountMap[id] = countResults[i * 4 + 3]?.count ?? 0
   })
 
   const adminMap: Record<string, { name: string; email: string }> = {}
@@ -75,7 +81,8 @@ export default async function ClinicsPage() {
     users_count: userCountMap[c.id] || 0,
     users: usersMap[c.id] || [],
     patients_count: patientCountMap[c.id] || 0,
-    appointments_count: 0,
+    appointments_count: appointmentCountMap[c.id] || 0,
+    atendimentos_count: atendimentoCountMap[c.id] || 0,
     active_modules: c.settings?.active_modules || [],
   }))
 
