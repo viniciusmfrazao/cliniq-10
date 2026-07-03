@@ -327,6 +327,15 @@ export const GUIDES: GuideRole[] = [
         color: 'from-violet-500 to-purple-500',
       },
       {
+        title: 'Antecipe o quanto vai faturar',
+        description:
+          'Em Previsão de Faturamento você vê, com base nos agendamentos futuros ainda não concluídos, quanto está previsto pra entrar — separado por procedimento, profissional ou dia. Filtre por período (amanhã, até fim do mês, próximo mês) e por profissional ou categoria.',
+        tip: 'Agendamentos que já têm entrada lançada ou foram concluídos não entram na previsão — só o que ainda pode virar receita.',
+        icon: 'calendar',
+        href: '/dashboard/financeiro/previsao',
+        color: 'from-teal-500 to-emerald-500',
+      },
+      {
         title: 'Defina e acompanhe metas',
         description:
           'Coloque sua meta de faturamento mensal. O sistema mostra o quanto falta e quanto sobra. Comissione profissionais por meta atingida.',
