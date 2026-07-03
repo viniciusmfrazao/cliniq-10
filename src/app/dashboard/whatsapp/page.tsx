@@ -251,6 +251,14 @@ export default function WhatsAppPage() {
     loadConfig()
   }, [])
 
+  // Segurança: se a linha selecionada no filtro perder a permissão Eva (ou
+  // desconectar), volta pra "Todos" em vez de deixar a lista vazia travada.
+  useEffect(() => {
+    if (lineFilter && waInboundLines.length > 0 && !waInboundLines.some(l => l.instance_name === lineFilter)) {
+      setLineFilter('')
+    }
+  }, [waInboundLines, lineFilter])
+
   // Auto-scroll pro final ao receber/abrir mensagens
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -957,6 +965,24 @@ export default function WhatsAppPage() {
           <p className="text-sm text-slate-500">Conversas via Evolution API</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Seletor de número — só aparece quando há 2+ linhas com permissão Eva
+              (role_inbound=true nas configurações). Números só de automação nunca
+              entram aqui, mesmo conectados. */}
+          {waInboundLines.length > 1 && (
+            <select
+              value={waInboundLines.some(l => l.instance_name === lineFilter) ? lineFilter : ''}
+              onChange={(e) => setLineFilter(e.target.value)}
+              className="btn-secondary text-sm pr-8"
+              title="Escolher qual número exibir"
+            >
+              <option value="">Todos os números (Eva)</option>
+              {waInboundLines.map((l) => (
+                <option key={l.instance_name} value={l.instance_name}>
+                  {lineLabels[l.instance_name] ?? l.instance_name.slice(0, 10)}
+                </option>
+              ))}
+            </select>
+          )}
           <EvaToggle
             enabled={evaEnabled}
             disabled={evaToggling}
@@ -1013,44 +1039,6 @@ export default function WhatsAppPage() {
             </div>
           </div>
 
-          {/* Abas de filtro por linha — aparece quando há mais de 1 linha */}
-          {allLines.length > 1 && (
-            <div className="flex border-b border-slate-100 dark:border-slate-700 overflow-x-auto">
-              <button
-                onClick={() => setLineFilter('')}
-                className={`flex-shrink-0 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
-                  lineFilter === ''
-                    ? 'border-emerald-500 text-emerald-700 dark:text-emerald-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Todos
-              </button>
-              {allLines.map((inst) => {
-                const label = lineLabels[inst] ?? inst.slice(0, 10)
-                const isInbound = waInboundLines.some((l) => l.instance_name === inst)
-                return (
-                  <button
-                    key={inst}
-                    onClick={() => setLineFilter(inst)}
-                    className={`flex-shrink-0 flex items-center gap-1 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
-                      lineFilter === inst
-                        ? 'border-violet-500 text-violet-700 dark:text-violet-400'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        isInbound ? 'bg-emerald-500' : 'bg-violet-400'
-                      }`}
-                    />
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-          
           <div className="flex-1 overflow-y-auto">
             {conversations.filter(c => {
               return !lineFilter || c.instanceName === lineFilter
