@@ -174,7 +174,17 @@ export default async function FinanceiroPage() {
       </div>
 
       {/* Atalhos */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <Link href="/dashboard/financeiro/previsao" className="bg-white rounded-xl p-4 border border-emerald-200 shadow-sm hover:border-emerald-300 hover:shadow-md transition group flex items-center gap-3">
+          <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 transition">
+            <Icon name="trendingUp" className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 text-sm">Previsão de Faturamento</p>
+            <p className="text-xs text-slate-500">Agendamentos futuros</p>
+          </div>
+        </Link>
+
         <Link href="/dashboard/financeiro/devedores" className="bg-white rounded-xl p-4 border border-rose-200 shadow-sm hover:border-rose-300 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-rose-100 rounded-lg flex items-center justify-center group-hover:bg-rose-200 transition">
             <Icon name="dollarSign" className="w-5 h-5 text-rose-600" />
