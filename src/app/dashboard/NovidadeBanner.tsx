@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
-const STORAGE_KEY = 'clinike_novidade_v2_jun2026'
+const STORAGE_KEY = 'clinike_novidade_v3_jul2026'
 const EXPIRA_EM_DIAS = 7
 
 const NOVIDADES = [
+  { emoji: '🔮', texto: 'Previsão de Faturamento: veja quanto vai entrar com os agendamentos futuros' },
   { emoji: '💳', texto: 'Valor cobrado pela profissional pré-preenchido no pagamento' },
   { emoji: '✏️', texto: 'Edição de entradas e saídas financeiras' },
   { emoji: '📊', texto: 'Rentabilidade por paciente: custo, receita e margem real' },
@@ -51,15 +52,15 @@ export default function NovidadeBanner() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-xs font-bold bg-white/25 px-2.5 py-0.5 rounded-full tracking-wide uppercase">
-              Atualização · Jun/2026
+              Novidade · Jul/2026
             </span>
           </div>
 
           <p className="font-bold text-base md:text-lg leading-tight">
-            Clinike ficou ainda mais completo 🎉
+            Chegou a Previsão de Faturamento! 🔮💰
           </p>
           <p className="text-white/80 text-xs md:text-sm mt-1 leading-relaxed">
-            Muita coisa boa chegou — do fluxo de pagamento à análise de rentabilidade de cada paciente. Veja o que mudou:
+            Agora dá pra ver, em segundos, quanto sua clínica tem previsto pra receber com os agendamentos futuros — por procedimento, profissional ou dia. E ainda vieram mais novidades:
           </p>
 
           {/* Lista de novidades */}
@@ -83,11 +84,11 @@ export default function NovidadeBanner() {
 
           <div className="flex items-center gap-3 mt-4 flex-wrap">
             <Link
-              href="/dashboard/como-funciona"
+              href="/dashboard/financeiro/previsao"
               onClick={fechar}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-violet-600 rounded-xl text-sm font-bold hover:bg-violet-50 transition-colors shadow-sm"
             >
-              Ver o que mudou
+              Ver previsão de faturamento
               <Icon name="chevronRight" className="w-4 h-4" />
             </Link>
             <button
