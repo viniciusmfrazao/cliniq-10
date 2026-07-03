@@ -20,6 +20,7 @@ type Procedure = {
   professional_ids: string[] | null
   includes_return: boolean | null
   return_days: number | null
+  custo_fixo_rateavel?: number | null
 }
 
 type Props = {
@@ -28,19 +29,21 @@ type Props = {
   clinicId: string
   isAdmin: boolean
   hasEva?: boolean
+  hasCustoRateavel?: boolean
 }
 
-export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva: hasEvaProp = false }: Props) {
+export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva: hasEvaProp = false, hasCustoRateavel: hasCustoRateavelProp = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [deleting, setDeleting] = useState<string | null>(null)
   const [editing, setEditing] = useState<Procedure | null>(null)
   const [activeTab, setActiveTab] = useState<'dados' | 'resultados'>('dados')
   const [hasEva, setHasEva] = useState(hasEvaProp)
+  const [hasCustoRateavel, setHasCustoRateavel] = useState(hasCustoRateavelProp)
 
-  // Busca hasEva no client para garantir valor correto mesmo se server não autenticou
+  // Busca módulos no client para garantir valor correto mesmo se server não autenticou
   useEffect(() => {
-    async function checkEva() {
+    async function checkModules() {
       const { data } = await supabase
         .from('clinics')
         .select('settings')
@@ -48,8 +51,9 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
         .single()
       const modules: string[] = data?.settings?.active_modules || []
       setHasEva(modules.includes('eva_ia'))
+      setHasCustoRateavel(modules.includes('custo_rateavel'))
     }
-    checkEva()
+    checkModules()
   }, [clinicId])
 
   async function handleDelete(id: string) {
@@ -154,6 +158,9 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
                         {proc.duration_minutes} min • R$ {Number(proc.price).toFixed(2)}
                         {proc.includes_return && proc.return_days != null && (
                           <> • retorno {proc.return_days}d</>
+                        )}
+                        {hasCustoRateavel && proc.custo_fixo_rateavel != null && (
+                          <> • custo insumo estimado R$ {Number(proc.custo_fixo_rateavel).toFixed(2)}</>
                         )}
                       </p>
                       <div className="flex flex-wrap items-center gap-1 mt-2">
@@ -265,6 +272,7 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
                   clinicId={clinicId}
                   professionals={professionals}
                   procedure={editing}
+                  hasCustoRateavel={hasCustoRateavel}
                   onSaved={() => { setEditing(null); setActiveTab('dados') }}
                   onCancel={() => { setEditing(null); setActiveTab('dados') }}
                 />

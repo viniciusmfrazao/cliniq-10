@@ -18,7 +18,7 @@ export default async function PatientMarginCard({
   // 1. Atendimentos concluídos do paciente
   const { data: appointments } = await supabase
     .from('appointments')
-    .select('id, start_time, procedures(name)')
+    .select('id, start_time, procedures(name, custo_fixo_rateavel)')
     .eq('patient_id', patientId)
     .in('status', ['completed', 'realizado'])
     .order('start_time', { ascending: false })
@@ -129,9 +129,13 @@ export default async function PatientMarginCard({
     const md = monthDataMap[month]
     const custoSala = md ? (md.aluguelPorDia[dia] || 0) / (atendsPorDia[dia] || 1) : 0
     const custoFixo = md ? md.custoFixoPorAtendimento + custoSala : 0
-    const procName = (apt.procedures as unknown as { name: string } | null)?.name || 'Atendimento'
+    const proc = apt.procedures as unknown as { name: string; custo_fixo_rateavel: number | null } | null
+    const procName = proc?.name || 'Atendimento'
+    // Custo de insumo estimado do procedimento (algodão, cola, etc — não rastreado no estoque).
+    // Entra na margem junto com custoEstoque, diferente do custoFixo (overhead, só informativo).
+    const custoInsumoEstimado = Number(proc?.custo_fixo_rateavel || 0)
 
-    aptMap[apt.id] = { id: apt.id, date: apt.start_time, procedureName: procName, receita: 0, custoEstoque: 0, custoFixo }
+    aptMap[apt.id] = { id: apt.id, date: apt.start_time, procedureName: procName, receita: 0, custoEstoque: custoInsumoEstimado, custoFixo }
   }
 
   for (const e of entradas || []) {
