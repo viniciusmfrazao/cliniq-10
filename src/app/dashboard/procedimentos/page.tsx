@@ -49,7 +49,7 @@ export default async function ProcedimentosPage() {
 
   const isAdmin = userData.role === 'admin' || userData.role === 'super_admin'
   const activeModules: string[] = clinicResult.data?.settings?.active_modules || []
-  const hasEva = activeModules.includes('eva_ai')
+  const hasEva = activeModules.includes('eva_ia')
   const hasCustoRateavel = activeModules.includes('custo_rateavel')
 
   return (
