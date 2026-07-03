@@ -50,6 +50,7 @@ export default async function ProcedimentosPage() {
   const isAdmin = userData.role === 'admin' || userData.role === 'super_admin'
   const activeModules: string[] = clinicResult.data?.settings?.active_modules || []
   const hasEva = activeModules.includes('eva_ai')
+  const hasCustoRateavel = activeModules.includes('custo_rateavel')
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -76,7 +77,7 @@ export default async function ProcedimentosPage() {
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
             Adicionar procedimento
           </h2>
-          <ProcedureForm clinicId={userData.clinic_id} professionals={professionals} />
+          <ProcedureForm clinicId={userData.clinic_id} professionals={professionals} hasCustoRateavel={hasCustoRateavel} />
         </div>
       )}
 
@@ -90,6 +91,7 @@ export default async function ProcedimentosPage() {
           clinicId={userData.clinic_id}
           isAdmin={isAdmin}
           hasEva={hasEva}
+          hasCustoRateavel={hasCustoRateavel}
         />
       </div>
     </div>

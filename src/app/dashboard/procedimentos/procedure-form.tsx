@@ -20,6 +20,7 @@ type Procedure = {
   includes_return?: boolean | null
   return_days?: number | null
   active?: boolean
+  custo_fixo_rateavel?: number | null
 }
 
 type Props = {
@@ -29,9 +30,10 @@ type Props = {
   onSaved?: () => void
   onCancel?: () => void
   compact?: boolean
+  hasCustoRateavel?: boolean
 }
 
-export default function ProcedureForm({ clinicId, professionals, procedure, onSaved, onCancel, compact = false }: Props) {
+export default function ProcedureForm({ clinicId, professionals, procedure, onSaved, onCancel, compact = false, hasCustoRateavel = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const isEditing = !!procedure?.id
@@ -45,6 +47,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
     professional_ids: (procedure?.professional_ids || []) as string[],
     includes_return: !!procedure?.includes_return,
     return_days: procedure?.return_days != null ? String(procedure.return_days) : '15',
+    custo_fixo_rateavel: procedure?.custo_fixo_rateavel != null ? String(procedure.custo_fixo_rateavel) : '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -76,6 +79,9 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
       professional_ids: form.professional_ids,
       includes_return: form.includes_return,
       return_days: form.includes_return ? parseInt(form.return_days) || null : null,
+      ...(hasCustoRateavel
+        ? { custo_fixo_rateavel: form.custo_fixo_rateavel !== '' ? parseFloat(form.custo_fixo_rateavel) : null }
+        : {}),
     }
 
     const { error } = isEditing
@@ -98,6 +104,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
         professional_ids: [],
         includes_return: false,
         return_days: '15',
+        custo_fixo_rateavel: '',
       })
     }
     setLoading(false)
@@ -142,6 +149,23 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
             onChange={e => update('price', e.target.value)}
           />
         </div>
+
+        {hasCustoRateavel && (
+          <div className="md:col-span-2">
+            <label className="label">Custo de insumo estimado (R$)</label>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              placeholder="Ex: 25,00"
+              value={form.custo_fixo_rateavel}
+              onChange={e => update('custo_fixo_rateavel', e.target.value)}
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Estimativa de custo de itens não rastreados no estoque (ex: algodão, cola, fita). Soma-se ao custo de produtos vinculados no atendimento — não substitui.
+            </p>
+          </div>
+        )}
 
         <div className="md:col-span-2">
           <label className="label">Categoria</label>
