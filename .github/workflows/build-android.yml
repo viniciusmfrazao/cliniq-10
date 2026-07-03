@@ -45,6 +45,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Generate Android app icons
+        run: |
+          pip install --quiet Pillow
+          python3 scripts/generate-android-icons.py
+
       - name: Set version code and name
         run: |
           cd android
