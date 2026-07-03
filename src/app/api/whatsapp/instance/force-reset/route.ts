@@ -19,7 +19,9 @@ import { resolveClinicInstanceForApi } from '@/lib/whatsapp-route-helpers'
  * fantasma, pareamento sumiu do celular, mensagens nao chegam nem saem).
  *
  * Diferente do DELETE normal:
- *  1. Apaga a instance antiga na Evolution (ignora erro/404).
+ *  1. Apaga a instance antiga na Evolution e CONFIRMA a exclusão (sucesso
+ *     ou 404 = já não existia). Se não conseguir confirmar, ABORTA sem
+ *     tocar no banco — evita deixar uma instance conectada órfã.
  *  2. Aguarda 500ms pra Evolution liberar o slot.
  *  3. Cria uma instance NOVA com nome diferente (timestamp suffix)
  *     pra garantir que nao haja resquicios do socket Baileys antigo.
@@ -44,13 +46,36 @@ export async function POST(req: NextRequest) {
   const existing = await resolveClinicInstanceForApi(svc, req, ctx.clinicId)
   const wasDefault = existing?.is_default === true
 
-  // 2) Apaga instance antiga na Evolution (best-effort)
+  // 2) Apaga instance antiga na Evolution — só seguimos se confirmarmos que
+  //    ela foi de fato removida (ou já não existia, 404). Qualquer outra
+  //    falha aborta o reset SEM tocar no banco, pra não deixar uma instance
+  //    conectada órfã (incidente Dra Mariana Farah, 02/jul/2026).
   if (existing?.instance_name) {
-    await deleteInstance(existing.instance_name).catch((e) => {
-      console.warn('[force-reset] deleteInstance falhou:', e)
-    })
+    const deleteResult = await deleteInstance(existing.instance_name).catch(
+      (e): { ok: false; error: string; status?: number } => ({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    )
+
+    const deletedOrAlreadyGone = deleteResult.ok || deleteResult.status === 404
+
+    if (!deletedOrAlreadyGone) {
+      console.error('[force-reset] deleteInstance não confirmado, abortando:', deleteResult)
+      return NextResponse.json(
+        {
+          error:
+            'Não foi possível confirmar a exclusão da instância antiga na Evolution. Reset abortado para evitar perda da conexão existente. Tente novamente em instantes.',
+          evolution_status: deleteResult.status,
+          evolution_error: deleteResult.error,
+        },
+        { status: 502 },
+      )
+    }
+
     await new Promise((r) => setTimeout(r, 500))
-    // Remove a row antiga local pra evitar conflito de instance_name
+    // Só agora, com a exclusão confirmada, removemos a row antiga local
+    // pra evitar conflito de instance_name.
     await svc.from('clinic_whatsapp').delete().eq('id', existing.id)
   }
 
