@@ -209,7 +209,8 @@ export default function PrevisaoFaturamentoView({ clinicId }: { clinicId: string
           </>
         )}
 
-        <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)} className="input text-sm h-10">
+        <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
+          className="input text-sm h-10 !w-auto min-w-[210px] flex-shrink-0 py-0">
           <option value="procedimento">Agrupar por procedimento</option>
           <option value="profissional">Agrupar por profissional</option>
           <option value="dia">Agrupar por dia</option>
