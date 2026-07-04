@@ -302,7 +302,7 @@ export async function POST(
 
   const { data: row } = await svc
     .from('clinic_whatsapp')
-    .select('clinic_id, webhook_token, instance_name, auto_reply_enabled, role_inbound, role_outbound_automation')
+    .select('clinic_id, webhook_token, instance_name, auto_reply_enabled, role_inbound, role_outbound_automation, role_outbound_manual')
     .eq('instance_name', instance)
     .maybeSingle()
 
@@ -349,7 +349,13 @@ export async function POST(
   // Instância de saída pura: só bloqueia messages_upsert.
   // connection_update e qrcode_updated precisam passar para que o número
   // consiga ser conectado e ter o phone_number salvo no banco.
+  // IMPORTANTE: só bloqueia se a linha NÃO tiver atendimento manual
+  // (role_outbound_manual) — senão descarta mensagens reais de uma linha
+  // que a secretária usa pra conversar (ela não tem role_inbound=true
+  // porque a Eva não deve responder ali, mas isso não significa que
+  // ninguém deva ver as mensagens).
   if (row.role_outbound_automation === true && row.role_inbound === false
+      && row.role_outbound_manual !== true
       && event === 'messages_upsert') {
     return NextResponse.json({ ok: true, skipped: 'outbound_only_instance' })
   }
