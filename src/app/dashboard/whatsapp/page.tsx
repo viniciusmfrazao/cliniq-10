@@ -251,13 +251,20 @@ export default function WhatsAppPage() {
     loadConfig()
   }, [])
 
-  // Segurança: se a linha selecionada no filtro perder a permissão Eva (ou
-  // desconectar), volta pra "Todos" em vez de deixar a lista vazia travada.
+  // Segurança: com 2+ linhas, sempre força uma selecionada especificamente —
+  // nunca deixa em branco (que mostraria conversas de todas misturadas).
+  // Se a selecionada some (desconectou/perdeu permissão), cai pra outra
+  // válida (prioriza a default), nunca pra "todos".
   useEffect(() => {
-    if (lineFilter && waInboundLines.length > 0 && !waInboundLines.some(l => l.instance_name === lineFilter)) {
-      setLineFilter('')
+    if (waInboundLines.length <= 1) return
+    const stillValid = lineFilter && waInboundLines.some(l => l.instance_name === lineFilter)
+    if (!stillValid) {
+      const fallback =
+        waInboundLines.find(l => l.instance_name === evaControlInstance) ??
+        waInboundLines[0]
+      setLineFilter(fallback.instance_name)
     }
-  }, [waInboundLines, lineFilter])
+  }, [waInboundLines, lineFilter, evaControlInstance])
 
   // Auto-scroll pro final ao receber/abrir mensagens
   useEffect(() => {
@@ -967,7 +974,9 @@ export default function WhatsAppPage() {
         <div className="flex flex-wrap items-center gap-2">
           {/* Seletor de número — só aparece quando há 2+ linhas com permissão Eva
               (role_inbound=true nas configurações). Números só de automação nunca
-              entram aqui, mesmo conectados. */}
+              entram aqui, mesmo conectados. Sem opção "Todos": é sempre um número
+              específico por vez, nunca uma visão combinada (evita misturar
+              conversas de linhas diferentes). */}
           {waInboundLines.length > 1 && (
             <select
               value={waInboundLines.some(l => l.instance_name === lineFilter) ? lineFilter : ''}
@@ -975,7 +984,6 @@ export default function WhatsAppPage() {
               className="btn-secondary text-sm pr-8"
               title="Escolher qual número exibir"
             >
-              <option value="">Todos os números (Eva)</option>
               {waInboundLines.map((l) => (
                 <option key={l.instance_name} value={l.instance_name}>
                   {lineLabels[l.instance_name] ?? l.instance_name.slice(0, 10)}
