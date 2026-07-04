@@ -17,6 +17,7 @@ import RecallHistory from './recall-history'
 import NpsForm from './nps-form'
 import NpsHistory from './nps-history'
 import ContatoPosForm from './contato-pos-form'
+import PosVendaForm from './pos-venda-form'
 import AlertaDespesasForm from './alerta-despesas-form'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -46,6 +47,10 @@ type AutomationRow = {
   template_contato_pos?: string | null
   contato_pos_excluir_categorias?: string[] | null
   contato_pos_seq?: any[] | null
+  pos_venda_ativo?: boolean | null
+  pos_venda_hora?: number | null
+  template_pos_venda?: string | null
+  pos_venda_seq?: any[] | null
   alerta_despesas?: boolean | null
   alerta_despesas_dias_antes?: number | null
   relatorio_telefones?: any
@@ -255,6 +260,28 @@ export default function AutomacoesClient({
               'Atendimento ',
             ],
             seq: auto?.contato_pos_seq ?? [],
+          }}
+        />
+      </AccordionItem>
+
+      <AccordionItem
+        id="pos-venda"
+        emoji="🔁"
+        gradient="bg-gradient-to-br from-fuchsia-500 to-pink-500"
+        title="Pós-venda"
+        description="Mensagens automáticas quando um Retorno é concluído"
+        isActive={!!auto?.pos_venda_ativo}
+        isOpen={openId === 'pos-venda'}
+        onToggle={() => toggle('pos-venda')}
+      >
+        <PosVendaForm
+          clinicId={clinicId}
+          clinicName={clinicName}
+          initial={{
+            enabled: auto?.pos_venda_ativo ?? false,
+            hora: auto?.pos_venda_hora ?? 10,
+            template: auto?.template_pos_venda || '',
+            seq: auto?.pos_venda_seq ?? [],
           }}
         />
       </AccordionItem>
