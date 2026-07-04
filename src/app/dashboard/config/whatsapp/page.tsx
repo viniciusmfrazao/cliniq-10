@@ -347,18 +347,21 @@ export default function WhatsappConfigPage() {
               }
               hasEva={hasEva}
               onUpdateRole={async (role, value) => {
-                // Exclusividade: Eva só pode atender em 1 número por vez
-                if (role === 'role_inbound' && value === true) {
-                  // Desativa role_inbound em todos os outros números
+                // Eva pode estar ativa em mais de um número simultaneamente
+                // (o followup automático já amarra cada lead na instância
+                // onde a conversa aconteceu, não escolhe "qualquer uma").
+                if (role === 'role_outbound_automation' && value === true) {
+                  // Automação continua exclusiva de 1 número — desativa nos
+                  // outros antes de ativar aqui (trava no banco
+                  // uq_clinic_whatsapp_one_automation_line garante isso
+                  // mesmo se essa parte falhar por algum motivo).
                   const others = instances.filter(
-                    (i) => i.instance_name !== inst.instance_name && i.role_inbound
+                    (i) => i.instance_name !== inst.instance_name && i.role_outbound_automation
                   )
                   for (const other of others) {
-                    await patchInstance(other, { role_inbound: false, auto_reply_enabled: false }, `role-${other.instance_name}-role_inbound`)
+                    await patchInstance(other, { role_outbound_automation: false }, `role-${other.instance_name}-role_outbound_automation`)
                   }
                 }
-                // Sincroniza auto_reply_enabled com role_inbound
-                // (o cron de follow-up usa auto_reply_enabled para decidir se dispara)
                 const patch: Record<string, boolean> = { [role]: value }
                 if (role === 'role_inbound') patch.auto_reply_enabled = value
                 patchInstance(inst, patch, `role-${inst.instance_name}-${role}`)

@@ -94,14 +94,17 @@ export default async function CRMPage() {
     .eq('clinic_id', userData?.clinic_id)
     .order('name')
 
-  // Buscar configurações do CRM
-  const { data: settings } = await supabase
+  // Buscar configurações do CRM — TODAS as linhas (não mais 1 só).
+  // Clínica com 1 linha só = 1 row (sempre com whatsapp_instance null) e
+  // nada muda visualmente. Clínica com CRM dedicado por número tem 2+ rows.
+  const { data: settingsRows } = await supabase
     .from('crm_settings')
     .select('*')
     .eq('clinic_id', userData?.clinic_id)
-    .maybeSingle()
 
-  const normalizedSettings = normalizeCRMSettings(settings)
+  const allSettings = (settingsRows || []).map(normalizeCRMSettings)
+  const settings = allSettings.find(s => !s.whatsapp_instance) ?? allSettings[0] ?? null
+  const normalizedSettings = settings
 
   // Buscar templates de mensagens
   const { data: templates } = await supabase
@@ -110,13 +113,14 @@ export default async function CRMPage() {
     .eq('clinic_id', userData?.clinic_id)
     .eq('active', true)
 
-  // Status da Eva (toggle auto/manual) — usado pra mostrar banner "Eva pausada"
-  // no topo do CRM quando a clínica desligou as respostas automáticas.
-  // Multi-numero: pega a instance default (ou a primeira inbound).
+  // Linhas WhatsApp conectadas (todos os papéis) — alimenta o seletor de
+  // CRM por número quando a clínica tem 2+ linhas configuradas com CRM
+  // dedicado (allSettings.length > 1).
   const { data: waList } = await supabase
     .from('clinic_whatsapp')
-    .select('auto_reply_enabled, is_default, role_inbound')
+    .select('instance_name, label, phone_number, auto_reply_enabled, is_default, role_inbound, role_outbound_automation')
     .eq('clinic_id', userData?.clinic_id)
+    .eq('status', 'connected')
   const waInstance = waList?.length
     ? (waList.find(w => w.is_default && w.role_inbound !== false) ??
        waList.find(w => w.role_inbound !== false) ??
@@ -138,6 +142,8 @@ export default async function CRMPage() {
       users={users || []}
       clinicId={userData?.clinic_id || ''}
       settings={normalizedSettings}
+      settingsList={allSettings}
+      waLines={waList || []}
       templates={templates || []}
       evaPaused={evaPaused}
       evaActive={evaActive}

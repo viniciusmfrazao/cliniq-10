@@ -10,7 +10,6 @@ import FollowupAlertBadge from '@/components/crm/FollowupAlertBadge'
 import LeadFollowupPanel from '@/components/crm/LeadFollowupPanel'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import CRMSettingsModal from './crm-settings-modal'
-import { useWaLine } from '@/contexts/WaLineContext'
 
 type Lead = {
   id: string
@@ -155,6 +154,7 @@ type CRMSettings = {
   whatsapp_welcome_message: string | null
   eva_auto_analyze: boolean
   eva_auto_suggest: boolean
+  whatsapp_instance?: string | null
 }
 
 type MessageTemplate = {
@@ -172,6 +172,20 @@ type Props = {
   users: { id: string; name: string }[]
   clinicId: string
   settings: CRMSettings | null
+  /** Todas as linhas de crm_settings da clínica. 1 item = comportamento de
+   * hoje (sem seletor). 2+ = clínica tem CRM dedicado por número. */
+  settingsList?: CRMSettings[]
+  /** Linhas WhatsApp conectadas — alimenta o seletor e o cálculo de Eva
+   * ativa/pausada por linha selecionada. */
+  waLines?: {
+    instance_name: string
+    label: string | null
+    phone_number: string | null
+    auto_reply_enabled: boolean
+    is_default: boolean
+    role_inbound: boolean
+    role_outbound_automation: boolean
+  }[]
   templates: MessageTemplate[]
   /** Quando true, mostra banner indicando que a Eva está em modo manual. */
   evaPaused?: boolean
@@ -245,10 +259,9 @@ const AI_PRIORITY_CONFIG = {
   cold: { label: '❄️ Frio', color: 'bg-blue-100 text-blue-700' },
 }
 
-export default function CRMView({ leads, procedures, users, clinicId, settings, templates, evaPaused = false, evaActive = true, manualFollowups = {} }: Props) {
+export default function CRMView({ leads, procedures, users, clinicId, settings, settingsList = [], waLines = [], templates, evaPaused: evaPausedProp = false, evaActive: evaActiveProp = true, manualFollowups = {} }: Props) {
   const router = useRouter()
   const supabase = createClient()
-  const { selectedLine } = useWaLine()
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'report'>('kanban')
   const [showNewLead, setShowNewLead] = useState(false)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
@@ -258,6 +271,23 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [showBell, setShowBell] = useState(false)
   // Drag & drop nativo HTML5 — usado pra mover lead entre colunas do Kanban
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null)
+
+  // ─── CRM por número ──────────────────────────────────────────────────────
+  // '' representa o CRM padrão (whatsapp_instance null na linha de settings).
+  // Só existe seletor quando a clínica tem 2+ linhas de crm_settings — pra
+  // qualquer clínica com 1 linha só, tudo cai no comportamento de sempre.
+  const hasMultiCrm = settingsList.length > 1
+  const [crmLine, setCrmLine] = useState<string>('')
+  // Instâncias explicitamente configuradas com CRM próprio, exceto o padrão.
+  const otherCrmInstances = settingsList
+    .map(s => s.whatsapp_instance)
+    .filter((i): i is string => !!i)
+  useEffect(() => {
+    if (!hasMultiCrm) return
+    if (crmLine === '') return // bucket padrão é sempre válido
+    const stillValid = settingsList.some(s => s.whatsapp_instance === crmLine)
+    if (!stillValid) setCrmLine('')
+  }, [hasMultiCrm, crmLine, settingsList])
 
   // Realtime: atualiza o CRM automaticamente quando leads ou follow-ups mudam.
   // Canal com nome fixo (evita duplicação no reconnect). Refresh com debounce.
@@ -315,9 +345,27 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     filter: { column: 'clinic_id', value: clinicId },
   })
 
+  // Settings ativas: da linha escolhida, ou o bucket padrão (settings prop,
+  // que já vem do server como a linha com whatsapp_instance null).
+  const activeSettings = hasMultiCrm
+    ? (settingsList.find(s => s.whatsapp_instance === (crmLine || null)) ?? settings)
+    : settings
+
   // Usar configurações customizadas ou padrão
-  const STAGES = settings?.custom_stages || DEFAULT_STAGES
-  const SOURCES = settings?.custom_sources || DEFAULT_SOURCES
+  const STAGES = activeSettings?.custom_stages || DEFAULT_STAGES
+  const SOURCES = activeSettings?.custom_sources || DEFAULT_SOURCES
+
+  // Eva ativa/pausada da linha selecionada (só relevante com CRM multi-linha;
+  // sem isso, usa os valores calculados no server pro bucket padrão).
+  const selectedWaLine = hasMultiCrm && crmLine
+    ? waLines.find(w => w.instance_name === crmLine)
+    : null
+  // Sombra as props originais — todo o resto do arquivo que já usa
+  // evaActive/evaPaused passa a refletir a linha selecionada automaticamente.
+  // Sem CRM multi-linha (caso de hoje pra quase toda clínica), é exatamente
+  // igual ao valor calculado no server, sem nenhuma mudança.
+  const evaActive = selectedWaLine ? selectedWaLine.auto_reply_enabled === true : evaActiveProp
+  const evaPaused = selectedWaLine ? selectedWaLine.auto_reply_enabled === false : evaPausedProp
 
   // ─── Helpers de followup ─────────────────────────────────────────────────
   // Um lead esta "em followup" quando a Eva ja agendou a proxima tentativa
@@ -359,38 +407,49 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     return 'fu_2h'
   }
 
-  // Stats
+  // Filtro real por linha do CRM. Sem CRM multi-linha, mostra tudo (igual
+  // sempre foi). Com CRM multi-linha: bucket padrão pega tudo que não foi
+  // explicitamente reivindicado por outra linha (leads antigos, sem
+  // whatsapp_instance, ou de instância não configurada aqui); uma linha
+  // específica só pega o que bate exatamente com ela.
+  const leadsForLine = !hasMultiCrm
+    ? leads
+    : crmLine
+      ? leads.filter(l => l.whatsapp_instance === crmLine)
+      : leads.filter(l => !l.whatsapp_instance || !otherCrmInstances.includes(l.whatsapp_instance))
+
+  // Stats — sempre da linha selecionada, nunca mistura com outra linha do CRM
   const stats = {
-    total: leads.length,
-    new: leads.filter(l => l.status === 'new').length,
-    contacted: leads.filter(l => l.status === 'contacted').length,
-    scheduled: leads.filter(l => l.status === 'scheduled').length,
-    converted: leads.filter(l => l.status === 'converted').length,
-    lost: leads.filter(l => l.status === 'lost').length,
+    total: leadsForLine.length,
+    new: leadsForLine.filter(l => l.status === 'new').length,
+    contacted: leadsForLine.filter(l => l.status === 'contacted').length,
+    scheduled: leadsForLine.filter(l => l.status === 'scheduled').length,
+    converted: leadsForLine.filter(l => l.status === 'converted').length,
+    lost: leadsForLine.filter(l => l.status === 'lost').length,
     // Conversao: % do total de leads que viraram cliente.
     // (Antes era convertidos/(convertidos+perdidos), o que dava 100% enganoso
     //  quando os outros leads ainda estavam em conversa. Agora reflete a
     //  performance real do funil considerando todo mundo.)
     conversionRate:
-      leads.length > 0
-        ? Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)
+      leadsForLine.length > 0
+        ? Math.round((leadsForLine.filter(l => l.status === 'converted').length / leadsForLine.length) * 100)
         : 0,
     // Eva IA stats — temperatura do lead (priority calculada pela IA)
-    hotLeads: leads.filter(l => l.ai_priority === 'hot').length,
-    warmLeads: leads.filter(l => l.ai_priority === 'warm').length,
-    coldLeads: leads.filter(l => l.ai_priority === 'cold').length,
-    estimatedValue: leads.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
-    pendingContact: leads.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() }).length,
+    hotLeads: leadsForLine.filter(l => l.ai_priority === 'hot').length,
+    warmLeads: leadsForLine.filter(l => l.ai_priority === 'warm').length,
+    coldLeads: leadsForLine.filter(l => l.ai_priority === 'cold').length,
+    estimatedValue: leadsForLine.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
+    pendingContact: leadsForLine.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() }).length,
     // Atendimento humano (Eva escalou)
-    humanReview: leads.filter(l => l.needs_human_review === true).length,
+    humanReview: leadsForLine.filter(l => l.needs_human_review === true).length,
     // Followup buckets (Eva aguardando resposta) — 5 estagios
-    followupTotal: leads.filter(isInFollowup).length,
-    followup2h: leads.filter(l => followupBucket(l) === 'fu_2h').length,
-    followup4h: leads.filter(l => followupBucket(l) === 'fu_4h').length,
-    followup48h: leads.filter(l => followupBucket(l) === 'fu_48h').length,
-    followup5d: leads.filter(l => followupBucket(l) === 'fu_5d').length,
-    followup10d: leads.filter(l => followupBucket(l) === 'fu_10d').length,
-    retornoAgendado: leads.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date()).length,
+    followupTotal: leadsForLine.filter(isInFollowup).length,
+    followup2h: leadsForLine.filter(l => followupBucket(l) === 'fu_2h').length,
+    followup4h: leadsForLine.filter(l => followupBucket(l) === 'fu_4h').length,
+    followup48h: leadsForLine.filter(l => followupBucket(l) === 'fu_48h').length,
+    followup5d: leadsForLine.filter(l => followupBucket(l) === 'fu_5d').length,
+    followup10d: leadsForLine.filter(l => followupBucket(l) === 'fu_10d').length,
+    retornoAgendado: leadsForLine.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date()).length,
   }
 
   const isFollowupFilter = (f: string) =>
@@ -402,10 +461,6 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   //   'pending_contact'      -> leads com next_contact_at vencido
   //   'followup_all'         -> qualquer lead em followup ativo
   //   'fu_2h' / 'fu_4h' / 'fu_48h' / 'fu_5d' / 'fu_10d' -> bucket especifico
-
-  // Filtro global de linha WhatsApp (vem da sidebar)
-  // CRM mostra todos os leads independente da linha WhatsApp selecionada
-  const leadsForLine = leads
 
   const filteredLeads =
     filter === 'all'
@@ -562,10 +617,37 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           <p className="text-sm text-slate-500 mt-0.5">Gerencie seus leads e oportunidades</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Seletor de CRM por número — só aparece com 2+ linhas de crm_settings
+              configuradas (settingsList.length > 1). Sem opção "Todos": é sempre
+              um CRM específico por vez, nunca leads de linhas diferentes misturados. */}
+          {hasMultiCrm && (
+            <select
+              value={crmLine}
+              onChange={(e) => setCrmLine(e.target.value)}
+              className="btn-secondary text-sm pr-8"
+              title="Escolher qual CRM exibir"
+            >
+              <option value="">
+                {(() => {
+                  const def = waLines.find(w => w.is_default) ?? waLines.find(w => w.role_inbound)
+                  return def ? `Eva · ${def.label || def.phone_number?.replace(/\D/g, '').slice(-8) || def.instance_name.slice(0, 10)}` : 'Eva (padrão)'
+                })()}
+              </option>
+              {otherCrmInstances.map((inst) => {
+                const w = waLines.find(l => l.instance_name === inst)
+                const label = w?.label || w?.phone_number?.replace(/\D/g, '').slice(-8) || inst.slice(0, 10)
+                return (
+                  <option key={inst} value={inst}>
+                    {w?.role_outbound_automation ? `Recepção · ${label}` : label}
+                  </option>
+                )
+              })}
+            </select>
+          )}
           {(() => {
             // pendências: follow-up manual vencido e não concluído
             const now = new Date()
-            const pendentes = leads.filter(l => {
+            const pendentes = leadsForLine.filter(l => {
               const mf = manualFollowups[l.id]
               return mf && new Date(mf) <= now
             })
