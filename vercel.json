@@ -25,6 +25,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/msg-conclusao",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/eva-followup",
       "schedule": "*/30 * * * *"
     },
