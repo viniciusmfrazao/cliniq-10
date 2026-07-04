@@ -58,21 +58,21 @@ const SUGGESTIONS_2H = [
   },
 ]
 
-const SUGGESTIONS_CONCLUSAO = [
-  {
-    id: 'simples',
-    label: 'Agradecimento simples',
-    text: `Oi {{primeiro_nome}}! Foi um prazer te atender hoje aqui na {{clinica}} 💕\n\nQualquer dúvida sobre os cuidados pós-procedimento, é só chamar!`,
-  },
-  {
-    id: 'com_profissional',
-    label: 'Com nome do profissional',
-    text: `Oi {{primeiro_nome}}! Passando pra agradecer sua visita hoje com {{profissional}} 💕\n\nFicamos à disposição pra qualquer coisa que precisar!`,
-  },
+const SUGGESTIONS_AGENDAMENTO = [
   {
     id: 'confirmacao',
     label: 'Confirmação',
     text: `Olá {{primeiro_nome}}, seu agendamento de {{procedimento}} foi marcado para dia {{data}} às {{hora}}.\n\nFicamos felizes e vamos ficar te aguardando! 💕`,
+  },
+  {
+    id: 'com_profissional',
+    label: 'Com nome do profissional',
+    text: `Olá {{primeiro_nome}}! Seu agendamento de {{procedimento}} com {{profissional}} ficou marcado para {{data}} às {{hora}} 💕\n\nQualquer imprevisto, é só nos chamar por aqui.`,
+  },
+  {
+    id: 'com_endereco',
+    label: 'Com endereço da clínica',
+    text: `Oi {{primeiro_nome}}! Seu agendamento na {{clinica}} foi confirmado para {{data}} às {{hora}} 📍\n\nTe esperamos! Qualquer dúvida, é só chamar por aqui.`,
   },
 ]
 
@@ -97,8 +97,8 @@ type Initial = {
   template24h: string
   lembrete2hEnabled: boolean
   template2h: string
-  msgConclusaoEnabled: boolean
-  templateConclusao: string
+  msgAgendamentoEnabled: boolean
+  templateAgendamento: string
 }
 
 type Props = { clinicId: string; clinicName: string; initial: Initial }
@@ -114,11 +114,11 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   const [template24h, setTemplate24h]     = useState(initial.template24h)
   const [lembrete2h, setLembrete2h]       = useState(initial.lembrete2hEnabled)
   const [template2h, setTemplate2h]       = useState(initial.template2h)
-  const [msgConclusao, setMsgConclusao]   = useState(initial.msgConclusaoEnabled)
-  const [templateConclusao, setTemplateConclusao] = useState(initial.templateConclusao)
+  const [msgAgendamento, setMsgAgendamento]   = useState(initial.msgAgendamentoEnabled)
+  const [templateAgendamento, setTemplateAgendamento] = useState(initial.templateAgendamento)
   const [saving, setSaving]               = useState(false)
   const [savedAt, setSavedAt]             = useState<Date | null>(null)
-  const [activeTab, setActiveTab]         = useState<'24h' | '2h' | 'conclusao'>('24h')
+  const [activeTab, setActiveTab]         = useState<'24h' | '2h' | 'agendamento'>('24h')
   const [testPhone, setTestPhone] = useState('')
   const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [testing, setTesting] = useState(false)
@@ -137,7 +137,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
 
   const preview24h = useMemo(() => renderPreview(template24h, previewVars), [template24h])
   const preview2h  = useMemo(() => renderPreview(template2h, previewVars), [template2h])
-  const previewConclusao = useMemo(() => renderPreview(templateConclusao, previewVars), [templateConclusao])
+  const previewAgendamento = useMemo(() => renderPreview(templateAgendamento, previewVars), [templateAgendamento])
 
   async function sendTest(template: string, previewFn: (t: string) => string) {
     if (!testPhone.trim()) {
@@ -178,8 +178,8 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
           template_confirma_24h: template24h,
           lembrete_2h: lembrete2h,
           template_lembrete_2h: template2h || null,
-          msg_conclusao: msgConclusao,
-          template_msg_conclusao: templateConclusao || null,
+          msg_agendamento: msgAgendamento,
+          template_msg_agendamento: templateAgendamento || null,
         })
         .eq('clinic_id', clinicId)
       if (error) { alert(parseSupabaseError(error)); return }
@@ -212,19 +212,19 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
         </div>
         <div>
           <p className="font-semibold text-slate-900">Ativar lembrete automático</p>
-          <p className="text-sm text-slate-500">Envia mensagem na véspera e/ou 2h antes da consulta.</p>
+          <p className="text-sm text-slate-500">Envia mensagem ao confirmar o agendamento, na véspera e/ou 2h antes da consulta.</p>
         </div>
       </label>
 
       <div className={enabled ? '' : 'opacity-50 pointer-events-none'}>
 
-        {/* Abas: ao concluir / véspera / 2h antes */}
+        {/* Abas: confirmação de agendamento / véspera / 2h antes */}
         <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-4">
           <button
-            onClick={() => setActiveTab('conclusao')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'conclusao' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            onClick={() => setActiveTab('agendamento')}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'agendamento' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            ✅ Ao concluir o agendamento
+            ✅ Confirmação de agendamento
           </button>
           <button
             onClick={() => setActiveTab('24h')}
@@ -364,28 +364,28 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
           </div>
         )}
 
-        {/* ABA AO CONCLUIR */}
-        {activeTab === 'conclusao' && (
+        {/* ABA CONFIRMAÇÃO DE AGENDAMENTO */}
+        {activeTab === 'agendamento' && (
           <div className="space-y-4">
             <label className="flex items-start gap-4 cursor-pointer">
               <div className="relative inline-flex items-center mt-1">
-                <input type="checkbox" checked={msgConclusao} onChange={e => setMsgConclusao(e.target.checked)} className="sr-only peer" />
+                <input type="checkbox" checked={msgAgendamento} onChange={e => setMsgAgendamento(e.target.checked)} className="sr-only peer" />
                 <div className="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-emerald-500 transition-colors" />
                 <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
               </div>
               <div>
-                <p className="font-semibold text-slate-900">Ativar mensagem ao concluir o agendamento</p>
-                <p className="text-sm text-slate-500">Envia automaticamente assim que o atendimento é marcado como concluído (qualquer que seja a tela usada).</p>
+                <p className="font-semibold text-slate-900">Ativar confirmação de agendamento</p>
+                <p className="text-sm text-slate-500">Envia automaticamente assim que um novo agendamento é criado (qualquer que seja a tela usada). Não envia pra agendamentos importados de histórico.</p>
               </div>
             </label>
 
-            <div className={msgConclusao ? '' : 'opacity-50 pointer-events-none'}>
+            <div className={msgAgendamento ? '' : 'opacity-50 pointer-events-none'}>
               {/* Sugestões */}
               <div className="mb-3">
                 <p className="text-xs text-slate-500 mb-2 font-medium">Sugestões:</p>
                 <div className="flex flex-wrap gap-2">
-                  {SUGGESTIONS_CONCLUSAO.map(s => (
-                    <button key={s.id} type="button" onClick={() => setTemplateConclusao(s.text)}
+                  {SUGGESTIONS_AGENDAMENTO.map(s => (
+                    <button key={s.id} type="button" onClick={() => setTemplateAgendamento(s.text)}
                       className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-violet-100 hover:text-violet-700 rounded-lg transition-colors">
                       {s.label}
                     </button>
@@ -397,27 +397,27 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
               <div className="mb-3">
                 <p className="text-xs text-slate-500 mb-2 font-medium">Inserir variável:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {TAGS.filter(t => t.tag !== '{{link_confirmacao}}').map(t => tagBtn(t.tag, setTemplateConclusao, templateConclusao))}
+                  {TAGS.filter(t => t.tag !== '{{link_confirmacao}}').map(t => tagBtn(t.tag, setTemplateAgendamento, templateAgendamento))}
                 </div>
               </div>
 
               {/* Template */}
               <div className="mb-3">
-                <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem ao concluir</label>
+                <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem de confirmação</label>
                 <textarea
-                  value={templateConclusao}
-                  onChange={e => setTemplateConclusao(e.target.value)}
+                  value={templateAgendamento}
+                  onChange={e => setTemplateAgendamento(e.target.value)}
                   rows={5}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none resize-none"
-                  placeholder="Digite a mensagem enviada ao concluir o atendimento..."
+                  placeholder="Digite a mensagem enviada ao criar o agendamento..."
                 />
               </div>
 
               {/* Preview */}
-              {templateConclusao && (
+              {templateAgendamento && (
                 <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
-                  <p className="text-xs font-medium text-emerald-700 mb-2">Preview (ao concluir):</p>
-                  <p className="text-sm text-slate-700 whitespace-pre-line">{previewConclusao}</p>
+                  <p className="text-xs font-medium text-emerald-700 mb-2">Preview (confirmação de agendamento):</p>
+                  <p className="text-sm text-slate-700 whitespace-pre-line">{previewAgendamento}</p>
                 </div>
               )}
             </div>
@@ -439,7 +439,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
           />
           <button
             type="button"
-            onClick={() => sendTest(activeTab === '24h' ? template24h : activeTab === '2h' ? template2h : templateConclusao, t => t
+            onClick={() => sendTest(activeTab === '24h' ? template24h : activeTab === '2h' ? template2h : templateAgendamento, t => t
               .replace(/\{\{primeiro_nome\}\}/g, 'Ana')
               .replace(/\{\{nome\}\}/g, 'Ana Silva')
               .replace(/\{\{clinica\}\}/g, 'Clínica')
