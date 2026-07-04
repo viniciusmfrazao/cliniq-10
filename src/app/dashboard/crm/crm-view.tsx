@@ -1335,6 +1335,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
       {showSettings && (
         <CRMSettingsModal
           clinicId={clinicId}
+          whatsappInstance={hasMultiCrm ? (crmLine || null) : null}
           currentStages={STAGES}
           currentSources={SOURCES}
           onClose={() => setShowSettings(false)}

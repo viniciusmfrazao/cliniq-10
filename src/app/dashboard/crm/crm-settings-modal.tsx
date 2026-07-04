@@ -19,6 +19,10 @@ type Source = {
 
 type Props = {
   clinicId: string
+  /** Instância da linha de CRM ativa (null = bucket padrão/Eva). Define
+   * em qual linha de crm_settings salvar quando a clínica tem CRM
+   * dedicado por número. */
+  whatsappInstance?: string | null
   currentStages: Stage[]
   currentSources: Source[]
   onClose: () => void
@@ -38,12 +42,13 @@ const COLORS = [
 
 const ICONS = ['📸', '💬', '👥', '🔍', '📘', '🌐', '📞', '📧', '🏥', '📌', '⭐', '🎯']
 
-export default function CRMSettingsModal({ clinicId, currentStages, currentSources, onClose, onSave }: Props) {
+export default function CRMSettingsModal({ clinicId, whatsappInstance = null, currentStages, currentSources, onClose, onSave }: Props) {
   const supabase = createClient()
   const [tab, setTab] = useState<'stages' | 'sources' | 'followup'>('stages')
   const [stages, setStages] = useState<Stage[]>(currentStages)
   const [sources, setSources] = useState<Source[]>(currentSources)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   
   // Follow-up settings
   const [followupDays, setFollowupDays] = useState(3)
@@ -107,34 +112,53 @@ export default function CRMSettingsModal({ clinicId, currentStages, currentSourc
 
   async function handleSave() {
     setSaving(true)
+    setSaveError(null)
 
-    // Check if settings exist
-    const { data: existing } = await supabase
+    // Identifica a linha certa de crm_settings pela instância ativa —
+    // clínica com CRM multi-linha tem 1 row por número, então "clinic_id"
+    // sozinho não identifica qual editar (antes usava .single(), que
+    // já dá erro com 2+ rows e fazia cair num insert que violava a
+    // constraint de unicidade, falhando em silêncio).
+    let query = supabase
       .from('crm_settings')
       .select('id')
       .eq('clinic_id', clinicId)
-      .single()
+    query = whatsappInstance
+      ? query.eq('whatsapp_instance', whatsappInstance)
+      : query.is('whatsapp_instance', null)
+    const { data: existing, error: fetchError } = await query.maybeSingle()
+
+    if (fetchError) {
+      setSaveError('Não consegui verificar as configurações existentes: ' + fetchError.message)
+      setSaving(false)
+      return
+    }
 
     const settingsData = {
       clinic_id: clinicId,
+      whatsapp_instance: whatsappInstance,
       custom_stages: stages,
       custom_sources: sources,
       whatsapp_followup_days: followupDays,
       eva_auto_suggest: autoReminder,
     }
 
-    if (existing) {
-      await supabase
-        .from('crm_settings')
-        .update(settingsData)
-        .eq('clinic_id', clinicId)
-    } else {
-      await supabase
-        .from('crm_settings')
-        .insert(settingsData)
-    }
+    const { error: saveErr } = existing
+      ? await supabase
+          .from('crm_settings')
+          .update(settingsData)
+          .eq('id', existing.id)
+      : await supabase
+          .from('crm_settings')
+          .insert(settingsData)
 
     setSaving(false)
+
+    if (saveErr) {
+      setSaveError('Não consegui salvar: ' + saveErr.message)
+      return
+    }
+
     onSave()
   }
 
@@ -332,6 +356,11 @@ export default function CRMSettingsModal({ clinicId, currentStages, currentSourc
           )}
         </div>
 
+        {saveError && (
+          <div className="px-4 py-2 bg-red-50 border-t border-red-100 text-xs text-red-700">
+            {saveError}
+          </div>
+        )}
         <div className="p-4 border-t border-slate-100 flex gap-3">
           <button
             onClick={onClose}

@@ -172,6 +172,11 @@ export default function WhatsAppPage() {
     name: string
     status: string
   } | null>(null)
+  /** custom_stages da linha de crm_settings que se aplica ao lead da
+   * conversa aberta — null = usa os padrões (DEFAULT_CRM_STAGES) */
+  const [crmStagesConfig, setCrmStagesConfig] = useState<
+    { id: string; label: string; color: string }[] | null
+  >(null)
   const [updatingCrm, setUpdatingCrm] = useState(false)
   const [resumingEva, setResumingEva] = useState(false)
   const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle')
@@ -673,7 +678,7 @@ export default function WhatsAppPage() {
     // Status do lead — Eva pausada / em revisão humana?
     const { data: leadData } = await supabase
       .from('leads')
-      .select('id, name, status, eva_pause_until, needs_human_review, human_review_reason')
+      .select('id, name, status, eva_pause_until, needs_human_review, human_review_reason, whatsapp_instance')
       .eq('clinic_id', clinicId)
       .eq('phone', phone)
       .order('created_at', { ascending: false })
@@ -692,17 +697,47 @@ export default function WhatsAppPage() {
       name: leadData.name || 'Lead',
       status: leadData.status || 'new',
     } : null)
+
+    // Busca as MESMAS etapas configuradas no CRM (crm-settings), pra esse
+    // dropdown nunca ter nome ou opção diferente do Kanban. Prioriza a linha
+    // de crm_settings da instância do lead; sem match, usa a padrão (null).
+    const { data: crmSettingsRows } = await supabase
+      .from('crm_settings')
+      .select('custom_stages, whatsapp_instance')
+      .eq('clinic_id', clinicId)
+    const matchedSettings =
+      crmSettingsRows?.find(s => s.whatsapp_instance === leadData?.whatsapp_instance) ??
+      crmSettingsRows?.find(s => !s.whatsapp_instance) ??
+      null
+    setCrmStagesConfig(matchedSettings?.custom_stages ?? null)
   }
 
   // ── CRM: atualizar status do lead diretamente do WhatsApp ──
-  const CRM_STAGES = [
-    { value: 'new',       label: 'Novo Lead',    color: 'bg-slate-100 text-slate-600' },
-    { value: 'contacted', label: 'Contactado',   color: 'bg-blue-100 text-blue-700' },
-    { value: 'waiting',   label: 'Aguardando',   color: 'bg-yellow-100 text-yellow-700' },
-    { value: 'scheduled', label: 'Agendado',     color: 'bg-violet-100 text-violet-700' },
-    { value: 'converted', label: 'Convertido',   color: 'bg-emerald-100 text-emerald-700' },
-    { value: 'lost',      label: 'Perdido',      color: 'bg-red-100 text-red-700' },
+  // Mesmas etapas do Kanban (crm_settings.custom_stages da linha certa),
+  // com fallback pros padrões — nunca um nome ou status que não existe
+  // no CRM (ex: 'waiting' não é uma coluna real do funil).
+  const STAGE_COLOR_CLASSES: Record<string, string> = {
+    slate: 'bg-slate-100 text-slate-600',
+    blue: 'bg-blue-100 text-blue-700',
+    amber: 'bg-amber-100 text-amber-700',
+    violet: 'bg-violet-100 text-violet-700',
+    emerald: 'bg-emerald-100 text-emerald-700',
+    red: 'bg-red-100 text-red-700',
+    pink: 'bg-pink-100 text-pink-700',
+    cyan: 'bg-cyan-100 text-cyan-700',
+  }
+  const DEFAULT_CRM_STAGES = [
+    { value: 'new', label: 'Novo Lead', color: 'slate' },
+    { value: 'contacted', label: 'Em Conversa', color: 'blue' },
+    { value: 'scheduled', label: 'Agendado', color: 'amber' },
+    { value: 'converted', label: 'Cliente', color: 'emerald' },
+    { value: 'lost', label: 'Perdido', color: 'red' },
   ]
+  const CRM_STAGES = (
+    crmStagesConfig && crmStagesConfig.length > 0
+      ? crmStagesConfig.map(s => ({ value: s.id, label: s.label, color: s.color }))
+      : DEFAULT_CRM_STAGES
+  ).map(s => ({ ...s, color: STAGE_COLOR_CLASSES[s.color] ?? STAGE_COLOR_CLASSES.slate }))
 
   async function updateCrmStatus(newStatus: string) {
     if (!crmLead || !clinicId) return
@@ -1051,9 +1086,9 @@ export default function WhatsAppPage() {
                 className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${statusFilter === 'waiting' ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700'}`}
               >
                 Aguardando
-                {conversations.filter(c => c.unread > 0).length > 0 && (
+                {conversations.filter(c => c.unread > 0 && (!lineFilter || c.instanceName === lineFilter)).length > 0 && (
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${statusFilter === 'waiting' ? 'bg-white/30 text-white' : 'bg-emerald-500 text-white'}`}>
-                    {conversations.filter(c => c.unread > 0).length}
+                    {conversations.filter(c => c.unread > 0 && (!lineFilter || c.instanceName === lineFilter)).length}
                   </span>
                 )}
               </button>
