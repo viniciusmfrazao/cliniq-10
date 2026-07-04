@@ -190,6 +190,7 @@ export default function WhatsAppPage() {
     Array<{
       instance_name: string
       auto_reply_enabled: boolean
+      role_inbound: boolean
       label: string | null
       phone_number: string | null
     }>
@@ -373,6 +374,7 @@ export default function WhatsAppPage() {
           auto_reply_enabled: boolean
           is_default: boolean
           role_inbound: boolean
+          role_outbound_manual: boolean
           label?: string | null
           phone_number?: string | null
         }>
@@ -381,8 +383,17 @@ export default function WhatsAppPage() {
       // Multi-numero: considera "configurado" se QUALQUER instance esta connected.
       const list = instance.instances ?? []
       const anyConnected = list.some(i => i.status === 'connected')
+      // Linhas onde a Eva pode atender (role_inbound) — usado só pro toggle
+      // "Eva ativa" (qual instância ele liga/desliga).
       const inboundConnected = list.filter(
         (i) => i.status === 'connected' && i.role_inbound !== false,
+      )
+      // Linhas de atendimento em geral — Eva OU secretária atendendo manual
+      // (role_outbound_manual). Usado pro seletor de número na tela de
+      // Conversas: a Sarah tem a Eva num número e a secretária atende manual
+      // no outro, então os dois precisam aparecer aqui pra escolher.
+      const chatCapableConnected = list.filter(
+        (i) => i.status === 'connected' && (i.role_inbound !== false || i.role_outbound_manual !== false),
       )
       const mainForEva =
         inboundConnected.find((i) => i.is_default) ??
@@ -417,9 +428,10 @@ export default function WhatsAppPage() {
         setHasEvaModule(activeModules.includes('eva_ia'))
         setHasCrmModule(activeModules.includes('crm'))
 
-        const inboundLines = inboundConnected.map((i) => ({
+        const inboundLines = chatCapableConnected.map((i) => ({
           instance_name: i.instance_name,
           auto_reply_enabled: i.auto_reply_enabled !== false,
+          role_inbound: i.role_inbound !== false,
           label: i.label ?? null,
           phone_number: i.phone_number ?? null,
         }))
@@ -487,7 +499,7 @@ export default function WhatsAppPage() {
     }
   }
 
-  type InboundLine = { instance_name: string; auto_reply_enabled: boolean; label: string | null; phone_number: string | null }
+  type InboundLine = { instance_name: string; auto_reply_enabled: boolean; role_inbound?: boolean; label: string | null; phone_number: string | null }
 
   async function loadConversations(clinicId: string, inboundLinesParam?: InboundLine[]) {
     // Usa as inbound lines passadas como parâmetro ou as do estado
@@ -506,7 +518,8 @@ export default function WhatsAppPage() {
     const convs: Conversation[] = []
     const linesFound = new Set<string>()
 
-    // Instâncias que têm role_inbound=true (linha da Eva)
+    // Instâncias de atendimento (Eva ou manual) — usadas pra decidir quais
+    // mensagens entram na lista de conversas
     const inboundInstances = new Set(
       effectiveInboundLines.map((l) => l.instance_name)
     )
@@ -972,11 +985,11 @@ export default function WhatsAppPage() {
           <p className="text-sm text-slate-500">Conversas via Evolution API</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Seletor de número — só aparece quando há 2+ linhas com permissão Eva
-              (role_inbound=true nas configurações). Números só de automação nunca
-              entram aqui, mesmo conectados. Sem opção "Todos": é sempre um número
-              específico por vez, nunca uma visão combinada (evita misturar
-              conversas de linhas diferentes). */}
+          {/* Seletor de número — aparece quando há 2+ linhas de atendimento
+              (Eva OU atendimento manual, role_inbound || role_outbound_manual).
+              Linha só de automação sem atendimento manual nunca entra aqui.
+              Sem opção "Todos": é sempre um número específico por vez, nunca
+              uma visão combinada (evita misturar conversas de linhas diferentes). */}
           {waInboundLines.length > 1 && (
             <select
               value={waInboundLines.some(l => l.instance_name === lineFilter) ? lineFilter : ''}
@@ -986,7 +999,7 @@ export default function WhatsAppPage() {
             >
               {waInboundLines.map((l) => (
                 <option key={l.instance_name} value={l.instance_name}>
-                  {lineLabels[l.instance_name] ?? l.instance_name.slice(0, 10)}
+                  {(l.role_inbound ? 'Eva · ' : 'Manual · ') + (lineLabels[l.instance_name] ?? l.instance_name.slice(0, 10))}
                 </option>
               ))}
             </select>
