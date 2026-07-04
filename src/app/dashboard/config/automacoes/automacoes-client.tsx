@@ -31,8 +31,8 @@ type AutomationRow = {
   template_confirma_24h?: string | null
   lembrete_2h?: boolean | null
   template_lembrete_2h?: string | null
-  msg_conclusao?: boolean | null
-  template_msg_conclusao?: string | null
+  msg_agendamento?: boolean | null
+  template_msg_agendamento?: string | null
   recall_inativos?: boolean | null
   recall_dias?: number | null
   template_recall?: string | null
@@ -209,8 +209,8 @@ export default function AutomacoesClient({
         emoji="📅"
         gradient="bg-gradient-to-br from-emerald-500 to-teal-500"
         title="Lembrete de consulta"
-        description="Enviado no dia anterior e/ou 2h antes da consulta"
-        isActive={!!(auto?.confirma_24h || auto?.lembrete_2h || auto?.msg_conclusao)}
+        description="Confirmação ao agendar, no dia anterior e/ou 2h antes da consulta"
+        isActive={!!(auto?.confirma_24h || auto?.lembrete_2h || auto?.msg_agendamento)}
         isOpen={openId === 'lembrete'}
         onToggle={() => toggle('lembrete')}
       >
@@ -223,8 +223,8 @@ export default function AutomacoesClient({
             template24h: auto?.template_confirma_24h || '',
             lembrete2hEnabled: auto?.lembrete_2h ?? false,
             template2h: auto?.template_lembrete_2h || '',
-            msgConclusaoEnabled: auto?.msg_conclusao ?? false,
-            templateConclusao: auto?.template_msg_conclusao || '',
+            msgAgendamentoEnabled: auto?.msg_agendamento ?? false,
+            templateAgendamento: auto?.template_msg_agendamento || '',
           }}
         />
         <ReminderHistory clinicId={clinicId} />

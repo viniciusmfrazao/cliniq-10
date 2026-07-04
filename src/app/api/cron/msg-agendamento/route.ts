@@ -5,18 +5,20 @@ import { sendWhatsappMessage } from '@/lib/whatsapp'
 export const maxDuration = 60
 
 /**
- * GET /api/cron/msg-conclusao
+ * GET /api/cron/msg-agendamento
  *
- * Cron que processa a fila de "mensagem ao concluir atendimento" —
- * atendimentos cujo appointments.conclusao_scheduled_at <= now() e
- * conclusao_sent_at IS NULL.
+ * Cron que processa a fila de "confirmação de agendamento" — dispara quando
+ * um NOVO agendamento é criado (não quando o atendimento é concluído).
+ *
+ * Fila: appointments.agendamento_scheduled_at <= now() e agendamento_sent_at IS NULL.
  *
  * Roda de 5 em 5 minutos (configurado no vercel.json).
  *
- * O agendamento é feito por trigger SQL (trg_msg_conclusao_schedule_on_complete)
- * quando o atendimento muda pra 'completed' (qualquer caminho: tela de
- * finalizar, agenda, recepção, import, etc.) e a flag
- * clinic_automations.msg_conclusao está ligada.
+ * O agendamento da fila é feito por trigger SQL
+ * (trg_msg_agendamento_schedule_on_create) no INSERT de um novo appointment,
+ * quando clinic_automations.msg_agendamento está ligada. Não dispara pra
+ * agendamentos que já nascem completed/cancelled/no_show, nem pra
+ * importação de histórico (start_time no passado).
  *
  * Auth: Header Authorization: Bearer ${CRON_SECRET}.
  */
@@ -26,8 +28,8 @@ const DEFAULT_LIMIT = 200
 
 type AutomationRow = {
   clinic_id: string
-  msg_conclusao: boolean | null
-  template_msg_conclusao: string | null
+  msg_agendamento: boolean | null
+  template_msg_agendamento: string | null
 }
 
 type WaRow = { clinic_id: string; status: string }
@@ -89,7 +91,7 @@ export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
   if (!secret) {
-    console.error('[cron/msg-conclusao] CRON_SECRET ausente em runtime')
+    console.error('[cron/msg-agendamento] CRON_SECRET ausente em runtime')
     return NextResponse.json({ ok: false, error: 'cron_not_configured' }, { status: 503 })
   }
   if (auth !== `Bearer ${secret}`) {
@@ -103,18 +105,17 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient()
   const nowISO = new Date().toISOString()
 
-  // Pega appointments com mensagem de conclusão agendada pra agora ou antes
+  // Pega appointments com confirmação de agendamento agendada pra agora ou antes
   const { data: queueRaw, error: errQueue } = await svc
     .from('appointments')
     .select(
       'id, clinic_id, patient_id, professional_id, procedure_id, start_time, status',
     )
-    .eq('status', 'completed')
-    .is('conclusao_sent_at', null)
-    .not('conclusao_scheduled_at', 'is', null)
-    .lte('conclusao_scheduled_at', nowISO)
+    .is('agendamento_sent_at', null)
+    .not('agendamento_scheduled_at', 'is', null)
+    .lte('agendamento_scheduled_at', nowISO)
     .not('patient_id', 'is', null)
-    .order('conclusao_scheduled_at', { ascending: true })
+    .order('agendamento_scheduled_at', { ascending: true })
     .limit(limit)
 
   if (errQueue) {
@@ -131,6 +132,7 @@ export async function GET(req: NextRequest) {
     professional_id: string | null
     procedure_id: string | null
     start_time: string
+    status: string
   }> | null) ?? []
 
   if (queue.length === 0) {
@@ -156,7 +158,7 @@ export async function GET(req: NextRequest) {
   ] = await Promise.all([
     svc
       .from('clinic_automations')
-      .select('clinic_id, msg_conclusao, template_msg_conclusao')
+      .select('clinic_id, msg_agendamento, template_msg_agendamento')
       .in('clinic_id', clinicIds),
     svc
       .from('clinic_whatsapp')
@@ -209,18 +211,32 @@ export async function GET(req: NextRequest) {
     skippedNoPhone: 0,
     skippedNoTemplate: 0,
     skippedAutomationOff: 0,
+    skippedNowInvalid: 0,
     errors: [] as Array<{ clinic_id: string; appointment_id?: string; error: string }>,
   }
 
   for (const app of queue) {
     const auto = automationByClinic.get(app.clinic_id)
-    if (!auto || !auto.msg_conclusao || !auto.template_msg_conclusao?.trim()) {
+    if (!auto || !auto.msg_agendamento || !auto.template_msg_agendamento?.trim()) {
       // A clinica desligou a automação no meio do caminho — limpa o agendamento
       summary.skippedAutomationOff++
       if (!dryRun) {
         await svc
           .from('appointments')
-          .update({ conclusao_scheduled_at: null })
+          .update({ agendamento_scheduled_at: null })
+          .eq('id', app.id)
+      }
+      continue
+    }
+
+    // Se o status mudou pra algo invalido antes do cron rodar (ex: cancelado
+    // logo em seguida), nao envia confirmação de um agendamento que nao vale mais.
+    if (['completed', 'cancelled', 'no_show'].includes(app.status)) {
+      summary.skippedNowInvalid++
+      if (!dryRun) {
+        await svc
+          .from('appointments')
+          .update({ agendamento_scheduled_at: null })
           .eq('id', app.id)
       }
       continue
@@ -240,7 +256,7 @@ export async function GET(req: NextRequest) {
       if (!dryRun) {
         await svc
           .from('appointments')
-          .update({ conclusao_scheduled_at: null })
+          .update({ agendamento_scheduled_at: null })
           .eq('id', app.id)
       }
       continue
@@ -251,7 +267,7 @@ export async function GET(req: NextRequest) {
     const clinicName = clinicNameById.get(app.clinic_id) || 'Clínica'
     const dt = formatBrazilDateTime(app.start_time)
 
-    const text = renderTemplate(auto.template_msg_conclusao!, {
+    const text = renderTemplate(auto.template_msg_agendamento!, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
       clinica: clinicName,
@@ -271,11 +287,11 @@ export async function GET(req: NextRequest) {
     const { data: claimed } = await svc
       .from('appointments')
       .update({
-        conclusao_sent_at: new Date().toISOString(),
-        conclusao_scheduled_at: null,
+        agendamento_sent_at: new Date().toISOString(),
+        agendamento_scheduled_at: null,
       })
       .eq('id', app.id)
-      .is('conclusao_sent_at', null)
+      .is('agendamento_sent_at', null)
       .select('id')
       .maybeSingle()
 
@@ -295,7 +311,7 @@ export async function GET(req: NextRequest) {
     if (result.ok) {
       summary.sent++
     } else {
-      // NÃO reverte conclusao_sent_at — evita reenvio duplicado em caso de falha de envio
+      // NÃO reverte agendamento_sent_at — evita reenvio duplicado em caso de falha de envio
       summary.errors.push({
         clinic_id: app.clinic_id,
         appointment_id: app.id,
