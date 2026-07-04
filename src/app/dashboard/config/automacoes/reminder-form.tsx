@@ -69,6 +69,11 @@ const SUGGESTIONS_CONCLUSAO = [
     label: 'Com nome do profissional',
     text: `Oi {{primeiro_nome}}! Passando pra agradecer sua visita hoje com {{profissional}} 💕\n\nFicamos à disposição pra qualquer coisa que precisar!`,
   },
+  {
+    id: 'confirmacao',
+    label: 'Confirmação',
+    text: `Olá {{primeiro_nome}}, seu agendamento de {{procedimento}} foi marcado para dia {{data}} às {{hora}}.\n\nFicamos felizes e vamos ficar te aguardando! 💕`,
+  },
 ]
 
 function renderPreview(template: string, vars: Vars): string {
