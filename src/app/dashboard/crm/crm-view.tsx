@@ -154,6 +154,7 @@ type CRMSettings = {
   whatsapp_welcome_message: string | null
   eva_auto_analyze: boolean
   eva_auto_suggest: boolean
+  whatsapp_instance?: string | null
 }
 
 type MessageTemplate = {
