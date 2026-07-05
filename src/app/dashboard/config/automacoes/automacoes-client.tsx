@@ -147,6 +147,109 @@ function GroupLabel({ label }: { label: string }) {
   )
 }
 
+// ─── Mapa da jornada (banner fixo, storytelling) ──────────────────────────────
+
+function JornadaCompleta({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
+  return (
+    <div className="card overflow-hidden border border-violet-100 bg-gradient-to-br from-violet-50/60 to-fuchsia-50/40">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4 text-left"
+      >
+        <span className="flex items-center gap-2 font-semibold text-violet-900">
+          🗺️ Ver a jornada completa
+        </span>
+        <Icon
+          name="chevronDown"
+          className={`w-4 h-4 text-violet-600 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="px-5 pb-6 space-y-4 text-sm text-slate-700 leading-relaxed">
+          <p>
+            <strong>Tudo começa quando alguém marca uma consulta.</strong>
+          </p>
+          <p>
+            Nesse exato momento, a automação <strong>📅 Lembrete de consulta</strong> já entra em ação: uma mensagem
+            confirma o agendamento na hora, outra chega um dia antes pra ninguém esquecer, e uma última avisa 2 horas
+            antes — o famoso empurrãozinho que reduz falta. Cada uma dessas mensagens é sua, editável do jeitinho que
+            sua clínica fala.
+          </p>
+
+          <p>
+            <strong>O paciente chegou, foi atendido, e agora?</strong>
+          </p>
+          <p>
+            É aqui que entra o <strong>💜 Contato pós-procedimento</strong>. No dia seguinte (ou quando você preferir —
+            3 dias, 7 dias, o tempo que fizer sentido pro procedimento) a clínica manda um &quot;oi, tudo bem? Como
+            você está se sentindo?&quot;. Isso não é só cuidado — é o que faz o paciente sentir que não foi só mais um
+            número na agenda.
+          </p>
+
+          <p>
+            <strong>Algum tempo depois, ele volta pra um Retorno.</strong>
+          </p>
+          <p>
+            E é exatamente aí que nasce o <strong>🔁 Pós-venda</strong>. Assim que o agendamento marcado como
+            &quot;Retorno&quot; é concluído, a clínica pode montar um fluxo inteiro de relacionamento: no dia
+            seguinte, 7 dias depois, 30 dias depois... quantas mensagens fizerem sentido pra manter o vínculo vivo e
+            lembrar o paciente de que a clínica está aqui pra próxima etapa da transformação dele.
+          </p>
+
+          <p>
+            <strong>Enquanto isso, a voz da clínica pode ir em duas direções.</strong>
+          </p>
+          <p>
+            O <strong>⭐ NPS pós-atendimento</strong> serve pra duas coisas: pode ser uma pesquisa de satisfação de
+            verdade, pra mapear o que pode melhorar — ou pode ser simplesmente uma mensagem de carinho, tipo:
+          </p>
+          <p className="italic bg-white/70 border border-violet-100 rounded-lg p-3">
+            &quot;Que alegria foi te receber hoje na clínica. Nosso maior objetivo é fazer você se sentir ainda mais
+            linda, realizada e transformada, e poder participar desse momento me deixa muito feliz. Foi um prazer te
+            atender! ✨&quot;
+          </p>
+          <p>Sem pesquisa nenhuma — só reforçando que ali é um lugar que se importa.</p>
+
+          <p>
+            <strong>E os pacientes que sumiram?</strong>
+          </p>
+          <p>
+            O <strong>💌 Recall de inativos</strong> existe pra isso: lembrar quem já é cliente da casa e faz um tempo
+            que não aparece. Vale ouro — porque esses pacientes já confiam na clínica, já conhecem o trabalho. É o
+            paciente de maior valor que existe: você não precisa gastar um centavo em captação pra trazer ele de
+            volta, só precisa lembrar ele que a clínica está aqui.
+          </p>
+
+          <p>
+            <strong>No meio do caminho, tem os momentos especiais.</strong>
+          </p>
+          <p>
+            A <strong>🎂 Mensagem de aniversário</strong> sai sozinha, no dia certo, sem ninguém precisar lembrar.
+          </p>
+
+          <p>
+            <strong>E por trás de tudo isso, a clínica se cuida também.</strong>
+          </p>
+          <p>
+            O <strong>💸 Alerta de despesas</strong> avisa sobre o financeiro da casa. E se você quiser receber o
+            resumo da semana inteira — agendamentos, cancelamentos, faturamento, estoque — é só cadastrar o número
+            que vai receber o <strong>Relatório semanal</strong> logo na primeira tela de Configurações.
+          </p>
+
+          <div className="pt-2 mt-2 border-t border-violet-100">
+            <p className="text-violet-800">
+              💜 <em>No fim, cada automação aqui não é só uma mensagem programada — é um pedacinho do relacionamento
+              entre a clínica e o paciente, funcionando sozinho, no momento certo.</em>
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Componente principal (Client) ────────────────────────────────────────────
 
 export default function AutomacoesClient({
@@ -157,6 +260,7 @@ export default function AutomacoesClient({
 }: Props) {
   // Controla qual accordion está aberto (null = todos fechados)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [jornadaAberta, setJornadaAberta] = useState(false)
 
   function toggle(id: string) {
     setOpenId((prev) => (prev === id ? null : id))
@@ -205,6 +309,9 @@ export default function AutomacoesClient({
           </div>
         </div>
       )}
+
+      {/* ── Mapa da jornada (fixo, expansível) ────────────────────────────── */}
+      <JornadaCompleta isOpen={jornadaAberta} onToggle={() => setJornadaAberta(p => !p)} />
 
       {/* ── Grupo: Antes do atendimento ───────────────────────────────────── */}
       <GroupLabel label="Antes do atendimento" />
