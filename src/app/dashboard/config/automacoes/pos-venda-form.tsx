@@ -22,7 +22,8 @@ Já pensou em agendar sua próxima sessão? Estamos sempre aqui pra te receber n
 ]
 
 interface SeqItem {
-  dias: number
+  valor: number
+  unidade: 'dias' | 'horas'
   ativo: boolean
   template: string
 }
@@ -65,9 +66,11 @@ export default function PosVendaForm({ clinicId, clinicName, initial }: Props) {
     .replace(/\{\{clinica\}\}/g, clinicName)
 
   function addSeq() {
-    const nextDias = seq.length === 0 ? 7 : (seq[seq.length - 1].dias + 7)
+    const last = seq[seq.length - 1]
+    const nextValor = !last ? 7 : (last.unidade === 'dias' ? last.valor + 7 : last.valor + 3)
     setSeq([...seq, {
-      dias: nextDias,
+      valor: nextValor,
+      unidade: 'dias',
       ativo: true,
       template: DEFAULT_SEQ_TEMPLATES[Math.min(seq.length, DEFAULT_SEQ_TEMPLATES.length - 1)],
     }])
@@ -200,7 +203,7 @@ export default function PosVendaForm({ clinicId, clinicName, initial }: Props) {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="font-semibold text-slate-800">Mensagens de acompanhamento</p>
-                <p className="text-sm text-slate-500">Envie mensagens adicionais X dias após o retorno concluído</p>
+                <p className="text-sm text-slate-500">Envie mensagens adicionais X horas ou dias após o retorno concluído</p>
               </div>
               <button type="button" onClick={addSeq}
                 className="flex items-center gap-1 text-sm px-3 py-1.5 bg-violet-50 text-violet-700 rounded-lg border border-violet-200 hover:bg-violet-100">
@@ -227,13 +230,26 @@ export default function PosVendaForm({ clinicId, clinicName, initial }: Props) {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <label className="text-sm text-slate-600 whitespace-nowrap">Enviar após</label>
-                  <input type="number" min={1} max={365} value={s.dias}
-                    onChange={e => updateSeq(idx, { dias: Number(e.target.value) })}
+                  <input type="number" min={1} max={s.unidade === 'horas' ? 168 : 365} value={s.valor}
+                    onChange={e => updateSeq(idx, { valor: Number(e.target.value) })}
                     className="input w-20 text-center" />
-                  <label className="text-sm text-slate-600">dias do retorno</label>
+                  <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                    <button type="button" onClick={() => updateSeq(idx, { unidade: 'horas' })}
+                      className={`px-3 py-1.5 text-sm ${s.unidade === 'horas' ? 'bg-violet-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                      horas
+                    </button>
+                    <button type="button" onClick={() => updateSeq(idx, { unidade: 'dias' })}
+                      className={`px-3 py-1.5 text-sm ${s.unidade === 'dias' ? 'bg-violet-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                      dias
+                    </button>
+                  </div>
+                  <label className="text-sm text-slate-600">do retorno concluído</label>
                 </div>
+                {s.unidade === 'horas' && (
+                  <p className="text-xs text-slate-400 mb-3">Enviado assim que o cron (roda a cada hora) detectar que o tempo passou — pode variar em até ~1h do horário exato.</p>
+                )}
 
                 <textarea rows={4} value={s.template}
                   onChange={e => updateSeq(idx, { template: e.target.value })}
@@ -261,7 +277,7 @@ export default function PosVendaForm({ clinicId, clinicName, initial }: Props) {
                   onClick={() => setTestMsgIdx(i)}
                   className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${testMsgIdx === i ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}
                 >
-                  +{s.dias}d
+                  +{s.valor}{s.unidade === 'horas' ? 'h' : 'd'}
                 </button>
               ))}
             </div>

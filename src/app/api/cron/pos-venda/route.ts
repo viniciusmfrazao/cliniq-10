@@ -5,6 +5,11 @@ import { sendWhatsappMessage } from '@/lib/whatsapp'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+// Janela máxima pra olhar pra trás em busca de retornos concluídos.
+// Cobre a mensagem principal (dia anterior), sequências em dias (até 60d)
+// e sequências em horas (até 168h = 7 dias). Evita varrer o histórico todo.
+const LOOKBACK_DAYS = 60
+
 function renderTemplate(template: string, vars: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || `{{${key}}}`)
 }
@@ -24,16 +29,25 @@ function isRetorno(procName: string): boolean {
   return procName.toLowerCase().includes('retorno')
 }
 
+type SeqItem = {
+  valor: number
+  unidade: 'dias' | 'horas'
+  ativo: boolean
+  template: string
+  // formato antigo (compatibilidade, caso alguma clínica já tenha salvo assim)
+  dias?: number
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const force = searchParams.get('force') === '1'
   const dryRun = searchParams.get('dry') === '1'
 
   const currentHour = getCurrentHourBRT()
+  const now = new Date()
 
   const svc = createServiceClient()
 
-  // Buscar clínicas com pós-venda ativo
   const { data: automations } = await svc
     .from('clinic_automations')
     .select(`
@@ -49,18 +63,11 @@ export async function GET(request: Request) {
   const results: any[] = []
 
   for (const auto of automations) {
-    const targetHour = Number(auto.pos_venda_hora ?? 10)
-    if (!force && currentHour !== targetHour) {
-      results.push({ clinic_id: auto.clinic_id, skipped: 'fora_do_horario' })
-      continue
-    }
-
     if (!auto.template_pos_venda) {
       results.push({ clinic_id: auto.clinic_id, skipped: 'sem_template' })
       continue
     }
 
-    // WhatsApp da clínica
     const { data: wa } = await svc
       .from('clinic_whatsapp')
       .select('instance_name, status')
@@ -75,23 +82,37 @@ export async function GET(request: Request) {
       .from('clinics').select('name').eq('id', auto.clinic_id).maybeSingle()
     const clinicName = clinic?.name || 'Clínica'
 
-    // ── MENSAGEM 1: retornos concluídos ontem ──────────────────────────
-    const ontem = getDateBRT(-1)
-    const { data: aptsOntem } = await svc
+    // Busca única de todos os retornos concluídos dentro da janela de lookback
+    const desde = getDateBRT(-LOOKBACK_DAYS)
+    const { data: retornos } = await svc
       .from('appointments')
-      .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
+      .select('id, patient_id, start_time, patients(name, phone), procedures(name), users(name)')
       .eq('clinic_id', auto.clinic_id)
       .eq('status', 'completed')
-      .gte('start_time', `${ontem}T00:00:00`)
-      .lt('start_time', `${ontem}T23:59:59`)
+      .gte('start_time', `${desde}T00:00:00`)
+      .order('start_time', { ascending: false })
 
-    for (const apt of aptsOntem || []) {
-      const procName = (apt.procedures as any)?.name || ''
-      if (!isRetorno(procName)) continue
+    const retornosFiltrados = (retornos || []).filter(apt => isRetorno((apt.procedures as any)?.name || ''))
+    if (!retornosFiltrados.length) { results.push({ clinic_id: auto.clinic_id, skipped: 'sem_retornos' }); continue }
 
+    // Já enviados (dedupe): busca o log de uma vez pra essa clínica
+    const aptIds = retornosFiltrados.map(a => a.id)
+    const { data: logRows } = await svc
+      .from('pos_venda_sent_log')
+      .select('appointment_id, tipo')
+      .eq('clinic_id', auto.clinic_id)
+      .in('appointment_id', aptIds)
+    const jaEnviado = new Set((logRows || []).map(r => `${r.appointment_id}::${r.tipo}`))
+
+    async function marcarEnviado(appointmentId: string, tipo: string) {
+      if (dryRun) return
+      await svc.from('pos_venda_sent_log').insert({ clinic_id: auto.clinic_id, appointment_id: appointmentId, tipo }).select().maybeSingle()
+    }
+
+    async function enviarPara(apt: any, template: string, tipo: string) {
       const patient = apt.patients as any
-      if (!patient?.phone) continue
-
+      if (!patient?.phone) return false
+      const procName = (apt.procedures as any)?.name || ''
       const vars = {
         primeiro_nome: (patient.name || '').split(' ')[0],
         nome: patient.name || '',
@@ -99,44 +120,57 @@ export async function GET(request: Request) {
         profissional: (apt.users as any)?.name || 'sua profissional',
         clinica: clinicName,
       }
-
-      const msg = renderTemplate(auto.template_pos_venda || '', vars)
+      const msg = renderTemplate(template, vars)
       if (!dryRun) await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
-      results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: 'msg1', proc: procName })
+      results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: tipo, proc: procName })
+      return true
     }
 
-    // ── MENSAGENS SEQUÊNCIA: X dias após o retorno concluído ───────────
-    const seqItems = auto.pos_venda_seq || []
-    for (const seqItem of seqItems) {
-      if (!seqItem.ativo || !seqItem.dias || !seqItem.template) continue
+    // ── MENSAGEM 1: dispara no horário configurado, retornos concluídos ontem ──
+    const targetHour = Number(auto.pos_venda_hora ?? 10)
+    if (force || currentHour === targetHour) {
+      const ontem = getDateBRT(-1)
+      for (const apt of retornosFiltrados) {
+        const dataApt = apt.start_time.slice(0, 10)
+        if (dataApt !== ontem) continue
+        if (jaEnviado.has(`${apt.id}::main`)) continue
+        const enviou = await enviarPara(apt, auto.template_pos_venda || '', 'msg1')
+        if (enviou) await marcarEnviado(apt.id, 'main')
+      }
+    }
 
-      const diaAlvo = getDateBRT(-seqItem.dias)
-      const { data: aptsSeq } = await svc
-        .from('appointments')
-        .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
-        .eq('clinic_id', auto.clinic_id)
-        .eq('status', 'completed')
-        .gte('start_time', `${diaAlvo}T00:00:00`)
-        .lt('start_time', `${diaAlvo}T23:59:59`)
+    // ── MENSAGENS SEQUÊNCIA: em dias (respeita o horário) ou em horas (checa toda hora) ──
+    const seqItems: SeqItem[] = auto.pos_venda_seq || []
+    for (let idx = 0; idx < seqItems.length; idx++) {
+      const seqItem = seqItems[idx]
+      if (!seqItem.ativo || !seqItem.template) continue
+      const tipoLog = `seq_${idx}`
+      const unidade = seqItem.unidade || 'dias' // compat com formato antigo (só "dias")
+      const valor = seqItem.valor ?? seqItem.dias ?? 0
+      if (!valor) continue
 
-      for (const apt of aptsSeq || []) {
-        const procName = (apt.procedures as any)?.name || ''
-        if (!isRetorno(procName)) continue
-
-        const patient = apt.patients as any
-        if (!patient?.phone) continue
-
-        const vars = {
-          primeiro_nome: (patient.name || '').split(' ')[0],
-          nome: patient.name || '',
-          procedimento: procName,
-          profissional: (apt.users as any)?.name || 'sua profissional',
-          clinica: clinicName,
+      if (unidade === 'horas') {
+        // Checa a cada execução do cron (independe do horário configurado):
+        // qualquer retorno cujo tempo decorrido já passou do valor em horas
+        // e que ainda não foi enviado.
+        for (const apt of retornosFiltrados) {
+          if (jaEnviado.has(`${apt.id}::${tipoLog}`)) continue
+          const horasPassadas = (now.getTime() - new Date(apt.start_time).getTime()) / 36e5
+          if (horasPassadas < valor) continue
+          const enviou = await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}h`)
+          if (enviou) await marcarEnviado(apt.id, tipoLog)
         }
-
-        const msg = renderTemplate(seqItem.template, vars)
-        if (!dryRun) await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
-        results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: `seq_${seqItem.dias}d`, proc: procName })
+      } else {
+        // dias: mantém o comportamento original, só dispara no horário configurado
+        if (!force && currentHour !== targetHour) continue
+        const diaAlvo = getDateBRT(-valor)
+        for (const apt of retornosFiltrados) {
+          const dataApt = apt.start_time.slice(0, 10)
+          if (dataApt !== diaAlvo) continue
+          if (jaEnviado.has(`${apt.id}::${tipoLog}`)) continue
+          const enviou = await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}d`)
+          if (enviou) await marcarEnviado(apt.id, tipoLog)
+        }
       }
     }
   }
