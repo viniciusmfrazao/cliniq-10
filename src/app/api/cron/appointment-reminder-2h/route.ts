@@ -164,7 +164,7 @@ export async function GET(req: NextRequest) {
         startTimeISO: app.start_time,
         endTimeISO: app.end_time,
       })
-      linkAgenda2h = generateCalendarLinks(getPublicBaseUrl(), event).googleUrl
+      linkAgenda2h = generateCalendarLinks(getPublicBaseUrl(), event).googleRedirectUrl
     }
 
     const rawText = renderTemplate(template, {

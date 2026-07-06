@@ -63,6 +63,12 @@ export type CalendarEventInput = {
 export type CalendarLinks = {
   /** Abre o Google Calendar (web ou app) já preenchido — fluxo mais direto no Android/Chrome */
   googleUrl: string
+  /**
+   * Link curto (via nosso domínio) que redireciona pro Google Calendar.
+   * Usar em textos/mensagens (WhatsApp) — o googleUrl direto fica gigante
+   * quando exposto como texto visível (título/local/descrição encoded).
+   */
+  googleRedirectUrl: string
   /** URL do endpoint que gera o .ics sob demanda — funciona em qualquer calendário (iOS, Outlook, etc) */
   icsUrl: string
 }
@@ -147,6 +153,64 @@ export function getPublicBaseUrl(): string {
 export function generateCalendarLinks(baseUrl: string, event: CalendarEventInput): CalendarLinks {
   return {
     googleUrl: generateGoogleCalendarUrl(event),
+    googleRedirectUrl: `${baseUrl}/api/calendar/${event.id}/google`,
     icsUrl: `${baseUrl}/api/calendar/${event.id}/ics`,
   }
+}
+
+/**
+ * Busca os dados de um appointment e monta o CalendarEventInput — usado
+ * pelos endpoints /api/calendar/[id]/ics e /api/calendar/[id]/google pra
+ * não duplicar a mesma query nos dois. Requer um client Supabase (service
+ * role) já criado no ponto de chamada, pra não acoplar este módulo a
+ * '@/lib/supabase/server'.
+ */
+export async function loadAppointmentCalendarEvent(
+  svc: {
+    from: (table: string) => any
+  },
+  appointmentId: string,
+): Promise<
+  | { ok: true; event: CalendarEventInput }
+  | { ok: false; status: number; error: string }
+> {
+  if (!appointmentId || !/^[0-9a-f-]{36}$/i.test(appointmentId)) {
+    return { ok: false, status: 400, error: 'invalid_appointment_id' }
+  }
+
+  const { data: appointment, error } = await svc
+    .from('appointments')
+    .select('id, clinic_id, professional_id, procedure_id, start_time, end_time, status')
+    .eq('id', appointmentId)
+    .maybeSingle()
+
+  if (error) return { ok: false, status: 500, error: error.message }
+  if (!appointment) return { ok: false, status: 404, error: 'appointment_not_found' }
+  if (appointment.status === 'cancelled') {
+    return { ok: false, status: 410, error: 'appointment_cancelled' }
+  }
+  if (!appointment.end_time) {
+    return { ok: false, status: 422, error: 'missing_end_time' }
+  }
+
+  const [{ data: clinic }, { data: prof }, { data: procedure }] = await Promise.all([
+    svc.from('clinics').select('name').eq('id', appointment.clinic_id).maybeSingle(),
+    appointment.professional_id
+      ? svc.from('users').select('name').eq('id', appointment.professional_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    appointment.procedure_id
+      ? svc.from('procedures').select('name').eq('id', appointment.procedure_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+
+  const event = buildAppointmentCalendarEvent({
+    appointmentId: appointment.id,
+    clinicName: clinic?.name || 'Clínica',
+    professionalName: prof?.name ?? null,
+    procedureName: procedure?.name ?? null,
+    startTimeISO: appointment.start_time,
+    endTimeISO: appointment.end_time,
+  })
+
+  return { ok: true, event }
 }

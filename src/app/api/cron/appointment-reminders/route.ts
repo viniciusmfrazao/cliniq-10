@@ -378,7 +378,7 @@ export async function GET(req: NextRequest) {
         startTimeISO: app.start_time,
         endTimeISO: app.end_time,
       })
-      linkAgenda = generateCalendarLinks(getPublicBaseUrl(), event).googleUrl
+      linkAgenda = generateCalendarLinks(getPublicBaseUrl(), event).googleRedirectUrl
     }
 
     const bodyText = renderTemplate(template, {

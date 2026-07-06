@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { buildAppointmentCalendarEvent, generateIcsContent } from '@/lib/calendar-links'
+import { generateIcsContent, loadAppointmentCalendarEvent } from '@/lib/calendar-links'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,52 +21,14 @@ export async function GET(
   { params }: { params: { appointmentId: string } },
 ) {
   const { appointmentId } = params
-
-  if (!appointmentId || !/^[0-9a-f-]{36}$/i.test(appointmentId)) {
-    return NextResponse.json({ ok: false, error: 'invalid_appointment_id' }, { status: 400 })
-  }
-
   const svc = createServiceClient()
 
-  const { data: appointment, error } = await svc
-    .from('appointments')
-    .select('id, clinic_id, professional_id, procedure_id, start_time, end_time, status')
-    .eq('id', appointmentId)
-    .maybeSingle()
-
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-  }
-  if (!appointment) {
-    return NextResponse.json({ ok: false, error: 'appointment_not_found' }, { status: 404 })
-  }
-  if (['cancelled'].includes(appointment.status)) {
-    return NextResponse.json({ ok: false, error: 'appointment_cancelled' }, { status: 410 })
-  }
-  if (!appointment.end_time) {
-    return NextResponse.json({ ok: false, error: 'missing_end_time' }, { status: 422 })
+  const result = await loadAppointmentCalendarEvent(svc, appointmentId)
+  if (!result.ok) {
+    return NextResponse.json({ ok: false, error: result.error }, { status: result.status })
   }
 
-  const [{ data: clinic }, { data: prof }, { data: procedure }] = await Promise.all([
-    svc.from('clinics').select('name').eq('id', appointment.clinic_id).maybeSingle(),
-    appointment.professional_id
-      ? svc.from('users').select('name').eq('id', appointment.professional_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    appointment.procedure_id
-      ? svc.from('procedures').select('name').eq('id', appointment.procedure_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ])
-
-  const event = buildAppointmentCalendarEvent({
-    appointmentId: appointment.id,
-    clinicName: clinic?.name || 'Clínica',
-    professionalName: prof?.name ?? null,
-    procedureName: procedure?.name ?? null,
-    startTimeISO: appointment.start_time,
-    endTimeISO: appointment.end_time,
-  })
-
-  const ics = generateIcsContent(event)
+  const ics = generateIcsContent(result.event)
 
   return new NextResponse(ics, {
     status: 200,
