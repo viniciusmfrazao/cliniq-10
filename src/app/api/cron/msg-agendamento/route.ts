@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { buildAppointmentCalendarEvent, generateCalendarLinks } from '@/lib/calendar-links'
+
+function getPublicBaseUrl(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://app.clinike.com.br').replace(/\/$/, '')
+}
 
 export const maxDuration = 60
 
@@ -74,6 +79,7 @@ function renderTemplate(
     data: string
     hora: string
     dia_semana: string
+    link_agenda: string
   },
 ): string {
   return template
@@ -85,6 +91,7 @@ function renderTemplate(
     .replace(/\{\{\s*data\s*\}\}/g, vars.data)
     .replace(/\{\{\s*hora\s*\}\}/g, vars.hora)
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
+    .replace(/\{\{\s*link_agenda\s*\}\}/g, vars.link_agenda)
 }
 
 export async function GET(req: NextRequest) {
@@ -109,7 +116,7 @@ export async function GET(req: NextRequest) {
   const { data: queueRaw, error: errQueue } = await svc
     .from('appointments')
     .select(
-      'id, clinic_id, patient_id, professional_id, procedure_id, start_time, status',
+      'id, clinic_id, patient_id, professional_id, procedure_id, start_time, end_time, status',
     )
     .is('agendamento_sent_at', null)
     .not('agendamento_scheduled_at', 'is', null)
@@ -132,6 +139,7 @@ export async function GET(req: NextRequest) {
     professional_id: string | null
     procedure_id: string | null
     start_time: string
+    end_time: string | null
     status: string
   }> | null) ?? []
 
@@ -267,6 +275,21 @@ export async function GET(req: NextRequest) {
     const clinicName = clinicNameById.get(app.clinic_id) || 'Clínica'
     const dt = formatBrazilDateTime(app.start_time)
 
+    // Link "adicionar à agenda" — sem OAuth, gerado sob demanda a partir dos
+    // próprios dados do agendamento (ver src/lib/calendar-links.ts)
+    let linkAgenda = ''
+    if (app.end_time) {
+      const event = buildAppointmentCalendarEvent({
+        appointmentId: app.id,
+        clinicName,
+        professionalName: prof?.name ?? null,
+        procedureName,
+        startTimeISO: app.start_time,
+        endTimeISO: app.end_time,
+      })
+      linkAgenda = generateCalendarLinks(getPublicBaseUrl(), event).googleUrl
+    }
+
     const text = renderTemplate(auto.template_msg_agendamento!, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
@@ -276,6 +299,7 @@ export async function GET(req: NextRequest) {
       data: dt.date,
       hora: dt.time,
       dia_semana: dt.weekday,
+      link_agenda: linkAgenda,
     })
 
     if (dryRun) {
