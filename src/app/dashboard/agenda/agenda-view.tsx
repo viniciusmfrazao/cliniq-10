@@ -713,24 +713,15 @@ const AppointmentCard = React.memo(function AppointmentCard({
               )}
 
               {calendarLinks && (
-                <div className="flex gap-2">
-                  <a
-                    href={calendarLinks.googleUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-sm transition-colors hover:bg-slate-200"
-                  >
-                    <Icon name="calendar" className="w-4 h-4" />
-                    Google Agenda
-                  </a>
-                  <a
-                    href={calendarLinks.icsUrl}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-sm transition-colors hover:bg-slate-200"
-                  >
-                    <Icon name="download" className="w-4 h-4" />
-                    .ics
-                  </a>
-                </div>
+                <a
+                  href={calendarLinks.googleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-sm transition-colors hover:bg-slate-200"
+                >
+                  <Icon name="calendar" className="w-4 h-4" />
+                  Adicionar ao Google Agenda
+                </a>
               )}
 
               {apt.patients?.id && (
@@ -1063,26 +1054,16 @@ const AppointmentCard = React.memo(function AppointmentCard({
             )}
 
             {calendarLinks && (
-              <div className="flex gap-1.5">
-                <a
-                  href={calendarLinks.googleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex-1 py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
-                >
-                  <Icon name="calendar" className="w-3 h-3" />
-                  Google Agenda
-                </a>
-                <a
-                  href={calendarLinks.icsUrl}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex-1 py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
-                >
-                  <Icon name="download" className="w-3 h-3" />
-                  .ics
-                </a>
-              </div>
+              <a
+                href={calendarLinks.googleUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="w-full py-1.5 px-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
+              >
+                <Icon name="calendar" className="w-3 h-3" />
+                Adicionar ao Google Agenda
+              </a>
             )}
             
             {/* Select de status — todos os status disponíveis, sem restrição de data */}

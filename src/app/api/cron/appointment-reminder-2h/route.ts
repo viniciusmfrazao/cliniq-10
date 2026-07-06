@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
+import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
 
@@ -41,12 +42,15 @@ function renderTemplate(template: string, vars: Record<string, string>): string 
     .replace(/\{\{\s*hora\s*\}\}/g, vars.hora)
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
     .replace(/\{\{\s*endereco\s*\}\}/g, vars.endereco ?? '')
+    .replace(/\{\{\s*link_agenda\s*\}\}/g, vars.link_agenda ?? '')
 }
 
 const DEFAULT_TEMPLATE_2H = `Oi {{primeiro_nome}}! Passando pra lembrar que daqui a pouco é o seu horário na *{{clinica}}* 🕐
 
 🗓 Hoje às *{{hora}}* com {{profissional}}{{#if endereco}}
 📍 {{endereco}}{{/if}}
+
+📅 Adicionar na sua agenda: {{link_agenda}}
 
 Te esperamos! 💕`
 
@@ -82,7 +86,7 @@ export async function GET(req: NextRequest) {
   // 1) Agendamentos na janela 2h
   const { data: apps, error: errApps } = await svc
     .from('appointments')
-    .select('id, clinic_id, start_time, status, patient_id, professional_id, procedure_id')
+    .select('id, clinic_id, start_time, end_time, status, patient_id, professional_id, procedure_id')
     .gte('start_time', windowStart.toISOString())
     .lte('start_time', windowEnd.toISOString())
     .in('status', ['scheduled', 'confirmed', 'pending_confirmation'])
@@ -148,6 +152,21 @@ export async function GET(req: NextRequest) {
     const dt = formatBrazilDateTime(app.start_time)
     const clinicName2h = clinicMap.get(app.clinic_id) || 'Clínica'
     const endereco2h = String((clinicSettingsMap.get(app.clinic_id) as any)?.address ?? '')
+
+    // Link "adicionar à agenda" — sem OAuth, gerado on-the-fly
+    let linkAgenda2h = ''
+    if (app.end_time) {
+      const event = buildAppointmentCalendarEvent({
+        appointmentId: app.id,
+        clinicName: clinicName2h,
+        professionalName: profMap.get(app.professional_id) || null,
+        procedureName: procMap.get(app.procedure_id) || null,
+        startTimeISO: app.start_time,
+        endTimeISO: app.end_time,
+      })
+      linkAgenda2h = generateCalendarLinks(getPublicBaseUrl(), event).googleUrl
+    }
+
     const rawText = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
@@ -158,6 +177,7 @@ export async function GET(req: NextRequest) {
       hora: dt.time,
       dia_semana: dt.weekday,
       endereco: endereco2h,
+      link_agenda: linkAgenda2h,
     })
     const text = renderConditional(rawText, { endereco: endereco2h })
 

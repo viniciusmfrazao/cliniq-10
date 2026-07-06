@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
 import { logEva } from '@/lib/eva-logger'
+import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
 
@@ -96,6 +97,8 @@ const DEFAULT_TEMPLATE_CONFIRMA = `Olá {{primeiro_nome}}! Falo do *{{clinica}}*
 
 *{{hora}}* — {{procedimento}} — {{profissional}}
 
+📅 Adicionar na sua agenda: {{link_agenda}}
+
 Podemos confirmar?`
 
 function renderTemplate(
@@ -111,6 +114,7 @@ function renderTemplate(
     dia_semana: string
     link_confirmacao: string
     endereco: string
+    link_agenda: string
   },
 ): string {
   return template
@@ -124,6 +128,7 @@ function renderTemplate(
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
     .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao)
     .replace(/\{\{\s*endereco\s*\}\}/g, vars.endereco)
+    .replace(/\{\{\s*link_agenda\s*\}\}/g, vars.link_agenda)
 }
 
 type AutomationRow = {
@@ -137,6 +142,7 @@ type AppointmentRow = {
   id: string
   clinic_id: string
   start_time: string
+  end_time: string | null
   status: string
   confirmation_sent_at: string | null
   confirmation_slug: string | null
@@ -253,7 +259,7 @@ export async function GET(req: NextRequest) {
   const { data: appsRaw, error: errApps } = await svc
     .from('appointments')
     .select(
-      'id, clinic_id, start_time, status, confirmation_sent_at, confirmation_slug, patient_id, professional_id, procedure_id',
+      'id, clinic_id, start_time, end_time, status, confirmation_sent_at, confirmation_slug, patient_id, professional_id, procedure_id',
     )
     .in('clinic_id', clinicIds)
     .gte('start_time', startISO)
@@ -360,6 +366,21 @@ export async function GET(req: NextRequest) {
 
     const dt = formatBrazilDateTime(app.start_time)
     const endereco = clinicAddressById.get(app.clinic_id) ?? ''
+
+    // Link "adicionar à agenda" — sem OAuth, gerado on-the-fly
+    let linkAgenda = ''
+    if (app.end_time) {
+      const event = buildAppointmentCalendarEvent({
+        appointmentId: app.id,
+        clinicName,
+        professionalName: prof?.name ?? null,
+        procedureName: proc?.name ?? null,
+        startTimeISO: app.start_time,
+        endTimeISO: app.end_time,
+      })
+      linkAgenda = generateCalendarLinks(getPublicBaseUrl(), event).googleUrl
+    }
+
     const bodyText = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
@@ -371,6 +392,7 @@ export async function GET(req: NextRequest) {
       dia_semana: dt.weekday,
       link_confirmacao: '', // não usado — substituído por botões interativos
       endereco,
+      link_agenda: linkAgenda,
     }).replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '')
 
     if (dryRun) {

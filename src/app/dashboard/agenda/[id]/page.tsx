@@ -209,24 +209,15 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
       {calendarLinks && (
         <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
           <p className="text-sm font-medium text-slate-700 mb-3">Adicionar à agenda</p>
-          <div className="flex flex-wrap gap-2">
-            <a
-              href={calendarLinks.googleUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 py-2 px-3 text-sm font-medium rounded-lg bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
-            >
-              <Icon name="calendar" className="w-4 h-4" />
-              Google Agenda
-            </a>
-            <a
-              href={calendarLinks.icsUrl}
-              className="flex items-center gap-2 py-2 px-3 text-sm font-medium rounded-lg bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
-            >
-              <Icon name="download" className="w-4 h-4" />
-              Baixar .ics (Apple/Outlook)
-            </a>
-          </div>
+          <a
+            href={calendarLinks.googleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 py-2 px-3 text-sm font-medium rounded-lg bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
+          >
+            <Icon name="calendar" className="w-4 h-4" />
+            Google Agenda
+          </a>
         </div>
       )}
 
