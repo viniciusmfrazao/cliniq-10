@@ -57,7 +57,18 @@ function renderConditional(text: string, vars: Record<string, string>): string {
   )
 }
 
+// Budget de segurança: a Vercel mata a função em 60s (maxDuration=60). Cada
+// envio automatizado passa por whatsapp_pace_send (gap de 15-35s por
+// instância), então um lote grande estourava o timeout no meio e o resto
+// ficava sem lembrete (a janela desliza com o tempo, então dava pra perder
+// o agendamento de vez). Paramos de iniciar novos envios bem antes do
+// limite; o cron agora roda a cada 5min (vercel.json) e a janela de 30min
+// se sobrepõe entre execuções, dando várias chances de retomar o que sobrou.
+const ROUTE_BUDGET_MS = 40_000
+const MAX_SENDS_PER_RUN = 4
+
 export async function GET(req: NextRequest) {
+  const routeStart = Date.now()
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ ok: false, error: 'cron_not_configured' }, { status: 503 })
@@ -113,7 +124,13 @@ export async function GET(req: NextRequest) {
   // 3) Enviar para cada agendamento
   const summary = { sent: 0, skipped: 0, errors: [] as string[] }
 
+  let stoppedEarly = false
   for (const app of apps as any[]) {
+    if (Date.now() - routeStart > ROUTE_BUDGET_MS || summary.sent >= MAX_SENDS_PER_RUN) {
+      stoppedEarly = true
+      break
+    }
+
     const wa = waMap.get(app.clinic_id)
     if (!wa || wa.status !== 'connected') { summary.skipped++; continue }
 
@@ -186,5 +203,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, ...summary })
+  return NextResponse.json({ ok: true, ...summary, stoppedEarly })
 }

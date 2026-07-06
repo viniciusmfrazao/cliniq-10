@@ -2,19 +2,19 @@
   "crons": [
     {
       "path": "/api/cron/birthdays",
-      "schedule": "0 12 * * *"
+      "schedule": "*/10 9-23 * * *"
     },
     {
       "path": "/api/cron/appointment-reminders",
-      "schedule": "0 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/appointment-reminder-2h",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/recall-inactive",
-      "schedule": "0 13 * * *"
+      "schedule": "*/10 9-23 * * *"
     },
     {
       "path": "/api/cron/nps",
@@ -42,15 +42,15 @@
     },
     {
       "path": "/api/cron/contato-pos",
-      "schedule": "0 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/pos-venda",
-      "schedule": "0 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/relatorio-semanal",
-      "schedule": "0 13 * * 1"
+      "schedule": "*/10 9-23 * * 1"
     },
     {
       "path": "/api/cron/alerta-despesas",

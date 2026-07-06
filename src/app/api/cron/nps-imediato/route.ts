@@ -20,6 +20,12 @@ export const maxDuration = 60
 
 const TZ_BR = 'America/Sao_Paulo'
 const DEFAULT_LIMIT = 200
+// Budget de segurança: a Vercel mata a função em 60s (maxDuration=60). Cada
+// envio automatizado passa por whatsapp_pace_send (gap de 15-35s), então com
+// a fila cheia o loop estourava o timeout no meio. Como esse cron já roda a
+// cada 5min e não limpa nps_scheduled_at em caso de corte, o resto da fila
+// é retomado automaticamente no próximo ciclo.
+const ROUTE_BUDGET_MS = 40_000
 
 type AutomationRow = {
   clinic_id: string
@@ -83,6 +89,7 @@ function renderTemplate(
 }
 
 export async function GET(req: NextRequest) {
+  const routeStart = Date.now()
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
   if (!secret) {
@@ -206,10 +213,16 @@ export async function GET(req: NextRequest) {
     skippedNoPhone: 0,
     skippedNoTemplate: 0,
     skippedAutomationOff: 0,
+    stoppedEarly: false,
     errors: [] as Array<{ clinic_id: string; appointment_id?: string; error: string }>,
   }
 
   for (const app of queue) {
+    if (Date.now() - routeStart > ROUTE_BUDGET_MS) {
+      summary.stoppedEarly = true
+      break
+    }
+
     const auto = automationByClinic.get(app.clinic_id)
     if (!auto || !auto.nps_pos_atendimento || !auto.template_nps?.trim()) {
       // A clinica desligou o NPS no meio do caminho — limpa o agendamento

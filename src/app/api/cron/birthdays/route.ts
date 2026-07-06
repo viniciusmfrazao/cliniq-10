@@ -89,7 +89,17 @@ type Patient = {
 
 type ClinicNameRow = { id: string; name: string }
 
+// Budget de segurança: a Vercel mata a função em 60s (maxDuration=60). Cada
+// envio automatizado passa por whatsapp_pace_send (gap de 15-35s), então um
+// dia com vários aniversariantes estourava o timeout e o resto ficava sem
+// mensagem até o ano seguinte (birthday_messages_log é 1x/ano). Paramos de
+// iniciar novos envios bem antes do limite; o cron agora roda a cada 10min
+// pra retomar o resto do dia até esvaziar a fila.
+const ROUTE_BUDGET_MS = 40_000
+const MAX_SENDS_PER_RUN = 4
+
 export async function GET(req: NextRequest) {
+  const routeStart = Date.now()
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
   if (!secret) {
@@ -173,10 +183,17 @@ export async function GET(req: NextRequest) {
     sent: 0,
     skippedOptOut: 0,
     skippedAlreadySent: 0,
+    stoppedEarly: false,
     errors: [] as Array<{ clinic_id: string; patient_id?: string; error: string }>,
   }
 
+  clinicLoop:
   for (const automation of matchingClinics) {
+    if (Date.now() - routeStart > ROUTE_BUDGET_MS || summary.sent >= MAX_SENDS_PER_RUN) {
+      summary.stoppedEarly = true
+      break
+    }
+
     const wa = waByClinic.get(automation.clinic_id)
     if (!wa || wa.status !== 'connected') {
       summary.clinicsSkipped++
@@ -211,6 +228,11 @@ export async function GET(req: NextRequest) {
     const birthdays = (birthdaysRaw as ViewRow[] | null) ?? []
 
     for (const b of birthdays) {
+      if (Date.now() - routeStart > ROUTE_BUDGET_MS || summary.sent >= MAX_SENDS_PER_RUN) {
+        summary.stoppedEarly = true
+        break clinicLoop
+      }
+
       // Opt-in respeitado se a clínica exige
       if (automation.aniversario_optin_required && b.whatsapp_opt_in !== true) {
         summary.skippedOptOut++

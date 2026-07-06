@@ -151,7 +151,18 @@ type ProcedureRow = { id: string; name: string }
 type ClinicRow = { id: string; name: string; settings?: Record<string, unknown> | null }
 type WaRow = { clinic_id: string; status: string }
 
+// Budget de segurança: a Vercel mata a função em 60s (maxDuration=60).
+// Cada envio automatizado passa por whatsapp_pace_send (gap de 15-35s por
+// instância pra evitar ban), então processar o lote inteiro numa execução
+// só estourava o timeout e deixava o resto sem confirmação pra sempre (esse
+// cron só rodava 1x/dia). Agora paramos de iniciar novos envios bem antes
+// do limite, e o cron roda a cada 5min (vercel.json) pra retomar o resto
+// da fila ao longo do dia até esvaziar.
+const ROUTE_BUDGET_MS = 40_000
+const MAX_SENDS_PER_RUN = 4
+
 export async function GET(req: NextRequest) {
+  const routeStart = Date.now()
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
   if (!secret) {
@@ -189,9 +200,14 @@ export async function GET(req: NextRequest) {
   const enabledClinics =
     (automations as AutomationRow[] | null)?.filter((a) => {
       if (!a.template_confirma_24h || a.template_confirma_24h.trim().length === 0) return false
-      // Usar horário configurado ou padrão 20h
+      // Usar horário configurado ou padrão 20h.
+      // Antes exigia targetHour === currentHour (uma janela de 1h só por
+      // dia); se o timeout cortasse o lote no meio, o resto nunca era
+      // retomado. Agora dispara a partir da hora configurada e continua
+      // tentando pelo resto do dia — confirmation_sent_at IS NULL garante
+      // que não duplica.
       const targetHour = a.confirma_24h_hora ?? 20
-      return targetHour === currentHour
+      return currentHour >= targetHour
     }) ?? []
 
   if (enabledClinics.length === 0) {
@@ -313,7 +329,13 @@ export async function GET(req: NextRequest) {
     if (c.template_confirma_24h) templateByClinic.set(c.clinic_id, c.template_confirma_24h)
   }
 
+  let stoppedEarly = false
   for (const app of apps) {
+    if (Date.now() - routeStart > ROUTE_BUDGET_MS || summary.sent >= MAX_SENDS_PER_RUN) {
+      stoppedEarly = true
+      break
+    }
+
     const wa = waByClinic.get(app.clinic_id)
     if (!wa || wa.status !== 'connected') {
       summary.skippedClinicNotConnected++
@@ -413,5 +435,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, ...summary })
+  return NextResponse.json({ ok: true, ...summary, stoppedEarly })
 }
