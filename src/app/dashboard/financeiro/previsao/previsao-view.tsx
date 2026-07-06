@@ -89,9 +89,10 @@ export default function PrevisaoFaturamentoView({ clinicId }: { clinicId: string
       let query = supabase
         .from('appointments')
         .select(`
-          id, start_time, status, professional_id,
+          id, start_time, status, professional_id, valor_cobrado,
           professional:users!appointments_professional_id_fkey(name),
-          procedures(name, price, category)
+          procedures(name, price, category),
+          appointment_procedures(procedure_name, price)
         `)
         .eq('clinic_id', clinicId)
         .gte('start_time', startOfDayBR(from))
@@ -122,7 +123,14 @@ export default function PrevisaoFaturamentoView({ clinicId }: { clinicId: string
       for (const a of (appointments || []) as any[]) {
         if (lancados.has(a.id)) continue
         const proc = a.procedures
-        const price = proc?.price != null ? Number(proc.price) : null
+        const apProcs: { procedure_name: string; price: number }[] = a.appointment_procedures || []
+        const somaProcs = apProcs.reduce((s, p) => s + (Number(p.price) || 0), 0)
+
+        // Prioridade: valor_cobrado (definido manualmente ou com desconto) > soma de múltiplos procedimentos > preço do procedimento único
+        const price = a.valor_cobrado != null
+          ? Number(a.valor_cobrado)
+          : (apProcs.length > 0 ? somaProcs : (proc?.price != null ? Number(proc.price) : null))
+
         if (price === null) { semValor++; continue }
         if (selectedCategories.length > 0 && !selectedCategories.includes(proc?.category || '')) continue
         parsed.push({
@@ -131,7 +139,7 @@ export default function PrevisaoFaturamentoView({ clinicId }: { clinicId: string
           status: a.status,
           professional_id: a.professional_id,
           professional_nome: a.professional?.name || 'Sem profissional',
-          procedimento_nome: proc?.name || 'Sem procedimento',
+          procedimento_nome: apProcs.length > 0 ? apProcs.map(p => p.procedure_name).join(' + ') : (proc?.name || 'Sem procedimento'),
           categoria: proc?.category || null,
           price,
         })

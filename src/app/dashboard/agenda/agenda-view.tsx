@@ -41,6 +41,8 @@ type Appointment = {
   checked_in_at: string | null
   payment_registered_at: string | null
   valor_cobrado: number | null
+  desconto_tipo: 'valor' | 'percentual' | null
+  desconto_valor: number | null
   valor_sinal: number | null
   forma_pagamento_sinal: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
@@ -160,9 +162,12 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [savingSchedule, setSavingSchedule] = useState(false)
   const [procList, setProcList] = useState<{ id: string; name: string; duration_minutes: number; price: number }[]>([])
   const [procListLoaded, setProcListLoaded] = useState(false)
-  const [selectedProcId, setSelectedProcId] = useState(apt.procedure_id || '')
   const [savingProc, setSavingProc] = useState(false)
   const [currentProcName, setCurrentProcName] = useState(apt.procedures?.name || '')
+  // Múltiplos procedimentos + desconto (popup desktop)
+  const [popupProcIds, setPopupProcIds] = useState<string[]>([])
+  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>(apt.desconto_tipo || 'valor')
+  const [descontoValorStr, setDescontoValorStr] = useState(apt.desconto_valor ? String(apt.desconto_valor) : '')
 
   async function openProcEdit(e: React.MouseEvent) {
     e.stopPropagation()
@@ -175,18 +180,48 @@ const AppointmentCard = React.memo(function AppointmentCard({
       setProcList(data || [])
       setProcListLoaded(true)
     }
+    // Pré-preencher com procedimentos já existentes no agendamento
+    const existing = apt.appointment_procedures?.map(p => p.procedure_id || '').filter(Boolean) || []
+    setPopupProcIds(existing.length > 0 ? existing : (apt.procedure_id ? [apt.procedure_id] : []))
+    setDescontoTipo(apt.desconto_tipo || 'valor')
+    setDescontoValorStr(apt.desconto_valor ? String(apt.desconto_valor) : '')
     setEditingProc(true)
   }
 
-  async function saveProc() {
-    if (!selectedProcId) return
+  // Salva múltiplos procedimentos + desconto selecionados no popup
+  async function saveProcMulti() {
     setSavingProc(true)
-    const proc = procList.find(p => p.id === selectedProcId)
+    const selectedProcs = procList.filter(p => popupProcIds.includes(p.id))
+    const totalProcs = selectedProcs.reduce((s, p) => s + (p.price || 0), 0)
+    const descontoNum = parseFloat(descontoValorStr) || 0
+    const valorFinal = descontoTipo === 'percentual'
+      ? Math.max(0, totalProcs * (1 - descontoNum / 100))
+      : Math.max(0, totalProcs - descontoNum)
+
+    // 1. Sincroniza appointment_procedures
+    await supabaseCard.from('appointment_procedures').delete().eq('appointment_id', apt.id)
+    if (selectedProcs.length > 0) {
+      await supabaseCard.from('appointment_procedures').insert(
+        selectedProcs.map(p => ({
+          appointment_id: apt.id,
+          clinic_id: apt.clinic_id,
+          procedure_id: p.id,
+          procedure_name: p.name,
+          duration_minutes: p.duration_minutes,
+          price: p.price ?? 0,
+        }))
+      )
+    }
+
+    // 2. Atualiza appointment: procedimento principal, desconto e valor final
     await supabaseCard.from('appointments').update({
-      procedure_id: selectedProcId,
-      ...(proc ? { notes: apt.notes || null } : {}),
+      procedure_id: popupProcIds[0] || null,
+      desconto_tipo: descontoNum > 0 ? descontoTipo : null,
+      desconto_valor: descontoNum > 0 ? descontoNum : null,
+      valor_cobrado: selectedProcs.length > 0 ? valorFinal : null,
     }).eq('id', apt.id)
-    setCurrentProcName(proc?.name || currentProcName)
+
+    setCurrentProcName(selectedProcs.map(p => p.name).join(' + ') || currentProcName)
     setSavingProc(false)
     setEditingProc(false)
     router.refresh()
@@ -714,47 +749,119 @@ const AppointmentCard = React.memo(function AppointmentCard({
           
           <div className="space-y-2 text-xs mb-3">
             <div className="flex justify-between items-center">
-              <span className="text-slate-500">Procedimento:</span>
+              <span className="text-slate-500">
+                Procedimento{(apt.appointment_procedures?.length || 0) > 1 ? 's' : ''}:
+              </span>
               <div className="flex items-center gap-1.5">
-                <span className="font-medium text-slate-700">{currentProcName || 'Atendimento'}</span>
+                <span className="font-medium text-slate-700 text-right">
+                  {apt.appointment_procedures && apt.appointment_procedures.length > 0
+                    ? apt.appointment_procedures.map(p => p.procedure_name).join(' + ')
+                    : (currentProcName || 'Atendimento')}
+                </span>
                 <button
                   onClick={openProcEdit}
-                  className="text-[10px] text-violet-600 hover:text-violet-800 font-medium"
+                  className="text-[10px] text-violet-600 hover:text-violet-800 font-medium flex-shrink-0"
                 >
                   Alterar
                 </button>
               </div>
             </div>
-            {editingProc && (
-              <div className="space-y-1.5 pt-1" onClick={e => e.stopPropagation()}>
-                <select
-                  className="w-full text-xs border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-violet-300"
-                  value={selectedProcId}
-                  onChange={e => setSelectedProcId(e.target.value)}
-                  autoFocus
-                >
-                  <option value="">— Sem procedimento —</option>
-                  {procList.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={saveProc}
-                    disabled={savingProc}
-                    className="flex-1 py-1 text-xs bg-violet-500 text-white rounded-lg font-medium hover:bg-violet-600 disabled:opacity-50"
-                  >
-                    {savingProc ? 'Salvando...' : 'Salvar'}
-                  </button>
-                  <button
-                    onClick={() => { setEditingProc(false); setSelectedProcId(apt.procedure_id || '') }}
-                    className="flex-1 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+            {/* Valor cobrado (com desconto aplicado, se houver) */}
+            {apt.valor_cobrado != null && (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Valor:</span>
+                <span className="font-semibold text-slate-700">
+                  R$ {Number(apt.valor_cobrado).toFixed(2).replace('.', ',')}
+                  {apt.desconto_valor ? (
+                    <span className="ml-1 text-[10px] font-normal text-emerald-600">
+                      (desc. {apt.desconto_tipo === 'percentual' ? `${apt.desconto_valor}%` : `R$ ${Number(apt.desconto_valor).toFixed(2)}`})
+                    </span>
+                  ) : null}
+                </span>
               </div>
             )}
+            {editingProc && (() => {
+              const selectedProcs = procList.filter(p => popupProcIds.includes(p.id))
+              const totalProcs = selectedProcs.reduce((s, p) => s + (p.price || 0), 0)
+              const descontoNum = parseFloat(descontoValorStr) || 0
+              const valorFinal = descontoTipo === 'percentual'
+                ? Math.max(0, totalProcs * (1 - descontoNum / 100))
+                : Math.max(0, totalProcs - descontoNum)
+              return (
+                <div className="space-y-2 pt-1" onClick={e => e.stopPropagation()}>
+                  <div className="max-h-36 overflow-y-auto space-y-1 border border-slate-200 rounded-lg p-1.5">
+                    {procList.map(p => {
+                      const isSelected = popupProcIds.includes(p.id)
+                      return (
+                        <label key={p.id} className="flex items-center gap-1.5 cursor-pointer p-1 rounded-md hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={e => {
+                              if (e.target.checked) setPopupProcIds(prev => [...prev, p.id])
+                              else setPopupProcIds(prev => prev.filter(id => id !== p.id))
+                            }}
+                            className="w-3.5 h-3.5 rounded text-violet-600 flex-shrink-0"
+                          />
+                          <span className="flex-1 truncate text-slate-700">{p.name}</span>
+                          <span className="text-slate-400 flex-shrink-0">
+                            {p.price > 0 ? `R$ ${p.price.toFixed(2).replace('.', ',')}` : 'Gratuito'}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+
+                  {/* Desconto */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 flex-shrink-0">Desconto:</span>
+                    <select
+                      value={descontoTipo}
+                      onChange={e => setDescontoTipo(e.target.value as 'valor' | 'percentual')}
+                      className="text-xs border border-slate-200 rounded-lg p-1 focus:outline-none focus:ring-2 focus:ring-violet-300"
+                    >
+                      <option value="valor">R$</option>
+                      <option value="percentual">%</option>
+                    </select>
+                    <input
+                      type="number" step="0.01" min="0"
+                      className="flex-1 min-w-0 text-xs border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-violet-300"
+                      placeholder="0"
+                      value={descontoValorStr}
+                      onChange={e => setDescontoValorStr(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Resumo */}
+                  {selectedProcs.length > 0 && (
+                    <div className="flex justify-between items-center bg-emerald-50 rounded-lg px-2 py-1.5">
+                      <span className="text-emerald-700">
+                        Subtotal: R$ {totalProcs.toFixed(2).replace('.', ',')}
+                      </span>
+                      <span className="font-bold text-emerald-700">
+                        Total: R$ {valorFinal.toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={saveProcMulti}
+                      disabled={savingProc}
+                      className="flex-1 py-1 text-xs bg-violet-500 text-white rounded-lg font-medium hover:bg-violet-600 disabled:opacity-50"
+                    >
+                      {savingProc ? 'Salvando...' : 'Salvar'}
+                    </button>
+                    <button
+                      onClick={() => setEditingProc(false)}
+                      className="flex-1 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
             <div className="flex justify-between">
               <span className="text-slate-500">Profissional:</span>
               <span className="font-medium text-slate-700">{apt.professional?.name || '-'}</span>
@@ -1124,7 +1231,10 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   }, [supabase, router, toast, localAppointments, setLocalAppointments])
 
   // Confirmar procedimentos realizados e finalizar atendimento
-  const handleProceduresConfirm = useCallback(async (procedures: Array<{ id: string; name: string; price: number }>) => {
+  const handleProceduresConfirm = useCallback(async (
+    procedures: Array<{ id: string; name: string; price: number }>,
+    desconto?: { tipo: 'valor' | 'percentual'; valor: number }
+  ) => {
     if (!procConfirmModal) return
     const { appointmentId } = procConfirmModal
 
@@ -1142,11 +1252,18 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
       )
     }
 
-    // 2. Atualizar procedure principal se só 1 procedimento
+    // 2. Calcular valor final (com desconto, se houver) e atualizar procedure principal
+    const totalProcs = procedures.reduce((s, p) => s + (p.price || 0), 0)
+    const valorFinal = desconto
+      ? (desconto.tipo === 'percentual' ? Math.max(0, totalProcs * (1 - desconto.valor / 100)) : Math.max(0, totalProcs - desconto.valor))
+      : totalProcs
     const mainProc = procedures[0]
     await supabase.from('appointments').update({
       status: 'completed',
       procedure_id: mainProc?.id || null,
+      valor_cobrado: procedures.length > 0 ? valorFinal : null,
+      desconto_tipo: desconto ? desconto.tipo : null,
+      desconto_valor: desconto ? desconto.valor : null,
     }).eq('id', appointmentId)
 
     // Atualizar estado local para refletir imediatamente na tela
@@ -1158,6 +1275,9 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
         ...a,
         status: 'completed',
         procedure_id: mainProc?.id || a.procedure_id,
+        valor_cobrado: procedures.length > 0 ? valorFinal : a.valor_cobrado,
+        desconto_tipo: desconto ? desconto.tipo : null,
+        desconto_valor: desconto ? desconto.valor : null,
         appointment_procedures: procedures.map(p => ({
           id: p.id,
           procedure_id: p.id,

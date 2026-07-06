@@ -9,12 +9,16 @@ type Props = {
   appointmentId: string
   procedurePrice: number | null
   initialValorCobrado: number | null
+  initialDescontoTipo?: 'valor' | 'percentual' | null
+  initialDescontoValor?: number | null
 }
 
 export default function ValorCobrancaSection({
   appointmentId,
   procedurePrice,
   initialValorCobrado,
+  initialDescontoTipo,
+  initialDescontoValor,
 }: Props) {
   const supabase = createClient()
   const toast = useToast()
@@ -28,6 +32,8 @@ export default function ValorCobrancaSection({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>(initialDescontoTipo || 'valor')
+  const [descontoValorStr, setDescontoValorStr] = useState(initialDescontoValor ? String(initialDescontoValor) : '')
 
   const fmt = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -35,11 +41,16 @@ export default function ValorCobrancaSection({
   const numVal = parseFloat(draft.replace(',', '.')) || 0
   const isGratuito = numVal === 0
 
-  async function saveValor(valor: number) {
+  async function saveValor(valor: number, descontoNum?: number) {
     setSaving(true)
+    const d = descontoNum !== undefined ? descontoNum : (parseFloat(descontoValorStr) || 0)
     const { error } = await supabase
       .from('appointments')
-      .update({ valor_cobrado: valor })
+      .update({
+        valor_cobrado: valor,
+        desconto_tipo: d > 0 ? descontoTipo : null,
+        desconto_valor: d > 0 ? d : null,
+      })
       .eq('id', appointmentId)
     setSaving(false)
     if (error) {
@@ -48,6 +59,18 @@ export default function ValorCobrancaSection({
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     }
+  }
+
+  function applyDesconto(tipo: 'valor' | 'percentual', descontoStr: string) {
+    const base = procedurePrice ?? numVal
+    const descontoNum = parseFloat(descontoStr) || 0
+    if (descontoNum <= 0) return
+    const finalVal = tipo === 'percentual'
+      ? Math.max(0, base * (1 - descontoNum / 100))
+      : Math.max(0, base - descontoNum)
+    setDraft(String(finalVal.toFixed(2)))
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => saveValor(finalVal, descontoNum), 800)
   }
 
   function handleChange(val: string) {
@@ -121,6 +144,39 @@ export default function ValorCobrancaSection({
             ✎ Valor personalizado
           </span>
         ) : null}
+      </div>
+
+      {/* Desconto */}
+      <div className="mt-3 pt-3 border-t border-slate-100">
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+          Aplicar desconto
+        </label>
+        <div className="flex items-center gap-2">
+          <select
+            value={descontoTipo}
+            onChange={e => {
+              const tipo = e.target.value as 'valor' | 'percentual'
+              setDescontoTipo(tipo)
+              applyDesconto(tipo, descontoValorStr)
+            }}
+            className="input text-sm"
+          >
+            <option value="valor">R$</option>
+            <option value="percentual">%</option>
+          </select>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            placeholder="0"
+            value={descontoValorStr}
+            onChange={e => {
+              setDescontoValorStr(e.target.value)
+              applyDesconto(descontoTipo, e.target.value)
+            }}
+            className="input flex-1 text-sm"
+          />
+        </div>
       </div>
     </div>
   )

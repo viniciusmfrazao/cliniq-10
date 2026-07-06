@@ -23,7 +23,7 @@ interface Props {
   patientName: string
   initialProcedureName?: string | null
   initialProcedureId?: string | null
-  onConfirm: (procedures: SelectedProc[]) => Promise<void>
+  onConfirm: (procedures: SelectedProc[], desconto?: { tipo: 'valor' | 'percentual'; valor: number }) => Promise<void>
   onCancel: () => void
 }
 
@@ -42,6 +42,8 @@ export default function ProceduresConfirmModal({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>('valor')
+  const [descontoValorStr, setDescontoValorStr] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -78,6 +80,10 @@ export default function ProceduresConfirmModal({
   }
 
   const total = selected.reduce((sum, p) => sum + p.price, 0)
+  const descontoNum = parseFloat(descontoValorStr) || 0
+  const totalComDesconto = descontoNum > 0
+    ? (descontoTipo === 'percentual' ? Math.max(0, total * (1 - descontoNum / 100)) : Math.max(0, total - descontoNum))
+    : total
   const filtered = procedures.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase())
   )
@@ -85,7 +91,7 @@ export default function ProceduresConfirmModal({
   async function handleConfirm() {
     if (selected.length === 0) return
     setSaving(true)
-    await onConfirm(selected)
+    await onConfirm(selected, descontoNum > 0 ? { tipo: descontoTipo, valor: descontoNum } : undefined)
     setSaving(false)
   }
 
@@ -163,19 +169,43 @@ export default function ProceduresConfirmModal({
         {/* Footer */}
         <div className="p-5 border-t border-slate-100">
           {selected.length > 0 && (
-            <div className="mb-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-emerald-700">
-                  {selected.length} procedimento{selected.length > 1 ? 's' : ''} selecionado{selected.length > 1 ? 's' : ''}
-                </p>
-                <p className="text-base font-bold text-emerald-700">
-                  Total: R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            <>
+              <div className="mb-3 flex items-center gap-2">
+                <label className="text-xs text-slate-500 flex-shrink-0">Desconto:</label>
+                <select
+                  value={descontoTipo}
+                  onChange={e => setDescontoTipo(e.target.value as 'valor' | 'percentual')}
+                  className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
+                >
+                  <option value="valor">R$</option>
+                  <option value="percentual">%</option>
+                </select>
+                <input
+                  type="number" min={0} step={0.01} placeholder="0"
+                  value={descontoValorStr}
+                  onChange={e => setDescontoValorStr(e.target.value)}
+                  className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div className="mb-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-emerald-700">
+                    {selected.length} procedimento{selected.length > 1 ? 's' : ''} selecionado{selected.length > 1 ? 's' : ''}
+                  </p>
+                  <p className="text-base font-bold text-emerald-700">
+                    Total: R$ {totalComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                {descontoNum > 0 && (
+                  <p className="text-xs text-emerald-600 mt-0.5">
+                    Subtotal R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} com desconto aplicado
+                  </p>
+                )}
+                <p className="text-xs text-emerald-600 mt-1 truncate">
+                  {selected.map(p => p.name).join(', ')}
                 </p>
               </div>
-              <p className="text-xs text-emerald-600 mt-1 truncate">
-                {selected.map(p => p.name).join(', ')}
-              </p>
-            </div>
+            </>
           )}
           <div className="flex gap-3">
             <button
