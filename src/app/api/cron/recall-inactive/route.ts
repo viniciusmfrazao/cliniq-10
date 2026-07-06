@@ -29,7 +29,14 @@ export const maxDuration = 60
  */
 
 const TZ_BR = 'America/Sao_Paulo'
-const DEFAULT_LIMIT_PER_CLINIC = 50
+// Era 50/clínica — com o gap de 15-35s do whatsapp_pace_send isso sozinho já
+// estourava os 60s da function bem antes de chegar nas outras clínicas
+// (efeito colateral: recall é anti-ban de alto risco de rajada, então o
+// limite baixo também é mais seguro pro número não ser bloqueado). Cron
+// agora roda com mais frequência pra escoar a fila em várias execuções.
+const DEFAULT_LIMIT_PER_CLINIC = 2
+// Budget de segurança: a Vercel mata a função em 60s (maxDuration=60).
+const ROUTE_BUDGET_MS = 40_000
 // Janela de re-envio por etapa: só reenvia a mesma etapa se o paciente
 // voltou E sumiu de novo (controlado pela last_completed_at, não por cooldown fixo)
 const LEGACY_COOLDOWN_DAYS = 90
@@ -146,6 +153,7 @@ function waScore(w: WaRow): number {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  const routeStart = Date.now()
   // Auth
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
@@ -222,6 +230,7 @@ export async function GET(req: NextRequest) {
     skippedNoPhone: 0,
     skippedAllStepsDone: 0,
     skippedNoStepReady: 0,
+    stoppedEarly: false,
     errors: [] as Array<{ clinic_id: string; patient_id?: string; error: string }>,
     detail: [] as Array<{
       clinic_id: string
@@ -234,6 +243,11 @@ export async function GET(req: NextRequest) {
 
   // 3) Processa cada clínica
   for (const auto of enabledClinics) {
+    if (Date.now() - routeStart > ROUTE_BUDGET_MS) {
+      summary.stoppedEarly = true
+      break
+    }
+
     const wa = waByClinic.get(auto.clinic_id)
     if (!wa || wa.status !== 'connected') {
       summary.skippedClinicNotConnected++

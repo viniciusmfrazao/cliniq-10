@@ -9,6 +9,13 @@ export const maxDuration = 60
 // Cobre a mensagem principal (dia anterior), sequências em dias (até 60d)
 // e sequências em horas (até 168h = 7 dias). Evita varrer o histórico todo.
 const LOOKBACK_DAYS = 60
+// Budget de segurança: a Vercel mata a função em 60s (maxDuration=60). Cada
+// envio automatizado passa por whatsapp_pace_send (gap de 15-35s), então
+// processar muitos retornos numa execução só estourava o timeout no meio.
+// Paramos de iniciar novos envios bem antes do limite; o resto é retomado
+// no próximo ciclo do cron (agora a cada 5min).
+const ROUTE_BUDGET_MS = 40_000
+const MAX_SENDS_PER_RUN = 4
 
 function renderTemplate(template: string, vars: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || `{{${key}}}`)
@@ -39,6 +46,7 @@ type SeqItem = {
 }
 
 export async function GET(request: Request) {
+  const routeStart = Date.now()
   const { searchParams } = new URL(request.url)
   const force = searchParams.get('force') === '1'
   const dryRun = searchParams.get('dry') === '1'
@@ -47,6 +55,9 @@ export async function GET(request: Request) {
   const now = new Date()
 
   const svc = createServiceClient()
+  let sendsThisRun = 0
+  let stoppedEarly = false
+  const budgetExceeded = () => Date.now() - routeStart > ROUTE_BUDGET_MS || sendsThisRun >= MAX_SENDS_PER_RUN
 
   const { data: automations } = await svc
     .from('clinic_automations')
@@ -63,6 +74,7 @@ export async function GET(request: Request) {
   const results: any[] = []
 
   for (const auto of automations) {
+    if (budgetExceeded()) { stoppedEarly = true; break }
     if (!auto.template_pos_venda) {
       results.push({ clinic_id: auto.clinic_id, skipped: 'sem_template' })
       continue
@@ -104,14 +116,19 @@ export async function GET(request: Request) {
       .in('appointment_id', aptIds)
     const jaEnviado = new Set((logRows || []).map(r => `${r.appointment_id}::${r.tipo}`))
 
-    async function marcarEnviado(appointmentId: string, tipo: string) {
-      if (dryRun) return
-      await svc.from('pos_venda_sent_log').insert({ clinic_id: auto.clinic_id, appointment_id: appointmentId, tipo }).select().maybeSingle()
+    // Trava ANTES de enviar (insert com unique(appointment_id,tipo) já existente
+    // na tabela) — se a function morrer no meio do envio, não reenvia no próximo
+    // ciclo achando que ainda não foi feito.
+    async function travarEnvio(appointmentId: string, tipo: string): Promise<boolean> {
+      if (dryRun) return true
+      const { error } = await svc.from('pos_venda_sent_log').insert({ clinic_id: auto.clinic_id, appointment_id: appointmentId, tipo })
+      return !error // erro = já existe (conflito unique) ou falha — não envia
     }
 
-    async function enviarPara(apt: any, template: string, tipo: string) {
+    async function enviarPara(apt: any, template: string, tipo: string, logTipo: string) {
       const patient = apt.patients as any
       if (!patient?.phone) return false
+      if (!(await travarEnvio(apt.id, logTipo))) return false
       const procName = (apt.procedures as any)?.name || ''
       const vars = {
         primeiro_nome: (patient.name || '').split(' ')[0],
@@ -121,7 +138,10 @@ export async function GET(request: Request) {
         clinica: clinicName,
       }
       const msg = renderTemplate(template, vars)
-      if (!dryRun) await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+      if (!dryRun) {
+        await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+        sendsThisRun++
+      }
       results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: tipo, proc: procName })
       return true
     }
@@ -131,11 +151,11 @@ export async function GET(request: Request) {
     if (force || currentHour === targetHour) {
       const ontem = getDateBRT(-1)
       for (const apt of retornosFiltrados) {
+        if (budgetExceeded()) { stoppedEarly = true; break }
         const dataApt = apt.start_time.slice(0, 10)
         if (dataApt !== ontem) continue
         if (jaEnviado.has(`${apt.id}::main`)) continue
-        const enviou = await enviarPara(apt, auto.template_pos_venda || '', 'msg1')
-        if (enviou) await marcarEnviado(apt.id, 'main')
+        await enviarPara(apt, auto.template_pos_venda || '', 'msg1', 'main')
       }
     }
 
@@ -154,26 +174,28 @@ export async function GET(request: Request) {
         // qualquer retorno cujo tempo decorrido já passou do valor em horas
         // e que ainda não foi enviado.
         for (const apt of retornosFiltrados) {
+          if (budgetExceeded()) { stoppedEarly = true; break }
           if (jaEnviado.has(`${apt.id}::${tipoLog}`)) continue
           const horasPassadas = (now.getTime() - new Date(apt.start_time).getTime()) / 36e5
           if (horasPassadas < valor) continue
-          const enviou = await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}h`)
-          if (enviou) await marcarEnviado(apt.id, tipoLog)
+          await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}h`, tipoLog)
         }
       } else {
         // dias: mantém o comportamento original, só dispara no horário configurado
         if (!force && currentHour !== targetHour) continue
         const diaAlvo = getDateBRT(-valor)
         for (const apt of retornosFiltrados) {
+          if (budgetExceeded()) { stoppedEarly = true; break }
           const dataApt = apt.start_time.slice(0, 10)
           if (dataApt !== diaAlvo) continue
           if (jaEnviado.has(`${apt.id}::${tipoLog}`)) continue
-          const enviou = await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}d`)
-          if (enviou) await marcarEnviado(apt.id, tipoLog)
+          await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}d`, tipoLog)
         }
       }
+      if (stoppedEarly) break
     }
+    if (stoppedEarly) break
   }
 
-  return NextResponse.json({ ok: true, dryRun, currentHour, enviados: results.filter(r => !r.skipped).length, results })
+  return NextResponse.json({ ok: true, dryRun, currentHour, stoppedEarly, sendsThisRun, enviados: results.filter(r => !r.skipped).length, results })
 }

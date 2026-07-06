@@ -20,7 +20,11 @@ function parsePhones(raw: unknown): string[] {
   return []
 }
 
+// Budget de segurança: a Vercel mata a função em 60s (maxDuration=60).
+const ROUTE_BUDGET_MS = 40_000
+
 export async function GET(req: NextRequest) {
+  const routeStart = Date.now()
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -44,7 +48,10 @@ export async function GET(req: NextRequest) {
 
   const results: any[] = []
 
+  let stoppedEarly = false
   for (const auto of automations) {
+    if (Date.now() - routeStart > ROUTE_BUDGET_MS) { stoppedEarly = true; break }
+
     // Janela de hora: compara só a hora, ignora os minutos
     // ex: configurado '10:00' aceita execucoes entre 10:00 e 10:59
     const configHour = parseInt(String(auto.relatorio_hora ?? '10:00').split(':')[0], 10)
@@ -155,6 +162,20 @@ export async function GET(req: NextRequest) {
         : `*📦 Estoque:* ✅ Tudo em dia!`,
     ].filter(l => l !== null).join('\n')
 
+    // Trava ANTES de enviar (não depois): se a function morrer no meio do
+    // envio pros telefones, o cron seguinte não reenvia o relatório inteiro
+    // de novo pra quem já recebeu.
+    const { data: lockedRows } = await svc
+      .from('clinic_automations')
+      .update({ last_relatorio_sent_at: new Date().toISOString() })
+      .eq('clinic_id', clinicId)
+      .eq('relatorio_semanal', true)
+      .select('clinic_id')
+    if (!lockedRows || lockedRows.length === 0) {
+      results.push({ clinic_id: clinicId, skipped: 'lock_failed' })
+      continue
+    }
+
     let sentForClinic = 0
     const sendResults: any[] = []
     for (const phone of phones) {
@@ -171,13 +192,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Marcar como enviado hoje (idempotencia)
-    if (sentForClinic > 0) {
-      await svc.from('clinic_automations')
-        .update({ last_relatorio_sent_at: new Date().toISOString() })
-        .eq('clinic_id', clinicId)
-    }
-
     results.push({
       clinic_id: clinicId,
       clinic: clinicName,
@@ -190,5 +204,5 @@ export async function GET(req: NextRequest) {
   }
 
   const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0)
-  return NextResponse.json({ ok: true, sent: totalSent, clinics: results.length, results })
+  return NextResponse.json({ ok: true, sent: totalSent, clinics: results.length, stoppedEarly, results })
 }
