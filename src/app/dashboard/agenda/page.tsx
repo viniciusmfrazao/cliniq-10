@@ -68,6 +68,13 @@ export default async function AgendaPage({
 
   const clinicId = userData?.clinic_id
 
+  const { data: clinicData } = await supabase
+    .from('clinics')
+    .select('name')
+    .eq('id', clinicId)
+    .maybeSingle()
+  const clinicName = clinicData?.name || 'Clinike'
+
   // Roles que podem atender pacientes (admin NÃO é profissional)
   const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'dentist']
 
@@ -223,6 +230,7 @@ export default async function AgendaPage({
         professionals={professionals || []}
         selectedProfessional={selectedProfessional}
         clinicId={clinicId}
+        clinicName={clinicName}
       />
     </div>
   )
