@@ -1231,7 +1231,10 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   }, [supabase, router, toast, localAppointments, setLocalAppointments])
 
   // Confirmar procedimentos realizados e finalizar atendimento
-  const handleProceduresConfirm = useCallback(async (procedures: Array<{ id: string; name: string; price: number }>) => {
+  const handleProceduresConfirm = useCallback(async (
+    procedures: Array<{ id: string; name: string; price: number }>,
+    desconto?: { tipo: 'valor' | 'percentual'; valor: number }
+  ) => {
     if (!procConfirmModal) return
     const { appointmentId } = procConfirmModal
 
@@ -1249,11 +1252,18 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
       )
     }
 
-    // 2. Atualizar procedure principal se só 1 procedimento
+    // 2. Calcular valor final (com desconto, se houver) e atualizar procedure principal
+    const totalProcs = procedures.reduce((s, p) => s + (p.price || 0), 0)
+    const valorFinal = desconto
+      ? (desconto.tipo === 'percentual' ? Math.max(0, totalProcs * (1 - desconto.valor / 100)) : Math.max(0, totalProcs - desconto.valor))
+      : totalProcs
     const mainProc = procedures[0]
     await supabase.from('appointments').update({
       status: 'completed',
       procedure_id: mainProc?.id || null,
+      valor_cobrado: procedures.length > 0 ? valorFinal : null,
+      desconto_tipo: desconto ? desconto.tipo : null,
+      desconto_valor: desconto ? desconto.valor : null,
     }).eq('id', appointmentId)
 
     // Atualizar estado local para refletir imediatamente na tela
@@ -1265,6 +1275,9 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
         ...a,
         status: 'completed',
         procedure_id: mainProc?.id || a.procedure_id,
+        valor_cobrado: procedures.length > 0 ? valorFinal : a.valor_cobrado,
+        desconto_tipo: desconto ? desconto.tipo : null,
+        desconto_valor: desconto ? desconto.valor : null,
         appointment_procedures: procedures.map(p => ({
           id: p.id,
           procedure_id: p.id,

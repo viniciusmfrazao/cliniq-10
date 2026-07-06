@@ -42,6 +42,8 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [procSearch, setProcSearch] = useState('')
   const [valorDraft, setValorDraft] = useState('')
+  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>('valor')
+  const [descontoValorStr, setDescontoValorStr] = useState('')
   const [loadingProcs, setLoadingProcs] = useState(false)
   const [allProcNames, setAllProcNames] = useState<string>(procedure?.name || 'Atendimento')
   const [showReschedule, setShowReschedule] = useState(false)
@@ -84,10 +86,26 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
       // auto-fill value with sum of selected (only if user hasn't manually overridden)
       const procs = clinicProcs.filter(p => next.includes(p.id))
-      setValorDraft(String(procs.reduce((s, p) => s + p.price, 0)))
+      const soma = procs.reduce((s, p) => s + p.price, 0)
+      const descontoNum = parseFloat(descontoValorStr) || 0
+      const finalVal = descontoNum > 0
+        ? (descontoTipo === 'percentual' ? Math.max(0, soma * (1 - descontoNum / 100)) : Math.max(0, soma - descontoNum))
+        : soma
+      setValorDraft(String(finalVal))
       return next
     })
   }
+
+  // Recalcula o valor a cobrar sempre que o desconto mudar
+  useEffect(() => {
+    const descontoNum = parseFloat(descontoValorStr) || 0
+    if (descontoNum <= 0) return
+    const finalVal = descontoTipo === 'percentual'
+      ? Math.max(0, autoTotal * (1 - descontoNum / 100))
+      : Math.max(0, autoTotal - descontoNum)
+    setValorDraft(finalVal.toFixed(2))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descontoTipo, descontoValorStr])
 
   const filteredProcs = clinicProcs.filter(p =>
     !procSearch || p.name.toLowerCase().includes(procSearch.toLowerCase())
@@ -186,6 +204,8 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
     const selected = procs.filter(p => selectedProcIds.includes(p.id))
     const total = selected.reduce((s, p) => s + p.price, 0) || procedure?.price || 0
     setValorDraft(String(total))
+    setDescontoTipo('valor')
+    setDescontoValorStr('')
     setProcSearch('')
     setLoadingProcs(false)
     setShowFinishModal(true)
@@ -235,11 +255,14 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
       }
 
       // 3. Finalizar e salvar valor cobrado
+      const descontoNum = parseFloat(descontoValorStr) || 0
       const { error } = await supabase
         .from('appointments')
         .update({
           status: 'completed',
           valor_cobrado: valor,
+          desconto_tipo: descontoNum > 0 ? descontoTipo : null,
+          desconto_valor: descontoNum > 0 ? descontoNum : null,
           procedure_id: selectedProcs[0]?.id || appointment.procedure_id,
         })
         .eq('id', appointment.id)
@@ -347,6 +370,37 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
                     Pré-preenchido no registro de pagamento · editável lá também
                   </p>
                 )}
+
+                {/* Desconto */}
+                <div className="pt-2 border-t border-slate-200">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                    Desconto (opcional)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={descontoTipo}
+                      onChange={e => setDescontoTipo(e.target.value as 'valor' | 'percentual')}
+                      className="border border-slate-200 rounded-xl px-2 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                    >
+                      <option value="valor">R$</option>
+                      <option value="percentual">%</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0"
+                      value={descontoValorStr}
+                      onChange={e => setDescontoValorStr(e.target.value)}
+                      className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                    />
+                  </div>
+                  {parseFloat(descontoValorStr) > 0 && (
+                    <p className="text-xs text-emerald-600 mt-1">
+                      Subtotal {autoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} → aplicado desconto
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
