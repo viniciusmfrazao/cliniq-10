@@ -140,6 +140,10 @@ export function buildAppointmentCalendarEvent(params: {
   }
 }
 
+export function getPublicBaseUrl(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://app.clinike.com.br').replace(/\/$/, '')
+}
+
 export function generateCalendarLinks(baseUrl: string, event: CalendarEventInput): CalendarLinks {
   return {
     googleUrl: generateGoogleCalendarUrl(event),

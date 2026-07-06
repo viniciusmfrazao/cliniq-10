@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
-import { buildAppointmentCalendarEvent, generateCalendarLinks } from '@/lib/calendar-links'
-
-function getPublicBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://app.clinike.com.br').replace(/\/$/, '')
-}
+import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
 
