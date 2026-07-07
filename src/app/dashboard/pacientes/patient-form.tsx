@@ -198,11 +198,20 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
           <input
             className="input"
             type="tel"
-            placeholder="(11) 99999-9999"
+            placeholder="(11) 99999-9999 ou +1 305 555 0100"
             value={maskPhone(form.phone)}
-            onChange={e => update('phone', unmask(e.target.value).slice(0, 11))}
-            maxLength={16}
+            onChange={e => {
+              const raw = e.target.value.trim()
+              if (raw.startsWith('+')) {
+                // Internacional: mantém o "+" e os dígitos como digitado, sem cap de 11.
+                update('phone', '+' + raw.replace(/[^\d]/g, ''))
+              } else {
+                update('phone', unmask(raw).slice(0, 11))
+              }
+            }}
+            maxLength={20}
           />
+          <p className="text-xs text-gray-500 mt-1">Para número fora do Brasil, digite com + e o código do país (ex: +1 305 555 0100)</p>
         </div>
 
         <div>

@@ -5,23 +5,39 @@ export type SendResult =
   | { ok: true; result: unknown }
   | { ok: false; error: string; code: 'not_configured' | 'not_connected' | 'evolution_error' | 'unknown' | 'rate_limited' }
 
+/**
+ * Telefone internacional (não-BR) é reconhecido pelo "+" na frente, salvo
+ * no cadastro do paciente (ex: "+1 305 555 0100" -> aqui chega como raw).
+ * Nesse caso o código do país já está incluso e NÃO deve levar o prefixo "55".
+ */
+function isInternationalRaw(raw: string): boolean {
+  return raw.trim().startsWith('+')
+}
+
 export function normalizePhone(raw: string): string {
+  if (isInternationalRaw(raw)) {
+    return raw.replace(/\D/g, '')
+  }
   let p = raw.replace(/\D/g, '')
   if (!p.startsWith('55')) p = '55' + p
   return p
 }
 
 /**
- * Valida se um telefone (raw ou já normalizado) é um número brasileiro válido.
+ * Valida se um telefone (raw ou já normalizado) é um número válido para WhatsApp.
  *
- * Formato esperado após normalização: 55 + DDD (2 dígitos) + número (8 ou 9 dígitos)
- * = 13 dígitos (celular 9 dígitos) ou 12 dígitos (fixo 8 dígitos).
+ * BR: 55 + DDD (2 dígitos) + número (8 ou 9 dígitos) = 12 ou 13 dígitos, DDD 11-99.
+ * Internacional (marcado com "+" no raw): aceita 8-15 dígitos após o código do país,
+ * sem a regra de DDD brasileiro.
  *
  * IDs de usuário do Facebook/Instagram (ex: 159712721031297) têm 15+ dígitos
  * e são rejeitados aqui com mensagem clara.
  */
 export function isValidPhone(raw: string): boolean {
   const p = normalizePhone(raw)
+  if (isInternationalRaw(raw)) {
+    return p.length >= 8 && p.length <= 15
+  }
   // Deve começar com 55 e ter 12 (fixo) ou 13 (celular) dígitos
   if (!/^55\d{10,11}$/.test(p)) return false
   // DDD válido: 11–99
