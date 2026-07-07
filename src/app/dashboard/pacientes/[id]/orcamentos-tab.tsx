@@ -53,6 +53,7 @@ export default function OrcamentosTab({
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     titulo: 'Orçamento',
@@ -82,9 +83,52 @@ export default function OrcamentosTab({
     })
   }
 
+  function resetForm() {
+    setForm({ titulo: 'Orçamento', valido_ate: '', observacoes: '', itens: [{ descricao: '', quantidade: 1, valor_unitario: 0 }] })
+    setEditingId(null)
+  }
+
+  function abrirEdicao(orc: Orcamento) {
+    setForm({
+      titulo: orc.titulo,
+      valido_ate: orc.valido_ate || '',
+      observacoes: orc.observacoes || '',
+      itens: orc.orcamento_itens.map(i => ({ descricao: i.descricao, quantidade: i.quantidade, valor_unitario: i.valor_unitario })),
+    })
+    setEditingId(orc.id)
+    setExpandedId(null)
+    setShowForm(true)
+  }
+
   async function handleSave() {
     if (!form.titulo.trim() || form.itens.some(i => !i.descricao.trim())) return
     setSaving(true)
+
+    if (editingId) {
+      // Editando orçamento existente: corrige valores/quantidades errados antes de reenviar
+      const { error } = await supabase.from('orcamentos').update({
+        titulo: form.titulo,
+        valido_ate: form.valido_ate || null,
+        observacoes: form.observacoes || null,
+      }).eq('id', editingId)
+
+      if (!error) {
+        await supabase.from('orcamento_itens').delete().eq('orcamento_id', editingId)
+        await supabase.from('orcamento_itens').insert(
+          form.itens.map(i => ({ orcamento_id: editingId, descricao: i.descricao, quantidade: i.quantidade, valor_unitario: i.valor_unitario }))
+        )
+        setOrcamentos(p => p.map(o => o.id === editingId
+          ? { ...o, titulo: form.titulo, valido_ate: form.valido_ate || null, observacoes: form.observacoes || null, orcamento_itens: form.itens }
+          : o
+        ))
+        setShowForm(false)
+        setExpandedId(editingId)
+        resetForm()
+      }
+      setSaving(false)
+      return
+    }
+
     const { data: orc, error } = await supabase.from('orcamentos').insert({
       clinic_id: clinicId,
       patient_id: patientId,
@@ -101,7 +145,7 @@ export default function OrcamentosTab({
       setOrcamentos(p => [newOrc, ...p])
       setShowForm(false)
       setExpandedId(orc.id)
-      setForm({ titulo: 'Orçamento', valido_ate: '', observacoes: '', itens: [{ descricao: '', quantidade: 1, valor_unitario: 0 }] })
+      resetForm()
     }
     setSaving(false)
   }
@@ -210,7 +254,7 @@ export default function OrcamentosTab({
           <h3 className="font-semibold text-slate-900 dark:text-white">Orçamentos</h3>
           <p className="text-sm text-slate-500">{orcamentos.length} orçamento{orcamentos.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={() => setShowForm(p => !p)}
+        <button onClick={() => { if (showForm) { setShowForm(false); resetForm() } else { resetForm(); setShowForm(true) } }}
           className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-colors flex-shrink-0">
           <Icon name="plus" className="w-4 h-4" />
           <span className="hidden sm:inline">Novo orçamento</span>
@@ -218,10 +262,10 @@ export default function OrcamentosTab({
         </button>
       </div>
 
-      {/* Form novo orçamento */}
+      {/* Form novo orçamento / edição */}
       {showForm && (
         <div className="card p-5 border-violet-200 bg-violet-50/30 dark:bg-violet-900/10">
-          <h4 className="font-semibold text-slate-900 dark:text-white mb-4">Novo Orçamento</h4>
+          <h4 className="font-semibold text-slate-900 dark:text-white mb-4">{editingId ? 'Editar Orçamento' : 'Novo Orçamento'}</h4>
           <div className="grid md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Título</label>
@@ -279,13 +323,13 @@ export default function OrcamentosTab({
               Total: <span className="text-violet-600">{fmt(totalForm)}</span>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setShowForm(false)}
+              <button onClick={() => { setShowForm(false); resetForm() }}
                 className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400">
                 Cancelar
               </button>
               <button onClick={handleSave} disabled={saving}
                 className="px-5 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 disabled:opacity-50 transition-colors">
-                {saving ? 'Salvando...' : 'Salvar orçamento'}
+                {saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Salvar orçamento'}
               </button>
             </div>
           </div>
@@ -388,6 +432,10 @@ export default function OrcamentosTab({
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition-colors">
                         <Icon name="phone" className="w-3.5 h-3.5" />
                         {orc.whatsapp_sent_at ? 'Reenviar WhatsApp' : 'Enviar WhatsApp'}
+                      </button>
+                      <button onClick={() => abrirEdicao(orc)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-violet-300 text-violet-600 text-xs font-semibold rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors">
+                        <Icon name="edit" className="w-3.5 h-3.5" /> Editar
                       </button>
                       <button onClick={() => deleteOrcamento(orc.id)}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-red-500 text-xs rounded-lg transition-colors ml-auto">
