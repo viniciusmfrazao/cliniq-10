@@ -1,5 +1,22 @@
+/**
+ * Detecta se o valor digitado é um telefone internacional (não-BR).
+ * Convenção: número internacional é digitado/salvo com "+" na frente
+ * (ex: "+1 305 555 0100"). Sem "+", assume-se BR e aplica a máscara padrão.
+ */
+export function isInternationalPhone(value: string | null | undefined): boolean {
+  if (!value) return false
+  return value.trim().startsWith('+')
+}
+
 export function maskPhone(value: string | null | undefined): string {
   if (!value) return ''
+
+  // Internacional: não aplica máscara BR, só limpa caracteres inválidos,
+  // preservando o "+" e os dígitos como o usuário digitou.
+  if (isInternationalPhone(value)) {
+    return '+' + value.replace(/[^\d\s]/g, '').trim()
+  }
+
   const numbers = value.replace(/\D/g, '')
   
   if (numbers.length <= 2) {
@@ -71,6 +88,10 @@ export function validateCPF(cpf: string): boolean {
 
 export function validatePhone(phone: string): boolean {
   const numbers = phone.replace(/\D/g, '')
+  if (isInternationalPhone(phone)) {
+    // Internacional: código do país + número, tipicamente 8-15 dígitos ao todo
+    return numbers.length >= 8 && numbers.length <= 15
+  }
   return numbers.length >= 10 && numbers.length <= 11
 }
 
@@ -89,6 +110,11 @@ export function validatePhone(phone: string): boolean {
  */
 export function phoneCanonical(raw: string | null | undefined): string {
   if (!raw) return ''
+  // Internacional (com "+"): não aplica heurística de DDD/nono dígito BR,
+  // só limpa a formatação, mantendo o código do país.
+  if (isInternationalPhone(raw)) {
+    return raw.replace(/\D/g, '')
+  }
   let p = raw.replace(/\D/g, '')
   if (p.length >= 12 && p.startsWith('55')) p = p.slice(2)
   if (p.length === 11 && p[2] === '9') p = p.slice(0, 2) + p.slice(3)
