@@ -5,6 +5,9 @@ import { notFound } from 'next/navigation'
 import ClinicModulesEditor from './modules-editor'
 import ClinicSettingsEditor from './clinic-settings-editor'
 
+
+export const dynamic = 'force-dynamic'
+
 export default async function ClinicDetailsPage({ params }: { params: { id: string } }) {
   const service = createServiceClient()
   const data = await getClinicDetails(params.id)

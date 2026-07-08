@@ -3,6 +3,9 @@ import { isSuperAdmin } from '@/lib/super-admin'
 import { getAllSettings } from '@/lib/app-settings'
 import EvolutionSettingsForm from './settings-form'
 
+
+export const dynamic = 'force-dynamic'
+
 export default async function AdminEvolutionPage() {
   if (!(await isSuperAdmin())) redirect('/dashboard')
 

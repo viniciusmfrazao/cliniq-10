@@ -86,10 +86,12 @@ export async function PATCH(
     }
     if (Object.prototype.hasOwnProperty.call(body, 'postal_code')) {
       const cep = body.postal_code?.replace(/\D/g, '') || null
+      console.log('[admin/clinics PATCH] postal_code recebido:', JSON.stringify(body.postal_code), '-> cep:', cep)
       nextSettings = cep ? { ...nextSettings, postal_code: cep } : (() => { const { postal_code: _r, ...rest } = nextSettings; return rest })()
     }
     if (Object.prototype.hasOwnProperty.call(body, 'address_number')) {
       const num = body.address_number?.trim() || null
+      console.log('[admin/clinics PATCH] address_number recebido:', JSON.stringify(body.address_number))
       nextSettings = num ? { ...nextSettings, address_number: num } : (() => { const { address_number: _r, ...rest } = nextSettings; return rest })()
     }
 
