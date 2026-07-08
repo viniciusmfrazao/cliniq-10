@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, cnpj, slug, planId, planName, adminName, adminEmail, adminPassword, activeModules } = body
+    const { name, cnpj, slug, phone, planId, planName, adminName, adminEmail, adminPassword, activeModules } = body
 
     if (!name || !slug || !adminName || !adminEmail || !adminPassword) {
       return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 })
@@ -55,12 +55,15 @@ export async function POST(request: NextRequest) {
     }
     
     // 1. Create the clinic (using service role to bypass RLS)
+    const cleanPhone = (phone || '').replace(/\D/g, '') || null
     const { data: clinic, error: clinicError } = await serviceSupabase
       .from('clinics')
       .insert({
         name,
         cnpj: cnpj || null,
         slug,
+        clinic_phone: cleanPhone,
+        billing_whatsapp: cleanPhone,
         plan: planValue,
         plan_id: planId || null,
         trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),

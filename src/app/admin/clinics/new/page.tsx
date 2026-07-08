@@ -27,6 +27,7 @@ export default function NewClinicPage() {
     name: '',
     cnpj: '',
     slug: '',
+    phone: '',
     adminName: '',
     adminEmail: '',
     adminPassword: '',
@@ -178,6 +179,22 @@ export default function NewClinicPage() {
                   placeholder="00.000.000/0001-00"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Telefone / WhatsApp da clínica
+              </label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))}
+                className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ex: 5534999990000"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Usado pra avisos de cobrança (Asaas) e contato geral. Pode editar depois.
+              </p>
             </div>
 
             <div>
