@@ -29,6 +29,18 @@ export const maxDuration = 60
 
 const TZ_BR = 'America/Sao_Paulo'
 
+// Limites (início/fim, em ISO UTC) de um dia civil em BRT, com offset em dias
+// a partir de hoje. BRT é UTC-3 fixo (sem horário de verão desde 2019).
+function getBRTDayBoundsISO(offsetDays: number): { startISO: string; endISO: string } {
+  const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: TZ_BR }))
+  const y = nowBR.getFullYear()
+  const m = nowBR.getMonth()
+  const d = nowBR.getDate() + offsetDays
+  const startUTC = new Date(Date.UTC(y, m, d, 3, 0, 0)) // 00:00 BRT = 03:00 UTC
+  const endUTC = new Date(startUTC.getTime() + 24 * 60 * 60 * 1000) // próximo 00:00 BRT (exclusivo)
+  return { startISO: startUTC.toISOString(), endISO: endUTC.toISOString() }
+}
+
 function formatBrazilDateTime(iso: string): { date: string; time: string; weekday: string } {
   const d = new Date(iso)
   const datePart = new Intl.DateTimeFormat('pt-BR', {
@@ -144,18 +156,16 @@ export async function GET(req: NextRequest) {
   const dryRun = url.searchParams.get('dry') === '1'
 
   const svc = createServiceClient()
-  // Janela deslizante (não mais "amanhã fixo"): pega qualquer agendamento
-  // ainda não confirmado dentro das próximas 48h. Antes a query só olhava
-  // pro range de "amanhã" relativo ao dia da execução — se o envio não
-  // rolasse naquele único dia (orçamento de tempo, instância ocupada etc.),
-  // no dia seguinte "amanhã" já tinha mudado e o agendamento ficava órfão
-  // pra sempre (confirmation_sent_at nunca setado). Agora, como a janela é
-  // relativa a "agora" e o filtro real é confirmation_sent_at IS NULL, todo
-  // run reconsidera o que ainda não foi enviado até conseguir.
-  const nowISO = new Date().toISOString()
-  const startISO = nowISO
-  const endISO = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
-  const dateLabel = 'proximas_48h'
+  // Janela = dia civil de amanhã (BRT), não uma janela deslizante de 48h.
+  // A tentativa anterior de evitar agendamento órfão trocou "dia certo" por
+  // "dentro do prazo", o que quebrou o texto fixo dos templates (que
+  // pressupõe "amanhã" literalmente) — agendamento de hoje ou de depois de
+  // amanhã acabava recebendo mensagem de confirmação com o dia errado.
+  // Aqui voltamos a restringir ao dia civil de amanhã; o catch-up de reenvio
+  // continua garantido porque o cron roda a cada 5min o resto do dia e o
+  // filtro real de dedupe é confirmation_sent_at IS NULL.
+  const { startISO, endISO } = getBRTDayBoundsISO(1)
+  const dateLabel = 'amanha'
 
   // Hora atual no fuso BRT
   const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: TZ_BR }))

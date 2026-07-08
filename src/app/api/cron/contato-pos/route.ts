@@ -22,10 +22,16 @@ function getCurrentHourBRT(): number {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })).getHours()
 }
 
-function getDateBRT(offsetDays = 0): string {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-  d.setDate(d.getDate() + offsetDays)
-  return d.toISOString().split('T')[0]
+// Limites (início/fim, ISO UTC) de um único dia civil em BRT, com offset em
+// dias a partir de hoje. BRT é UTC-3 fixo (sem horário de verão desde 2019).
+function getBRTDayBoundsISO(offsetDays: number): { startISO: string; endISO: string } {
+  const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+  const y = nowBR.getFullYear()
+  const m = nowBR.getMonth()
+  const d = nowBR.getDate() + offsetDays
+  const startUTC = new Date(Date.UTC(y, m, d, 3, 0, 0)) // 00:00 BRT = 03:00 UTC
+  const endUTC = new Date(startUTC.getTime() + 24 * 60 * 60 * 1000) // próximo 00:00 BRT (exclusivo)
+  return { startISO: startUTC.toISOString(), endISO: endUTC.toISOString() }
 }
 
 export async function GET(request: Request) {
@@ -92,20 +98,20 @@ export async function GET(request: Request) {
     const excluirCats: string[] = auto.contato_pos_excluir_categorias || []
     const EXCLUIR_NOMES = ['avalia', 'retorno', 'consulta', ...excluirCats.map((c: string) => c.toLowerCase())]
 
-    // ── MENSAGEM 1: atendimentos concluídos recentemente ────────────────
-    // Antes filtrava só "ontem" (dia fixo): se o envio não rolasse naquele
-    // único dia, o atendimento nunca mais caía na query e ficava órfão pra
-    // sempre. Agora usa uma janela de lookback (3 dias) — como o filtro
-    // real de dedupe é contato_pos_sent_at IS NULL, todo run reconsidera o
-    // que ainda não foi enviado até conseguir, sem duplicar.
-    const lookbackFloor = getDateBRT(-3)
+    // ── MENSAGEM 1: atendimentos concluídos ONTEM (dia civil BRT) ───────
+    // A janela larga (lookback de 3 dias até "agora") pegava atendimento de
+    // HOJE também, mas o template pressupõe "ontem" — paciente que fez
+    // procedimento de manhã recebia a mensagem de pós-venda à tarde do
+    // mesmo dia. Restrito ao dia civil de ontem; catch-up continua via
+    // contato_pos_sent_at IS NULL + cron a cada 5min pelo resto do dia.
+    const { startISO: ontemStart, endISO: ontemEnd } = getBRTDayBoundsISO(-1)
     const { data: aptsOntem } = await svc
       .from('appointments')
       .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
       .eq('clinic_id', auto.clinic_id)
       .eq('status', 'completed')
-      .gte('start_time', `${lookbackFloor}T00:00:00`)
-      .lt('start_time', new Date().toISOString())
+      .gte('start_time', ontemStart)
+      .lt('start_time', ontemEnd)
       .is('contato_pos_sent_at', null)
 
     for (const apt of aptsOntem || []) {
@@ -166,20 +172,20 @@ export async function GET(request: Request) {
       if (!seqItem.ativo || !seqItem.dias || !seqItem.template) continue
 
       const tipo = `legado_seq_${seqItem.dias}d`
-      // Antes buscava só o dia exato "hoje - X dias" — se não enviasse
-      // naquele dia, o agendamento nunca mais caía na query (órfão pra
-      // sempre). Agora usa uma janela de catch-up de 5 dias; o dedupe real
-      // já é feito pelo unique(appointment_id, tipo) em pos_venda_sent_log,
-      // então alargar a janela não duplica envio, só evita perder.
-      const diaAlvo = getDateBRT(-seqItem.dias)
-      const diaAlvoFloor = getDateBRT(-seqItem.dias - 5)
+      // Janela larga de 5 dias de lookback pegava atendimento fora do dia
+      // que o template da sequência pressupõe (ex.: "faz 7 dias que você
+      // fez X"), disparando a mensagem cedo ou tarde demais. Restrito ao
+      // dia civil exato "hoje - X dias"; catch-up dentro do próprio dia
+      // continua garantido pelo unique(appointment_id, tipo) em
+      // pos_venda_sent_log + cron a cada 5min.
+      const { startISO: diaAlvoStart, endISO: diaAlvoEnd } = getBRTDayBoundsISO(-seqItem.dias)
       const { data: aptsSeq } = await svc
         .from('appointments')
         .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
         .eq('clinic_id', auto.clinic_id)
         .eq('status', 'completed')
-        .gte('start_time', `${diaAlvoFloor}T00:00:00`)
-        .lt('start_time', `${diaAlvo}T23:59:59`)
+        .gte('start_time', diaAlvoStart)
+        .lt('start_time', diaAlvoEnd)
 
       for (const apt of aptsSeq || []) {
         if (Date.now() - routeStart > ROUTE_BUDGET_MS || sendsThisRun >= MAX_SENDS_PER_RUN) {
