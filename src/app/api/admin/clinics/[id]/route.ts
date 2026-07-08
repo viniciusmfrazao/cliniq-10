@@ -14,6 +14,8 @@ type PatchBody = {
   plan_price?: number | null
   plan_expires_at?: string | null
   billing_notes?: string | null
+  postal_code?: string | null
+  address_number?: string | null
   primary_admin?: {
     id: string
     name?: string
@@ -81,6 +83,14 @@ export async function PATCH(
         const { max_whatsapp_numbers_override: _removed, ...rest } = currentSettings
         nextSettings = rest
       }
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'postal_code')) {
+      const cep = body.postal_code?.replace(/\D/g, '') || null
+      nextSettings = cep ? { ...nextSettings, postal_code: cep } : (() => { const { postal_code: _r, ...rest } = nextSettings; return rest })()
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'address_number')) {
+      const num = body.address_number?.trim() || null
+      nextSettings = num ? { ...nextSettings, address_number: num } : (() => { const { address_number: _r, ...rest } = nextSettings; return rest })()
     }
 
     const clinicUpdate: Record<string, unknown> = {

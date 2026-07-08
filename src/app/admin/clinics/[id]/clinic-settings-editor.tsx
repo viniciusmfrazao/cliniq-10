@@ -57,6 +57,8 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
     clinic_phone: clinic.clinic_phone || '',
     billing_whatsapp: clinic.billing_whatsapp || '',
     billing_notes: clinic.billing_notes || '',
+    postal_code: typeof clinic.settings?.postal_code === 'string' ? clinic.settings.postal_code : '',
+    address_number: typeof clinic.settings?.address_number === 'string' ? clinic.settings.address_number : '',
     max_whatsapp_numbers_override: initialOverride,
     admin_id: initialAdmin?.id || '',
     admin_name: initialAdmin?.name || '',
@@ -80,6 +82,8 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
         clinic_phone: form.clinic_phone.trim() || null,
         billing_whatsapp: form.billing_whatsapp.trim() || null,
         billing_notes: form.billing_notes.trim() || null,
+        postal_code: form.postal_code.trim() || null,
+        address_number: form.address_number.trim() || null,
         max_whatsapp_numbers_override: form.max_whatsapp_numbers_override
           ? Math.max(1, parseInt(form.max_whatsapp_numbers_override, 10))
           : null,
@@ -194,6 +198,29 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
             onChange={(e) => setForm((prev) => ({ ...prev, billing_notes: e.target.value }))}
             className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">CEP (endereço da clínica)</label>
+            <input
+              type="text"
+              placeholder="Ex: 38400-000"
+              value={form.postal_code}
+              onChange={(e) => setForm((prev) => ({ ...prev, postal_code: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            />
+            <p className="text-xs text-slate-400 mt-1">Obrigatório pra assinatura no cartão (Asaas exige endereço no cliente)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Número</label>
+            <input
+              type="text"
+              placeholder="Ex: 123"
+              value={form.address_number}
+              onChange={(e) => setForm((prev) => ({ ...prev, address_number: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            />
+          </div>
         </div>
       </div>
 

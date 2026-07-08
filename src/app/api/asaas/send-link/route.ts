@@ -5,9 +5,9 @@ const ASAAS_API_KEY = process.env.ASAAS_API_KEY!
 const ASAAS_BASE = 'https://api.asaas.com/v3'
 const CHECKOUT_BASE_URL = 'https://asaas.com/checkoutSession/show'
 
-async function asaas(path: string, body?: object) {
+async function asaas(path: string, body?: object, method?: 'POST' | 'PUT') {
   const res = await fetch(`${ASAAS_BASE}${path}`, {
-    method: body ? 'POST' : 'GET',
+    method: method || (body ? 'POST' : 'GET'),
     headers: { 'Content-Type': 'application/json', 'access_token': ASAAS_API_KEY },
     body: body ? JSON.stringify(body) : undefined,
   })
@@ -55,6 +55,14 @@ export async function POST(req: Request) {
     // Telefone: billing_whatsapp > clinic_phone > settings
     const phone = (clinic.billing_whatsapp || clinic.clinic_phone || settings?.phone || '').replace(/\D/g, '')
 
+    // Endereço: exigido pela Asaas pra criar checkout de cartão (antifraude).
+    // CEP+Número bastam — a Asaas completa rua/bairro/cidade a partir do CEP.
+    const postalCode = (settings?.postal_code || '').replace(/\D/g, '')
+    const addressNumber = (settings?.address_number || '').trim()
+    if (paymentMethod === 'CREDIT_CARD' && (!postalCode || !addressNumber)) {
+      return NextResponse.json({ ok: false, error: 'CEP e número do endereço da clínica não cadastrados. Preencha em "Editar clínica" (seção Cobrança) antes de gerar o link de cartão.' }, { status: 400 })
+    }
+
     // 1. Criar (ou reaproveitar) customer na Asaas
     let customerId: string
     const { data: existing } = await svc
@@ -71,9 +79,17 @@ export async function POST(req: Request) {
         email,
         cpfCnpj: rawCnpj,
         mobilePhone: phone.replace(/\D/g, ''),
+        postalCode: postalCode || undefined,
+        addressNumber: addressNumber || undefined,
         notificationDisabled: false,
       })
       customerId = customer.id
+    }
+
+    // Garante que o endereço está atualizado na Asaas (cobre tanto customer
+    // recém-criado sem endereço quanto reaproveitado de antes desse campo existir)
+    if (paymentMethod === 'CREDIT_CARD') {
+      await asaas(`/customers/${customerId}`, { postalCode, addressNumber }, 'PUT')
     }
 
     // 2. Calcular data da primeira cobrança (respeitando o trial)
