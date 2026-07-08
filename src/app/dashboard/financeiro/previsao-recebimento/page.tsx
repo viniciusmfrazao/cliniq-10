@@ -4,7 +4,7 @@ import PrevisaoRecebimentoView from './previsao-recebimento-view'
 import BackButton from '@/components/ui/BackButton'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Previsão de Recebimento | Clinike' }
+export const metadata = { title: 'Recebíveis Futuros | Clinike' }
 
 export default async function PrevisaoRecebimentoPage() {
   const supabase = await createClient()
@@ -18,7 +18,7 @@ export default async function PrevisaoRecebimentoPage() {
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <BackButton href="/dashboard/financeiro" label="Financeiro" />
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Previsão de Recebimento</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Recebíveis Futuros</h1>
         <p className="text-sm text-slate-500 mt-1">
           Parcelas de vendas já realizadas que ainda vão cair no caixa, líquidas de taxa
         </p>

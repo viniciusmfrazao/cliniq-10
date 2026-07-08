@@ -180,7 +180,7 @@ export default async function FinanceiroPage() {
             <Icon name="dollarSign" className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <p className="font-semibold text-slate-900 text-sm">Previsão de Recebimento</p>
+            <p className="font-semibold text-slate-900 text-sm">Recebíveis Futuros</p>
             <p className="text-xs text-slate-500">Parcelas a cair no caixa</p>
           </div>
         </Link>
