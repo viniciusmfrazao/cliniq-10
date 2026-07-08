@@ -22,21 +22,21 @@ const BANDEIRA_PARA_KEY: Record<string, string[]> = {
   'Amex, Elo, outros': ['amex', 'elo'],
 }
 
-type TaxaPag = { forma: string; bandeira: string; dias_repasse: number; intervalo_dias_parcelas: number }
+type TaxaPag = { forma: string; bandeira: string; dias_repasse: number; modo_repasse: 'fixo' | 'parcelado' }
 
-// Resolve prazo de repasse (D+X da 1ª parcela e intervalo entre parcelas) pela mesma
-// lógica de fallback usada para taxa: bandeira específica > 'todas' > default 30/30
-function getPrazo(taxas: TaxaPag[], forma: string, bandeira: string | null): { dias: number; intervalo: number } {
+// Resolve prazo de repasse pela mesma lógica de fallback usada para taxa:
+// bandeira específica > 'todas' > default (fixo D+30 se não configurado)
+function getPrazo(taxas: TaxaPag[], forma: string, bandeira: string | null): { dias: number; modo: 'fixo' | 'parcelado' } {
   const formaKey = FORMA_PARA_KEY[forma]
-  if (!formaKey) return { dias: 30, intervalo: 30 }
+  if (!formaKey) return { dias: 30, modo: 'fixo' }
   const bandeiraKeys = bandeira ? (BANDEIRA_PARA_KEY[bandeira] || []) : []
   for (const bKey of bandeiraKeys) {
     const t = taxas.find(t => t.forma === formaKey && t.bandeira === bKey)
-    if (t) return { dias: t.dias_repasse, intervalo: t.intervalo_dias_parcelas }
+    if (t) return { dias: t.dias_repasse, modo: t.modo_repasse }
   }
   const todas = taxas.find(t => t.forma === formaKey && t.bandeira === 'todas')
-  if (todas) return { dias: todas.dias_repasse, intervalo: todas.intervalo_dias_parcelas }
-  return { dias: 30, intervalo: 30 }
+  if (todas) return { dias: todas.dias_repasse, modo: todas.modo_repasse }
+  return { dias: 30, modo: 'fixo' }
 }
 
 const PERIODOS = [
@@ -86,7 +86,7 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
       try {
         const { data: taxas } = await supabase
           .from('taxas_pagamento')
-          .select('forma, bandeira, dias_repasse, intervalo_dias_parcelas')
+          .select('forma, bandeira, dias_repasse, modo_repasse')
           .eq('clinic_id', clinicId)
 
         // Vendas parceladas podem levar até 12 parcelas de ~30 dias para
@@ -107,12 +107,31 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
         for (const e of (entradas || []) as any[]) {
           const nParcelas = e.n_parcelas || 1
           const valorLiquido = Number(e.valor_liquido) || 0
-          const valorParcela = valorLiquido / nParcelas
-          const { dias, intervalo } = getPrazo(taxasList, e.forma_pagamento, e.bandeira)
+          const { dias, modo } = getPrazo(taxasList, e.forma_pagamento, e.bandeira)
 
+          if (modo === 'fixo' || nParcelas <= 1) {
+            // Todo o valor líquido cai de uma vez, em D+dias
+            const data = addDaysBR(e.data_venda, dias)
+            if (data < hoje) continue
+            geradas.push({
+              key: `${e.id}-1`,
+              entradaId: e.id,
+              data,
+              parcelaNum: 1,
+              totalParcelas: 1,
+              valorLiquido,
+              pacienteNome: e.paciente_nome || 'Paciente',
+              procedimentoNome: e.procedimento_nome || 'Procedimento',
+              formaPagamento: e.forma_pagamento,
+            })
+            continue
+          }
+
+          // Parcelado: 1ª parcela em D+dias, demais a cada 30 dias
+          const valorParcela = valorLiquido / nParcelas
           for (let i = 1; i <= nParcelas; i++) {
-            const data = addDaysBR(e.data_venda, dias + (i - 1) * intervalo)
-            if (data < hoje) continue // já deveria ter caído — não é "previsão"
+            const data = addDaysBR(e.data_venda, dias + (i - 1) * 30)
+            if (data < hoje) continue
             geradas.push({
               key: `${e.id}-${i}`,
               entradaId: e.id,
