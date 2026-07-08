@@ -26,7 +26,12 @@ type Contract = {
 
 type Row = { clinic: Clinic; contract: Contract | null }
 
-const SITE_URL = 'https://app.clinike.com.br'
+// Usa o domínio atual (teste.clinike.com.br em staging, app.clinike.com.br em produção)
+// em vez de fixo, senão o link gerado em staging aponta pra produção (onde o contrato não existe).
+function getSiteUrl() {
+  if (typeof window !== 'undefined') return window.location.origin
+  return 'https://app.clinike.com.br'
+}
 
 function StatusBadge({ status }: { status: Contract['status'] | 'none' }) {
   const map: Record<string, string> = {
@@ -68,7 +73,7 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
         alert(data.error || 'Erro ao gerar contrato')
         return
       }
-      const link = `${SITE_URL}/assinar-contrato/${data.token}`
+      const link = `${getSiteUrl()}/assinar-contrato/${data.token}`
       await navigator.clipboard.writeText(link).catch(() => {})
       setState(prev => prev.map(r => r.clinic.id === clinicId
         ? { ...r, contract: { id: '', clinic_id: clinicId, status: 'pending', sign_token: data.token, sent_at: new Date().toISOString(), viewed_at: null, signed_at: null, signer_name: null, created_at: new Date().toISOString() } }
@@ -83,13 +88,13 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
   }
 
   function copyLink(token: string) {
-    const link = `${SITE_URL}/assinar-contrato/${token}`
+    const link = `${getSiteUrl()}/assinar-contrato/${token}`
     navigator.clipboard.writeText(link).catch(() => {})
     alert(`Link copiado:\n${link}`)
   }
 
   function waLink(phone: string | null, token: string) {
-    const link = `${SITE_URL}/assinar-contrato/${token}`
+    const link = `${getSiteUrl()}/assinar-contrato/${token}`
     const msg = encodeURIComponent(`Olá! Segue o contrato de adesão à Clinike para assinatura digital:\n\n${link}`)
     const digits = (phone || '').replace(/\D/g, '')
     return digits ? `https://wa.me/${digits.startsWith('55') ? digits : '55' + digits}?text=${msg}` : `https://wa.me/?text=${msg}`
@@ -176,7 +181,7 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
 
                 {contract && contract.status === 'signed' && (
                   <a
-                    href={`${SITE_URL}/assinar-contrato/${contract.sign_token}`}
+                    href={`${getSiteUrl()}/assinar-contrato/${contract.sign_token}`}
                     target="_blank"
                     rel="noreferrer"
                     className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
