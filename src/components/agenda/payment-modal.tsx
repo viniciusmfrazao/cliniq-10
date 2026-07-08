@@ -31,8 +31,7 @@ const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', 
 
 // Mesma lista de Configurações → Taxas de Pagamento — sempre visível,
 // independente de já existir taxa configurada pra bandeira ou não.
-const BANDEIRAS = [
-  { key: 'todas', label: 'Padrão (todas)' },
+const BANDEIRAS_ESPECIFICAS = [
   { key: 'visa', label: 'Visa' },
   { key: 'master', label: 'Mastercard' },
   { key: 'elo', label: 'Elo' },
@@ -351,24 +350,40 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                         className="input w-full text-sm" />
                     </div>
                   </div>
-                  {s.forma === 'credito' && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">Bandeira</label>
-                        <select value={s.bandeira || 'todas'} onChange={e => updateSplit(s.id, { bandeira: e.target.value })} className="input w-full text-sm">
-                          {BANDEIRAS.map(b => (
-                            <option key={b.key} value={b.key}>{b.label}</option>
-                          ))}
-                        </select>
+                  {s.forma === 'credito' && (() => {
+                    const especifica = !!s.bandeira && s.bandeira !== 'todas'
+                    return (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Parcelas</label>
+                          <select value={s.parcelas} onChange={e => updateSplit(s.id, { parcelas: parseInt(e.target.value) })} className="input w-full text-sm">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => <option key={p} value={p}>{p}x</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs text-slate-500">Bandeira</label>
+                            <button type="button"
+                              onClick={() => updateSplit(s.id, { bandeira: especifica ? 'todas' : BANDEIRAS_ESPECIFICAS[0].key })}
+                              className="text-xs text-violet-600 font-medium hover:text-violet-700">
+                              {especifica ? 'usar padrão' : 'específica?'}
+                            </button>
+                          </div>
+                          {especifica ? (
+                            <select value={s.bandeira} onChange={e => updateSplit(s.id, { bandeira: e.target.value })} className="input w-full text-sm">
+                              {BANDEIRAS_ESPECIFICAS.map(b => (
+                                <option key={b.key} value={b.key}>{b.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="input w-full text-sm bg-slate-100 text-slate-400 flex items-center px-3">
+                              Padrão (todas)
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">Parcelas</label>
-                        <select value={s.parcelas} onChange={e => updateSplit(s.id, { parcelas: parseInt(e.target.value) })} className="input w-full text-sm">
-                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => <option key={p} value={p}>{p}x</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                   <div className="flex justify-between text-xs text-slate-500">
                     <span>Taxa: {s.taxa}%</span>
                     <span className="font-medium text-emerald-600">Líquido: {fmt(s.liquido)}</span>
