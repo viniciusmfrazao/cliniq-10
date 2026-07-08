@@ -1,6 +1,9 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import SubscriptionsClient from './subscriptions-client'
 
+
+export const dynamic = 'force-dynamic'
+
 export default async function SubscriptionsPage() {
   const svc = createServiceClient()
 

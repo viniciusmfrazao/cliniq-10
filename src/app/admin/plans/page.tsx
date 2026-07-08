@@ -4,6 +4,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import PlansList from './plans-list'
 
+
+export const dynamic = 'force-dynamic'
+
 export default async function PlansPage() {
   const isAdmin = await isSuperAdmin()
   if (!isAdmin) redirect('/dashboard')
