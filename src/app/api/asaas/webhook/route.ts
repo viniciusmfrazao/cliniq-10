@@ -64,6 +64,7 @@ export async function POST(req: Request) {
         await svc.from('clinic_subscriptions').update({
           status: 'active',
           asaas_subscription_id: payment.subscription || null,
+          payment_method: payment.billingType || undefined,
           last_payment_at: now,
           last_payment_value: payment.value,
           current_period_start: now,
