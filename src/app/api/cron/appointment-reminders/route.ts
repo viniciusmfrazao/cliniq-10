@@ -29,39 +29,6 @@ export const maxDuration = 60
 
 const TZ_BR = 'America/Sao_Paulo'
 
-/** Pega o range UTC pra "amanhã" no fuso BRT. Brasil não tem DST desde 2019, UTC-3 fixo. */
-function brTomorrowRange(): { startISO: string; endISO: string; dateLabel: string } {
-  const now = new Date()
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ_BR,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now)
-  const get = (t: string) => parts.find((p) => p.type === t)!.value
-  const todayY = parseInt(get('year'), 10)
-  const todayM = parseInt(get('month'), 10)
-  const todayD = parseInt(get('day'), 10)
-
-  // amanhã (data BR)
-  const tomorrow = new Date(Date.UTC(todayY, todayM - 1, todayD + 1))
-  const ty = tomorrow.getUTCFullYear()
-  const tm = String(tomorrow.getUTCMonth() + 1).padStart(2, '0')
-  const td = String(tomorrow.getUTCDate()).padStart(2, '0')
-
-  // 00:00 BRT = 03:00 UTC (UTC-3 fixo)
-  const startISO = `${ty}-${tm}-${td}T03:00:00.000Z`
-  // 00:00 BRT do dia seguinte
-  const dayAfter = new Date(Date.UTC(ty, parseInt(tm, 10) - 1, parseInt(td, 10) + 1))
-  const ay = dayAfter.getUTCFullYear()
-  const am = String(dayAfter.getUTCMonth() + 1).padStart(2, '0')
-  const ad = String(dayAfter.getUTCDate()).padStart(2, '0')
-  const endISO = `${ay}-${am}-${ad}T03:00:00.000Z`
-
-  const dateLabel = `${td}/${tm}/${ty}`
-  return { startISO, endISO, dateLabel }
-}
-
 function formatBrazilDateTime(iso: string): { date: string; time: string; weekday: string } {
   const d = new Date(iso)
   const datePart = new Intl.DateTimeFormat('pt-BR', {
@@ -177,7 +144,18 @@ export async function GET(req: NextRequest) {
   const dryRun = url.searchParams.get('dry') === '1'
 
   const svc = createServiceClient()
-  const { startISO, endISO, dateLabel } = brTomorrowRange()
+  // Janela deslizante (não mais "amanhã fixo"): pega qualquer agendamento
+  // ainda não confirmado dentro das próximas 48h. Antes a query só olhava
+  // pro range de "amanhã" relativo ao dia da execução — se o envio não
+  // rolasse naquele único dia (orçamento de tempo, instância ocupada etc.),
+  // no dia seguinte "amanhã" já tinha mudado e o agendamento ficava órfão
+  // pra sempre (confirmation_sent_at nunca setado). Agora, como a janela é
+  // relativa a "agora" e o filtro real é confirmation_sent_at IS NULL, todo
+  // run reconsidera o que ainda não foi enviado até conseguir.
+  const nowISO = new Date().toISOString()
+  const startISO = nowISO
+  const endISO = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
+  const dateLabel = 'proximas_48h'
 
   // Hora atual no fuso BRT
   const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: TZ_BR }))

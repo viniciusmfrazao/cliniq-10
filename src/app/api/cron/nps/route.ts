@@ -163,7 +163,14 @@ export async function GET(req: NextRequest) {
   )
 
   const svc = createServiceClient()
-  const { startISO, endISO, dateLabel } = brYesterdayRange()
+  // Antes buscava só "ontem" (dia fixo): se o envio não rolasse naquele
+  // único dia, o atendimento nunca mais caía na query e ficava órfão pra
+  // sempre (nps_sent_at nunca setado). Agora usa uma janela de lookback (4
+  // dias) — o dedupe real já é nps_sent_at IS NULL, então todo run
+  // reconsidera o que ainda não foi enviado até conseguir, sem duplicar.
+  const startISO = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString()
+  const endISO = new Date().toISOString()
+  const dateLabel = 'ultimos_4_dias'
 
   // 1) Carrega automations das clínicas com NPS ligado
   const { data: automations, error: errAuto } = await svc
