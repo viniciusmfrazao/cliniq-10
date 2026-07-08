@@ -102,7 +102,7 @@ export async function POST(req: Request) {
         customer: customerId,
         items: [
           {
-            name: `Assinatura Clinike — ${planName}`,
+            name: planName.slice(0, 30),
             description: `Assinatura ${planName} do Clinike`,
             quantity: 1,
             value: planPrice,
