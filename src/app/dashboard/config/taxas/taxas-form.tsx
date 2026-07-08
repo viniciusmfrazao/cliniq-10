@@ -93,7 +93,13 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
   const [draft, setDraft] = useState<Config>({ taxa: 0, dias: 30, modo: 'parcelado' })
 
   function getConfig(formaKey: string): Config {
-    return configs[`${formaKey}__${bandeira}`] || defaultConfig(formaKey)
+    const proprio = configs[`${formaKey}__${bandeira}`]
+    if (proprio) return proprio
+    if (bandeira !== 'todas') {
+      const padrao = configs[`${formaKey}__todas`]
+      if (padrao) return padrao
+    }
+    return defaultConfig(formaKey)
   }
 
   function openModal(formaKey: string) {
@@ -178,19 +184,37 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
           <div />
         </div>
         {FORMAS.map((forma, i) => {
-          const cfg = getConfig(forma.key)
-          const configurado = !!configs[`${forma.key}__${bandeira}`]
+          const proprio = configs[`${forma.key}__${bandeira}`]
+          const padrao = configs[`${forma.key}__todas`]
+          const usandoPadrao = bandeira !== 'todas' && !proprio && !!padrao
+          const efetivo = proprio || (bandeira !== 'todas' ? padrao : undefined)
+          const configurado = !!efetivo
+          // Só faz sentido avisar de "exceção" quando estou olhando o Padrão e
+          // outra bandeira específica sobrescreve — pra não passar batido.
+          const excecoes = bandeira === 'todas'
+            ? BANDEIRAS.filter(b => b.key !== 'todas' && configs[`${forma.key}__${b.key}`])
+            : []
           return (
             <button key={forma.key} onClick={() => openModal(forma.key)}
               className={`w-full grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center px-4 py-3 text-left hover:bg-slate-50 transition-colors ${
                 i < FORMAS.length - 1 ? 'border-b border-slate-100' : ''
               }`}>
-              <div className="text-sm font-medium text-slate-800">{forma.label}</div>
-              <div className={`text-sm ${configurado ? 'text-slate-900 font-semibold' : 'text-slate-300'}`}>
-                {configurado ? `${cfg.taxa}%` : '—'}
+              <div>
+                <div className="text-sm font-medium text-slate-800">{forma.label}</div>
+                {excecoes.length > 0 && (
+                  <div className="text-[11px] text-amber-600 mt-0.5">
+                    ⚠ taxa própria em: {excecoes.map(e => e.label.replace('Padrão (todas as bandeiras)', '')).join(', ')}
+                  </div>
+                )}
+                {usandoPadrao && (
+                  <div className="text-[11px] text-slate-400 mt-0.5">sem taxa própria — usando o Padrão</div>
+                )}
+              </div>
+              <div className={`text-sm ${configurado ? (usandoPadrao ? 'text-slate-500' : 'text-slate-900 font-semibold') : 'text-slate-300'}`}>
+                {configurado ? `${efetivo!.taxa}%` : '—'}
               </div>
               <div className={`hidden sm:block text-xs ${configurado ? 'text-slate-500' : 'text-slate-300'}`}>
-                {configurado ? prazoResumo(cfg, (forma as any).n || 1) : 'Não configurado'}
+                {configurado ? prazoResumo(efetivo!, (forma as any).n || 1) : 'Não configurado'}
               </div>
               <Icon name="edit" className="w-4 h-4 text-slate-300 justify-self-end" />
             </button>
@@ -219,6 +243,32 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
               <p className="text-center text-sm font-semibold text-violet-600">
                 Configurando: {BANDEIRAS.find(b => b.key === bandeira)?.label}
               </p>
+
+              {bandeira === 'todas' ? (() => {
+                const excecoes = BANDEIRAS.filter(b => b.key !== 'todas' && configs[`${modalForma}__${b.key}`])
+                return excecoes.length > 0 ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                    ⚠ {excecoes.map(e => e.label).join(', ')} {excecoes.length > 1 ? 'têm' : 'tem'} taxa própria pra {modalFormaObj.label} e não vão mudar com o Padrão — elas sempre têm prioridade sobre ele.
+                  </div>
+                ) : null
+              })() : (() => {
+                const temPropria = !!configs[`${modalForma}__${bandeira}`]
+                const padrao = configs[`${modalForma}__todas`]
+                if (temPropria) {
+                  return (
+                    <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 text-xs text-violet-800">
+                      Essa é uma taxa própria pra {BANDEIRAS.find(b => b.key === bandeira)?.label} — ela tem prioridade sobre o Padrão pra essa forma de pagamento.
+                    </div>
+                  )
+                }
+                return (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
+                    Ainda sem taxa própria — hoje {modalFormaObj.label} nessa bandeira usa o Padrão{padrao ? ` (${padrao.taxa}%)` : ' (não configurado)'}.
+                    Salvando aqui, essa bandeira passa a ter prioridade sobre o Padrão só pra essa forma.
+                  </div>
+                )
+              })()}
+
 
               {modalFormaObj.parcelavel ? (
                 <div>
