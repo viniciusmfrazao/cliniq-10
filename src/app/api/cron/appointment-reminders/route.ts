@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
 import { logEva } from '@/lib/eva-logger'
-import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
 
@@ -29,39 +28,6 @@ export const maxDuration = 60
  */
 
 const TZ_BR = 'America/Sao_Paulo'
-
-/** Pega o range UTC pra "amanhã" no fuso BRT. Brasil não tem DST desde 2019, UTC-3 fixo. */
-function brTomorrowRange(): { startISO: string; endISO: string; dateLabel: string } {
-  const now = new Date()
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ_BR,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now)
-  const get = (t: string) => parts.find((p) => p.type === t)!.value
-  const todayY = parseInt(get('year'), 10)
-  const todayM = parseInt(get('month'), 10)
-  const todayD = parseInt(get('day'), 10)
-
-  // amanhã (data BR)
-  const tomorrow = new Date(Date.UTC(todayY, todayM - 1, todayD + 1))
-  const ty = tomorrow.getUTCFullYear()
-  const tm = String(tomorrow.getUTCMonth() + 1).padStart(2, '0')
-  const td = String(tomorrow.getUTCDate()).padStart(2, '0')
-
-  // 00:00 BRT = 03:00 UTC (UTC-3 fixo)
-  const startISO = `${ty}-${tm}-${td}T03:00:00.000Z`
-  // 00:00 BRT do dia seguinte
-  const dayAfter = new Date(Date.UTC(ty, parseInt(tm, 10) - 1, parseInt(td, 10) + 1))
-  const ay = dayAfter.getUTCFullYear()
-  const am = String(dayAfter.getUTCMonth() + 1).padStart(2, '0')
-  const ad = String(dayAfter.getUTCDate()).padStart(2, '0')
-  const endISO = `${ay}-${am}-${ad}T03:00:00.000Z`
-
-  const dateLabel = `${td}/${tm}/${ty}`
-  return { startISO, endISO, dateLabel }
-}
 
 function formatBrazilDateTime(iso: string): { date: string; time: string; weekday: string } {
   const d = new Date(iso)
@@ -97,8 +63,6 @@ const DEFAULT_TEMPLATE_CONFIRMA = `Olá {{primeiro_nome}}! Falo do *{{clinica}}*
 
 *{{hora}}* — {{procedimento}} — {{profissional}}
 
-📅 Adicionar na sua agenda: {{link_agenda}}
-
 Podemos confirmar?`
 
 function renderTemplate(
@@ -114,7 +78,6 @@ function renderTemplate(
     dia_semana: string
     link_confirmacao: string
     endereco: string
-    link_agenda: string
   },
 ): string {
   return template
@@ -128,7 +91,6 @@ function renderTemplate(
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
     .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao)
     .replace(/\{\{\s*endereco\s*\}\}/g, vars.endereco)
-    .replace(/\{\{\s*link_agenda\s*\}\}/g, vars.link_agenda)
 }
 
 type AutomationRow = {
@@ -142,7 +104,6 @@ type AppointmentRow = {
   id: string
   clinic_id: string
   start_time: string
-  end_time: string | null
   status: string
   confirmation_sent_at: string | null
   confirmation_slug: string | null
@@ -183,7 +144,18 @@ export async function GET(req: NextRequest) {
   const dryRun = url.searchParams.get('dry') === '1'
 
   const svc = createServiceClient()
-  const { startISO, endISO, dateLabel } = brTomorrowRange()
+  // Janela deslizante (não mais "amanhã fixo"): pega qualquer agendamento
+  // ainda não confirmado dentro das próximas 48h. Antes a query só olhava
+  // pro range de "amanhã" relativo ao dia da execução — se o envio não
+  // rolasse naquele único dia (orçamento de tempo, instância ocupada etc.),
+  // no dia seguinte "amanhã" já tinha mudado e o agendamento ficava órfão
+  // pra sempre (confirmation_sent_at nunca setado). Agora, como a janela é
+  // relativa a "agora" e o filtro real é confirmation_sent_at IS NULL, todo
+  // run reconsidera o que ainda não foi enviado até conseguir.
+  const nowISO = new Date().toISOString()
+  const startISO = nowISO
+  const endISO = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
+  const dateLabel = 'proximas_48h'
 
   // Hora atual no fuso BRT
   const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: TZ_BR }))
@@ -259,7 +231,7 @@ export async function GET(req: NextRequest) {
   const { data: appsRaw, error: errApps } = await svc
     .from('appointments')
     .select(
-      'id, clinic_id, start_time, end_time, status, confirmation_sent_at, confirmation_slug, patient_id, professional_id, procedure_id',
+      'id, clinic_id, start_time, status, confirmation_sent_at, confirmation_slug, patient_id, professional_id, procedure_id',
     )
     .in('clinic_id', clinicIds)
     .gte('start_time', startISO)
@@ -366,21 +338,6 @@ export async function GET(req: NextRequest) {
 
     const dt = formatBrazilDateTime(app.start_time)
     const endereco = clinicAddressById.get(app.clinic_id) ?? ''
-
-    // Link "adicionar à agenda" — sem OAuth, gerado on-the-fly
-    let linkAgenda = ''
-    if (app.end_time) {
-      const event = buildAppointmentCalendarEvent({
-        appointmentId: app.id,
-        clinicName,
-        professionalName: prof?.name ?? null,
-        procedureName: proc?.name ?? null,
-        startTimeISO: app.start_time,
-        endTimeISO: app.end_time,
-      })
-      linkAgenda = generateCalendarLinks(getPublicBaseUrl(), event).googleRedirectUrl
-    }
-
     const bodyText = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
@@ -392,7 +349,6 @@ export async function GET(req: NextRequest) {
       dia_semana: dt.weekday,
       link_confirmacao: '', // não usado — substituído por botões interativos
       endereco,
-      link_agenda: linkAgenda,
     }).replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '')
 
     if (dryRun) {

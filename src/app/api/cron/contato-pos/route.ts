@@ -92,15 +92,20 @@ export async function GET(request: Request) {
     const excluirCats: string[] = auto.contato_pos_excluir_categorias || []
     const EXCLUIR_NOMES = ['avalia', 'retorno', 'consulta', ...excluirCats.map((c: string) => c.toLowerCase())]
 
-    // ── MENSAGEM 1: atendimentos de ontem ──────────────────────────────
-    const ontem = getDateBRT(-1)
+    // ── MENSAGEM 1: atendimentos concluídos recentemente ────────────────
+    // Antes filtrava só "ontem" (dia fixo): se o envio não rolasse naquele
+    // único dia, o atendimento nunca mais caía na query e ficava órfão pra
+    // sempre. Agora usa uma janela de lookback (3 dias) — como o filtro
+    // real de dedupe é contato_pos_sent_at IS NULL, todo run reconsidera o
+    // que ainda não foi enviado até conseguir, sem duplicar.
+    const lookbackFloor = getDateBRT(-3)
     const { data: aptsOntem } = await svc
       .from('appointments')
       .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
       .eq('clinic_id', auto.clinic_id)
       .eq('status', 'completed')
-      .gte('start_time', `${ontem}T00:00:00`)
-      .lt('start_time', `${ontem}T23:59:59`)
+      .gte('start_time', `${lookbackFloor}T00:00:00`)
+      .lt('start_time', new Date().toISOString())
       .is('contato_pos_sent_at', null)
 
     for (const apt of aptsOntem || []) {
@@ -150,13 +155,19 @@ export async function GET(request: Request) {
       if (!seqItem.ativo || !seqItem.dias || !seqItem.template) continue
 
       const tipo = `legado_seq_${seqItem.dias}d`
+      // Antes buscava só o dia exato "hoje - X dias" — se não enviasse
+      // naquele dia, o agendamento nunca mais caía na query (órfão pra
+      // sempre). Agora usa uma janela de catch-up de 5 dias; o dedupe real
+      // já é feito pelo unique(appointment_id, tipo) em pos_venda_sent_log,
+      // então alargar a janela não duplica envio, só evita perder.
       const diaAlvo = getDateBRT(-seqItem.dias)
+      const diaAlvoFloor = getDateBRT(-seqItem.dias - 5)
       const { data: aptsSeq } = await svc
         .from('appointments')
         .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
         .eq('clinic_id', auto.clinic_id)
         .eq('status', 'completed')
-        .gte('start_time', `${diaAlvo}T00:00:00`)
+        .gte('start_time', `${diaAlvoFloor}T00:00:00`)
         .lt('start_time', `${diaAlvo}T23:59:59`)
 
       for (const apt of aptsSeq || []) {
