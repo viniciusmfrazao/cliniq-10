@@ -154,7 +154,7 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
   return (
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-        💡 A taxa calcula o valor líquido nas entradas financeiras. O prazo alimenta a Previsão de Recebimento
+        💡 A taxa calcula o valor líquido nas entradas financeiras. O prazo alimenta o Recebíveis Futuros
         (quando o dinheiro cai no caixa). Clique em uma forma de pagamento pra configurar.
       </div>
 
