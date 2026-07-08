@@ -143,8 +143,19 @@ export async function GET(request: Request) {
 
       const msg = renderTemplate(auto.template_contato_pos || '', vars)
       if (!dryRun) {
-        await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
-        sendsThisRun++
+        const sendResult = await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+        if (sendResult.ok) {
+          sendsThisRun++
+        } else {
+          // Falha transitória (pacer anti-ban): desfaz a trava pra o
+          // próximo ciclo tentar de novo — sem isso ficava marcado como
+          // "enviado" sem a mensagem ter saído de fato.
+          if (sendResult.code === 'rate_limited') {
+            await svc.from('appointments').update({ contato_pos_sent_at: null }).eq('id', apt.id)
+          }
+          results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: 'msg1', proc: procName, error: sendResult.error })
+          continue
+        }
       }
       results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: 'msg1', proc: procName })
     }
@@ -202,8 +213,19 @@ export async function GET(request: Request) {
 
         const msg = renderTemplate(seqItem.template, vars)
         if (!dryRun) {
-          await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
-          sendsThisRun++
+          const sendResult = await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+          if (sendResult.ok) {
+            sendsThisRun++
+          } else {
+            // Falha transitória (pacer anti-ban): desfaz o lock (apaga a
+            // linha de log) pra o próximo ciclo tentar de novo — sem isso
+            // ficava marcado como "enviado" sem a mensagem ter saído.
+            if (sendResult.code === 'rate_limited') {
+              await svc.from('pos_venda_sent_log').delete().eq('clinic_id', auto.clinic_id).eq('appointment_id', apt.id).eq('tipo', tipo)
+            }
+            results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: tipo, proc: procName, error: sendResult.error })
+            continue
+          }
         }
         results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: tipo, proc: procName })
       }

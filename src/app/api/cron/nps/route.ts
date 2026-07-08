@@ -424,7 +424,15 @@ export async function GET(req: NextRequest) {
           .from('nps_responses')
           .update({ status: 'error', error: result.error })
           .eq('id', inserted!.id)
-        // NÃO reverte nps_sent_at — evita reenvio duplicado em caso de falha
+        // Falha transitória (pacer anti-ban): desfaz a trava pra o próximo
+        // ciclo tentar de novo. Antes não revertia nunca (pra evitar
+        // reenvio duplicado), mas isso deixava o NPS marcado como "enviado"
+        // sem a mensagem ter saído — mesmo bug encontrado em
+        // appointment-reminders e contato-pos. Só reverte no rate_limited;
+        // outras falhas (número inválido etc.) continuam travadas.
+        if (result.code === 'rate_limited') {
+          await svc.from('appointments').update({ nps_sent_at: null }).eq('id', app.appointment_id)
+        }
         summary.errors.push({
           clinic_id: clinicId,
           appointment_id: app.appointment_id,
