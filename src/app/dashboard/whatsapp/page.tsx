@@ -509,17 +509,30 @@ export default function WhatsAppPage() {
   async function loadConversations(clinicId: string, inboundLinesParam?: InboundLine[]) {
     // Usa as inbound lines passadas como parâmetro ou as do estado
     const effectiveInboundLines = inboundLinesParam ?? waInboundLines
-    const { data } = await supabase
-      .from('eva_conversations')
-      .select('*')
-      .eq('clinic_id', clinicId)
-      .order('created_at', { ascending: false })
 
+    // RPC que já devolve 1 linha por telefone (a mais recente + não lidas),
+    // agregado no servidor — evita o corte de ~1000 linhas que o select cru
+    // sofria (linhas com menos volume, como a da Eva, sumiam da lista quando
+    // a outra linha tinha muita atividade recente).
+    const { data, error } = await supabase.rpc('get_whatsapp_conversation_threads', {
+      p_clinic_id: clinicId,
+    })
+
+    if (error) {
+      console.error('Erro ao carregar conversas:', error)
+      return
+    }
     if (!data) return
 
-    // Agrupa por telefone APENAS (não por linha) — evita duplicatas
-    // Filtra grupos de WhatsApp (IDs de grupo começam com números longos sem 55)
-    const seen = new Set<string>()
+    type ThreadRow = {
+      phone: string
+      content: string | null
+      role: 'user' | 'assistant' | null
+      created_at: string
+      metadata: EvaRow['metadata']
+      unread_count: number
+    }
+
     const convs: Conversation[] = []
     const linesFound = new Set<string>()
 
@@ -529,46 +542,32 @@ export default function WhatsAppPage() {
       effectiveInboundLines.map((l) => l.instance_name)
     )
 
-    // Conta mensagens não lidas por telefone (role='user' após última msg 'assistant')
-    const unreadMap = new Map<string, number>()
-    const lastAssistantMap = new Map<string, string>()
-    for (const r of (data as EvaRow[]).slice().reverse()) {
-      const phone = r.phone ?? ''
-      if (r.role === 'assistant') {
-        lastAssistantMap.set(phone, r.created_at)
-        unreadMap.set(phone, 0) // zera quando Eva/secretária respondeu
-      } else if (r.role === 'user') {
-        const lastAsst = lastAssistantMap.get(phone)
-        if (!lastAsst || r.created_at > lastAsst) {
-          unreadMap.set(phone, (unreadMap.get(phone) ?? 0) + 1)
-        }
-      }
-    }
-
-    for (const r of data as EvaRow[]) {
-      if (!r.content) continue
-      const phone = r.phone ?? ''
+    for (const t of data as ThreadRow[]) {
+      if (!t.content) continue
+      const phone = t.phone ?? ''
       if (phone.length > 15) continue
       if (phone.includes('@g.us')) continue
 
-      const inst = rowInstanceName(r)
+      const row: EvaRow = {
+        id: phone,
+        clinic_id: clinicId,
+        phone,
+        role: t.role,
+        content: t.content,
+        created_at: t.created_at,
+        metadata: t.metadata,
+      }
+      const inst = rowInstanceName(row)
 
       // Filtrar mensagens de instâncias que não são inbound (ex: automações)
-      // Se inst é conhecido e não está nas inbound lines → pula
       if (inboundInstances.size > 0 && inst && !inboundInstances.has(inst)) continue
-      // Se inst é null mas metadata.outbound=true → veio de automação sem instance_name → pula
-      if (inboundInstances.size > 0 && !inst) {
-        const meta = r.metadata as Record<string, unknown> | null
-        if (meta && meta.outbound === true && r.role !== 'user') continue
-      }
 
       if (inst) linesFound.add(inst)
 
-      if (seen.has(phone)) continue
-      seen.add(phone)
-      const conv = buildConversationFromRow(undefined, r)
-      if (conv) convs.push({ ...conv, unread: unreadMap.get(phone) ?? 0 })
+      const conv = buildConversationFromRow(undefined, row)
+      if (conv) convs.push({ ...conv, unread: t.unread_count ?? 0 })
     }
+
     // Buscar nomes dos leads para enriquecer a lista
     const phones = convs.map(c => c.phone).filter(Boolean)
     if (phones.length > 0 && clinicId) {
