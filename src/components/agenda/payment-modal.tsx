@@ -29,6 +29,17 @@ type Props = {
 const FORMAS = ['pix', 'dinheiro', 'credito', 'debito']
 const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', credito: 'Crédito', debito: 'Débito' }
 
+// Mesma lista de Configurações → Taxas de Pagamento — sempre visível,
+// independente de já existir taxa configurada pra bandeira ou não.
+const BANDEIRAS = [
+  { key: 'todas', label: 'Padrão (todas)' },
+  { key: 'visa', label: 'Visa' },
+  { key: 'master', label: 'Mastercard' },
+  { key: 'elo', label: 'Elo' },
+  { key: 'amex', label: 'American Express' },
+  { key: 'hipercard', label: 'Hipercard' },
+]
+
 function uid() { return Math.random().toString(36).slice(2) }
 
 export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, onClose, onSuccess }: Props) {
@@ -76,7 +87,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
       const total = procList.reduce((s, p) => s + p.price, 0)
       const initialValor = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : total
-      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
+      setSplits([{ id: uid(), forma: 'pix', bandeira: 'todas', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
 
       // Todos os procedimentos da clínica (para adicionar no pagamento)
       const { data: clinicProcsData } = await supabase
@@ -329,7 +340,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block">Forma</label>
-                      <select value={s.forma} onChange={e => updateSplit(s.id, { forma: e.target.value, bandeira: '' })} className="input w-full text-sm">
+                      <select value={s.forma} onChange={e => updateSplit(s.id, { forma: e.target.value, bandeira: 'todas' })} className="input w-full text-sm">
                         {FORMAS.map(f => <option key={f} value={f}>{FORMA_LABEL[f]}</option>)}
                       </select>
                     </div>
@@ -340,31 +351,24 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                         className="input w-full text-sm" />
                     </div>
                   </div>
-                  {s.forma === 'credito' && (() => {
-                    const bandeiras = [...new Set(taxas.filter(t => t.forma.startsWith('credito')).map(t => t.bandeira).filter(b => b && b !== 'todas'))]
-                    const temBandeiras = bandeiras.length > 0
-                    return (
-                      <div className={`grid gap-3 ${temBandeiras ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                        {temBandeiras && (
-                          <div>
-                            <label className="text-xs text-slate-500 mb-1 block">Bandeira</label>
-                            <select value={s.bandeira} onChange={e => updateSplit(s.id, { bandeira: e.target.value })} className="input w-full text-sm">
-                              <option value="">Selecione</option>
-                              {bandeiras.map(b => (
-                                <option key={b!} value={b!}>{b}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                        <div>
-                          <label className="text-xs text-slate-500 mb-1 block">Parcelas</label>
-                          <select value={s.parcelas} onChange={e => updateSplit(s.id, { parcelas: parseInt(e.target.value) })} className="input w-full text-sm">
-                            {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => <option key={p} value={p}>{p}x</option>)}
-                          </select>
-                        </div>
+                  {s.forma === 'credito' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Bandeira</label>
+                        <select value={s.bandeira || 'todas'} onChange={e => updateSplit(s.id, { bandeira: e.target.value })} className="input w-full text-sm">
+                          {BANDEIRAS.map(b => (
+                            <option key={b.key} value={b.key}>{b.label}</option>
+                          ))}
+                        </select>
                       </div>
-                    )
-                  })()}
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Parcelas</label>
+                        <select value={s.parcelas} onChange={e => updateSplit(s.id, { parcelas: parseInt(e.target.value) })} className="input w-full text-sm">
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => <option key={p} value={p}>{p}x</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex justify-between text-xs text-slate-500">
                     <span>Taxa: {s.taxa}%</span>
                     <span className="font-medium text-emerald-600">Líquido: {fmt(s.liquido)}</span>
@@ -372,7 +376,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 </div>
               ))}
 
-              <button onClick={() => setSplits(p => [...p, { id: uid(), forma: 'pix', bandeira: '', valor: 0, parcelas: 1, taxa: 0, liquido: 0 }])}
+              <button onClick={() => setSplits(p => [...p, { id: uid(), forma: 'pix', bandeira: 'todas', valor: 0, parcelas: 1, taxa: 0, liquido: 0 }])}
                 className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-violet-300 hover:text-violet-500 transition-colors flex items-center justify-center gap-2">
                 <Icon name="plus" className="w-4 h-4" /> Adicionar forma de pagamento
               </button>
