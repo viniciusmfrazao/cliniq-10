@@ -404,6 +404,18 @@ export async function GET(req: NextRequest) {
       summary.sent++
       void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'ok', details: { appointment_id: app.id, mode: 'buttons' } })
     } else {
+      // Falha transitória (adiado pelo pacer anti-ban): desfaz a trava pra
+      // o próximo ciclo tentar de novo. Sem isso, o agendamento ficava
+      // marcado como "confirmação enviada" sem a mensagem nunca ter saído
+      // — paciente não recebia nada e o sistema achava que tinha enviado.
+      // Outras falhas (ex.: número inválido) permanecem travadas, já que
+      // retentar não resolveria.
+      if (result.code === 'rate_limited') {
+        await svc
+          .from('appointments')
+          .update({ confirmation_sent_at: null })
+          .eq('id', app.id)
+      }
       summary.errors.push({
         clinic_id: app.clinic_id,
         appointment_id: app.id,
