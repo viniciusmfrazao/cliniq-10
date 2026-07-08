@@ -16,6 +16,10 @@ async function asaas(path: string, body?: object) {
   return data
 }
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 export async function POST(req: Request) {
   try {
     const {
@@ -77,36 +81,71 @@ export async function POST(req: Request) {
     if (trialDays > 0) nextDueDate.setDate(nextDueDate.getDate() + trialDays)
     const nextDueDateStr = nextDueDate.toISOString().split('T')[0]
 
-    // 3. Criar checkout de assinatura recorrente
-    // - CREDIT_CARD: cliente cadastra o cartão agora, cobrança automática só em nextDueDate
-    // - PIX: cobrança (QR code) é gerada com vencimento em nextDueDate — não existe "cartão salvo" no pix
-    const checkout = await asaas('/checkouts', {
-      billingTypes: [paymentMethod],
-      chargeTypes: ['RECURRENT'],
-      minutesToExpire: 10080, // 7 dias pra clínica clicar e completar o cadastro
-      callback: {
-        successUrl: 'https://app.clinike.com.br/dashboard?assinatura=ativada',
-        cancelUrl: 'https://app.clinike.com.br/planos',
-        expiredUrl: 'https://app.clinike.com.br/planos',
-      },
-      customer: customerId,
-      items: [
-        {
-          name: `Assinatura Clinike — ${planName}`,
-          description: `Assinatura ${planName} do Clinike`,
-          quantity: 1,
-          value: planPrice,
+    let checkoutUrl: string
+    let checkoutId: string | null = null
+    let asaasSubscriptionId: string | null = null
+
+    if (paymentMethod === 'CREDIT_CARD') {
+      // Checkout hospedado — cliente cadastra o cartão agora, cobrança
+      // automática só em nextDueDate. A Asaas só permite CREDIT_CARD pra
+      // chargeType RECURRENT no checkout hospedado (Pix não tem "cartão
+      // salvo", ver branch abaixo).
+      const checkout = await asaas('/checkouts', {
+        billingTypes: ['CREDIT_CARD'],
+        chargeTypes: ['RECURRENT'],
+        minutesToExpire: 1440, // máximo permitido pela Asaas (24h) pra clínica completar o cadastro
+        callback: {
+          successUrl: 'https://app.clinike.com.br/dashboard?assinatura=ativada',
+          cancelUrl: 'https://app.clinike.com.br/planos',
+          expiredUrl: 'https://app.clinike.com.br/planos',
         },
-      ],
-      subscription: {
-        cycle: billingCycle,
+        customer: customerId,
+        items: [
+          {
+            name: `Assinatura Clinike — ${planName}`,
+            description: `Assinatura ${planName} do Clinike`,
+            quantity: 1,
+            value: planPrice,
+          },
+        ],
+        subscription: {
+          cycle: billingCycle,
+          nextDueDate: nextDueDateStr,
+        },
+      })
+      checkoutId = checkout.id
+      checkoutUrl = `${CHECKOUT_BASE_URL}?id=${checkout.id}`
+    } else {
+      // PIX: não existe checkout hospedado recorrente pra Pix na Asaas —
+      // a cobrança recorrente é criada direto via /subscriptions, e a
+      // Asaas mesma gera e envia a cobrança (QR code) a cada ciclo, com
+      // vencimento em nextDueDate. Buscamos o link da 1ª cobrança gerada
+      // pra poder enviar pra clínica.
+      const subscription = await asaas('/subscriptions', {
+        customer: customerId,
+        billingType: 'PIX',
         nextDueDate: nextDueDateStr,
-      },
-    })
+        value: planPrice,
+        cycle: billingCycle,
+        description: `Assinatura ${planName} do Clinike`,
+      })
+      asaasSubscriptionId = subscription.id
 
-    const checkoutUrl = `${CHECKOUT_BASE_URL}?id=${checkout.id}`
+      // A cobrança é gerada de forma assíncrona — tenta algumas vezes
+      let firstPayment: any = null
+      for (let attempt = 0; attempt < 4 && !firstPayment; attempt++) {
+        if (attempt > 0) await sleep(1500)
+        const payments = await asaas(`/payments?subscription=${subscription.id}`)
+        firstPayment = payments?.data?.[0] || null
+      }
 
-    // 4. Salvar no banco
+      if (!firstPayment?.invoiceUrl) {
+        return NextResponse.json({ ok: false, error: 'Assinatura Pix criada, mas a cobrança ainda não foi gerada pela Asaas. Confira em alguns segundos na tela de assinaturas.' }, { status: 202 })
+      }
+      checkoutUrl = firstPayment.invoiceUrl
+    }
+
+    // 3. Salvar no banco
     const trialEndsAt = trialDays > 0
       ? new Date(Date.now() + trialDays * 86400000).toISOString()
       : null
@@ -114,7 +153,8 @@ export async function POST(req: Request) {
     await svc.from('clinic_subscriptions').upsert({
       clinic_id: clinicId,
       asaas_customer_id: customerId,
-      asaas_checkout_id: checkout.id,
+      asaas_checkout_id: checkoutId,
+      asaas_subscription_id: asaasSubscriptionId,
       asaas_checkout_url: checkoutUrl,
       payment_method: paymentMethod,
       plan_name: planName,
@@ -126,7 +166,7 @@ export async function POST(req: Request) {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'clinic_id' })
 
-    // 5. plan_expires_at = data real da primeira cobrança — é o prazo que
+    // 4. plan_expires_at = data real da primeira cobrança — é o prazo que
     // passa a valer pro aviso/bloqueio no app (ver dashboard/layout.tsx)
     await svc.from('clinics').update({
       plan_expires_at: nextDueDate.toISOString(),
