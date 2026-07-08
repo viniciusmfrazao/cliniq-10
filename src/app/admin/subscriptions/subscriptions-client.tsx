@@ -12,9 +12,10 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 }
 
 export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]; plans: any[] }) {
+  const hasCnpj = (c: any) => !!((c.cnpj || c.settings?.cnpj || '').replace(/\D/g, '').length >= 11)
   const [sending, setSending] = useState<string | null>(null)
   const [modal, setModal] = useState<{ clinicId: string; clinicName: string } | null>(null)
-  const [form, setForm] = useState({ planId: '', planName: '', planPrice: '', billingCycle: 'MONTHLY', trialDays: '30' })
+  const [form, setForm] = useState({ planId: '', planName: '', planPrice: '', billingCycle: 'MONTHLY', trialDays: '30', paymentMethod: 'CREDIT_CARD' })
   const [result, setResult] = useState<{ url?: string; error?: string } | null>(null)
   const [search, setSearch] = useState('')
 
@@ -35,6 +36,7 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
           planPrice: parseFloat(form.planPrice) || plan?.price_monthly || 0,
           billingCycle: form.billingCycle,
           trialDays: parseInt(form.trialDays),
+          paymentMethod: form.paymentMethod,
         }),
       })
       const data = await r.json()
@@ -85,10 +87,17 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-slate-800 truncate">{clinic.name}</p>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>{label}</span>
+                  {!hasCnpj(clinic) && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700" title="Sem CNPJ/CPF cadastrado — não é possível gerar link de cobrança">
+                      ⚠️ sem CNPJ
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 mt-1 flex-wrap">
                   {sub?.plan_name && (
-                    <p className="text-xs text-slate-500">📦 {sub.plan_name} — R$ {sub.plan_price}/mês</p>
+                    <p className="text-xs text-slate-500">
+                      📦 {sub.plan_name} — R$ {sub.plan_price}/mês{sub?.payment_method && ` · ${sub.payment_method === 'PIX' ? 'Pix' : 'Cartão'}`}
+                    </p>
                   )}
                   {sub?.last_payment_at && (
                     <p className="text-xs text-slate-500">💰 Último pagamento: {new Date(sub.last_payment_at).toLocaleDateString('pt-BR')}</p>
@@ -111,7 +120,9 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
                 )}
                 <button
                   onClick={() => { setModal({ clinicId: clinic.id, clinicName: clinic.name }); setResult(null) }}
-                  className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium"
+                  disabled={!hasCnpj(clinic)}
+                  title={!hasCnpj(clinic) ? 'Cadastre o CNPJ/CPF da clínica no admin antes de enviar o link' : undefined}
+                  className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-lg font-medium"
                 >
                   📤 Enviar link
                 </button>
@@ -153,6 +164,35 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
                 <p className="text-xs text-slate-400 mt-1">Pode editar o valor para cobrar diferente do plano padrão</p>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Forma de pagamento</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button"
+                    onClick={() => setForm({ ...form, paymentMethod: 'CREDIT_CARD' })}
+                    className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                      form.paymentMethod === 'CREDIT_CARD'
+                        ? 'bg-violet-600 border-violet-600 text-white'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}>
+                    💳 Cartão
+                  </button>
+                  <button type="button"
+                    onClick={() => setForm({ ...form, paymentMethod: 'PIX' })}
+                    className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                      form.paymentMethod === 'PIX'
+                        ? 'bg-violet-600 border-violet-600 text-white'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}>
+                    🔑 Pix
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  {form.paymentMethod === 'CREDIT_CARD'
+                    ? 'Cliente cadastra o cartão agora; a cobrança acontece só na data abaixo.'
+                    : 'A cobrança Pix é gerada com vencimento na data abaixo (sem cartão salvo).'}
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Cobrança</label>
@@ -163,7 +203,7 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Trial (dias)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">1ª cobrança em (dias)</label>
                   <input type="number" min={0} max={90} value={form.trialDays}
                     onChange={e => setForm({ ...form, trialDays: e.target.value })}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />

@@ -7,8 +7,8 @@ export default async function SubscriptionsPage() {
   const { data: clinics } = await svc
     .from('clinics')
     .select(`
-      id, name, created_at, trial_ends_at, plan_expires_at, billing_whatsapp,
-      clinic_subscriptions(status, plan_name, plan_price, billing_cycle, checkout_sent_at, last_payment_at, asaas_checkout_url, trial_ends_at)
+      id, name, cnpj, settings, created_at, trial_ends_at, plan_expires_at, billing_whatsapp,
+      clinic_subscriptions(status, plan_name, plan_price, billing_cycle, checkout_sent_at, last_payment_at, asaas_checkout_url, payment_method, trial_ends_at)
     `)
     .order('created_at', { ascending: false })
 

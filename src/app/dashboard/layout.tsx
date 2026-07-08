@@ -7,6 +7,7 @@ import ChatWidget from '@/components/ui/ChatWidget'
 import AppProviders from '@/components/layout/AppProviders'
 import WhatsappHealthBanner from '@/components/layout/WhatsappHealthBanner'
 import WhatsappHealthBannerWrapper from '@/components/layout/WhatsappHealthBannerWrapper'
+import BillingOverdueBanner from '@/components/layout/BillingOverdueBanner'
 
 export default async function DashboardLayout({ children, searchParams }: { children: React.ReactNode, searchParams?: { admin?: string } }) {
   const supabase = await createClient()
@@ -33,7 +34,7 @@ export default async function DashboardLayout({ children, searchParams }: { chil
 
   // Run clinic and users queries in PARALLEL (much faster!)
   const [clinicResult, usersResult] = await Promise.all([
-    supabase.from('clinics').select('name, trial_ends_at, settings').eq('id', userData.clinic_id).single(),
+    supabase.from('clinics').select('name, trial_ends_at, plan_expires_at, settings, clinic_subscriptions(status)').eq('id', userData.clinic_id).single(),
     supabase.from('users').select('id, name, role').eq('clinic_id', userData.clinic_id).order('name')
   ])
 
@@ -45,6 +46,20 @@ export default async function DashboardLayout({ children, searchParams }: { chil
   const trialDaysLeft = clinic?.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at).getTime() - Date.now()) / 86400000))
     : 0
+
+  // Bloqueio de acesso por pagamento vencido — só se aplica a clínicas que já
+  // passaram pelo fluxo de assinatura Asaas (clinic_subscriptions existe).
+  // Clínicas legadas (sem assinatura registrada) continuam liberadas pelo
+  // trial_ends_at manual, sem risco de bloqueio por engano.
+  const hasSubscription = Array.isArray(clinic?.clinic_subscriptions) && clinic.clinic_subscriptions.length > 0
+  const daysOverdue = hasSubscription && clinic?.plan_expires_at
+    ? Math.floor((Date.now() - new Date(clinic.plan_expires_at).getTime()) / 86400000)
+    : null
+
+  const BILLING_GRACE_DAYS = 7
+  if (daysOverdue !== null && daysOverdue > BILLING_GRACE_DAYS) {
+    redirect('/planos?trial_expirado=1')
+  }
 
   return (
     <AppProviders
@@ -61,6 +76,10 @@ export default async function DashboardLayout({ children, searchParams }: { chil
             userRole={userData?.role || 'viewer'}
             trialDaysLeft={trialDaysLeft}
             userId={user.id}
+          />
+          <BillingOverdueBanner
+            clinicId={userData.clinic_id}
+            role={userData?.role || 'viewer'}
           />
           <WhatsappHealthBannerWrapper>
             <WhatsappHealthBanner

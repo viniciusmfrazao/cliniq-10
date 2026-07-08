@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 
 const ASAAS_API_KEY = process.env.ASAAS_API_KEY!
 const ASAAS_BASE = 'https://api.asaas.com/v3'
+const CHECKOUT_BASE_URL = 'https://asaas.com/checkoutSession/show'
 
 async function asaas(path: string, body?: object) {
   const res = await fetch(`${ASAAS_BASE}${path}`, {
@@ -17,7 +18,18 @@ async function asaas(path: string, body?: object) {
 
 export async function POST(req: Request) {
   try {
-    const { clinicId, planName, planPrice, billingCycle = 'MONTHLY', trialDays = 0 } = await req.json()
+    const {
+      clinicId,
+      planName,
+      planPrice,
+      billingCycle = 'MONTHLY',
+      trialDays = 0,
+      paymentMethod = 'CREDIT_CARD', // 'CREDIT_CARD' | 'PIX'
+    } = await req.json()
+
+    if (!['CREDIT_CARD', 'PIX'].includes(paymentMethod)) {
+      return NextResponse.json({ ok: false, error: 'Forma de pagamento inválida' }, { status: 400 })
+    }
 
     const svc = createServiceClient()
 
@@ -28,7 +40,7 @@ export async function POST(req: Request) {
     const settings = clinic.settings as any
 
     // Email: settings > fallback
-    const email = settings?.email || `clinica-${clinicId.replace(/-/g,'')}@clinike.com.br`
+    const email = settings?.email || `clinica-${clinicId.replace(/-/g, '')}@clinike.com.br`
 
     // CNPJ: coluna direta > settings > erro
     const rawCnpj = (clinic.cnpj || settings?.cnpj || '').replace(/\D/g, '')
@@ -39,7 +51,7 @@ export async function POST(req: Request) {
     // Telefone: billing_whatsapp > clinic_phone > settings
     const phone = (clinic.billing_whatsapp || clinic.clinic_phone || settings?.phone || '').replace(/\D/g, '')
 
-    // 1. Criar customer na Asaas
+    // 1. Criar (ou reaproveitar) customer na Asaas
     let customerId: string
     const { data: existing } = await svc
       .from('clinic_subscriptions')
@@ -60,24 +72,39 @@ export async function POST(req: Request) {
       customerId = customer.id
     }
 
-    // 2. Calcular data do primeiro vencimento
+    // 2. Calcular data da primeira cobrança (respeitando o trial)
     const nextDueDate = new Date()
     if (trialDays > 0) nextDueDate.setDate(nextDueDate.getDate() + trialDays)
     const nextDueDateStr = nextDueDate.toISOString().split('T')[0]
 
-    // 3. Criar payment link de assinatura
-    const link = await asaas('/paymentLinks', {
-      name: `Clinike — ${planName}`,
-      description: `Assinatura ${planName} do Clinike`,
-      billingType: 'UNDEFINED',
-      chargeType: 'RECURRENT',
-      cycle: billingCycle,
-      value: planPrice,
-      dueDateLimitDays: 5,
-      isAddressRequired: false,
+    // 3. Criar checkout de assinatura recorrente
+    // - CREDIT_CARD: cliente cadastra o cartão agora, cobrança automática só em nextDueDate
+    // - PIX: cobrança (QR code) é gerada com vencimento em nextDueDate — não existe "cartão salvo" no pix
+    const checkout = await asaas('/checkouts', {
+      billingTypes: [paymentMethod],
+      chargeTypes: ['RECURRENT'],
+      minutesToExpire: 10080, // 7 dias pra clínica clicar e completar o cadastro
+      callback: {
+        successUrl: 'https://app.clinike.com.br/dashboard?assinatura=ativada',
+        cancelUrl: 'https://app.clinike.com.br/planos',
+        expiredUrl: 'https://app.clinike.com.br/planos',
+      },
+      customer: customerId,
+      items: [
+        {
+          name: `Assinatura Clinike — ${planName}`,
+          description: `Assinatura ${planName} do Clinike`,
+          quantity: 1,
+          value: planPrice,
+        },
+      ],
+      subscription: {
+        cycle: billingCycle,
+        nextDueDate: nextDueDateStr,
+      },
     })
 
-    const checkoutUrl = link.url || link.paymentLink
+    const checkoutUrl = `${CHECKOUT_BASE_URL}?id=${checkout.id}`
 
     // 4. Salvar no banco
     const trialEndsAt = trialDays > 0
@@ -87,7 +114,9 @@ export async function POST(req: Request) {
     await svc.from('clinic_subscriptions').upsert({
       clinic_id: clinicId,
       asaas_customer_id: customerId,
+      asaas_checkout_id: checkout.id,
       asaas_checkout_url: checkoutUrl,
+      payment_method: paymentMethod,
       plan_name: planName,
       plan_price: planPrice,
       billing_cycle: billingCycle,
@@ -97,12 +126,11 @@ export async function POST(req: Request) {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'clinic_id' })
 
-    // 5. Atualizar plan_expires_at na clínica se trial
-    if (trialDays > 0) {
-      await svc.from('clinics').update({
-        trial_ends_at: trialEndsAt,
-      }).eq('id', clinicId)
-    }
+    // 5. plan_expires_at = data real da primeira cobrança — é o prazo que
+    // passa a valer pro aviso/bloqueio no app (ver dashboard/layout.tsx)
+    await svc.from('clinics').update({
+      plan_expires_at: nextDueDate.toISOString(),
+    }).eq('id', clinicId)
 
     return NextResponse.json({ ok: true, checkoutUrl, customerId })
   } catch (e: any) {
@@ -110,4 +138,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
 }
-
