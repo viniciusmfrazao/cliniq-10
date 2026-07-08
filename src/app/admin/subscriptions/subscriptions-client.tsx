@@ -189,7 +189,7 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
                 <p className="text-xs text-slate-400 mt-1">
                   {form.paymentMethod === 'CREDIT_CARD'
                     ? 'Cliente cadastra o cartão agora; a cobrança acontece só na data abaixo.'
-                    : 'A cobrança Pix é gerada com vencimento na data abaixo (sem cartão salvo).'}
+                    : 'A Asaas gera a cobrança Pix (QR code) com vencimento na data abaixo, a cada ciclo.'}
                 </p>
               </div>
 
