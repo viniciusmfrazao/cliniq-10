@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { parseSupabaseError } from '@/lib/error-messages'
-
+import Icon from '@/components/ui/Icon'
 
 type Taxa = {
   id: string
@@ -11,33 +10,28 @@ type Taxa = {
   bandeira: string
   taxa_percentual: number
   dias_repasse: number | null
+  modo_repasse: 'fixo' | 'parcelado' | null
 }
 
-// Prazo padrão de repasse (dias até a 1ª/única parcela cair no caixa)
-// quando a clínica ainda não configurou nada pra essa forma.
-function defaultDiasRepasse(forma: string): number {
-  if (forma === 'pix' || forma === 'dinheiro' || forma === 'boleto') return 0
-  if (forma === 'debito') return 1
-  return 30 // crédito parcelado
-}
+type Config = { taxa: number; dias: number; modo: 'fixo' | 'parcelado' }
 
 const FORMAS = [
-  { key: 'pix', label: 'Pix' },
-  { key: 'dinheiro', label: 'Dinheiro' },
-  { key: 'boleto', label: 'Boleto' },
-  { key: 'debito', label: 'Débito' },
-  { key: 'credito_1x', label: 'Crédito 1x' },
-  { key: 'credito_2x', label: 'Crédito 2x' },
-  { key: 'credito_3x', label: 'Crédito 3x' },
-  { key: 'credito_4x', label: 'Crédito 4x' },
-  { key: 'credito_5x', label: 'Crédito 5x' },
-  { key: 'credito_6x', label: 'Crédito 6x' },
-  { key: 'credito_7x', label: 'Crédito 7x' },
-  { key: 'credito_8x', label: 'Crédito 8x' },
-  { key: 'credito_9x', label: 'Crédito 9x' },
-  { key: 'credito_10x', label: 'Crédito 10x' },
-  { key: 'credito_11x', label: 'Crédito 11x' },
-  { key: 'credito_12x', label: 'Crédito 12x' },
+  { key: 'pix', label: 'Pix', parcelavel: false },
+  { key: 'dinheiro', label: 'Dinheiro', parcelavel: false },
+  { key: 'boleto', label: 'Boleto', parcelavel: false },
+  { key: 'debito', label: 'Débito', parcelavel: false },
+  { key: 'credito_1x', label: 'Crédito 1x', parcelavel: true, n: 1 },
+  { key: 'credito_2x', label: 'Crédito 2x', parcelavel: true, n: 2 },
+  { key: 'credito_3x', label: 'Crédito 3x', parcelavel: true, n: 3 },
+  { key: 'credito_4x', label: 'Crédito 4x', parcelavel: true, n: 4 },
+  { key: 'credito_5x', label: 'Crédito 5x', parcelavel: true, n: 5 },
+  { key: 'credito_6x', label: 'Crédito 6x', parcelavel: true, n: 6 },
+  { key: 'credito_7x', label: 'Crédito 7x', parcelavel: true, n: 7 },
+  { key: 'credito_8x', label: 'Crédito 8x', parcelavel: true, n: 8 },
+  { key: 'credito_9x', label: 'Crédito 9x', parcelavel: true, n: 9 },
+  { key: 'credito_10x', label: 'Crédito 10x', parcelavel: true, n: 10 },
+  { key: 'credito_11x', label: 'Crédito 11x', parcelavel: true, n: 11 },
+  { key: 'credito_12x', label: 'Crédito 12x', parcelavel: true, n: 12 },
 ]
 
 const BANDEIRAS = [
@@ -49,64 +43,113 @@ const BANDEIRAS = [
   { key: 'hipercard', label: 'Hipercard' },
 ]
 
+const DIAS_PRESETS = [
+  { dias: 0, label: 'Hoje' },
+  { dias: 1, label: 'Amanhã' },
+  { dias: 2, label: '2 dias' },
+  { dias: 3, label: '3 dias' },
+  { dias: 4, label: '4 dias' },
+  { dias: 5, label: '5 dias' },
+  { dias: 6, label: '6 dias' },
+  { dias: 7, label: '7 dias' },
+  { dias: 14, label: '14 dias' },
+  { dias: 21, label: '21 dias' },
+  { dias: 30, label: '30 dias' },
+  { dias: 31, label: '31 dias' },
+  { dias: 60, label: '60 dias' },
+  { dias: 90, label: '90 dias' },
+]
+
+function defaultConfig(forma: string): Config {
+  if (forma === 'pix' || forma === 'dinheiro' || forma === 'boleto') return { taxa: 0, dias: 0, modo: 'fixo' }
+  if (forma === 'debito') return { taxa: 0, dias: 1, modo: 'fixo' }
+  return { taxa: 0, dias: 30, modo: 'parcelado' } // crédito
+}
+
+function prazoResumo(c: Config, n: number): string {
+  if (c.dias === 0 && c.modo === 'fixo') return 'Recebe na hora'
+  if (c.modo === 'parcelado' && n > 1) {
+    const ultima = 30 + (n - 1) * 30
+    return `Parcelado: 1ª em 30 dias, última em ${ultima} dias`
+  }
+  return `Recebe em ${c.dias} dia${c.dias > 1 ? 's' : ''} (valor cheio)`
+}
+
 export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string; initialTaxas: Taxa[] }) {
   const supabase = createClient()
-  const [taxas, setTaxas] = useState<Record<string, number>>(
-    Object.fromEntries(initialTaxas.map(t => [`${t.forma}__${t.bandeira}`, t.taxa_percentual]))
+
+  const [configs, setConfigs] = useState<Record<string, Config>>(
+    Object.fromEntries(initialTaxas.map(t => [
+      `${t.forma}__${t.bandeira}`,
+      { taxa: t.taxa_percentual, dias: t.dias_repasse ?? defaultConfig(t.forma).dias, modo: t.modo_repasse ?? defaultConfig(t.forma).modo },
+    ]))
   )
-  const [dias, setDias] = useState<Record<string, number>>(
-    Object.fromEntries(initialTaxas.map(t => [`${t.forma}__${t.bandeira}`, t.dias_repasse ?? defaultDiasRepasse(t.forma)]))
-  )
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [bandeira, setBandeira] = useState('todas')
+  const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [savedFlash, setSavedFlash] = useState(false)
 
-  function getTaxa(forma: string) {
-    return taxas[`${forma}__${bandeira}`] ?? 0
+  // Modal
+  const [modalForma, setModalForma] = useState<string | null>(null)
+  const [draft, setDraft] = useState<Config>({ taxa: 0, dias: 30, modo: 'parcelado' })
+
+  function getConfig(formaKey: string): Config {
+    return configs[`${formaKey}__${bandeira}`] || defaultConfig(formaKey)
   }
 
-  function setTaxa(forma: string, valor: number) {
-    setTaxas(p => ({ ...p, [`${forma}__${bandeira}`]: valor }))
+  function openModal(formaKey: string) {
+    setModalForma(formaKey)
+    setDraft(getConfig(formaKey))
   }
 
-  function getDias(forma: string) {
-    const key = `${forma}__${bandeira}`
-    return dias[key] ?? defaultDiasRepasse(forma)
-  }
-
-  function setDia(forma: string, valor: number) {
-    setDias(p => ({ ...p, [`${forma}__${bandeira}`]: valor }))
-  }
-
-  async function handleSave() {
-    setSaving(true)
-    // União das chaves de taxa e de prazo — uma configuração pode existir sem a outra
-    const keys = new Set([...Object.keys(taxas), ...Object.keys(dias)])
-    const rows = Array.from(keys).map(key => {
-      const [forma, band] = key.split('__')
-      return {
-        clinic_id: clinicId,
-        forma,
-        bandeira: band || 'todas',
-        taxa_percentual: taxas[key] ?? 0,
-        dias_repasse: dias[key] ?? defaultDiasRepasse(forma),
-      }
-    })
-
+  async function persist(formaKey: string, cfg: Config) {
+    setSavingKey(formaKey)
     const { error } = await supabase
       .from('taxas_pagamento')
-      .upsert(rows, { onConflict: 'clinic_id,forma,bandeira' })
+      .upsert({
+        clinic_id: clinicId,
+        forma: formaKey,
+        bandeira,
+        taxa_percentual: cfg.taxa,
+        dias_repasse: cfg.dias,
+        modo_repasse: cfg.modo,
+      }, { onConflict: 'clinic_id,forma,bandeira' })
 
-    if (error) alert('Erro ao salvar: ' + error.message)
-    else { setSaved(true); setTimeout(() => setSaved(false), 3000) }
-    setSaving(false)
+    setSavingKey(null)
+    if (error) { alert('Erro ao salvar: ' + error.message); return false }
+    setConfigs(p => ({ ...p, [`${formaKey}__${bandeira}`]: cfg }))
+    setSavedFlash(true)
+    setTimeout(() => setSavedFlash(false), 2000)
+    return true
   }
+
+  async function handleSalvar() {
+    if (!modalForma) return
+    const ok = await persist(modalForma, draft)
+    if (ok) setModalForma(null)
+  }
+
+  async function handleSalvarProxima() {
+    if (!modalForma) return
+    const atual = FORMAS.find(f => f.key === modalForma)
+    if (!atual?.parcelavel) { handleSalvar(); return }
+    const ok = await persist(modalForma, draft)
+    if (!ok) return
+    const proximo = FORMAS.find(f => f.parcelavel && (f as any).n === (atual as any).n + 1)
+    if (!proximo) { setModalForma(null); return }
+    // Mantém taxa/dias/modo como sugestão de partida pra próxima parcela
+    setModalForma(proximo.key)
+    setDraft(getConfig(proximo.key).taxa > 0 || getConfig(proximo.key).dias !== defaultConfig(proximo.key).dias
+      ? getConfig(proximo.key)
+      : draft)
+  }
+
+  const modalFormaObj = FORMAS.find(f => f.key === modalForma)
 
   return (
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-        💡 A taxa calcula o valor líquido nas entradas financeiras. O prazo em dias
-        alimenta a Previsão de Recebimento (quando o dinheiro cai no caixa). Configure por bandeira se variam.
+        💡 A taxa calcula o valor líquido nas entradas financeiras. O prazo alimenta a Previsão de Recebimento
+        (quando o dinheiro cai no caixa). Clique em uma forma de pagamento pra configurar.
       </div>
 
       {/* Seletor de bandeira */}
@@ -126,65 +169,160 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
         </div>
       </div>
 
-      {/* Tabela de taxas */}
+      {/* Lista de formas — cada linha abre o modal de configuração */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="grid grid-cols-3 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
           <div>Forma de pagamento</div>
-          <div>Taxa (%)</div>
-          <div>Dias para receber</div>
+          <div>Taxa</div>
+          <div className="hidden sm:block">Prazo</div>
+          <div />
         </div>
-        {FORMAS.map((forma, i) => (
-          <div key={forma.key}
-            className={`grid grid-cols-3 items-center px-4 py-3 ${i < FORMAS.length - 1 ? 'border-b border-slate-100' : ''}`}>
-            <div className="text-sm font-medium text-slate-800">{forma.label}</div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.01}
-                value={getTaxa(forma.key)}
-                onChange={e => setTaxa(forma.key, parseFloat(e.target.value) || 0)}
-                className="w-24 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-              />
-              <span className="text-sm text-slate-500">%</span>
-              {getTaxa(forma.key) > 0 && (
-                <span className="text-xs text-slate-400">
-                  = R$ {(getTaxa(forma.key)).toFixed(2)} em R$ 100,00
-                </span>
+        {FORMAS.map((forma, i) => {
+          const cfg = getConfig(forma.key)
+          const configurado = !!configs[`${forma.key}__${bandeira}`]
+          return (
+            <button key={forma.key} onClick={() => openModal(forma.key)}
+              className={`w-full grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center px-4 py-3 text-left hover:bg-slate-50 transition-colors ${
+                i < FORMAS.length - 1 ? 'border-b border-slate-100' : ''
+              }`}>
+              <div className="text-sm font-medium text-slate-800">{forma.label}</div>
+              <div className={`text-sm ${configurado ? 'text-slate-900 font-semibold' : 'text-slate-300'}`}>
+                {configurado ? `${cfg.taxa}%` : '—'}
+              </div>
+              <div className={`hidden sm:block text-xs ${configurado ? 'text-slate-500' : 'text-slate-300'}`}>
+                {configurado ? prazoResumo(cfg, (forma as any).n || 1) : 'Não configurado'}
+              </div>
+              <Icon name="edit" className="w-4 h-4 text-slate-300 justify-self-end" />
+            </button>
+          )
+        })}
+      </div>
+
+      {savedFlash && (
+        <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+          <Icon name="check" className="w-4 h-4" /> Salvo!
+        </div>
+      )}
+
+      {/* Modal de configuração */}
+      {modalForma && modalFormaObj && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setModalForma(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-900">Configurar Taxa</h3>
+              <button onClick={() => setModalForma(null)} className="p-1.5 hover:bg-slate-100 rounded-lg transition">
+                <Icon name="x" className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <p className="text-center text-sm font-semibold text-violet-600">
+                Configurando: {BANDEIRAS.find(b => b.key === bandeira)?.label}
+              </p>
+
+              {modalFormaObj.parcelavel ? (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Número de Parcelas</label>
+                  <select
+                    value={modalForma}
+                    onChange={e => openModal(e.target.value)}
+                    className="input w-full"
+                  >
+                    {FORMAS.filter(f => f.parcelavel).map(f => (
+                      <option key={f.key} value={f.key}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 mb-1">Forma de pagamento</p>
+                  <p className="text-sm text-slate-500">{modalFormaObj.label}</p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                  Você recebe em:
+                  <span title="Dias corridos até o valor entrar no seu financeiro.">
+                    <Icon name="info" className="w-3.5 h-3.5 text-slate-400" />
+                  </span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {modalFormaObj.parcelavel && (modalFormaObj as any).n > 1 && (
+                    <button
+                      onClick={() => setDraft(d => ({ ...d, modo: 'parcelado', dias: 30 }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                        draft.modo === 'parcelado'
+                          ? 'bg-violet-600 border-violet-600 text-white'
+                          : 'bg-white border-violet-300 text-violet-600 hover:bg-violet-50'
+                      }`}>
+                      CONFORME PARCELAS
+                    </button>
+                  )}
+                  {DIAS_PRESETS.map(p => (
+                    <button key={p.dias}
+                      onClick={() => setDraft(d => ({ ...d, modo: 'fixo', dias: p.dias }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                        draft.modo === 'fixo' && draft.dias === p.dias
+                          ? 'bg-slate-800 border-slate-800 text-white'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}>
+                      {p.label.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+
+                {draft.modo === 'parcelado' && modalFormaObj.parcelavel && (
+                  <p className="text-sm text-blue-600 mt-3">
+                    Com esta opção, a primeira parcela cairá no financeiro em 30 dias, a segunda em 60 dias e assim por diante
+                    {(modalFormaObj as any).n > 2 ? `, até a ${(modalFormaObj as any).n}ª em ${30 * (modalFormaObj as any).n} dias.` : '.'}
+                  </p>
+                )}
+                {draft.modo === 'fixo' && (
+                  <p className="text-sm text-slate-500 mt-3">
+                    {draft.dias === 0
+                      ? 'O valor cheio cai no financeiro no mesmo dia da venda.'
+                      : `O valor cheio cai no financeiro ${draft.dias} dia${draft.dias > 1 ? 's' : ''} após a venda, de uma vez.`}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Taxa (%)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min={0} max={100} step={0.01}
+                    value={draft.taxa}
+                    onChange={e => setDraft(d => ({ ...d, taxa: parseFloat(e.target.value) || 0 }))}
+                    className="input w-28 text-center"
+                  />
+                  <span className="text-sm text-slate-500">%</span>
+                  {draft.taxa > 0 && (
+                    <span className="text-xs text-slate-400">= R$ {draft.taxa.toFixed(2)} em R$ 100,00</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100">
+              <button onClick={() => setModalForma(null)}
+                className="px-5 py-2.5 border border-violet-300 text-violet-600 rounded-xl font-semibold text-sm hover:bg-violet-50 transition-colors">
+                Fechar
+              </button>
+              <button onClick={handleSalvar} disabled={savingKey === modalForma}
+                className="px-5 py-2.5 bg-slate-200 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-300 disabled:opacity-50 transition-colors">
+                {savingKey === modalForma ? 'Salvando...' : 'Salvar'}
+              </button>
+              {modalFormaObj.parcelavel && (modalFormaObj as any).n < 12 && (
+                <button onClick={handleSalvarProxima} disabled={savingKey === modalForma}
+                  className="px-5 py-2.5 bg-violet-600 text-white rounded-xl font-semibold text-sm hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                  Salvar & Próxima Parcela
+                </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                max={365}
-                step={1}
-                value={getDias(forma.key)}
-                onChange={e => setDia(forma.key, parseInt(e.target.value) || 0)}
-                className="w-20 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-              />
-              <span className="text-sm text-slate-500">
-                {getDias(forma.key) === 0 ? 'na hora' : `dia${getDias(forma.key) > 1 ? 's' : ''}`}
-              </span>
-            </div>
           </div>
-        ))}
-      </div>
-      <p className="text-xs text-slate-500">
-        Para crédito parcelado, é o prazo até a 1ª parcela cair — as demais parcelas caem a cada 30 dias.
-        Usado na Previsão de Recebimento.
-      </p>
-
-      <div className="flex justify-end items-center gap-3">
-        {saved && <span className="text-sm text-emerald-600 font-medium">✓ Salvo!</span>}
-        <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2.5 bg-violet-600 text-white rounded-xl font-semibold text-sm hover:bg-violet-700 disabled:opacity-50 transition-colors">
-          {saving ? 'Salvando...' : 'Salvar taxas'}
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
-
-
