@@ -616,6 +616,75 @@ export async function POST(
         }
         // ─────────────────────────────────────────────────────────────────
 
+        // ─── DETECÇÃO AUTOMÁTICA DE ORIGEM (lead_source_rules) ───────────
+        // Match de hashtag/frase configurada pela clínica na mensagem do
+        // paciente. Funciona pra QUALQUER clínica (com ou sem Eva) porque o
+        // lead é criado aqui no webhook independente do módulo eva_ia. A
+        // atribuição em si acontece no bloco do lead mais abaixo. Hashtags
+        // são removidas do content pra Eva/inbox não exibirem o código
+        // (metadata.caption preserva o texto original).
+        type SourceRule = {
+          id: string
+          source_id: string
+          match_type: 'hashtag' | 'contains' | 'exact'
+          pattern: string
+          priority: number
+        }
+        let matchedSourceRule: SourceRule | null = null
+        let sourceDetailOriginal: string | null = null
+        if (!fromMe && (parsed.text?.trim() || transcription)) {
+          try {
+            const { data: rules } = await svc
+              .from('lead_source_rules')
+              .select('id, source_id, match_type, pattern, priority')
+              .eq('clinic_id', clinicId)
+              .eq('active', true)
+              .order('priority', { ascending: false })
+            if (rules && rules.length > 0) {
+              const norm = (s: string) =>
+                s
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '')
+                  .toLowerCase()
+                  .trim()
+              const normContent = norm(content)
+              for (const r of rules as SourceRule[]) {
+                const p = norm(r.pattern)
+                if (!p) continue
+                const hit =
+                  r.match_type === 'exact'
+                    ? normContent === p
+                    : normContent.includes(p)
+                if (hit) {
+                  matchedSourceRule = r
+                  sourceDetailOriginal = content.slice(0, 240)
+                  if (r.match_type === 'hashtag') {
+                    const esc = r.pattern
+                      .trim()
+                      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                    content = content
+                      .replace(new RegExp(esc, 'gi'), '')
+                      .replace(/\s{2,}/g, ' ')
+                      .trim()
+                    // Mensagem era só o código -> vira saudação neutra pra
+                    // Eva não receber string vazia
+                    if (!content) content = 'Olá!'
+                  }
+                  debugTrace.push(
+                    `source rule hit: "${r.pattern}" -> ${r.source_id}`,
+                  )
+                  break
+                }
+              }
+            }
+          } catch (err) {
+            internalErrors.push(
+              `source rules: ${err instanceof Error ? err.message : String(err)}`,
+            )
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────
+
         const finalMime = cleanMimeType(mimetype) ?? cleanMimeType(parsed.mimetype)
         const baseMetadata = {
           evolution_message_id: messageId,
@@ -903,7 +972,7 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
           {
             const leadRes = await svc
               .from('leads')
-              .select('id, name, status, eva_pause_until, needs_human_review')
+              .select('id, name, status, source, eva_pause_until, needs_human_review')
               .eq('clinic_id', clinicId)
               .eq('phone', phone)
               .order('created_at', { ascending: false })
@@ -937,7 +1006,8 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
                 clinic_id: clinicId,
                 name: pushName || 'Lead WhatsApp',
                 phone,
-                source: 'whatsapp',
+                source: matchedSourceRule?.source_id ?? 'whatsapp',
+                source_detail: matchedSourceRule ? sourceDetailOriginal : null,
                 status: 'new',
                 whatsapp_instance: instance,
                 notes: `Primeira mensagem: ${content.slice(0, 240)}`,
@@ -947,7 +1017,16 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
               if (insertLead.error) {
                 internalErrors.push(`insert leads: ${insertLead.error.message}`)
               } else {
-                debugTrace.push('lead created')
+                debugTrace.push(
+                  matchedSourceRule
+                    ? `lead created (source=${matchedSourceRule.source_id})`
+                    : 'lead created',
+                )
+                if (matchedSourceRule) {
+                  void svc.rpc('increment_source_rule_hit', {
+                    rule_id: matchedSourceRule.id,
+                  })
+                }
               }
             } else {
               // Touch no lead existente: atualiza last_contact_at, e se o nome
@@ -975,6 +1054,23 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
               // (sobrescreve cooldown anterior pra renovar a janela).
               if (npsCooldownUntil) {
                 patch.eva_pause_until = npsCooldownUntil
+              }
+              // Atribuição de origem em lead existente: só sobrescreve se a
+              // origem atual é genérica ('whatsapp' ou vazia). Lead antigo
+              // que volta clicando num anúncio novo é re-atribuído — isso é
+              // atribuição correta de re-engajamento.
+              if (
+                matchedSourceRule &&
+                (!leadRes.data.source || leadRes.data.source === 'whatsapp')
+              ) {
+                patch.source = matchedSourceRule.source_id
+                patch.source_detail = sourceDetailOriginal
+                void svc.rpc('increment_source_rule_hit', {
+                  rule_id: matchedSourceRule.id,
+                })
+                debugTrace.push(
+                  `lead re-attributed (source=${matchedSourceRule.source_id})`,
+                )
               }
               const updLead = await svc
                 .from('leads')
