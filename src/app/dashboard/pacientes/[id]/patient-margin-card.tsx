@@ -33,18 +33,26 @@ export default async function PatientMarginCard({
     .select('valor_liquido, appointment_id')
     .in('appointment_id', appointmentIds)
 
-  // 3a. Custo via appointment_products
-  const { data: usedProducts } = await supabase
-    .from('appointment_products')
-    .select('appointment_id, quantity, products(cost_price)')
-    .in('appointment_id', appointmentIds)
-
-  // 3b. Custo via stock_movements (injetáveis pelo mapa)
+  // 3. Custo de estoque: stock_movements é o ledger real (o que de fato saiu do estoque).
+  // appointment_products é só a "receita" definida no procedimento — quando o consumo já
+  // gerou stock_movements pro mesmo atendimento, usar só o movement pra não contar 2x.
   const { data: stockMovements } = await supabase
     .from('stock_movements')
     .select('appointment_id, quantity, products(cost_price)')
     .in('appointment_id', appointmentIds)
-    .eq('type', 'saida')
+    .in('type', ['saida', 'uso_atendimento'])
+
+  const appointmentsComMovimento = new Set((stockMovements || []).map((sm) => sm.appointment_id))
+
+  const { data: usedProductsRaw } = await supabase
+    .from('appointment_products')
+    .select('appointment_id, quantity, products(cost_price)')
+    .in('appointment_id', appointmentIds)
+
+  // Só entra na conta se aquele atendimento NÃO tiver stock_movement próprio (evita dupla contagem)
+  const usedProducts = (usedProductsRaw || []).filter(
+    (up) => !appointmentsComMovimento.has(up.appointment_id)
+  )
 
   // 4. Meses distintos dos atendimentos
   const months = [...new Set(appointments.map((a) => a.start_time.substring(0, 7)))]
@@ -254,3 +262,4 @@ export default async function PatientMarginCard({
     </div>
   )
 }
+
