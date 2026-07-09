@@ -270,6 +270,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [showSettings, setShowSettings] = useState(false)
   const [showLegend, setShowLegend] = useState(false)
   const [showBell, setShowBell] = useState(false)
+  // Filtro de origem (fonte) + período — afeta stats, kanban, lista e relatório
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [dateFrom, setDateFrom] = useState<string>('')
+  const [dateTo, setDateTo] = useState<string>('')
+  const [showSourceBreakdown, setShowSourceBreakdown] = useState(false)
   // Drag & drop nativo HTML5 — usado pra mover lead entre colunas do Kanban
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null)
 
@@ -419,38 +424,70 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
       ? leads.filter(l => l.whatsapp_instance === crmLine)
       : leads.filter(l => !l.whatsapp_instance || !otherCrmInstances.includes(l.whatsapp_instance))
 
+  // Filtro de origem + período — aplicado em cima da linha selecionada e
+  // ANTES de qualquer outro filtro/stat, então cascata automaticamente pra
+  // stats, kanban, lista e relatório sem precisar duplicar lógica.
+  const dateFromTs = dateFrom ? new Date(dateFrom + 'T00:00:00').getTime() : null
+  const dateToTs = dateTo ? new Date(dateTo + 'T23:59:59').getTime() : null
+  const leadsInScope = leadsForLine.filter(l => {
+    if (sourceFilter !== 'all' && l.source !== sourceFilter) return false
+    if (dateFromTs || dateToTs) {
+      const created = new Date(l.created_at).getTime()
+      if (dateFromTs && created < dateFromTs) return false
+      if (dateToTs && created > dateToTs) return false
+    }
+    return true
+  })
+
+  // Contagem de leads por fonte, respeitando o período selecionado (mas não
+  // o próprio sourceFilter, senão o breakdown sempre mostraria 100% numa
+  // fonte só). Usada no painel "Leads por origem".
+  const leadsForSourceBreakdown = leadsForLine.filter(l => {
+    if (dateFromTs || dateToTs) {
+      const created = new Date(l.created_at).getTime()
+      if (dateFromTs && created < dateFromTs) return false
+      if (dateToTs && created > dateToTs) return false
+    }
+    return true
+  })
+  const sourceBreakdown = SOURCES.map(s => ({
+    ...s,
+    count: leadsForSourceBreakdown.filter(l => l.source === s.id).length,
+    converted: leadsForSourceBreakdown.filter(l => l.source === s.id && l.status === 'converted').length,
+  })).filter(s => s.count > 0).sort((a, b) => b.count - a.count)
+
   // Stats — sempre da linha selecionada, nunca mistura com outra linha do CRM
   const stats = {
-    total: leadsForLine.length,
-    new: leadsForLine.filter(l => l.status === 'new').length,
-    contacted: leadsForLine.filter(l => l.status === 'contacted').length,
-    scheduled: leadsForLine.filter(l => l.status === 'scheduled').length,
-    converted: leadsForLine.filter(l => l.status === 'converted').length,
-    lost: leadsForLine.filter(l => l.status === 'lost').length,
+    total: leadsInScope.length,
+    new: leadsInScope.filter(l => l.status === 'new').length,
+    contacted: leadsInScope.filter(l => l.status === 'contacted').length,
+    scheduled: leadsInScope.filter(l => l.status === 'scheduled').length,
+    converted: leadsInScope.filter(l => l.status === 'converted').length,
+    lost: leadsInScope.filter(l => l.status === 'lost').length,
     // Conversao: % do total de leads que viraram cliente.
     // (Antes era convertidos/(convertidos+perdidos), o que dava 100% enganoso
     //  quando os outros leads ainda estavam em conversa. Agora reflete a
     //  performance real do funil considerando todo mundo.)
     conversionRate:
-      leadsForLine.length > 0
-        ? Math.round((leadsForLine.filter(l => l.status === 'converted').length / leadsForLine.length) * 100)
+      leadsInScope.length > 0
+        ? Math.round((leadsInScope.filter(l => l.status === 'converted').length / leadsInScope.length) * 100)
         : 0,
     // Eva IA stats — temperatura do lead (priority calculada pela IA)
-    hotLeads: leadsForLine.filter(l => l.ai_priority === 'hot').length,
-    warmLeads: leadsForLine.filter(l => l.ai_priority === 'warm').length,
-    coldLeads: leadsForLine.filter(l => l.ai_priority === 'cold').length,
-    estimatedValue: leadsForLine.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
-    pendingContact: leadsForLine.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() }).length,
+    hotLeads: leadsInScope.filter(l => l.ai_priority === 'hot').length,
+    warmLeads: leadsInScope.filter(l => l.ai_priority === 'warm').length,
+    coldLeads: leadsInScope.filter(l => l.ai_priority === 'cold').length,
+    estimatedValue: leadsInScope.filter(l => l.status !== 'lost').reduce((sum, l) => sum + (l.estimated_value || 0), 0),
+    pendingContact: leadsInScope.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() }).length,
     // Atendimento humano (Eva escalou)
-    humanReview: leadsForLine.filter(l => l.needs_human_review === true).length,
+    humanReview: leadsInScope.filter(l => l.needs_human_review === true).length,
     // Followup buckets (Eva aguardando resposta) — 5 estagios
-    followupTotal: leadsForLine.filter(isInFollowup).length,
-    followup2h: leadsForLine.filter(l => followupBucket(l) === 'fu_2h').length,
-    followup4h: leadsForLine.filter(l => followupBucket(l) === 'fu_4h').length,
-    followup48h: leadsForLine.filter(l => followupBucket(l) === 'fu_48h').length,
-    followup5d: leadsForLine.filter(l => followupBucket(l) === 'fu_5d').length,
-    followup10d: leadsForLine.filter(l => followupBucket(l) === 'fu_10d').length,
-    retornoAgendado: leadsForLine.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date()).length,
+    followupTotal: leadsInScope.filter(isInFollowup).length,
+    followup2h: leadsInScope.filter(l => followupBucket(l) === 'fu_2h').length,
+    followup4h: leadsInScope.filter(l => followupBucket(l) === 'fu_4h').length,
+    followup48h: leadsInScope.filter(l => followupBucket(l) === 'fu_48h').length,
+    followup5d: leadsInScope.filter(l => followupBucket(l) === 'fu_5d').length,
+    followup10d: leadsInScope.filter(l => followupBucket(l) === 'fu_10d').length,
+    retornoAgendado: leadsInScope.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date()).length,
   }
 
   const isFollowupFilter = (f: string) =>
@@ -465,61 +502,61 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
   const filteredLeads =
     filter === 'all'
-      ? leadsForLine
+      ? leadsInScope
       : filter === 'retorno_agendado'
-        ? leadsForLine.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date())
+        ? leadsInScope.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date())
       : filter === 'human_review'
-        ? leadsForLine.filter(l => l.needs_human_review === true)
+        ? leadsInScope.filter(l => l.needs_human_review === true)
         : filter === 'hot' || filter === 'warm' || filter === 'cold'
-          ? leadsForLine.filter(l => l.ai_priority === filter)
+          ? leadsInScope.filter(l => l.ai_priority === filter)
           : filter === 'pending_contact'
-            ? leadsForLine.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() })
+            ? leadsInScope.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() })
             : filter === 'followup_all'
-              ? leadsForLine.filter(isInFollowup)
+              ? leadsInScope.filter(isInFollowup)
               : isFollowupFilter(filter)
-                ? leadsForLine.filter(l => followupBucket(l) === filter)
+                ? leadsInScope.filter(l => followupBucket(l) === filter)
                 : filter === 'no_contact_7'
-                ? leadsForLine.filter(l => {
+                ? leadsInScope.filter(l => {
                     if (!l.last_contact_at) return true
                     return (Date.now() - new Date(l.last_contact_at).getTime()) > 7 * 24 * 60 * 60 * 1000
                   })
                 : filter === 'no_contact_14'
-                  ? leadsForLine.filter(l => {
+                  ? leadsInScope.filter(l => {
                       if (!l.last_contact_at) return true
                       return (Date.now() - new Date(l.last_contact_at).getTime()) > 14 * 24 * 60 * 60 * 1000
                     })
                   : filter === 'no_contact_30'
-                    ? leadsForLine.filter(l => {
+                    ? leadsInScope.filter(l => {
                         if (!l.last_contact_at) return true
                         return (Date.now() - new Date(l.last_contact_at).getTime()) > 30 * 24 * 60 * 60 * 1000
                       })
                     : filter === 'eva_paused'
-                      ? leadsForLine.filter(l => l.eva_pause_until && new Date(l.eva_pause_until) > new Date())
-                      : leadsForLine.filter(l => l.status === filter)
+                      ? leadsInScope.filter(l => l.eva_pause_until && new Date(l.eva_pause_until) > new Date())
+                      : leadsInScope.filter(l => l.status === filter)
 
   // Agrupar por stage para Kanban (respeita os filtros especiais)
   const leadsForKanban =
     filter === 'retorno_agendado'
-      ? leadsForLine.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date())
+      ? leadsInScope.filter(l => l.eva_pause_until != null && new Date(l.eva_pause_until) > new Date())
       : filter === 'human_review'
-      ? leadsForLine.filter(l => l.needs_human_review === true)
+      ? leadsInScope.filter(l => l.needs_human_review === true)
       : filter === 'hot' || filter === 'warm' || filter === 'cold'
-        ? leadsForLine.filter(l => l.ai_priority === filter)
+        ? leadsInScope.filter(l => l.ai_priority === filter)
         : filter === 'pending_contact'
-          ? leadsForLine.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() })
+          ? leadsInScope.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() })
           : filter === 'followup_all'
-            ? leadsForLine.filter(isInFollowup)
+            ? leadsInScope.filter(isInFollowup)
             : isFollowupFilter(filter)
-              ? leadsForLine.filter(l => followupBucket(l) === filter)
+              ? leadsInScope.filter(l => followupBucket(l) === filter)
               : filter === 'no_contact_7'
-                ? leadsForLine.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 7 * 24 * 60 * 60 * 1000 })
+                ? leadsInScope.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 7 * 24 * 60 * 60 * 1000 })
                 : filter === 'no_contact_14'
-                  ? leadsForLine.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 14 * 24 * 60 * 60 * 1000 })
+                  ? leadsInScope.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 14 * 24 * 60 * 60 * 1000 })
                   : filter === 'no_contact_30'
-                    ? leadsForLine.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 30 * 24 * 60 * 60 * 1000 })
+                    ? leadsInScope.filter(l => { if (!l.last_contact_at) return true; return (Date.now() - new Date(l.last_contact_at).getTime()) > 30 * 24 * 60 * 60 * 1000 })
                     : filter === 'eva_paused'
-                      ? leadsForLine.filter(l => l.eva_pause_until && new Date(l.eva_pause_until) > new Date())
-                      : leadsForLine
+                      ? leadsInScope.filter(l => l.eva_pause_until && new Date(l.eva_pause_until) > new Date())
+                      : leadsInScope
   const leadsByStage = STAGES.reduce((acc, stage) => {
     acc[stage.id] = leadsForKanban.filter(l => l.status === stage.id)
     return acc
@@ -648,7 +685,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           {(() => {
             // pendências: follow-up manual vencido e não concluído
             const now = new Date()
-            const pendentes = leadsForLine.filter(l => {
+            const pendentes = leadsInScope.filter(l => {
               const mf = manualFollowups[l.id]
               return mf && new Date(mf) <= now
             })
@@ -971,6 +1008,90 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           )}
         </select>
       </div>
+
+      {/* Filtro de Origem + Período */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <select
+          value={sourceFilter}
+          onChange={e => setSourceFilter(e.target.value)}
+          className="input w-auto text-sm"
+        >
+          <option value="all">Todas as origens</option>
+          {sourceBreakdown.map(s => (
+            <option key={s.id} value={s.id}>{s.icon} {s.label} ({s.count})</option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={e => setDateFrom(e.target.value)}
+          className="input w-auto text-sm"
+          title="De"
+        />
+        <span className="text-xs text-slate-400">até</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={e => setDateTo(e.target.value)}
+          className="input w-auto text-sm"
+          title="Até"
+        />
+        {(sourceFilter !== 'all' || dateFrom || dateTo) && (
+          <button
+            onClick={() => { setSourceFilter('all'); setDateFrom(''); setDateTo('') }}
+            className="text-xs text-slate-500 hover:text-red-600 underline"
+          >
+            Limpar filtro
+          </button>
+        )}
+        <button
+          onClick={() => setShowSourceBreakdown(v => !v)}
+          className="ml-auto text-xs text-violet-600 hover:text-violet-800 flex items-center gap-1"
+        >
+          <Icon name="barChart" className="w-3.5 h-3.5" />
+          {showSourceBreakdown ? 'Ocultar' : 'Ver'} leads por origem
+        </button>
+      </div>
+
+      {showSourceBreakdown && (
+        <div className="mb-4 p-4 bg-white border border-slate-200 rounded-xl">
+          <p className="text-xs text-slate-500 mb-3">
+            Distribuição de leads por origem{dateFrom || dateTo ? ' no período selecionado' : ''}
+            {' '}· {leadsForSourceBreakdown.length} lead{leadsForSourceBreakdown.length === 1 ? '' : 's'} no total
+          </p>
+          {sourceBreakdown.length === 0 ? (
+            <p className="text-sm text-slate-400">Nenhum lead no período.</p>
+          ) : (
+            <div className="space-y-2">
+              {sourceBreakdown.map(s => {
+                const pct = leadsForSourceBreakdown.length > 0
+                  ? Math.round((s.count / leadsForSourceBreakdown.length) * 100)
+                  : 0
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setSourceFilter(sourceFilter === s.id ? 'all' : s.id)}
+                    className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-colors ${
+                      sourceFilter === s.id ? 'bg-violet-50 ring-1 ring-violet-300' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-lg w-6 text-center">{s.icon}</span>
+                    <span className="text-sm font-medium text-slate-700 w-32 truncate">{s.label}</span>
+                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-violet-500 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-sm text-slate-600 w-10 text-right">{s.count}</span>
+                    <span className="text-xs text-slate-400 w-10 text-right">{pct}%</span>
+                    <span className="text-xs text-emerald-600 w-24 text-right">
+                      {s.converted > 0 ? `${s.converted} convertido${s.converted === 1 ? '' : 's'}` : ''}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Kanban View */}
       {viewMode === 'kanban' && (
@@ -1346,7 +1467,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
       {/* Relatório */}
       {viewMode === 'report' && (
-        <CrmReport clinicId={clinicId} stages={STAGES} />
+        <CrmReport clinicId={clinicId} stages={STAGES} sources={SOURCES} />
       )}
     </div>
   )
