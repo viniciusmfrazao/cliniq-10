@@ -4,11 +4,33 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
 import { todayBR, startOfMonthBR, endOfMonthBR, parseDateBR } from '@/lib/datetime'
+import RentabilidadeFiltro from './RentabilidadeFiltro'
 
 function fmt(v: number) { return formatBRL(v || 0) }
 function fmtCompact(v: number) { return formatBRLCompact(v || 0) }
 
-export default async function FinanceiroPage() {
+type RentabilidadeRow = {
+  receita: number
+  cmv: number
+  lucro_bruto: number
+  margem_pct: number
+  fixos: number
+  lucro_operacional: number
+  atendimentos: number
+}
+
+function mesLabelCurto(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00')
+  const l = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+  return l.replace('.', '').replace(/^\w/, (c) => c.toUpperCase())
+}
+
+export default async function FinanceiroPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string; ini?: string; fim?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
@@ -66,6 +88,35 @@ export default async function FinanceiroPage() {
   const ticketMedio   = entradasMes?.length ? liquidoMes / entradasMes.length : 0
 
   const mesLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  // --- Rentabilidade (receita − estoque consumido, sem depender de vínculo com atendimento) ---
+  const mesAtualStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  const mesFiltro = sp.ini && sp.fim ? '' : (sp.mes || mesAtualStr)
+  let rentIni: string
+  let rentFim: string
+  if (sp.ini && sp.fim) {
+    rentIni = sp.ini
+    rentFim = sp.fim
+  } else {
+    const [ry, rm] = mesFiltro.split('-').map(Number)
+    rentIni = `${mesFiltro}-01`
+    rentFim = `${mesFiltro}-${new Date(ry, rm, 0).getDate()}`
+  }
+
+  const { data: rentData } = await supabase
+    .rpc('rentabilidade_periodo', { p_clinic_id: clinicId, p_data_ini: rentIni, p_data_fim: rentFim })
+    .single()
+  const rent = (rentData || {
+    receita: 0, cmv: 0, lucro_bruto: 0, margem_pct: 0, fixos: 0, lucro_operacional: 0, atendimentos: 0,
+  }) as RentabilidadeRow
+
+  const { data: tendenciaData } = await supabase
+    .rpc('rentabilidade_tendencia_mensal', { p_clinic_id: clinicId, p_meses: 6 })
+  const tendencia = (tendenciaData || []) as (RentabilidadeRow & { mes: string })[]
+  const maiorReceitaTendencia = Math.max(1, ...tendencia.map((t) => t.receita))
+
+  const rentMargemColor = rent.margem_pct >= 50 ? 'text-emerald-600' : rent.margem_pct >= 20 ? 'text-amber-600' : 'text-red-600'
+  const rentMargemBg = rent.margem_pct >= 50 ? 'bg-emerald-50 border-emerald-200' : rent.margem_pct >= 20 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
 
   return (
     <div className="space-y-6">
@@ -169,7 +220,86 @@ export default async function FinanceiroPage() {
             <span className="md:hidden">{fmtCompact(resultadoMes)}</span>
             <span className="hidden md:inline">{fmt(resultadoMes)}</span>
           </p>
-          <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Lucro operacional</p>
+          <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado (caixa)</p>
+        </div>
+      </div>
+
+      {/* Rentabilidade */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+              <Icon name="trendingUp" className="w-4 h-4 text-violet-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Rentabilidade</h2>
+              <p className="text-xs text-slate-500">
+                Receita − estoque efetivamente consumido no período ({rent.atendimentos} atendimentos)
+              </p>
+            </div>
+          </div>
+          <RentabilidadeFiltro mesAtual={mesFiltro || mesAtualStr} iniAtual={sp.ini} fimAtual={sp.fim} />
+        </div>
+
+        {/* Cards do período selecionado */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+          <div className="p-3 bg-emerald-50 rounded-xl">
+            <p className="text-xs text-slate-500 mb-1">Receita</p>
+            <p className="text-sm font-bold text-emerald-700">{fmt(rent.receita)}</p>
+          </div>
+          <div className="p-3 bg-slate-50 rounded-xl">
+            <p className="text-xs text-slate-500 mb-1">CMV consumido</p>
+            <p className="text-sm font-bold text-slate-700">{fmt(rent.cmv)}</p>
+          </div>
+          <div className="p-3 bg-slate-50 rounded-xl">
+            <p className="text-xs text-slate-500 mb-1">Lucro bruto</p>
+            <p className={`text-sm font-bold ${rent.lucro_bruto >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(rent.lucro_bruto)}</p>
+          </div>
+          <div className={`p-3 rounded-xl border ${rentMargemBg}`}>
+            <p className="text-xs text-slate-500 mb-1">Margem</p>
+            <p className={`text-sm font-bold ${rentMargemColor}`}>{rent.margem_pct.toFixed(0)}%</p>
+          </div>
+          <div className="p-3 bg-slate-50 rounded-xl">
+            <p className="text-xs text-slate-500 mb-1">Fixos (ref.)</p>
+            <p className="text-sm font-bold text-slate-400">{fmt(rent.fixos)}</p>
+          </div>
+          <div className={`p-3 rounded-xl border ${rent.lucro_operacional >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <p className="text-xs text-slate-500 mb-1">Lucro operacional</p>
+            <p className={`text-sm font-bold ${rent.lucro_operacional >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(rent.lucro_operacional)}</p>
+          </div>
+        </div>
+
+        {/* Tendência últimos 6 meses */}
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Últimos 6 meses</p>
+          <div className="space-y-2">
+            {tendencia.map((t) => {
+              const barPct = Math.max(4, (t.receita / maiorReceitaTendencia) * 100)
+              return (
+                <div key={t.mes} className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500 w-16 flex-shrink-0">{mesLabelCurto(t.mes)}</span>
+                  <div className="flex-1 h-6 bg-slate-50 rounded-lg overflow-hidden relative">
+                    <div
+                      className="h-full bg-violet-200 rounded-lg"
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700 w-24 text-right flex-shrink-0" title="Receita">
+                    {fmtCompact(t.receita)}
+                  </span>
+                  <span
+                    className={`text-xs font-bold w-24 text-right flex-shrink-0 ${t.lucro_operacional >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                    title="Lucro operacional"
+                  >
+                    {fmtCompact(t.lucro_operacional)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            📊 Barra e 1ª coluna = receita do mês · 2ª coluna = lucro operacional (receita − estoque consumido − custos fixos pagos)
+          </p>
         </div>
       </div>
 
@@ -329,3 +459,4 @@ export default async function FinanceiroPage() {
     </div>
   )
 }
+
