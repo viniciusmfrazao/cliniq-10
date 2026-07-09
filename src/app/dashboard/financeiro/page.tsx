@@ -15,6 +15,7 @@ type RentabilidadeRow = {
   lucro_bruto: number
   margem_pct: number
   fixos: number
+  fixos_por_atendimento: number
   lucro_operacional: number
   atendimentos: number
 }
@@ -107,7 +108,7 @@ export default async function FinanceiroPage({
     .rpc('rentabilidade_periodo', { p_clinic_id: clinicId, p_data_ini: rentIni, p_data_fim: rentFim })
     .single()
   const rent = (rentData || {
-    receita: 0, cmv: 0, lucro_bruto: 0, margem_pct: 0, fixos: 0, lucro_operacional: 0, atendimentos: 0,
+    receita: 0, cmv: 0, lucro_bruto: 0, margem_pct: 0, fixos: 0, fixos_por_atendimento: 0, lucro_operacional: 0, atendimentos: 0,
   }) as RentabilidadeRow
 
   const { data: tendenciaData } = await supabase
@@ -260,14 +261,21 @@ export default async function FinanceiroPage({
             <p className={`text-sm font-bold ${rentMargemColor}`}>{rent.margem_pct.toFixed(0)}%</p>
           </div>
           <div className="p-3 bg-slate-50 rounded-xl">
-            <p className="text-xs text-slate-500 mb-1">Fixos (ref.)</p>
-            <p className="text-sm font-bold text-slate-400">{fmt(rent.fixos)}</p>
+            <p className="text-xs text-slate-500 mb-1">Fixos (ref./atend.)</p>
+            <p className="text-sm font-bold text-slate-400">{fmt(rent.fixos_por_atendimento)}</p>
+            <p className="text-xs text-slate-400">total: {fmtCompact(rent.fixos)}</p>
           </div>
           <div className={`p-3 rounded-xl border ${rent.lucro_operacional >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
             <p className="text-xs text-slate-500 mb-1">Lucro operacional</p>
             <p className={`text-sm font-bold ${rent.lucro_operacional >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(rent.lucro_operacional)}</p>
           </div>
         </div>
+
+        <p className="text-xs text-slate-400 -mt-3 mb-6">
+          📊 Fixos = todas as saídas pagas do período (aluguel, salários, etc.), exceto compras de estoque/insumos —
+          essas já entram no CMV pelo que foi efetivamente consumido, não pelo que foi comprado. &quot;Ref./atend.&quot; é a
+          média por atendimento; o &quot;Lucro operacional&quot; usa o total, não a média.
+        </p>
 
         {/* Tendência últimos 6 meses */}
         <div>
