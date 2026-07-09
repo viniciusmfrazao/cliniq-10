@@ -242,6 +242,13 @@ export default async function FinanceiroPage({
           <RentabilidadeFiltro mesAtual={mesFiltro || mesAtualStr} iniAtual={sp.ini} fimAtual={sp.fim} />
         </div>
 
+        {rent.receita > 0 && rent.cmv === 0 && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+            ⚠️ Nenhuma baixa de estoque registrada nesse período — a margem de 100% abaixo não reflete custo real,
+            só que a clínica não está dando baixa dos produtos usados nos atendimentos.
+          </div>
+        )}
+
         {/* Cards do período selecionado */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <div className="p-3 bg-emerald-50 rounded-xl">
