@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -144,6 +144,7 @@ function StepCard({
 }) {
   const [showPreview, setShowPreview] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const templateRef = useRef<HTMLTextAreaElement>(null)
 
   const preview = useMemo(
     () => renderPreview(step.template, step.dias, clinicName),
@@ -153,7 +154,17 @@ function StepCard({
   const suggestionsForStep = TEMPLATES_SUGERIDOS[Math.min(index + 1, 3)] ?? []
 
   function insertPlaceholder(tag: string) {
-    onChange({ template: step.template + tag })
+    const el = templateRef.current
+    if (!el) { onChange({ template: step.template + tag }); return }
+    const start = el.selectionStart ?? step.template.length
+    const end = el.selectionEnd ?? step.template.length
+    const next = step.template.slice(0, start) + tag + step.template.slice(end)
+    onChange({ template: next })
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + tag.length
+      el.setSelectionRange(pos, pos)
+    })
   }
 
   return (
@@ -316,6 +327,7 @@ function StepCard({
 
         {/* Textarea */}
         <textarea
+          ref={templateRef}
           value={step.template}
           onChange={(e) => onChange({ template: e.target.value })}
           rows={6}

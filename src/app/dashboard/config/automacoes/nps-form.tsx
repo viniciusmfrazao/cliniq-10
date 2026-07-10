@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -132,6 +132,7 @@ export default function NpsForm({ clinicId, clinicName, initial }: Props) {
   const [testPhone, setTestPhone] = useState('')
   const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [testing, setTesting] = useState(false)
+  const templateRef = useRef<HTMLTextAreaElement>(null)
 
   // Preview com atendimento de "ontem"
   const previewVars = useMemo(() => {
@@ -346,6 +347,7 @@ export default function NpsForm({ clinicId, clinicName, initial }: Props) {
         <div className="space-y-2 mb-2">
           <label className="block text-sm font-medium text-slate-900">Texto da mensagem</label>
           <textarea
+            ref={templateRef}
             value={template}
             onChange={(e) => setTemplate(e.target.value)}
             rows={10}
@@ -360,7 +362,19 @@ export default function NpsForm({ clinicId, clinicName, initial }: Props) {
             <button
               key={p.tag}
               type="button"
-              onClick={() => setTemplate((t) => t + ' ' + p.tag)}
+              onClick={() => {
+                const el = templateRef.current
+                if (!el) { setTemplate((t) => t + ' ' + p.tag); return }
+                const start = el.selectionStart ?? template.length
+                const end = el.selectionEnd ?? template.length
+                const next = template.slice(0, start) + p.tag + template.slice(end)
+                setTemplate(next)
+                requestAnimationFrame(() => {
+                  el.focus()
+                  const pos = start + p.tag.length
+                  el.setSelectionRange(pos, pos)
+                })
+              }}
               className="px-2.5 py-1 text-xs font-mono bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200"
               title={p.desc}
             >
