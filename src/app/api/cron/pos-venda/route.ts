@@ -15,7 +15,7 @@ const LOOKBACK_DAYS = 60
 // Paramos de iniciar novos envios bem antes do limite; o resto é retomado
 // no próximo ciclo do cron (agora a cada 5min).
 const ROUTE_BUDGET_MS = 40_000
-const MAX_SENDS_PER_RUN = 4
+const MAX_SENDS_PER_RUN = 15
 
 function renderTemplate(template: string, vars: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || `{{${key}}}`)

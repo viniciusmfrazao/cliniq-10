@@ -12,7 +12,7 @@ export const maxDuration = 60
 // o que sobrar fica pra ser pego no próximo ciclo do cron (que agora roda
 // a cada 5min, não mais 1x/hora).
 const ROUTE_BUDGET_MS = 40_000
-const MAX_SENDS_PER_RUN = 4
+const MAX_SENDS_PER_RUN = 15
 
 function renderTemplate(template: string, vars: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || `{{${key}}}`)

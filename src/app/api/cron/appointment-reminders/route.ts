@@ -144,7 +144,7 @@ type WaRow = { clinic_id: string; status: string }
 // do limite, e o cron roda a cada 5min (vercel.json) pra retomar o resto
 // da fila ao longo do dia até esvaziar.
 const ROUTE_BUDGET_MS = 40_000
-const MAX_SENDS_PER_RUN = 4
+const MAX_SENDS_PER_RUN = 15
 
 export async function GET(req: NextRequest) {
   const routeStart = Date.now()
