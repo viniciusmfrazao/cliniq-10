@@ -268,15 +268,18 @@ async function resolveInstance(
  * caller trata como "não enviado agora", o item fica pra ser pego no
  * próximo ciclo do cron (mesmo padrão que já existe pra outras falhas).
  *
- * Gap alvo: 15-35s randomizado (evita intervalo fixo, que também é sinal de bot).
+ * Gap alvo: 6-12s randomizado (evita intervalo fixo, que também é sinal de bot).
+ * Reduzido de 15-35s em jul/2026 — o gap antigo, somado ao MAX_SENDS_PER_RUN
+ * baixo de cada cron, fazia a fila de confirmação/lembrete vazar ao longo do
+ * dia em vez de sair no horário configurado pela clínica.
  */
 async function paceAutomatedSend(instanceName: string, deadlineMs: number): Promise<boolean> {
   const svc = createServiceClient()
   for (let attempt = 0; attempt < 3; attempt++) {
     const { data: waitSec, error } = await svc.rpc('whatsapp_pace_send', {
       p_instance_name: instanceName,
-      p_min_gap_seconds: 15,
-      p_max_gap_seconds: 35,
+      p_min_gap_seconds: 6,
+      p_max_gap_seconds: 12,
     })
     if (error) return true // não bloqueia envio por falha no pacer
     const wait = Number(waitSec) || 0
