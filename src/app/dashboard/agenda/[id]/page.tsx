@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import AppointmentActions from './actions'
+import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export default async function AppointmentDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
@@ -19,6 +20,7 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
       procedures(id, name, price),
       users(id, name),
       rooms(id, name, color),
+      clinics(name),
       valor_sinal,
       forma_pagamento_sinal
     `)
@@ -78,6 +80,21 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
   // Verificar se cadastro do paciente está completo
   const patient = appointment.patients as { id: string; name: string; phone: string | null; email: string | null; cpf: string | null; birth_date: string | null } | null
   const isPatientIncomplete = patient && (!patient.cpf || !patient.birth_date)
+
+  // Link "adicionar à agenda" (Google + .ics) — sem OAuth, gerado on-the-fly
+  const calendarLinks = appointment.end_time && appointment.status !== 'cancelled'
+    ? generateCalendarLinks(
+        getPublicBaseUrl(),
+        buildAppointmentCalendarEvent({
+          appointmentId: appointment.id,
+          clinicName: appointment.clinics?.name || 'Clinike',
+          professionalName: appointment.users?.name ?? null,
+          procedureName: appointment.procedures?.name ?? null,
+          startTimeISO: appointment.start_time,
+          endTimeISO: appointment.end_time,
+        }),
+      )
+    : null
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -188,6 +205,21 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
           )}
         </div>
       </div>
+
+      {calendarLinks && (
+        <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+          <p className="text-sm font-medium text-slate-700 mb-3">Adicionar à agenda</p>
+          <a
+            href={calendarLinks.googleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 py-2 px-3 text-sm font-medium rounded-lg bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
+          >
+            <Icon name="calendar" className="w-4 h-4" />
+            Google Agenda
+          </a>
+        </div>
+      )}
 
       <AppointmentActions 
         appointment={appointment}
