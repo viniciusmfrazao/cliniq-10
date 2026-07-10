@@ -790,6 +790,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
               Outras Informações
             </h2>
 
+            {secoesAtivas.includes('imagem') && (
             <div className="mb-5">
               <p className="text-sm mb-3" style={{ color: 'var(--mid)' }}>Autoriza uso da sua imagem?</p>
               <div className="flex gap-2">
@@ -797,6 +798,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                 <Choice group="imagem" value="Não" selected={responses.imagem === 'Não'} onClick={() => selectSingle('imagem', 'Não')} />
               </div>
             </div>
+            )}
 
             {secoesAtivas.includes('filmagem') && (
             <div className="mb-5">
@@ -907,5 +909,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     </>
   )
 }
+
 
 
