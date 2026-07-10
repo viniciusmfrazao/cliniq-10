@@ -3,13 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import SaidasList from './saidas-list'
+import { getFinancialAccess } from '@/lib/financial-access'
 
 export default async function SaidasPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
-  if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
-  const clinicId = userData?.clinic_id
+  if (!user) redirect('/login')
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  // Saídas não têm profissional vinculado — só escopo 'all' pode ver essa área.
+  if (scope !== 'all') redirect('/dashboard/financeiro')
 
   // Busca lançadas (pago=true) e pendentes (pago=false) separadamente
   // para não perder pendentes ao filtrar por mês na UI

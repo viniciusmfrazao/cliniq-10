@@ -1,13 +1,16 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import HistoricoPacienteView from './historico-view'
+import { getFinancialAccess } from '@/lib/financial-access'
 
 export default async function HistoricoPacientePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
-  const clinicId = userData?.clinic_id
+  if (!user) redirect('/login')
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  if (scope === 'none') redirect('/dashboard')
 
   const { data: entradas } = await supabase
     .from('entradas')

@@ -4,6 +4,7 @@ import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import EntradasList from './entradas-list'
+import { getFinancialAccess } from '@/lib/financial-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,9 +12,8 @@ export default async function EntradasPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user.id).single()
-  if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
-  const clinicId = userData?.clinic_id
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  if (scope === 'none') redirect('/dashboard')
 
   // Carrega o mês atual por padrão
   const hoje = new Date()
@@ -56,7 +56,9 @@ export default async function EntradasPage() {
           </Link>
           <div>
             <h1 className="text-2xl md:text-3xl font-black text-slate-900">Entradas</h1>
-            <p className="text-slate-500">Gerencie as receitas da clínica</p>
+            <p className="text-slate-500">
+              {scope === 'own' ? 'Suas receitas' : 'Gerencie as receitas da clínica'}
+            </p>
           </div>
         </div>
         <Link

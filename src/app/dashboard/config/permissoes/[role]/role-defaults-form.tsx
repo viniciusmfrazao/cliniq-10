@@ -9,6 +9,7 @@ import {
   COLOR_STYLES,
   ROLE_LABELS,
   FACTORY_DEFAULTS,
+  MUTUALLY_EXCLUSIVE,
 } from '@/lib/permissions'
 
 type Props = {
@@ -36,18 +37,25 @@ export default function RoleDefaultsForm({ role, initialPermissions, isCustom }:
 
   function togglePermission(permId: string) {
     if (hasAll) return
-    setPermissions((prev) =>
-      prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId],
-    )
+    setPermissions((prev) => {
+      if (prev.includes(permId)) return prev.filter((p) => p !== permId)
+      const pair = MUTUALLY_EXCLUSIVE.find((p) => p.includes(permId as any))
+      const other = pair?.find((p) => p !== permId)
+      const base = other ? prev.filter((p) => p !== other) : prev
+      return [...base, permId]
+    })
   }
 
   function toggleGroupAll(groupPermIds: string[]) {
     if (hasAll) return
-    const allSelected = groupPermIds.every((id) => permissions.includes(id))
+    const exclusiveToSkip = new Set(MUTUALLY_EXCLUSIVE.map((pair) => pair[1]))
+    const effectiveIds = groupPermIds.filter((id) => !exclusiveToSkip.has(id as any))
+    const allSelected = effectiveIds.every((id) => permissions.includes(id))
     setPermissions((prev) => {
-      if (allSelected) return prev.filter((p) => !groupPermIds.includes(p))
+      if (allSelected) return prev.filter((p) => !effectiveIds.includes(p) && !exclusiveToSkip.has(p as any))
       const next = new Set(prev)
-      for (const id of groupPermIds) next.add(id)
+      for (const id of effectiveIds) next.add(id)
+      for (const id of exclusiveToSkip) next.delete(id)
       return Array.from(next)
     })
   }

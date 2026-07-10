@@ -1,13 +1,16 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import FluxoView from './fluxo-view'
+import { getFinancialAccess } from '@/lib/financial-access'
 
 export default async function FluxoPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
-  const clinicId = userData?.clinic_id
+  if (!user) redirect('/login')
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  if (scope === 'none') redirect('/dashboard')
 
   const year = new Date().getFullYear()
 
@@ -41,8 +44,9 @@ export default async function FluxoPage() {
       <FluxoView 
         entradas={entradas || []} 
         saidas={saidas || []} 
-        clinicId={clinicId}
+        clinicId={clinicId ?? ''}
         year={year}
+        scope={scope === 'own' ? 'own' : 'all'}
       />
     </div>
   )

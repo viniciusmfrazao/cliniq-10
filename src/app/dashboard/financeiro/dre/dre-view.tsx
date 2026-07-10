@@ -23,6 +23,7 @@ type Props = {
   entradas: Entrada[]
   saidas: Saida[]
   clinicId: string
+  scope?: 'all' | 'own'
 }
 
 const CATEGORIAS_DRE = [
@@ -43,7 +44,7 @@ function fmtPct(v: number) {
   return (v * 100).toFixed(1) + '%'
 }
 
-export default function DreView({ entradas: initialEntradas, saidas: initialSaidas, clinicId }: Props) {
+export default function DreView({ entradas: initialEntradas, saidas: initialSaidas, clinicId, scope = 'all' }: Props) {
   const [mes, setMes] = useState(todayBR().slice(0, 7))
   const [entradas, setEntradas] = useState(initialEntradas)
   const [saidas, setSaidas] = useState(initialSaidas)
@@ -120,6 +121,12 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
         {loading && <Icon name="loader" className="w-5 h-5 animate-spin text-violet-600" />}
       </div>
 
+      {scope === 'own' && (
+        <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-700">
+          Mostrando apenas a sua receita. Despesas, CMV e lucro são calculados no nível da clínica e não aparecem no seu modo de acesso.
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-purple-50">
           <h3 className="font-bold text-slate-900 flex items-center gap-2">
@@ -147,6 +154,8 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
             </div>
           </div>
 
+          {scope === 'all' && (
+          <>
           <div className="flex justify-between items-center p-4 pl-8">
             <span className="text-slate-600">(-) CMV / Insumos</span>
             <div className="text-right">
@@ -212,9 +221,12 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
               )}
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
 
+      {scope === 'all' && (
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
@@ -278,6 +290,7 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

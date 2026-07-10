@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
 import { todayBR, startOfMonthBR, endOfMonthBR, parseDateBR } from '@/lib/datetime'
+import { getFinancialAccess } from '@/lib/financial-access'
 import RentabilidadeFiltro from './RentabilidadeFiltro'
 
 function fmt(v: number) { return formatBRL(v || 0) }
@@ -34,9 +35,10 @@ export default async function FinanceiroPage({
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
-  const clinicId = userData?.clinic_id
-  if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
+  if (!user) redirect('/login')
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  if (scope === 'none') redirect('/dashboard')
+  const isOwnScope = scope === 'own'
 
   const todayStr = todayBR()
   const startOfMonth = startOfMonthBR().slice(0, 10)
@@ -56,13 +58,16 @@ export default async function FinanceiroPage({
     .lte('data_venda', endOfMonth)
 
   // Saídas do mês: apenas pagas (pago=true) até hoje — exclui futuros agendados
-  const { data: saidasMes } = await supabase
-    .from('saidas')
-    .select('valor')
-    .eq('clinic_id', clinicId)
-    .eq('pago', true)
-    .gte('data', startOfMonth)
-    .lte('data', todayStr)
+  // (escopo 'own' não vê saídas — RLS já bloqueia, então nem consultamos)
+  const { data: saidasMes } = isOwnScope
+    ? { data: [] as { valor: number }[] }
+    : await supabase
+        .from('saidas')
+        .select('valor')
+        .eq('clinic_id', clinicId)
+        .eq('pago', true)
+        .gte('data', startOfMonth)
+        .lte('data', todayStr)
 
   const { data: ultimasEntradas } = await supabase
     .from('entradas')
@@ -72,14 +77,16 @@ export default async function FinanceiroPage({
     .limit(5)
 
   // Últimas saídas: apenas pagas e até hoje — sem futuros agendados
-  const { data: ultimasSaidas } = await supabase
-    .from('saidas')
-    .select('*')
-    .eq('clinic_id', clinicId)
-    .eq('pago', true)
-    .lte('data', todayStr)
-    .order('data', { ascending: false })
-    .limit(5)
+  const { data: ultimasSaidas } = isOwnScope
+    ? { data: [] as any[] }
+    : await supabase
+        .from('saidas')
+        .select('*')
+        .eq('clinic_id', clinicId)
+        .eq('pago', true)
+        .lte('data', todayStr)
+        .order('data', { ascending: false })
+        .limit(5)
 
   const receitaHoje   = entradasHoje?.reduce((s, e) => s + Number(e.valor_bruto  || 0), 0) || 0
   const receitaMes    = entradasMes?.reduce((s, e)  => s + Number(e.valor_bruto  || 0), 0) || 0
@@ -104,15 +111,18 @@ export default async function FinanceiroPage({
     rentFim = `${mesFiltro}-${new Date(ry, rm, 0).getDate()}`
   }
 
-  const { data: rentData } = await supabase
-    .rpc('rentabilidade_periodo', { p_clinic_id: clinicId, p_data_ini: rentIni, p_data_fim: rentFim })
-    .single()
+  const { data: rentData } = isOwnScope
+    ? { data: null }
+    : await supabase
+        .rpc('rentabilidade_periodo', { p_clinic_id: clinicId, p_data_ini: rentIni, p_data_fim: rentFim })
+        .single()
   const rent = (rentData || {
     receita: 0, cmv: 0, lucro_bruto: 0, margem_pct: 0, fixos: 0, fixos_por_atendimento: 0, lucro_operacional: 0, atendimentos: 0,
   }) as RentabilidadeRow
 
-  const { data: tendenciaData } = await supabase
-    .rpc('rentabilidade_tendencia_mensal', { p_clinic_id: clinicId, p_meses: 6 })
+  const { data: tendenciaData } = isOwnScope
+    ? { data: [] }
+    : await supabase.rpc('rentabilidade_tendencia_mensal', { p_clinic_id: clinicId, p_meses: 6 })
   const tendencia = (tendenciaData || []) as (RentabilidadeRow & { mes: string })[]
   const maiorReceitaTendencia = Math.max(1, ...tendencia.map((t) => t.receita))
 
@@ -125,6 +135,9 @@ export default async function FinanceiroPage({
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-slate-900">Financeiro</h1>
           <p className="text-slate-500 capitalize">{mesLabel}</p>
+          {isOwnScope && (
+            <p className="text-xs text-violet-600 font-medium mt-1">Mostrando apenas os seus atendimentos</p>
+          )}
         </div>
         <div className="flex gap-2">
           <Link
@@ -134,18 +147,20 @@ export default async function FinanceiroPage({
             <Icon name="plus" className="w-5 h-5" />
             Nova Entrada
           </Link>
-          <Link
-            href="/dashboard/financeiro/saidas/nova"
-            className="inline-flex items-center gap-2 bg-rose-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-rose-700 transition"
-          >
-            <Icon name="minus" className="w-5 h-5" />
-            Nova Saída
-          </Link>
+          {!isOwnScope && (
+            <Link
+              href="/dashboard/financeiro/saidas/nova"
+              className="inline-flex items-center gap-2 bg-rose-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-rose-700 transition"
+            >
+              <Icon name="minus" className="w-5 h-5" />
+              Nova Saída
+            </Link>
+          )}
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+      <div className={`grid grid-cols-2 md:grid-cols-3 ${isOwnScope ? 'lg:grid-cols-4' : 'lg:grid-cols-6'} gap-3 md:gap-4`}>
         <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
           <div className="flex items-center gap-3 mb-2 md:mb-3">
             <div className="w-9 h-9 md:w-10 md:h-10 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -198,34 +213,39 @@ export default async function FinanceiroPage({
           <p className="text-xs md:text-sm text-slate-500 truncate">Ticket médio</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
-          <div className="flex items-center gap-3 mb-2 md:mb-3">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Icon name="trendingDown" className="w-5 h-5 text-rose-600" />
+        {!isOwnScope && (
+          <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
+            <div className="flex items-center gap-3 mb-2 md:mb-3">
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Icon name="trendingDown" className="w-5 h-5 text-rose-600" />
+              </div>
             </div>
+            <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(despesasMes)}>
+              <span className="md:hidden">{fmtCompact(despesasMes)}</span>
+              <span className="hidden md:inline">{fmt(despesasMes)}</span>
+            </p>
+            <p className="text-xs md:text-sm text-slate-500 truncate">Saídas do mês</p>
           </div>
-          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(despesasMes)}>
-            <span className="md:hidden">{fmtCompact(despesasMes)}</span>
-            <span className="hidden md:inline">{fmt(despesasMes)}</span>
-          </p>
-          <p className="text-xs md:text-sm text-slate-500 truncate">Saídas do mês</p>
-        </div>
+        )}
 
-        <div className={`rounded-2xl p-4 md:p-5 border shadow-sm min-w-0 ${resultadoMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-          <div className="flex items-center gap-3 mb-2 md:mb-3">
-            <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${resultadoMes >= 0 ? 'bg-emerald-200' : 'bg-rose-200'}`}>
-              <Icon name={resultadoMes >= 0 ? 'trendingUp' : 'trendingDown'} className={`w-5 h-5 ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} />
+        {!isOwnScope && (
+          <div className={`rounded-2xl p-4 md:p-5 border shadow-sm min-w-0 ${resultadoMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <div className="flex items-center gap-3 mb-2 md:mb-3">
+              <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${resultadoMes >= 0 ? 'bg-emerald-200' : 'bg-rose-200'}`}>
+                <Icon name={resultadoMes >= 0 ? 'trendingUp' : 'trendingDown'} className={`w-5 h-5 ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} />
+              </div>
             </div>
+            <p className={`text-lg md:text-2xl font-black truncate ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} title={fmt(resultadoMes)}>
+              <span className="md:hidden">{fmtCompact(resultadoMes)}</span>
+              <span className="hidden md:inline">{fmt(resultadoMes)}</span>
+            </p>
+            <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado (caixa)</p>
           </div>
-          <p className={`text-lg md:text-2xl font-black truncate ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} title={fmt(resultadoMes)}>
-            <span className="md:hidden">{fmtCompact(resultadoMes)}</span>
-            <span className="hidden md:inline">{fmt(resultadoMes)}</span>
-          </p>
-          <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado (caixa)</p>
-        </div>
+        )}
       </div>
 
-      {/* Rentabilidade */}
+      {/* Rentabilidade — cruza receita com estoque/custos da clínica, não faz sentido por profissional */}
+      {!isOwnScope && (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
           <div className="flex items-center gap-2">
@@ -317,9 +337,11 @@ export default async function FinanceiroPage({
           </p>
         </div>
       </div>
+      )}
 
       {/* Atalhos */}
-      <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+      <div className={`grid grid-cols-2 ${isOwnScope ? 'md:grid-cols-4' : 'md:grid-cols-7'} gap-3`}>
+        {!isOwnScope && (
         <Link href="/dashboard/financeiro/previsao-recebimento" className="bg-white rounded-xl p-4 border border-blue-200 shadow-sm hover:border-blue-300 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition">
             <Icon name="dollarSign" className="w-5 h-5 text-blue-600" />
@@ -329,7 +351,9 @@ export default async function FinanceiroPage({
             <p className="text-xs text-slate-500">Parcelas a cair no caixa</p>
           </div>
         </Link>
+        )}
 
+        {!isOwnScope && (
         <Link href="/dashboard/financeiro/previsao" className="bg-white rounded-xl p-4 border border-emerald-200 shadow-sm hover:border-emerald-300 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 transition">
             <Icon name="trendingUp" className="w-5 h-5 text-emerald-600" />
@@ -339,7 +363,9 @@ export default async function FinanceiroPage({
             <p className="text-xs text-slate-500">Agendamentos futuros</p>
           </div>
         </Link>
+        )}
 
+        {!isOwnScope && (
         <Link href="/dashboard/financeiro/devedores" className="bg-white rounded-xl p-4 border border-rose-200 shadow-sm hover:border-rose-300 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-rose-100 rounded-lg flex items-center justify-center group-hover:bg-rose-200 transition">
             <Icon name="dollarSign" className="w-5 h-5 text-rose-600" />
@@ -349,6 +375,7 @@ export default async function FinanceiroPage({
             <p className="text-xs text-slate-500">Em aberto</p>
           </div>
         </Link>
+        )}
 
         <Link href="/dashboard/financeiro/fluxo" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition">
@@ -392,7 +419,7 @@ export default async function FinanceiroPage({
       </div>
 
       {/* Últimas movimentações */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className={`grid ${isOwnScope ? '' : 'lg:grid-cols-2'} gap-6`}>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-5 border-b border-slate-100">
             <div className="flex items-center gap-3">
@@ -432,6 +459,7 @@ export default async function FinanceiroPage({
           )}
         </div>
 
+        {!isOwnScope && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-5 border-b border-slate-100">
             <div className="flex items-center gap-3">
@@ -470,6 +498,7 @@ export default async function FinanceiroPage({
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   )
