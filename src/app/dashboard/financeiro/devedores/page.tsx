@@ -26,7 +26,7 @@ export default async function DevedoresPage() {
 
   const pacientes = await getAllPatients<{ id: string; name: string; phone: string | null }>(
     supabase,
-    clinicId,
+    clinicId ?? '',
     'id, name, phone'
   )
 

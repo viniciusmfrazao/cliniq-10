@@ -5,7 +5,7 @@ export type FinancialScope = 'all' | 'own' | 'none'
 
 export type FinancialAccess = {
   scope: FinancialScope
-  clinicId: string | null
+  clinicId: string | undefined
   userId: string
 }
 
@@ -30,7 +30,7 @@ export async function getFinancialAccess(
     .eq('id', userId)
     .maybeSingle()
 
-  const clinicId = me?.clinic_id ?? null
+  const clinicId = me?.clinic_id ?? undefined
   const role = me?.role ?? ''
 
   if (role === 'admin' || role === 'super_admin') {

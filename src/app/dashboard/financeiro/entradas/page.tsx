@@ -30,7 +30,7 @@ export default async function EntradasPage() {
     .order('data_venda', { ascending: false })
 
   const pacientes = await getAllPatients<{ id: string; name: string }>(
-    supabase, clinicId, 'id, name'
+    supabase, clinicId ?? '', 'id, name'
   )
 
   const { data: procedimentos } = await supabase
@@ -75,7 +75,7 @@ export default async function EntradasPage() {
         pacientes={pacientes || []}
         procedimentos={procedimentos || []}
         profissionais={profissionais || []}
-        clinicId={clinicId}
+        clinicId={clinicId ?? ''}
       />
     </div>
   )
