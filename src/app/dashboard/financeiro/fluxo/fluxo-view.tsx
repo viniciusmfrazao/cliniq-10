@@ -21,6 +21,7 @@ type Props = {
   saidas: Saida[]
   clinicId: string
   year: number
+  scope?: 'all' | 'own'
 }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -29,7 +30,7 @@ function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
 
-export default function FluxoView({ entradas: initialEntradas, saidas: initialSaidas, clinicId, year: initialYear }: Props) {
+export default function FluxoView({ entradas: initialEntradas, saidas: initialSaidas, clinicId, year: initialYear, scope = 'all' }: Props) {
   const [year, setYear] = useState(initialYear)
   const [entradas, setEntradas] = useState(initialEntradas)
   const [saidas, setSaidas] = useState(initialSaidas)
@@ -104,7 +105,13 @@ export default function FluxoView({ entradas: initialEntradas, saidas: initialSa
         {loading && <Icon name="loader" className="w-5 h-5 animate-spin text-violet-600" />}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {scope === 'own' && (
+        <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-700">
+          Mostrando apenas a sua receita. Despesas da clínica não aparecem no seu modo de acesso.
+        </div>
+      )}
+
+      <div className={`grid grid-cols-2 ${scope === 'own' ? 'md:grid-cols-3' : 'md:grid-cols-5'} gap-4`}>
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
           <p className="text-sm text-slate-500">Receita Bruta</p>
           <p className="text-2xl font-black text-slate-900">{fmt(totalReceitaBruta)}</p>
@@ -113,14 +120,18 @@ export default function FluxoView({ entradas: initialEntradas, saidas: initialSa
           <p className="text-sm text-slate-500">Receita Líquida</p>
           <p className="text-2xl font-black text-emerald-600">{fmt(totalReceitaLiquida)}</p>
         </div>
+        {scope === 'all' && (
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
           <p className="text-sm text-slate-500">Despesas</p>
           <p className="text-2xl font-black text-rose-600">{fmt(totalDespesas)}</p>
         </div>
+        )}
+        {scope === 'all' && (
         <div className={`rounded-2xl p-5 border shadow-sm ${totalResultado >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
           <p className={`text-sm ${totalResultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado</p>
           <p className={`text-2xl font-black ${totalResultado >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{fmt(totalResultado)}</p>
         </div>
+        )}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
           <p className="text-sm text-slate-500">Atendimentos</p>
           <p className="text-2xl font-black text-slate-900">{totalAtendimentos}</p>

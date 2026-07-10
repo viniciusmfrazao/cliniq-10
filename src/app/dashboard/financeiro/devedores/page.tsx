@@ -1,14 +1,18 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import DevedoresList from './devedores-list'
+import { getFinancialAccess } from '@/lib/financial-access'
 
 export default async function DevedoresPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
-  const clinicId = userData?.clinic_id
+  if (!user) redirect('/login')
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  // Devedores não têm profissional vinculado — só escopo 'all' pode ver essa área.
+  if (scope !== 'all') redirect('/dashboard/financeiro')
   const { data: clinic } = await supabase.from('clinics').select('name').eq('id', clinicId).single()
   const clinicName = clinic?.name || 'a clínica'
 

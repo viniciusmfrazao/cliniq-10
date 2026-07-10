@@ -52,7 +52,8 @@ const PERMISSION_GROUPS = [
   {
     label: 'Financeiro',
     permissions: [
-      { id: 'financial_view', label: 'Ver financeiro' },
+      { id: 'financial_view_all', label: 'Ver financeiro completo' },
+      { id: 'financial_view_own', label: 'Ver apenas minhas entradas' },
       { id: 'financial_edit', label: 'Lançamentos financeiros' },
     ]
   },
@@ -84,8 +85,8 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   nutritionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
   psychologist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
   receptionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'crm_view', 'crm_edit'],
-  financial: ['agenda_view', 'patients_view', 'financial_view', 'financial_edit', 'reports_view'],
-  manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view', 'reports_view', 'crm_view', 'crm_edit'],
+  financial: ['agenda_view', 'patients_view', 'financial_view_all', 'financial_edit', 'reports_view'],
+  manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view_all', 'reports_view', 'crm_view', 'crm_edit'],
   assistant: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit'],
   viewer: ['agenda_view', 'patients_view'],
 }
@@ -106,6 +107,8 @@ export default function PermissionsModal({ member, onClose, onSave }: Props) {
 
   const hasAll = Array.isArray(permissions) && permissions.includes('all')
   
+  const MUTUALLY_EXCLUSIVE: [string, string][] = [['financial_view_all', 'financial_view_own']]
+
   function togglePermission(permId: string) {
     // Se tem 'all', expandir para lista completa antes de toggle
     if (hasAll) {
@@ -113,11 +116,13 @@ export default function PermissionsModal({ member, onClose, onSave }: Props) {
       setPermissions(allIds.filter(id => id !== permId))
       return
     }
-    setPermissions(prev => 
-      prev.includes(permId) 
-        ? prev.filter(p => p !== permId)
-        : [...prev, permId]
-    )
+    setPermissions(prev => {
+      if (prev.includes(permId)) return prev.filter(p => p !== permId)
+      const pair = MUTUALLY_EXCLUSIVE.find((p) => p.includes(permId))
+      const other = pair?.find((p) => p !== permId)
+      const base = other ? prev.filter((p) => p !== other) : prev
+      return [...base, permId]
+    })
   }
 
   function toggleAll() {

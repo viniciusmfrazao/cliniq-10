@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PrevisaoRecebimentoView from './previsao-recebimento-view'
 import BackButton from '@/components/ui/BackButton'
+import { getFinancialAccess } from '@/lib/financial-access'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Recebíveis Futuros | Clinike' }
@@ -10,9 +11,8 @@ export default async function PrevisaoRecebimentoPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user.id).single()
-  if (!userData?.clinic_id) redirect('/dashboard')
-  if (!['admin', 'super_admin', 'manager', 'financial'].includes(userData.role || '')) redirect('/dashboard')
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  if (scope === 'none') redirect('/dashboard')
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
@@ -23,7 +23,7 @@ export default async function PrevisaoRecebimentoPage() {
           Parcelas de vendas já realizadas que ainda vão cair no caixa, líquidas de taxa
         </p>
       </div>
-      <PrevisaoRecebimentoView clinicId={userData.clinic_id} />
+      <PrevisaoRecebimentoView clinicId={clinicId ?? ''} />
     </div>
   )
 }

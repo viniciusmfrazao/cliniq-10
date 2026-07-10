@@ -4,13 +4,14 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import DreView from './dre-view'
 import { startOfMonthBR, endOfMonthBR } from '@/lib/datetime'
+import { getFinancialAccess } from '@/lib/financial-access'
 
 export default async function DrePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id, role').eq('id', user!.id).single()
-  if (!['admin','super_admin','manager','financial'].includes(userData?.role || '')) redirect('/dashboard')
-  const clinicId = userData?.clinic_id
+  if (!user) redirect('/login')
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  if (scope === 'none') redirect('/dashboard')
 
   // Mes corrente no fuso de Brasilia (servidor roda em UTC)
   const startOfMonth = startOfMonthBR().slice(0, 10)
@@ -46,7 +47,8 @@ export default async function DrePage() {
       <DreView 
         entradas={entradas || []} 
         saidas={saidas || []} 
-        clinicId={clinicId} 
+        clinicId={clinicId ?? ''} 
+        scope={scope === 'own' ? 'own' : 'all'}
       />
     </div>
   )

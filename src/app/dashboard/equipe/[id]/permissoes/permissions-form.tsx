@@ -87,7 +87,8 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     icon: 'dollarSign',
     color: 'green',
     permissions: [
-      { id: 'financial_view', label: 'Ver financeiro', description: 'Consultar entradas, saídas e relatórios' },
+      { id: 'financial_view_all', label: 'Ver financeiro completo', description: 'Consultar entradas, saídas e relatórios de toda a clínica' },
+      { id: 'financial_view_own', label: 'Ver apenas minhas entradas', description: 'Consultar somente os recebimentos em que é o profissional responsável — sem ver saídas, devedores nem dados de outros profissionais' },
       { id: 'financial_edit', label: 'Lançamentos financeiros', description: 'Registrar pagamentos, despesas e baixar contas' },
     ],
   },
@@ -128,8 +129,8 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   nutritionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
   psychologist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
   receptionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'crm_view', 'crm_edit'],
-  financial: ['agenda_view', 'patients_view', 'financial_view', 'financial_edit', 'reports_view'],
-  manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view', 'reports_view', 'crm_view', 'crm_edit'],
+  financial: ['agenda_view', 'patients_view', 'financial_view_all', 'financial_edit', 'reports_view'],
+  manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view_all', 'reports_view', 'crm_view', 'crm_edit'],
   assistant: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit'],
   viewer: ['agenda_view', 'patients_view'],
 }
@@ -183,21 +184,30 @@ export default function PermissionsForm({ member, activeModules = [] }: Props) {
     return a !== b
   }, [initialPerms, permissions])
 
+  const MUTUALLY_EXCLUSIVE: [string, string][] = [['financial_view_all', 'financial_view_own']]
+
   function togglePermission(permId: string) {
     if (hasAll) return
-    setPermissions((prev) =>
-      prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId],
-    )
+    setPermissions((prev) => {
+      if (prev.includes(permId)) return prev.filter((p) => p !== permId)
+      const pair = MUTUALLY_EXCLUSIVE.find((p) => p.includes(permId))
+      const other = pair?.find((p) => p !== permId)
+      const base = other ? prev.filter((p) => p !== other) : prev
+      return [...base, permId]
+    })
   }
 
   function toggleGroupAll(group: PermissionGroup) {
     if (hasAll) return
-    const allIds = group.permissions.map((p) => p.id)
+    // Nos pares mutuamente exclusivos, "marcar todas" so marca a 1a opcao (mais ampla)
+    const exclusiveToSkip = new Set(MUTUALLY_EXCLUSIVE.map((pair) => pair[1]))
+    const allIds = group.permissions.map((p) => p.id).filter((id) => !exclusiveToSkip.has(id))
     const allSelected = allIds.every((id) => permissions.includes(id))
     setPermissions((prev) => {
-      if (allSelected) return prev.filter((p) => !allIds.includes(p))
+      if (allSelected) return prev.filter((p) => !allIds.includes(p) && !exclusiveToSkip.has(p))
       const next = new Set(prev)
       for (const id of allIds) next.add(id)
+      for (const id of exclusiveToSkip) next.delete(id)
       return Array.from(next)
     })
   }

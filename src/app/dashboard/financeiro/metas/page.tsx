@@ -1,14 +1,17 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import MetasView from './metas-view'
 import { startOfMonthBR, endOfMonthBR } from '@/lib/datetime'
+import { getFinancialAccess } from '@/lib/financial-access'
 
 export default async function MetasPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
-  const clinicId = userData?.clinic_id
+  if (!user) redirect('/login')
+  const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
+  if (scope === 'none') redirect('/dashboard')
 
   // Mes corrente no fuso de Brasilia
   const startOfMonth = startOfMonthBR().slice(0, 10)
@@ -40,7 +43,11 @@ export default async function MetasPage() {
         </Link>
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-slate-900">Metas</h1>
-          <p className="text-slate-500">Defina e acompanhe suas metas mensais</p>
+          <p className="text-slate-500">
+            {scope === 'own'
+              ? 'Sua receita comparada à meta da clínica'
+              : 'Defina e acompanhe suas metas mensais'}
+          </p>
         </div>
       </div>
 
@@ -48,7 +55,7 @@ export default async function MetasPage() {
         metas={metas || []} 
         receitaMesAtual={receitaMesAtual}
         atendimentosMesAtual={atendimentosMesAtual}
-        clinicId={clinicId}
+        clinicId={clinicId ?? ''}
         currentMonth={currentMonth}
       />
     </div>
