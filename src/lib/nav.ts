@@ -4,6 +4,10 @@ export type NavItem = {
   href: string
   icon: string
   roles: string[]
+  /** Se presente, o item tambem aparece pra quem tiver QUALQUER uma dessas
+   *  permissoes, mesmo que o papel nao esteja em `roles` (ex: financeiro
+   *  liberado por permissao individual pra um profissional). */
+  anyPermissions?: string[]
   children?: NavSubItem[]
 }
 
@@ -39,6 +43,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: '/dashboard/financeiro',
     icon: 'dollarSign',
     roles: FINANCIAL,
+    anyPermissions: ['financial_view_all', 'financial_view_own', 'all'],
     children: [
       { label: 'Dashboard',   href: '/dashboard/financeiro' },
       { label: 'Entradas',    href: '/dashboard/financeiro/entradas' },
@@ -56,5 +61,5 @@ export const BOTTOM_NAV: NavItem[] = [
   { label: 'Agenda',    href: '/dashboard/agenda',      icon: 'calendar', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'] },
   { label: 'Pacientes', href: '/dashboard/pacientes',   icon: 'users',    roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
   { label: 'Recepção',  href: '/dashboard/recepcao',    icon: 'inbox',    roles: [...MANAGEMENT, ...RECEPTION] },
-  { label: 'Financeiro',href: '/dashboard/financeiro',  icon: 'dollar',   roles: FINANCIAL },
+  { label: 'Financeiro',href: '/dashboard/financeiro',  icon: 'dollar',   roles: FINANCIAL, anyPermissions: ['financial_view_all', 'financial_view_own', 'all'] },
 ]

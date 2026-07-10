@@ -2,11 +2,14 @@ import BackButton from '@/components/ui/BackButton'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ProductForm from '../product-form'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 export default async function NovoProductPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+  const access = await getEffectiveAccess(supabase, user.id)
+  if (!can(access, 'stock_edit')) redirect('/dashboard/estoque')
 
   return (
     <div className="max-w-2xl mx-auto">

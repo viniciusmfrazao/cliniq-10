@@ -4,12 +4,15 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import ProductForm from '../../product-form'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 export default async function EditProductPage({ params }: { params: { id: string } }) {
   const { id } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+  const access = await getEffectiveAccess(supabase, user.id)
+  if (!can(access, 'stock_edit')) redirect('/dashboard/estoque')
 
   const { data: product } = await supabase
     .from('products')

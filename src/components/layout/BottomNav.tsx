@@ -15,7 +15,9 @@ type Props = {
 export default function BottomNav({ userRole, activeModules = [], userPermissions = [] }: Props) {
   const pathname = usePathname()
   const items = BOTTOM_NAV.filter(i => {
-    if (!i.roles.includes(userRole)) return false
+    const roleOk = i.roles.includes(userRole)
+    const permOk = i.anyPermissions?.some(p => userPermissions.includes(p)) ?? false
+    if (!roleOk && !permOk) return false
     if (activeModules.length === 0) return true
     return isRouteEnabled(i.href, activeModules)
   })

@@ -4,12 +4,17 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import StockMovementForm from './stock-movement-form'
 import MovementHistory from './movement-history'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 export default async function ProductDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const access = await getEffectiveAccess(supabase, user.id)
+  if (!can(access, 'stock_view')) redirect('/dashboard')
+  const canEdit = can(access, 'stock_edit')
 
   const { data: product } = await supabase
     .from('products')
@@ -61,6 +66,7 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
                   {product.brand || 'Sem marca'} • {product.category} • {product.unit}
                 </p>
               </div>
+              {canEdit && (
               <Link
                 href={`/dashboard/estoque/${product.id}/editar`}
                 className="btn-secondary flex items-center gap-2"
@@ -68,6 +74,7 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
                 <Icon name="edit" className="w-4 h-4" />
                 Editar
               </Link>
+              )}
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
@@ -124,10 +131,12 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Movimentacao */}
+        {canEdit && (
         <div className="card p-6">
           <h2 className="text-sm font-semibold text-slate-900 mb-4">Movimentar Estoque</h2>
           <StockMovementForm product={product} />
         </div>
+        )}
 
         {/* Historico */}
         <div className="card p-6">
