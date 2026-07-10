@@ -52,10 +52,12 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
-  // Filtra por role E por módulos ativos (se houver módulos configurados)
+  // Filtra por role (ou permissão individual) E por módulos ativos (se houver módulos configurados)
   const nav = NAV_ITEMS.filter(i => {
-    // Verifica role
-    if (!i.roles.includes(userRole)) return false
+    // Verifica role — ou, se o item aceitar liberação por permissão, verifica isso também
+    const roleOk = i.roles.includes(userRole)
+    const permOk = i.anyPermissions?.some(p => userPermissions.includes(p)) ?? false
+    if (!roleOk && !permOk) return false
     // Verifica módulos
     if (activeModules.length === 0) return true
     return isRouteEnabled(i.href, activeModules)

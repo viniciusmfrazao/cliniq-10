@@ -8,6 +8,7 @@ import AppProviders from '@/components/layout/AppProviders'
 import WhatsappHealthBanner from '@/components/layout/WhatsappHealthBanner'
 import WhatsappHealthBannerWrapper from '@/components/layout/WhatsappHealthBannerWrapper'
 import BillingOverdueBanner from '@/components/layout/BillingOverdueBanner'
+import { FACTORY_DEFAULTS } from '@/lib/permissions'
 
 export default async function DashboardLayout({ children, searchParams }: { children: React.ReactNode, searchParams?: { admin?: string } }) {
   const supabase = await createClient()
@@ -41,7 +42,19 @@ export default async function DashboardLayout({ children, searchParams }: { chil
   const clinic = clinicResult.data
   const clinicUsers = usersResult.data
   const activeModules = clinic?.settings?.active_modules || []
-  const userPermissions: string[] = Array.isArray(userData?.permissions) ? userData.permissions as string[] : []
+  let userPermissions: string[] = Array.isArray(userData?.permissions) ? userData.permissions as string[] : []
+  // Sem override individual -> cai pro default do papel na clinica, ou pro factory default
+  if (userPermissions.length === 0 && userData?.role && !['admin', 'super_admin'].includes(userData.role)) {
+    const { data: roleDefault } = await supabase
+      .from('clinic_role_defaults')
+      .select('permissions')
+      .eq('clinic_id', userData.clinic_id)
+      .eq('role', userData.role)
+      .maybeSingle()
+    userPermissions = Array.isArray(roleDefault?.permissions)
+      ? roleDefault!.permissions as string[]
+      : FACTORY_DEFAULTS[userData.role] ?? []
+  }
 
   const trialDaysLeft = clinic?.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at).getTime() - Date.now()) / 86400000))

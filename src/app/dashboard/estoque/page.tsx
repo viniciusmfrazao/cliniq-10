@@ -5,11 +5,16 @@ import Icon from '@/components/ui/Icon'
 import ProductList from './product-list'
 import StockAlerts from './stock-alerts'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 export default async function EstoquePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const access = await getEffectiveAccess(supabase, user.id)
+  if (!can(access, 'stock_view')) redirect('/dashboard')
+  const canEdit = can(access, 'stock_edit')
 
   const { data: userData } = await supabase
     .from('users')
@@ -52,10 +57,12 @@ export default async function EstoquePage() {
           <h1 className="text-xl font-bold text-slate-900">Estoque</h1>
           <p className="text-sm text-slate-500 mt-0.5">Controle de produtos e insumos</p>
         </div>
+        {canEdit && (
         <Link href="/dashboard/estoque/novo" className="btn-primary w-auto px-4 flex items-center gap-2">
           <Icon name="plus" className="w-4 h-4" />
           Novo Produto
         </Link>
+        )}
       </div>
 
       {/* Alertas */}
@@ -119,6 +126,7 @@ export default async function EstoquePage() {
         products={products || []}
         categories={CATEGORIES}
         clinicId={userData?.clinic_id || ''}
+        canEdit={canEdit}
       />
     </div>
   )

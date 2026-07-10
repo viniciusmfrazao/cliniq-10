@@ -22,9 +22,10 @@ type Props = {
   products: Product[]
   categories: { id: string; label: string; icon: string }[]
   clinicId?: string
+  canEdit?: boolean
 }
 
-export default function ProductList({ products, categories, clinicId }: Props) {
+export default function ProductList({ products, categories, clinicId, canEdit = true }: Props) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
 
@@ -104,10 +105,12 @@ export default function ProductList({ products, categories, clinicId }: Props) {
           </div>
           <p className="text-slate-600 font-medium">Nenhum produto encontrado</p>
           <p className="text-sm text-slate-400 mt-1">Adicione produtos ao estoque</p>
+          {canEdit && (
           <Link href="/dashboard/estoque/novo" className="btn-primary w-auto px-6 inline-flex items-center gap-2 mt-4">
             <Icon name="plus" className="w-4 h-4" />
             Adicionar Produto
           </Link>
+          )}
         </div>
       ) : (
         <div className="divide-y divide-slate-50">
