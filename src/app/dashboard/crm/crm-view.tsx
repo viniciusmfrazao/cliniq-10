@@ -17,6 +17,7 @@ type Lead = {
   phone: string | null
   email: string | null
   source: string
+  source_detail?: string | null
   status: string
   interest: string | null
   procedure_id: string | null
@@ -1678,6 +1679,11 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
                 })()}
               </h2>
               <p className="text-sm text-slate-500">{source?.icon} {source?.label} • {new Date(lead.created_at).toLocaleDateString('pt-BR')}</p>
+              {lead.source_detail && (
+                <p className="text-xs text-slate-400 italic mt-0.5" title="Mensagem que identificou a origem automaticamente">
+                  &ldquo;{lead.source_detail.slice(0, 80)}{lead.source_detail.length > 80 ? '…' : ''}&rdquo;
+                </p>
+              )}
             </div>
             <button onClick={onClose} className="flex items-center gap-1 p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
               <Icon name="x" className="w-5 h-5" />

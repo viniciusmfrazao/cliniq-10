@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 
@@ -15,6 +15,17 @@ type Source = {
   id: string
   label: string
   icon: string
+}
+
+type SourceRule = {
+  id: string
+  source_id: string
+  match_type: 'hashtag' | 'contains' | 'exact'
+  pattern: string
+  priority: number
+  active: boolean
+  hits: number
+  _new?: boolean // ainda não existe no banco
 }
 
 type Props = {
@@ -44,11 +55,58 @@ const ICONS = ['📸', '💬', '👥', '🔍', '📘', '🌐', '📞', '📧', '
 
 export default function CRMSettingsModal({ clinicId, whatsappInstance = null, currentStages, currentSources, onClose, onSave }: Props) {
   const supabase = createClient()
-  const [tab, setTab] = useState<'stages' | 'sources' | 'followup'>('stages')
+  const [tab, setTab] = useState<'stages' | 'sources' | 'detect' | 'followup'>('stages')
   const [stages, setStages] = useState<Stage[]>(currentStages)
   const [sources, setSources] = useState<Source[]>(currentSources)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Regras de detecção automática de origem (lead_source_rules)
+  const [rules, setRules] = useState<SourceRule[]>([])
+  const [removedRuleIds, setRemovedRuleIds] = useState<string[]>([])
+  const [rulesLoaded, setRulesLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('lead_source_rules')
+      .select('id, source_id, match_type, pattern, priority, active, hits')
+      .eq('clinic_id', clinicId)
+      .order('priority', { ascending: false })
+      .then(({ data }) => {
+        if (!cancelled) {
+          setRules((data as SourceRule[]) || [])
+          setRulesLoaded(true)
+        }
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinicId])
+
+  function addRule() {
+    setRules([...rules, {
+      id: crypto.randomUUID(),
+      source_id: sources[0]?.id || 'whatsapp',
+      match_type: 'hashtag',
+      pattern: '',
+      priority: 0,
+      active: true,
+      hits: 0,
+      _new: true,
+    }])
+  }
+
+  function updateRule(index: number, field: keyof SourceRule, value: string | number | boolean) {
+    const updated = [...rules]
+    updated[index] = { ...updated[index], [field]: value }
+    setRules(updated)
+  }
+
+  function removeRule(index: number) {
+    const rule = rules[index]
+    if (!rule._new) setRemovedRuleIds([...removedRuleIds, rule.id])
+    setRules(rules.filter((_, i) => i !== index))
+  }
   
   // Follow-up settings
   const [followupDays, setFollowupDays] = useState(3)
@@ -152,13 +210,48 @@ export default function CRMSettingsModal({ clinicId, whatsappInstance = null, cu
           .from('crm_settings')
           .insert(settingsData)
 
-    setSaving(false)
-
     if (saveErr) {
+      setSaving(false)
       setSaveError('Não consegui salvar: ' + saveErr.message)
       return
     }
 
+    // Regras de detecção automática (só toca no banco se a aba foi carregada)
+    if (rulesLoaded) {
+      if (removedRuleIds.length > 0) {
+        const { error: delErr } = await supabase
+          .from('lead_source_rules')
+          .delete()
+          .in('id', removedRuleIds)
+        if (delErr) {
+          setSaving(false)
+          setSaveError('Não consegui remover regras: ' + delErr.message)
+          return
+        }
+      }
+      const validRules = rules.filter(r => r.pattern.trim().length > 0)
+      if (validRules.length > 0) {
+        const { error: upErr } = await supabase
+          .from('lead_source_rules')
+          .upsert(validRules.map(r => ({
+            id: r.id,
+            clinic_id: clinicId,
+            source_id: r.source_id,
+            match_type: r.match_type,
+            pattern: r.pattern.trim(),
+            priority: r.priority,
+            active: r.active,
+            updated_at: new Date().toISOString(),
+          })), { onConflict: 'id' })
+        if (upErr) {
+          setSaving(false)
+          setSaveError('Não consegui salvar as regras de detecção: ' + upErr.message)
+          return
+        }
+      }
+    }
+
+    setSaving(false)
     onSave()
   }
 
@@ -189,6 +282,14 @@ export default function CRMSettingsModal({ clinicId, whatsappInstance = null, cu
             }`}
           >
             Fontes de Leads
+          </button>
+          <button
+            onClick={() => setTab('detect')}
+            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+              tab === 'detect' ? 'text-violet-600 border-b-2 border-violet-600' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Detecção
           </button>
           <button
             onClick={() => setTab('followup')}
@@ -301,6 +402,87 @@ export default function CRMSettingsModal({ clinicId, whatsappInstance = null, cu
               >
                 + Adicionar Fonte
               </button>
+            </div>
+          )}
+
+          {/* Detecção automática Tab */}
+          {tab === 'detect' && (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-500">
+                Detecte automaticamente a origem do lead pela primeira mensagem no WhatsApp.
+                Cadastre um código (ex: <span className="font-mono bg-slate-100 px-1 rounded">#BTX01</span>) ou
+                uma frase, e escolha a fonte que será atribuída quando a mensagem contiver esse texto.
+              </p>
+              <div className="p-3 bg-violet-50 rounded-xl text-xs text-violet-700">
+                💡 Use no link do anúncio: <span className="font-mono">wa.me/55SEUNUMERO?text=Olá! Quero saber mais #BTX01</span> —
+                o código é removido da conversa automaticamente após a detecção.
+              </div>
+
+              {!rulesLoaded && <p className="text-sm text-slate-400">Carregando...</p>}
+
+              {rulesLoaded && rules.map((rule, index) => (
+                <div key={rule.id} className="p-3 bg-slate-50 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={rule.match_type}
+                      onChange={e => updateRule(index, 'match_type', e.target.value)}
+                      className="w-32 px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-white"
+                    >
+                      <option value="hashtag">Código #</option>
+                      <option value="contains">Contém frase</option>
+                      <option value="exact">Texto exato</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={rule.pattern}
+                      onChange={e => updateRule(index, 'pattern', e.target.value)}
+                      placeholder={rule.match_type === 'hashtag' ? '#BTX01' : 'vi o anúncio de botox'}
+                      className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-lg"
+                    />
+                    <button
+                      onClick={() => removeRule(index)}
+                      className="p-1.5 text-red-400 hover:text-red-600"
+                    >
+                      <Icon name="trash" className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Atribuir fonte:</span>
+                    <select
+                      value={rule.source_id}
+                      onChange={e => updateRule(index, 'source_id', e.target.value)}
+                      className="flex-1 px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-white"
+                    >
+                      {sources.map(s => (
+                        <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
+                      ))}
+                    </select>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rule.active}
+                        onChange={e => updateRule(index, 'active', e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-violet-600"
+                      />
+                      Ativa
+                    </label>
+                    {!rule._new && (
+                      <span className="text-xs text-slate-400 whitespace-nowrap">
+                        {rule.hits} lead{rule.hits === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {rulesLoaded && (
+                <button
+                  onClick={addRule}
+                  className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-500 hover:border-violet-300 hover:text-violet-600 transition-colors"
+                >
+                  + Adicionar Regra de Detecção
+                </button>
+              )}
             </div>
           )}
 
