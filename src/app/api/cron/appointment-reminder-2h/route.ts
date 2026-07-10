@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
+import { sendWhatsappMessage } from '@/lib/whatsapp'
 import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
@@ -43,6 +43,7 @@ function renderTemplate(template: string, vars: Record<string, string>): string 
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
     .replace(/\{\{\s*endereco\s*\}\}/g, vars.endereco ?? '')
     .replace(/\{\{\s*link_agenda\s*\}\}/g, vars.link_agenda ?? '')
+    .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao ?? '')
 }
 
 const DEFAULT_TEMPLATE_2H = `Oi {{primeiro_nome}}! Passando pra lembrar que daqui a pouco é o seu horário na *{{clinica}}* 🕐
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
   // 1) Agendamentos na janela 2h
   const { data: apps, error: errApps } = await svc
     .from('appointments')
-    .select('id, clinic_id, start_time, end_time, status, patient_id, professional_id, procedure_id')
+    .select('id, clinic_id, start_time, end_time, status, confirmation_slug, patient_id, professional_id, procedure_id')
     .gte('start_time', windowStart.toISOString())
     .lte('start_time', windowEnd.toISOString())
     .in('status', ['scheduled', 'confirmed', 'pending_confirmation'])
@@ -167,6 +168,10 @@ export async function GET(req: NextRequest) {
       linkAgenda2h = generateCalendarLinks(getPublicBaseUrl(), event).googleRedirectUrl
     }
 
+    const linkConfirmacao2h = app.confirmation_slug
+      ? `${getPublicBaseUrl()}/confirmar/${app.confirmation_slug}`
+      : ''
+
     const rawText = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
@@ -178,6 +183,7 @@ export async function GET(req: NextRequest) {
       dia_semana: dt.weekday,
       endereco: endereco2h,
       link_agenda: linkAgenda2h,
+      link_confirmacao: linkConfirmacao2h,
     })
     const text = renderConditional(rawText, { endereco: endereco2h })
 
@@ -190,30 +196,15 @@ export async function GET(req: NextRequest) {
 
     if (errLock) { summary.errors.push(`lock ${app.id}: ${errLock.message}`); continue }
 
-    // Envia como botões (CONFIRMAR / CANCELAR / NÃO SOU EU).
-    // Fallback para texto se Evolution não suportar botões na instância.
-    let result = await sendWhatsappButtons({
+    // Texto simples — sem botões. Se a clínica quiser pedir confirmação
+    // nesse lembrete, deve incluir {{link_confirmacao}} no template.
+    const result = await sendWhatsappMessage({
       clinicId: app.clinic_id,
       phone: patient.phone,
-      body: text.replace(/\n{3,}/g, '\n\n').trim(),
-      footer: clinicName2h,
-      buttons: [
-        { id: 'confirm', text: '✅ Confirmar' },
-        { id: 'cancel', text: '❌ Cancelar' },
-        { id: 'reschedule', text: '🔄 Reagendar' },
-      ],
+      message: text.replace(/\n{3,}/g, '\n\n').trim(),
       purpose: 'automation',
       instanceName: wa.instance_name,
     })
-    if (!result.ok) {
-      result = await sendWhatsappMessage({
-        clinicId: app.clinic_id,
-        phone: patient.phone,
-        message: text + '\n\nResponda *Confirmar* ou *Cancelar*.',
-        purpose: 'automation',
-        instanceName: wa.instance_name,
-      })
-    }
 
     if (result.ok) {
       summary.sent++

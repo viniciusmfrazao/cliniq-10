@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
+import { sendWhatsappMessage } from '@/lib/whatsapp'
 import { logEva } from '@/lib/eva-logger'
+import { getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
 
@@ -69,13 +70,12 @@ function firstName(full: string | null | undefined): string {
 
 // Template padrão — usado quando clínica não configurou template personalizado.
 // Variáveis disponíveis: {{nome}}, {{primeiro_nome}}, {{clinica}}, {{profissional}},
-// {{procedimento}}, {{data}}, {{hora}}, {{dia_semana}}, {{endereco}}.
-// Nota: {{link_confirmacao}} ainda é aceito mas é ignorado (substituído por botões).
+// {{procedimento}}, {{data}}, {{hora}}, {{dia_semana}}, {{endereco}}, {{link_confirmacao}}.
 const DEFAULT_TEMPLATE_CONFIRMA = `Olá {{primeiro_nome}}! Falo do *{{clinica}}* e gostaria de confirmar seu agendamento marcado para *{{dia_semana}}, {{data}}*:
 
 *{{hora}}* — {{procedimento}} — {{profissional}}
 
-Podemos confirmar?`
+Para confirmar sua presença, clique aqui: {{link_confirmacao}}`
 
 function renderTemplate(
   template: string,
@@ -348,6 +348,12 @@ export async function GET(req: NextRequest) {
 
     const dt = formatBrazilDateTime(app.start_time)
     const endereco = clinicAddressById.get(app.clinic_id) ?? ''
+
+    // Link de confirmação por texto — volta a ser o fluxo padrão (sem botões).
+    const linkConfirmacao = app.confirmation_slug
+      ? `${getPublicBaseUrl()}/confirmar/${app.confirmation_slug}`
+      : ''
+
     const bodyText = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
@@ -357,7 +363,7 @@ export async function GET(req: NextRequest) {
       data: dt.date,
       hora: dt.time,
       dia_semana: dt.weekday,
-      link_confirmacao: '', // não usado — substituído por botões interativos
+      link_confirmacao: linkConfirmacao,
       endereco,
     }).replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '')
 
@@ -383,36 +389,20 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Tenta enviar como mensagem com botões; fallback para texto simples
-    // se a instância não suportar (ex.: WhatsApp Personal sem Business API).
-    let result = await sendWhatsappButtons({
+    // Envia sempre como texto simples — sem botões interativos. A confirmação
+    // acontece via link ({{link_confirmacao}}) que aponta pra /confirmar/[slug],
+    // não mais por resposta de botão nem por texto fixo concatenado.
+    const result = await sendWhatsappMessage({
       clinicId: app.clinic_id,
       phone: patient.phone,
-      body: bodyText,
-      footer: clinicName,
-      buttons: [
-        { id: 'confirm', text: '✅ Confirmar' },
-        { id: 'cancel', text: '❌ Cancelar' },
-        { id: 'reschedule', text: '🔄 Reagendar' },
-      ],
+      message: bodyText,
       purpose: 'automation',
       instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
     })
 
-    if (!result.ok) {
-      // Fallback: texto simples com instrução de resposta
-      result = await sendWhatsappMessage({
-        clinicId: app.clinic_id,
-        phone: patient.phone,
-        message: bodyText + '\n\nResponda *Confirmar* ou *Cancelar*.',
-        purpose: 'automation',
-        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
-      })
-    }
-
     if (result.ok) {
       summary.sent++
-      void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'ok', details: { appointment_id: app.id, mode: 'buttons' } })
+      void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'ok', details: { appointment_id: app.id, mode: 'link' } })
     } else {
       // Falha transitória (adiado pelo pacer anti-ban): desfaz a trava pra
       // o próximo ciclo tentar de novo. Sem isso, o agendamento ficava
