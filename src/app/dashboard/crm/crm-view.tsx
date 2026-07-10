@@ -400,6 +400,20 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   // um follow-up manual pendente. Alimenta o card e o filtro "Em follow-up".
   const isInFollowup = (l: Lead): boolean => isEvaFollowup(l) || hasManualFollowup(l)
 
+  // "Verificar" — alerta de silêncio em clínica 100% manual (sem Eva).
+  // Só faz sentido quando não há Eva: com Eva ativa, o ciclo automático dela
+  // (isEvaFollowup, 5 estágios) já cobre esse silêncio e esse alerta ficaria
+  // redundante. Dispara quando: lead está "Em Contato", ninguém (nem
+  // paciente nem atendente) tocou a conversa nos últimos 15min, e não há
+  // follow-up manual agendado pra esse lead.
+  const CHECK_IN_SILENCE_MS = 15 * 60 * 1000
+  const needsCheckIn = (l: Lead): boolean =>
+    !evaActive &&
+    l.status === 'contacted' &&
+    !hasManualFollowup(l) &&
+    !!l.last_contact_at &&
+    Date.now() - new Date(l.last_contact_at).getTime() >= CHECK_IN_SILENCE_MS
+
   const getFollowupCount = (l: Lead): number => l.eva_followup_count ?? 0
 
   const followupBucket = (l: Lead): 'fu_2h' | 'fu_4h' | 'fu_48h' | 'fu_5d' | 'fu_10d' | null => {
@@ -480,6 +494,8 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
     pendingContact: leadsInScope.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() }).length,
     // Atendimento humano (Eva escalou)
     humanReview: leadsInScope.filter(l => l.needs_human_review === true).length,
+    // Conversas paradas em clínica 100% manual (sem Eva) — ver needsCheckIn
+    checkInTotal: leadsInScope.filter(needsCheckIn).length,
     // Followup buckets (Eva aguardando resposta) — 5 estagios
     followupTotal: leadsInScope.filter(isInFollowup).length,
     followup2h: leadsInScope.filter(l => followupBucket(l) === 'fu_2h').length,
@@ -511,7 +527,9 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           ? leadsInScope.filter(l => l.ai_priority === filter)
           : filter === 'pending_contact'
             ? leadsInScope.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() })
-            : filter === 'followup_all'
+            : filter === 'checkin'
+              ? leadsInScope.filter(needsCheckIn)
+              : filter === 'followup_all'
               ? leadsInScope.filter(isInFollowup)
               : isFollowupFilter(filter)
                 ? leadsInScope.filter(l => followupBucket(l) === filter)
@@ -544,7 +562,9 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
         ? leadsInScope.filter(l => l.ai_priority === filter)
         : filter === 'pending_contact'
           ? leadsInScope.filter(l => { const mf = manualFollowups[l.id]; return mf && new Date(mf) <= new Date() })
-          : filter === 'followup_all'
+          : filter === 'checkin'
+            ? leadsInScope.filter(needsCheckIn)
+            : filter === 'followup_all'
             ? leadsInScope.filter(isInFollowup)
             : isFollowupFilter(filter)
               ? leadsInScope.filter(l => followupBucket(l) === filter)
@@ -683,11 +703,12 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
             </select>
           )}
           {(() => {
-            // pendências: follow-up manual vencido e não concluído
+            // pendências: follow-up manual vencido e não concluído, OU
+            // (clínica manual sem Eva) conversa parada sem follow-up agendado
             const now = new Date()
             const pendentes = leadsInScope.filter(l => {
               const mf = manualFollowups[l.id]
-              return mf && new Date(mf) <= now
+              return (mf && new Date(mf) <= now) || needsCheckIn(l)
             })
             const count = pendentes.length
             return (
@@ -723,6 +744,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                           {pendentes.map(l => {
                             const mf = manualFollowups[l.id]
                             const isFollowup = mf && new Date(mf) <= now
+                            const isCheckIn = !isFollowup && needsCheckIn(l)
                             return (
                               <button
                                 key={l.id}
@@ -731,8 +753,8 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="font-medium text-slate-800 text-sm truncate">{l.name}</p>
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${isFollowup ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'}`}>
-                                    {isFollowup ? '📅 Follow-up' : '⏰ Contato'}
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${isFollowup ? 'bg-sky-100 text-sky-700' : isCheckIn ? 'bg-orange-100 text-orange-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {isFollowup ? '📅 Follow-up' : isCheckIn ? '⚠️ Verificar' : '⏰ Contato'}
                                   </span>
                                 </div>
                                 {l.phone && <p className="text-xs text-slate-400 mt-0.5">{l.phone}</p>}
@@ -792,6 +814,17 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           >
             <p className="text-2xl font-bold text-rose-600">{stats.humanReview} 🚨</p>
             <p className="text-xs text-rose-600">Atendimento Humano</p>
+          </button>
+        )}
+
+        {!evaActive && stats.checkInTotal > 0 && (
+          <button
+            onClick={() => setFilter(filter === 'checkin' ? 'all' : 'checkin')}
+            className={`card p-3 text-left bg-gradient-to-br from-orange-50 to-amber-50 transition-all ${filter === 'checkin' ? 'ring-2 ring-orange-400' : 'hover:from-orange-100 hover:to-amber-100'}`}
+            title="Conversas paradas há mais de 15min, sem follow-up agendado. Clique para filtrar."
+          >
+            <p className="text-2xl font-bold text-orange-600">{stats.checkInTotal} ⚠️</p>
+            <p className="text-xs text-orange-600">Verificar</p>
           </button>
         )}
 
@@ -1151,11 +1184,17 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                     ? HUMAN_REVIEW_REASONS[lead.human_review_reason ?? ''] ?? { label: 'Atendimento', emoji: '🚨' }
                     : null
 
+                  // Conversa parada em clínica 100% manual (sem Eva): ninguém
+                  // respondeu em 15min e não há follow-up agendado.
+                  const checkIn = needsCheckIn(lead)
+
                   const cardRing = humanReview
                     ? 'ring-2 ring-rose-400'
-                    : needsContact
-                      ? 'ring-2 ring-amber-400'
-                      : ''
+                    : checkIn
+                      ? 'ring-2 ring-orange-400'
+                      : needsContact
+                        ? 'ring-2 ring-amber-400'
+                        : ''
 
                   const isDragging = draggingLeadId === lead.id
                   return (
@@ -1202,6 +1241,15 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                               {lead.human_review_details}
                             </p>
                           )}
+                        </div>
+                      )}
+                      {checkIn && (
+                        <div
+                          className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-md border bg-orange-50 text-orange-800 border-orange-200 mb-2"
+                          title="Sem resposta do paciente nem do atendente há mais de 15min, e sem follow-up agendado"
+                        >
+                          <span>⚠️</span>
+                          <span className="font-semibold">Verificar</span>
                         </div>
                       )}
                       {retorno && !followup && (
