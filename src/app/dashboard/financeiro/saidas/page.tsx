@@ -54,7 +54,7 @@ export default async function SaidasPage() {
         </Link>
       </div>
 
-      <SaidasList saidas={saidas} clinicId={clinicId} />
+      <SaidasList saidas={saidas} clinicId={clinicId ?? ''} />
     </div>
   )
 }
