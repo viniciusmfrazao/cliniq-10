@@ -1,5 +1,5 @@
 import BackButton from '@/components/ui/BackButton'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -9,7 +9,7 @@ import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 export default async function EditProductPage({ params }: { params: { id: string } }) {
   const { id } = params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
   const access = await getEffectiveAccess(supabase, user.id)
   if (!can(access, 'stock_edit')) redirect('/dashboard/estoque')

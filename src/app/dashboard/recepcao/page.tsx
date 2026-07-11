@@ -1,11 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ReceptionView from './reception-view'
 import { todayBR, startOfDayBR, endOfDayBR } from '@/lib/datetime'
 
 export default async function RecepcaoPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
 
   const { data: userData } = await supabase

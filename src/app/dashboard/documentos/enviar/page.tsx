@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -7,7 +7,7 @@ import SendDocumentForm from './send-form'
 
 export default async function EnviarDocumentoPage({ searchParams }: { searchParams: { patient?: string; appointment?: string } }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
 
   const { data: userData } = await supabase

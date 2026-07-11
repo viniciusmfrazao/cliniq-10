@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -8,7 +8,7 @@ import { getFinancialAccess } from '@/lib/financial-access'
 
 export default async function DevedoresPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
   const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
   // Devedores não têm profissional vinculado — só escopo 'all' pode ver essa área.

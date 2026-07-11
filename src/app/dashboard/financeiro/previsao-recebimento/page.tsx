@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PrevisaoRecebimentoView from './previsao-recebimento-view'
 import BackButton from '@/components/ui/BackButton'
@@ -9,7 +9,7 @@ export const metadata = { title: 'Recebíveis Futuros | Clinike' }
 
 export default async function PrevisaoRecebimentoPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
   const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
   if (scope === 'none') redirect('/dashboard')

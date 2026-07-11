@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
 import RankingsView from './rankings-view'
@@ -9,7 +9,7 @@ export const metadata = { title: 'Rankings | Clinike' }
 
 export default async function RankingsPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
   const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
   if (scope === 'none') redirect('/dashboard')

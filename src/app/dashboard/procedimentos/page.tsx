@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ProcedureList from './procedure-list'
 import ProcedureForm from './procedure-form'
@@ -12,7 +12,7 @@ const PROFESSIONAL_ROLES = ['doctor', 'biomedic', 'nurse', 'esthetician', 'physi
 export default async function ProcedimentosPage() {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
 
   const { data: userData } = await supabase

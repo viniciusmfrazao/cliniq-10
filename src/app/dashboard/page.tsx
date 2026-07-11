@@ -1,5 +1,5 @@
 // rebuild: 2026-06-27 19:47:41
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { parseDateBR } from '@/lib/datetime'
 import Link from 'next/link'
 import NovidadeBanner from './NovidadeBanner'
@@ -47,7 +47,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage({ searchParams }: { searchParams: { welcome?: string } }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) return null
   const { data: userData } = await supabase.from('users').select('name, clinic_id, role').eq('id', user.id).single()
   const { data: clinic } = await supabase.from('clinics').select('name, trial_ends_at, settings').eq('id', userData?.clinic_id).single()

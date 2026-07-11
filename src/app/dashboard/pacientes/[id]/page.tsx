@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { parseDateBR } from '@/lib/datetime'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -38,7 +38,7 @@ export default async function PatientCentralPage({
   const currentTab: PatientTab = isValidTab(searchParams.tab) ? searchParams.tab : 'overview'
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   const { data: userData } = await supabase
     .from('users')
     .select('clinic_id, id, name')

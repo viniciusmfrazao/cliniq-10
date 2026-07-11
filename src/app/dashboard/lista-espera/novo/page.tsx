@@ -1,12 +1,12 @@
 import BackButton from '@/components/ui/BackButton'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import { redirect } from 'next/navigation'
 import WaitingListForm from './waiting-list-form'
 
 export default async function NovaListaEsperaPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
 
   const { data: userData } = await supabase

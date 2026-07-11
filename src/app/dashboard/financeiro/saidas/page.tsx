@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import SaidasList from './saidas-list'
@@ -7,7 +7,7 @@ import { getFinancialAccess } from '@/lib/financial-access'
 
 export default async function SaidasPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
   const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
   // Saídas não têm profissional vinculado — só escopo 'all' pode ver essa área.
