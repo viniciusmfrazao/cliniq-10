@@ -19,6 +19,7 @@ type LogEntry = {
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [clinics, setClinics] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [groupNearby, setGroupNearby] = useState(true)
@@ -31,6 +32,13 @@ export default function LogsPage() {
     dateFrom: '',
     dateTo: '',
   })
+
+  useEffect(() => {
+    fetch('/api/admin/clinics')
+      .then(res => (res.ok ? res.json() : []))
+      .then((data: any[]) => setClinics(Array.isArray(data) ? data.map(c => ({ id: c.id, name: c.name })) : []))
+      .catch(() => setClinics([]))
+  }, [])
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -175,6 +183,19 @@ export default function LogsPage() {
               onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Clínica</label>
+            <select
+              value={filters.clinic_id}
+              onChange={e => setFilters(prev => ({ ...prev, clinic_id: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+            >
+              <option value="">Todas</option>
+              {clinics.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Ação</label>
