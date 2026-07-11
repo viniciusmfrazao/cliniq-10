@@ -329,6 +329,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       procedure_id: mainProcId,
+      confirmation_sent_at: null,
+      reminder_2h_sent_at: null,
     }).eq('id', apt.id)
     // Sincronizar appointment_procedures
     if (editProcIds.length > 0) {
@@ -1015,6 +1017,70 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 </button>
               </div>
             </div>
+
+            <div className={`flex justify-between items-center ${editingSchedule ? 'bg-violet-50 dark:bg-violet-900/20 -mx-1.5 px-1.5 py-1 rounded-lg' : ''}`}>
+              <span className="text-slate-500">Horário:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-slate-700 text-right">
+                  {aptTime} — {apt.procedures?.duration_minutes || 30}min
+                </span>
+                {!editingSchedule && (
+                  <button
+                    onClick={() => {
+                      const d = new Date(apt.start_time)
+                      const tz = 'America/Sao_Paulo'
+                      setEditDate(d.toLocaleDateString('sv-SE', { timeZone: tz }))
+                      setEditTime(d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: tz }))
+                      const existing = apt.appointment_procedures?.map(p => p.procedure_id || '').filter(Boolean) || []
+                      setEditProcIds(existing.length > 0 ? existing : (apt.procedure_id ? [apt.procedure_id] : []))
+                      setEditingSchedule(true)
+                    }}
+                    className="text-[10px] text-violet-600 hover:text-violet-800 font-medium flex-shrink-0"
+                  >
+                    Alterar
+                  </button>
+                )}
+              </div>
+            </div>
+            {editingSchedule && (
+              <div className="space-y-2 pt-1" onClick={e => e.stopPropagation()}>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">Data</label>
+                    <input
+                      type="date"
+                      value={editDate}
+                      onChange={e => setEditDate(e.target.value)}
+                      className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">Horário</label>
+                    <input
+                      type="time"
+                      value={editTime}
+                      onChange={e => setEditTime(e.target.value)}
+                      className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={saveSchedule}
+                    disabled={savingSchedule || !editDate || !editTime}
+                    className="flex-1 py-1.5 text-[11px] font-semibold bg-violet-600 text-white rounded-lg disabled:opacity-50"
+                  >
+                    {savingSchedule ? 'Salvando...' : 'Salvar'}
+                  </button>
+                  <button
+                    onClick={() => setEditingSchedule(false)}
+                    className="flex-1 py-1.5 text-[11px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 rounded-lg"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
             {/* Valor cobrado (com desconto aplicado, se houver) */}
             {apt.valor_cobrado != null && (
               <div className="flex justify-between items-center">
