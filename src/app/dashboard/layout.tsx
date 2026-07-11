@@ -15,17 +15,14 @@ export default async function DashboardLayout({ children, searchParams }: { chil
   const user = await getCachedUser()
   if (!user) redirect('/login')
 
-  // Run user query first (needed for clinic_id)
-  const { data: userData } = await supabase
-    .from('users').select('name, role, clinic_id, permissions').eq('id', user.id).maybeSingle()
-
-  // Super admin sempre vai para /admin, mesmo que tenha clinic_id
-  // Usa o client do próprio usuário (RLS: só vê o próprio registro)
-  const { data: sa } = await supabase
-    .from('super_admins')
-    .select('id')
-    .eq('id', user.id)
-    .maybeSingle()
+  // userData e super_admins só dependem de user.id — rodam em paralelo
+  // (antes eram sequenciais, sem necessidade: economiza 1 round-trip)
+  const [{ data: userData }, { data: sa }] = await Promise.all([
+    supabase.from('users').select('name, role, clinic_id, permissions').eq('id', user.id).maybeSingle(),
+    // Super admin sempre vai para /admin, mesmo que tenha clinic_id
+    // Usa o client do próprio usuário (RLS: só vê o próprio registro)
+    supabase.from('super_admins').select('id').eq('id', user.id).maybeSingle(),
+  ])
   if (sa && searchParams?.admin !== '0') redirect('/admin')
 
   // Usuário sem clinic_id e sem super_admin vai para login
