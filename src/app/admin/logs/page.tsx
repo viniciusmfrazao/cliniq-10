@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 
 type LogEntry = {
   id: string
@@ -21,6 +21,8 @@ export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const [groupNearby, setGroupNearby] = useState(true)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [filters, setFilters] = useState({
     clinic_id: '',
     action: '',
@@ -81,6 +83,45 @@ export default function LogsPage() {
     })
   }
 
+  const formatTime = (date: string) => {
+    return new Date(date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  }
+
+  // Agrupa entradas consecutivas (na lista já ordenada por created_at desc)
+  // do mesmo usuário + mesma clínica + mesma entidade dentro de uma janela de 60s.
+  // Ex: usuário arrastou o card 2x no Kanban em 14s -> vira 1 linha com "2x".
+  function groupLogs(list: LogEntry[]): LogEntry[][] {
+    const groups: LogEntry[][] = []
+    for (const log of list) {
+      const currentGroup = groups[groups.length - 1]
+      const prev = currentGroup?.[currentGroup.length - 1]
+      if (prev) {
+        const sameKey = prev.clinic_id === log.clinic_id &&
+          prev.user_id === log.user_id &&
+          prev.entity_type === log.entity_type &&
+          prev.entity_id === log.entity_id
+        const gapSeconds = (new Date(prev.created_at).getTime() - new Date(log.created_at).getTime()) / 1000
+        if (sameKey && gapSeconds >= 0 && gapSeconds <= 60) {
+          currentGroup.push(log)
+          continue
+        }
+      }
+      groups.push([log])
+    }
+    return groups
+  }
+
+  function toggleGroup(key: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const displayGroups = groupNearby ? groupLogs(logs) : logs.map(l => [l])
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -91,6 +132,17 @@ export default function LogsPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={groupNearby}
+              onChange={e => setGroupNearby(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-blue-600"
+            />
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              Agrupar ações próximas (60s)
+            </span>
+          </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -249,33 +301,70 @@ export default function LogsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                      {formatDate(log.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">
-                      {log.clinic_name || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">
-                      {log.user_name || '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${getActionColor(log.action)}`}>
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                      {log.entity_type}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">
-                      {log.entity_name || log.entity_id?.slice(0, 8) || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-500 font-mono">
-                      {log.ip_address || '-'}
-                    </td>
-                  </tr>
-                ))}
+                {displayGroups.map((group) => {
+                  const log = group[0] // mais recente do grupo
+                  const groupKey = log.id
+                  const isExpanded = expandedGroups.has(groupKey)
+                  const hasMultiple = group.length > 1
+                  return (
+                    <Fragment key={groupKey}>
+                      <tr
+                        className={`hover:bg-slate-50 dark:hover:bg-slate-700/30 ${hasMultiple ? 'cursor-pointer' : ''}`}
+                        onClick={() => hasMultiple && toggleGroup(groupKey)}
+                      >
+                        <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            {hasMultiple && (
+                              <span className="text-slate-400 text-xs">{isExpanded ? '▾' : '▸'}</span>
+                            )}
+                            {formatDate(log.created_at)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">
+                          {log.clinic_name || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">
+                          {log.user_name || '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${getActionColor(log.action)}`}>
+                            {log.action}
+                          </span>
+                          {hasMultiple && (
+                            <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-200 font-semibold">
+                              {group.length}x
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                          {log.entity_type}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">
+                          {log.entity_name || log.entity_id?.slice(0, 8) || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500 font-mono">
+                          {log.ip_address || '-'}
+                        </td>
+                      </tr>
+                      {hasMultiple && isExpanded && group.map((sub, i) => (
+                        <tr key={`${groupKey}-${i}`} className="bg-slate-50/60 dark:bg-slate-900/30">
+                          <td className="px-4 py-2 pl-9 text-xs text-slate-500 whitespace-nowrap">
+                            ↳ {formatTime(sub.created_at)}
+                          </td>
+                          <td className="px-4 py-2" colSpan={2} />
+                          <td className="px-4 py-2">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getActionColor(sub.action)}`}>
+                              {sub.action}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-xs text-slate-500">{sub.entity_type}</td>
+                          <td className="px-4 py-2 text-xs text-slate-600">{sub.entity_name || '-'}</td>
+                          <td className="px-4 py-2" />
+                        </tr>
+                      ))}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
