@@ -157,7 +157,7 @@ function previewFor(kind: ParsedKind, caption: string | null): string {
     case 'audio':
       return '🎤 Mensagem de voz'
     case 'video':
-      return '🎬 Vídeo (confira no celular)'
+      return '🎬 Vídeo'
     case 'document':
       return '📎 Documento'
     case 'sticker':
@@ -452,8 +452,7 @@ export async function POST(
           break
         }
 
-        // Pra mídias (exceto vídeo, que a gente só sinaliza), tenta resolver
-        // base64 e salvar no Storage privado.
+        // Pra mídias, tenta resolver base64 e salvar no Storage privado.
         let mediaUrl: string | null = null
         let mediaPath: string | null = null
         let mimetype: string | null = parsed.mimetype
@@ -461,6 +460,7 @@ export async function POST(
         const isMedia =
           parsed.kind === 'image' ||
           parsed.kind === 'audio' ||
+          parsed.kind === 'video' ||
           parsed.kind === 'document' ||
           parsed.kind === 'sticker'
 
