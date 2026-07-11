@@ -77,6 +77,28 @@ function rowInstanceName(r: EvaRow): string | null {
   return null
 }
 
+// Label do separador de data entre mensagens: "Hoje", "Ontem" ou "10 de julho".
+// Comparação sempre no fuso America/Sao_Paulo, igual ao horário mostrado nas bolhas.
+function dateSeparatorLabel(iso: string): string {
+  const tz = 'America/Sao_Paulo'
+  const dayKey = (d: Date) =>
+    d.toLocaleDateString('en-CA', { timeZone: tz }) // YYYY-MM-DD, estável pra comparar
+
+  const msgDate = new Date(iso)
+  const today = new Date()
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+
+  if (dayKey(msgDate) === dayKey(today)) return 'Hoje'
+  if (dayKey(msgDate) === dayKey(yesterday)) return 'Ontem'
+
+  return msgDate.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: 'long',
+    year: dayKey(msgDate).slice(0, 4) === dayKey(today).slice(0, 4) ? undefined : 'numeric',
+    timeZone: tz,
+  })
+}
+
 function rowToMessage(r: EvaRow): Message | null {
   if (!r.role || !r.content) return null
   return {
@@ -188,6 +210,7 @@ export default function WhatsAppPage() {
   const [evaToggling, setEvaToggling] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const selectedThreadIdRef = useRef<string | null>(null)
+  const conversationsRef = useRef<Conversation[]>([])
   /** Apelidos das linhas (instance_name → label amigável) vindos da API */
   const [lineLabels, setLineLabels] = useState<Record<string, string>>({})
   /** Linhas conectadas onde a Eva pode atender (role_inbound) — para o seletor do toggle */
@@ -221,6 +244,10 @@ export default function WhatsAppPage() {
   useEffect(() => {
     selectedThreadIdRef.current = selectedConversation?.id ?? null
   }, [selectedConversation])
+
+  useEffect(() => {
+    conversationsRef.current = conversations
+  }, [conversations])
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -289,12 +316,28 @@ export default function WhatsAppPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneFromQuery, clinicId, conversations])
 
+  // Reconcilia (rebusca do banco) a lista de conversas + a conversa aberta.
+  // Usado depois de qualquer gap de realtime (reconexão do canal ou volta de
+  // foco da aba) pra pegar mensagens que chegaram enquanto o WebSocket
+  // estava caído — o Postgres Changes não faz replay de eventos perdidos.
+  const reconcile = useCallback(() => {
+    if (!clinicId) return
+    loadConversations(clinicId)
+    const open = selectedThreadIdRef.current
+    if (open) {
+      const conv = conversationsRef.current.find((c) => c.id === open)
+      if (conv) loadMessages(conv.phone, conv.instanceName)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinicId])
+
   // Subscription Realtime — reconexão automática em caso de erro
   useEffect(() => {
     if (!clinicId) return
 
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     let destroyed = false
+    let hasConnectedBefore = false
 
     // Nome fixo do canal (sem Date.now) — evita múltiplos canais acumulados
     const CHANNEL_NAME = `whatsapp:${clinicId}`
@@ -325,6 +368,10 @@ export default function WhatsAppPage() {
           if (status === 'SUBSCRIBED') {
             setRealtimeStatus('live')
             if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
+            // Reconectou depois de ter caído (não é a primeira conexão) —
+            // pode ter perdido inserts durante o gap, então rebusca.
+            if (hasConnectedBefore) reconcile()
+            hasConnectedBefore = true
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             setRealtimeStatus('error')
             // Reconectar após 5s — sem re-criar canal duplicado
@@ -339,13 +386,22 @@ export default function WhatsAppPage() {
 
     subscribe()
 
+    // Navegadores throttlam/matam WebSockets com a aba em background sem
+    // sempre disparar CHANNEL_ERROR de forma limpa — ao voltar o foco,
+    // rebusca como rede de segurança extra.
+    function onVisible() {
+      if (document.visibilityState === 'visible') reconcile()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
     return () => {
       destroyed = true
       if (retryTimer) clearTimeout(retryTimer)
+      document.removeEventListener('visibilitychange', onVisible)
       try { supabase.removeChannel(supabase.channel(CHANNEL_NAME)) } catch { /* noop */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clinicId])
+  }, [clinicId, reconcile])
 
   async function loadConfig() {
     try {
@@ -1302,9 +1358,24 @@ export default function WhatsAppPage() {
 
               {/* Mensagens */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {messages.map((msg) => (
-                  <MessageBubble key={msg.id} msg={msg} />
-                ))}
+                {messages.map((msg, idx) => {
+                  const prev = idx > 0 ? messages[idx - 1] : null
+                  const showDateSeparator =
+                    !prev ||
+                    dateSeparatorLabel(prev.created_at) !== dateSeparatorLabel(msg.created_at)
+                  return (
+                    <div key={msg.id}>
+                      {showDateSeparator && (
+                        <div className="flex justify-center my-2">
+                          <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-700 dark:text-slate-300 rounded-full px-3 py-1">
+                            {dateSeparatorLabel(msg.created_at)}
+                          </span>
+                        </div>
+                      )}
+                      <MessageBubble msg={msg} />
+                    </div>
+                  )
+                })}
                 <div ref={messagesEndRef} />
               </div>
 
