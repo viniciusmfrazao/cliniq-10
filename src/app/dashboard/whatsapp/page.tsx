@@ -1486,10 +1486,27 @@ function MessageBubble({ msg }: { msg: Message }) {
           </div>
         )}
 
-        {msg.kind === 'video' && (
-          <div className={`px-3 py-2 rounded-xl ${isMine ? 'bg-emerald-600/40' : 'bg-black/10'} text-xs flex items-center gap-2`}>
+        {msg.kind === 'video' && msg.mediaUrl && (
+          <video
+            controls
+            src={msg.mediaUrl}
+            className="rounded-xl max-w-[260px] max-h-[320px] mb-1 -mx-1 -mt-1"
+          >
+            Seu navegador não suporta vídeo.
+          </video>
+        )}
+
+        {msg.kind === 'video' && !msg.mediaUrl && msg.mediaPath && (
+          <div className={`px-3 py-2 rounded-xl ${isMine ? 'bg-emerald-600/40' : 'bg-black/10'} text-xs italic flex items-center gap-2`}>
             <span>🎬</span>
-            <span>Vídeo recebido — confira no celular</span>
+            <span>Vídeo (carregando…)</span>
+          </div>
+        )}
+
+        {msg.kind === 'video' && !msg.mediaUrl && !msg.mediaPath && (
+          <div className="px-3 py-2 rounded-xl bg-amber-500/20 text-xs italic flex items-center gap-2">
+            <span>🎬</span>
+            <span>Vídeo (não foi possível baixar — confira no celular)</span>
           </div>
         )}
 
