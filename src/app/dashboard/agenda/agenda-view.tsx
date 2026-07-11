@@ -702,8 +702,29 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 >
                   ✕ Não compareceu
                 </button>
+                <button
+                  onClick={() => { onStatusChange(apt.id, 'cancelled'); setShowPreview(false) }}
+                  className="flex-1 py-2 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+                >
+                  ⊘ Cancelar
+                </button>
               </div>
             )}
+
+            {/* Seletor completo de status — mesmas opções do desktop (reagendamento etc.) */}
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500 font-medium">Alterar status:</span>
+              <select
+                value={apt.status}
+                onChange={(e) => onStatusChange(apt.id, e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none transition-all"
+              >
+                {ALL_STATUSES.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+
 
             {/* Ações */}
             <div className="space-y-2 pt-2">
