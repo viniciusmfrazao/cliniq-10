@@ -679,11 +679,11 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
             {/* Mudar status */}
             {!isCancelled && apt.status !== 'completed' && (
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {apt.status !== 'confirmed' && (
                   <button
                     onClick={() => { onStatusChange(apt.id, 'confirmed'); setShowPreview(false) }}
-                    className="flex-1 py-2 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                    className="py-2 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
                   >
                     ✓ Confirmar
                   </button>
@@ -691,39 +691,25 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 {apt.status !== 'in_progress' && (
                   <button
                     onClick={() => { onStatusChange(apt.id, 'in_progress'); setShowPreview(false) }}
-                    className="flex-1 py-2 text-xs font-semibold bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
+                    className="py-2 text-xs font-semibold bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
                   >
                     ▶ Em atendimento
                   </button>
                 )}
                 <button
                   onClick={() => { onStatusChange(apt.id, 'no_show'); setShowPreview(false) }}
-                  className="flex-1 py-2 text-xs font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                  className="py-2 text-xs font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
                 >
                   ✕ Não compareceu
                 </button>
                 <button
                   onClick={() => { onStatusChange(apt.id, 'cancelled'); setShowPreview(false) }}
-                  className="flex-1 py-2 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+                  className="py-2 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
                 >
                   ⊘ Cancelar
                 </button>
               </div>
             )}
-
-            {/* Seletor completo de status — mesmas opções do desktop (reagendamento etc.) */}
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-slate-500 font-medium">Alterar status:</span>
-              <select
-                value={apt.status}
-                onChange={(e) => onStatusChange(apt.id, e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none transition-all"
-              >
-                {ALL_STATUSES.map(s => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </div>
 
 
             {/* Ações */}
