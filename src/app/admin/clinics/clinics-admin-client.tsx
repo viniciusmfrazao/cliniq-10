@@ -21,6 +21,13 @@ type Clinic = {
   appointments_count: number
   atendimentos_count: number
   active_modules: string[]
+  last_activity: {
+    last_activity_at: string
+    action: string
+    entity_type: string
+    entity_name: string
+    user_name: string
+  } | null
   admin: { name: string; email: string } | null
   whatsapp: { status: string; instance: string } | null
   users: Array<{ name: string; email: string; role: string }>
@@ -29,6 +36,24 @@ type Clinic = {
 function getDaysLeft(dateStr: string | null): number | null {
   if (!dateStr) return null
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+}
+
+const ACTION_LABELS: Record<string, string> = { insert: 'criou', update: 'atualizou', delete: 'excluiu' }
+const ENTITY_LABELS: Record<string, string> = {
+  appointments: 'agendamento', patients: 'paciente', leads: 'lead',
+  users: 'usuário', products: 'produto', stock_movements: 'estoque',
+}
+
+function formatLastActivity(clinic: Clinic): string {
+  const a = clinic.last_activity
+  if (!a) return 'Sem uso registrado'
+  const date = new Date(a.last_activity_at)
+  const dateStr = date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const actionLabel = ACTION_LABELS[a.action] || a.action
+  const entityLabel = ENTITY_LABELS[a.entity_type] || a.entity_type
+  const who = a.user_name || 'usuário'
+  const what = a.entity_name ? `"${a.entity_name}"` : ''
+  return `${dateStr} — ${who} ${actionLabel} ${entityLabel} ${what}`.trim()
 }
 
 function StatusBadge({ clinic }: { clinic: Clinic }) {
@@ -216,6 +241,7 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
                 {(clinic.clinic_phone || clinic.billing_whatsapp) && (
                   <p className="text-xs text-slate-400">📱 {clinic.clinic_phone || clinic.billing_whatsapp}</p>
                 )}
+                <p className="text-xs text-slate-400 mt-0.5">🕐 {formatLastActivity(clinic)}</p>
               </div>
 
               {/* Coluna de métricas */}

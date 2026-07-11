@@ -33,10 +33,11 @@ export default async function ClinicsPage() {
   const appointmentCountMap: Record<string, number> = {}
   const atendimentoCountMap: Record<string, number> = {}
 
-  const [adminsRes, waListRes, usersRes, ...countResults] = await Promise.all([
+  const [adminsRes, waListRes, usersRes, lastActivityRes, ...countResults] = await Promise.all([
     svc.from('users').select('clinic_id, name, email').in('clinic_id', clinicIds).eq('role', 'admin'),
     svc.from('clinic_whatsapp').select('clinic_id, status, instance_name, is_default').in('clinic_id', clinicIds),
     svc.from('users').select('clinic_id, name, email, role').in('clinic_id', clinicIds).eq('active', true).order('name'),
+    svc.rpc('admin_last_clinic_activity'),
     ...clinicIds.flatMap(id => [
       svc.from('users').select('id', { count: 'exact', head: true }).eq('clinic_id', id).eq('active', true),
       svc.from('patients').select('id', { count: 'exact', head: true }).eq('clinic_id', id),
@@ -48,6 +49,21 @@ export default async function ClinicsPage() {
   const admins = adminsRes.data
   const waList = waListRes.data
   const allClinicUsers = usersRes.data || []
+
+  if (lastActivityRes.error) {
+    console.error('[admin/clinics] erro last_activity:', lastActivityRes.error.message)
+  }
+
+  const lastActivityMap: Record<string, {
+    last_activity_at: string
+    action: string
+    entity_type: string
+    entity_name: string
+    user_name: string
+  }> = {}
+  for (const row of (lastActivityRes.data || [] as any[])) {
+    lastActivityMap[row.clinic_id] = row
+  }
 
   clinicIds.forEach((id, i) => {
     userCountMap[id] = countResults[i * 4]?.count ?? 0
@@ -84,6 +100,7 @@ export default async function ClinicsPage() {
     appointments_count: appointmentCountMap[c.id] || 0,
     atendimentos_count: atendimentoCountMap[c.id] || 0,
     active_modules: c.settings?.active_modules || [],
+    last_activity: lastActivityMap[c.id] || null,
   }))
 
   return <ClinicsAdminClient clinics={enriched} />
