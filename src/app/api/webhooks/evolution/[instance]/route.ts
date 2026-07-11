@@ -227,15 +227,19 @@ async function logWebhook(args: {
 }) {
   try {
     // Body só é salvo para erros — logs de sucesso não precisam do payload completo
-    // Isso evita acúmulo de GBs de dados desnecessários no banco
+    // Isso evita acúmulo de GBs de dados desnecessários no banco.
+    // EXCEÇÃO TEMPORÁRIA: messages_update sempre loga o body — investigando
+    // caso de vídeo enviado direto do celular que não gera messages_upsert
+    // (2026-07-11). Reverter depois de diagnosticado.
     const isSuccess = args.statusCode >= 200 && args.statusCode < 300
+    const forceBody = args.event === 'messages_update'
     await args.svc.from('evolution_webhook_logs').insert({
       instance: args.instance,
       event: args.event ?? null,
       status_code: args.statusCode,
       error: args.error ?? null,
-      body: isSuccess ? null : (args.body ?? null),
-      headers: isSuccess ? null : (args.headers ?? null),
+      body: (isSuccess && !forceBody) ? null : (args.body ?? null),
+      headers: (isSuccess && !forceBody) ? null : (args.headers ?? null),
       query: args.query ?? null,
     })
   } catch (e) {
