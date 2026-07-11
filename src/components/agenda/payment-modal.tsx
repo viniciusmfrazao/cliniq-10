@@ -49,6 +49,8 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [splits, setSplits] = useState<Split[]>([])
   const [debitos, setDebitos] = useState<Debito[]>([])
   const [obs, setObs] = useState('')
+  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>('valor')
+  const [descontoValorStr, setDescontoValorStr] = useState('')
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -143,10 +145,31 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valor, 0)
   // Use valor_cobrado set by professional if available, otherwise fall back to procedure price
   const baseTotal = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : totalProcs
-  const totalDever = baseTotal + totalDebitos
+  const descontoNum = parseFloat(descontoValorStr) || 0
+  const totalComDesconto = descontoTipo === 'percentual'
+    ? Math.max(0, baseTotal * (1 - descontoNum / 100))
+    : Math.max(0, baseTotal - descontoNum)
+  const totalDever = totalComDesconto + totalDebitos
   const totalPago = splits.reduce((s, p) => s + p.valor, 0)
   const totalLiquido = splits.reduce((s, p) => s + p.liquido, 0)
   const saldo = Math.max(0, totalDever - totalPago)
+
+  // Com pagamento único (padrão), o valor já vem pré-preenchido com o total —
+  // ajusta automaticamente ao mudar o desconto. Se já houver split(s) extra,
+  // não mexe pra não sobrescrever valores que o usuário já ajustou manualmente.
+  function applyDesconto(newTipo: 'valor' | 'percentual', newValorStr: string) {
+    setDescontoTipo(newTipo)
+    setDescontoValorStr(newValorStr)
+    if (splits.length === 1) {
+      const num = parseFloat(newValorStr) || 0
+      const novoTotal = newTipo === 'percentual'
+        ? Math.max(0, baseTotal * (1 - num / 100))
+        : Math.max(0, baseTotal - num)
+      setSplits(prev => prev.map((s, i) =>
+        i === 0 ? { ...s, valor: novoTotal, liquido: novoTotal * (1 - s.taxa / 100) } : s
+      ))
+    }
+  }
 
   async function save() {
     setSaving(true)
@@ -186,9 +209,16 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         if (error) console.error('Erro ao quitar débito:', error)
       }
 
-      // Marcar pagamento
+      // Marcar pagamento (+ desconto aplicado no momento do pagamento, se houver)
       await supabase.from('appointments')
-        .update({ payment_registered_at: new Date().toISOString() })
+        .update({
+          payment_registered_at: new Date().toISOString(),
+          ...(descontoNum > 0 ? {
+            desconto_tipo: descontoTipo,
+            desconto_valor: descontoNum,
+            valor_cobrado: totalComDesconto,
+          } : {}),
+        })
         .eq('id', appointmentId)
 
       router.refresh()
@@ -250,6 +280,35 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Desconto */}
+              <div className="bg-slate-50 rounded-xl p-3">
+                <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Desconto</p>
+                <div className="flex gap-2">
+                  <select
+                    value={descontoTipo}
+                    onChange={e => applyDesconto(e.target.value as 'valor' | 'percentual', descontoValorStr)}
+                    className="input text-sm w-20 flex-shrink-0"
+                  >
+                    <option value="valor">R$</option>
+                    <option value="percentual">%</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0"
+                    value={descontoValorStr}
+                    onChange={e => applyDesconto(descontoTipo, e.target.value)}
+                    className="input text-sm flex-1"
+                  />
+                </div>
+                {descontoNum > 0 && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    {fmt(baseTotal)} <span className="text-slate-400">→</span> <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
+                  </p>
+                )}
               </div>
 
               {/* Adicionar procedimento */}
@@ -396,10 +455,18 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
               {/* Resumo */}
               <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">
-                {totalDebitos > 0 && <>
+                {(totalDebitos > 0 || descontoNum > 0) && (
                   <div className="flex justify-between text-sm text-slate-500"><span>Procedimentos</span><span>{fmt(totalProcs)}</span></div>
+                )}
+                {descontoNum > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600">
+                    <span>Desconto</span>
+                    <span>-{descontoTipo === 'percentual' ? `${descontoNum}%` : fmt(descontoNum)}</span>
+                  </div>
+                )}
+                {totalDebitos > 0 && (
                   <div className="flex justify-between text-sm text-red-500 pb-1.5 border-b border-slate-200"><span>Débitos selecionados</span><span>{fmt(totalDebitos)}</span></div>
-                </>}
+                )}
                 <div className="flex justify-between text-sm font-bold text-slate-900"><span>Total a pagar</span><span>{fmt(totalDever)}</span></div>
                 <div className="flex justify-between text-sm text-slate-500"><span>Total líquido</span><span className="font-semibold text-emerald-600">{fmt(totalLiquido)}</span></div>
 
