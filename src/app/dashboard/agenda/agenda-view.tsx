@@ -101,7 +101,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
   compact = false,
   isRightColumn = false,
   columnIndex = 0,
-  totalColumns = 1
+  totalColumns = 1,
+  heightPx
 }: { 
   apt: Appointment
   clinicId: string
@@ -114,6 +115,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
   columnIndex?: number
   totalColumns?: number
   canDrag?: boolean
+  // Altura real renderizada em px (só na grade proporcional do dia) — usada
+  // pra decidir o layout ultra-compacto de agendamentos curtos (ex: 15min)
+  heightPx?: number
 }) {
   const [showPreview, setShowPreview] = useState(false)
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -466,6 +470,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.phone)
   const isConfirmed = apt.status === 'confirmed'
   const isCancelled = apt.status === 'cancelled' || apt.status === 'no_show'
+  // Agendamentos curtos (ex: 15min) renderizam num card muito baixo na grade
+  // proporcional do dia — sem espaço pra 2-3 linhas, então usa layout de 1 linha só
+  const isTiny = typeof heightPx === 'number' && heightPx < 44
   const canCheckIn = ['scheduled', 'confirmed', 'pending_confirmation'].includes(apt.status) && !apt.checked_in_at
   const isCheckedIn = !!apt.checked_in_at
   const checkedInTime = apt.checked_in_at 
@@ -509,7 +516,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
             handleMouseEnter()
           }
         }}
-        className={`block p-2 rounded-lg h-full overflow-hidden ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-40' : ''}`}
+        className={`block ${isTiny ? 'p-1' : 'p-2'} rounded-lg h-full overflow-hidden ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-40' : ''}`}
       >
         {/* Botão rápido de agendar no mesmo slot — só para cancelados */}
         {isCancelled && (
@@ -522,38 +529,58 @@ const AppointmentCard = React.memo(function AppointmentCard({
             <Icon name="plus" className="w-3 h-3" />
           </Link>
         )}
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-xs font-bold text-slate-700">{aptTime}</span>
-          <div className="flex items-center gap-1">
-            {isConfirmed && !isCheckedIn && (
-              <span className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center" title="Confirmado">
-                <Icon name="check" className="w-2 h-2 text-white" />
-              </span>
-            )}
+        {isTiny ? (
+          <div className="flex items-center gap-1 h-full">
+            <span className="text-[10px] font-bold text-slate-700 flex-shrink-0">{aptTime}</span>
+            <span className="text-[10px] font-semibold text-slate-900 truncate flex-1">
+              {apt.patients?.name || 'Paciente'}
+            </span>
             {isCheckedIn && (
-              <span className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center" title={`Chegou às ${checkedInTime}`}>
-                <Icon name="check" className="w-2 h-2 text-white" />
-              </span>
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0" title={`Chegou às ${checkedInTime}`} />
+            )}
+            {isConfirmed && !isCheckedIn && (
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" title="Confirmado" />
             )}
             {isPatientIncomplete && (
-              <span className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
-                <Icon name="bell" className="w-2 h-2 text-white" />
-              </span>
-            )}
-            {onDragStart && (
-              <Icon name="menu" className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100" />
+              <span className="w-1.5 h-1.5 bg-amber-400 rounded-full flex-shrink-0" title="Cadastro pendente" />
             )}
           </div>
-        </div>
-        <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-slate-900 truncate`}>
-          {apt.patients?.name || 'Paciente'}
-        </p>
-        {!compact && (
-          <p className="text-xs text-slate-500 truncate">
-            {apt.appointment_procedures && apt.appointment_procedures.length > 0
-              ? apt.appointment_procedures.map(p => p.procedure_name).join(' + ')
-              : apt.procedures?.name || 'Atendimento'}
-          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-xs font-bold text-slate-700">{aptTime}</span>
+              <div className="flex items-center gap-1">
+                {isConfirmed && !isCheckedIn && (
+                  <span className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center" title="Confirmado">
+                    <Icon name="check" className="w-2 h-2 text-white" />
+                  </span>
+                )}
+                {isCheckedIn && (
+                  <span className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center" title={`Chegou às ${checkedInTime}`}>
+                    <Icon name="check" className="w-2 h-2 text-white" />
+                  </span>
+                )}
+                {isPatientIncomplete && (
+                  <span className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
+                    <Icon name="bell" className="w-2 h-2 text-white" />
+                  </span>
+                )}
+                {onDragStart && (
+                  <Icon name="menu" className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100" />
+                )}
+              </div>
+            </div>
+            <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-slate-900 truncate`}>
+              {apt.patients?.name || 'Paciente'}
+            </p>
+            {!compact && (
+              <p className="text-xs text-slate-500 truncate">
+                {apt.appointment_procedures && apt.appointment_procedures.length > 0
+                  ? apt.appointment_procedures.map(p => p.procedure_name).join(' + ')
+                  : apt.procedures?.name || 'Atendimento'}
+              </p>
+            )}
+          </>
         )}
       </Link>
 
@@ -1874,6 +1901,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                                 columnIndex={profIdx}
                                 totalColumns={displayProfessionals.length}
                                 canDrag={true}
+                                heightPx={height - 4}
                               />
                             </div>
                           )
