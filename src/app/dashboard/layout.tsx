@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient, getCachedUser } from '@/lib/supabase/server'
 import Sidebar from '@/components/layout/Sidebar'
 import BottomNav from '@/components/layout/BottomNav'
 import TopBar from '@/components/layout/TopBar'
@@ -12,7 +12,7 @@ import { FACTORY_DEFAULTS } from '@/lib/permissions'
 
 export default async function DashboardLayout({ children, searchParams }: { children: React.ReactNode, searchParams?: { admin?: string } }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
 
   // Run user query first (needed for clinic_id)

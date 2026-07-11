@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import AttendanceHeader from './attendance-header'
 import MedicalRecordSection from './medical-record-section'
@@ -20,7 +20,7 @@ import AnamneseHistorico from './anamnese-historico'
 export default async function AtendimentoPage({ params }: { params: { appointmentId: string } }) {
   const { appointmentId } = params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
 
   const { data: userData } = await supabase

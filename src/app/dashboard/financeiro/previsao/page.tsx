@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PrevisaoFaturamentoView from './previsao-view'
 import BackButton from '@/components/ui/BackButton'
@@ -9,7 +9,7 @@ export const metadata = { title: 'Previsão de Faturamento | Clinike' }
 
 export default async function PrevisaoFaturamentoPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
   const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
   // Cruza agendamentos futuros de todos os profissionais — só escopo 'all' por enquanto.

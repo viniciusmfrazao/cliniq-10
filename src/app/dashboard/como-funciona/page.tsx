@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { defaultGuideForRole } from '@/lib/guides'
 import GuideView from './guide-view'
 
@@ -13,9 +13,7 @@ export default async function ComoFuncionaPage({
   searchParams: { papel?: string }
 }) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   const { data: userData } = await supabase
     .from('users')
     .select('role, name')

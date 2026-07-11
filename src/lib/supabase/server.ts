@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { cache } from 'react'
 
 // Extrai o project ref da URL do Supabase (funciona em prod e staging)
 // Ex: https://yqrjbyaucimvmzpfipgs.supabase.co → yqrjbyaucimvmzpfipgs
@@ -48,6 +49,17 @@ export async function createClient() {
     }
   )
 }
+
+// Memoiza auth.getUser() por request (React cache dedup) — evita repetir a
+// verificação de JWT (chamada de rede ao Auth do Supabase) toda vez que o
+// layout e a página chamam getUser() na mesma navegação. Mesma assinatura
+// de retorno (`User | null`) do padrão antigo, então é drop-in replacement
+// de `const { data: { user } } = await supabase.auth.getUser()`.
+export const getCachedUser = cache(async () => {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
+})
 
 export function createServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

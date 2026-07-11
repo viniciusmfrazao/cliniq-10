@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DisponibilidadeClient from './disponibilidade-client'
 import BackButton from '@/components/ui/BackButton'
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function DisponibilidadePage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
 
   const { data: userData } = await supabase

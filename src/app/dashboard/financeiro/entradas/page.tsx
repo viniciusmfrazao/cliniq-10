@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function EntradasPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) redirect('/login')
   const { scope, clinicId } = await getFinancialAccess(supabase, user.id)
   if (scope === 'none') redirect('/dashboard')

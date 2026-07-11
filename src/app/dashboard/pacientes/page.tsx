@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCachedUser } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PatientSearch from './patient-search'
@@ -15,7 +15,7 @@ export default async function PacientesPage({
   const safeQuery = sanitizeSearchTerm(sp.q)
   const filter = sp.filter
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).maybeSingle()
 
   const currentPage = Math.max(1, parseInt(sp.page || '1'))
