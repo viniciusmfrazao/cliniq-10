@@ -5,67 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 import { formatBRL } from '@/lib/format'
 import { todayBR, addDaysBR, startOfMonthBR, endOfMonthBR, parseDateBR } from '@/lib/datetime'
-
-// Mesmo mapeamento usado em entradas/nova/entrada-form.tsx (formato "Crédito 3x")
-const FORMA_PARA_KEY: Record<string, string> = {
-  'Pix': 'pix', 'Dinheiro': 'dinheiro', 'Débito': 'debito',
-  'Crédito 1x': 'credito_1x', 'Crédito 2x': 'credito_2x', 'Crédito 3x': 'credito_3x',
-  'Crédito 4x': 'credito_4x', 'Crédito 5x': 'credito_5x', 'Crédito 6x': 'credito_6x',
-  'Crédito 7x': 'credito_7x', 'Crédito 8x': 'credito_8x', 'Crédito 9x': 'credito_9x',
-  'Crédito 10x': 'credito_10x', 'Crédito 11x': 'credito_11x', 'Crédito 12x': 'credito_12x',
-}
-
-const BANDEIRA_PARA_KEY: Record<string, string[]> = {
-  'Visa': ['visa'],
-  'Mastercard': ['master'],
-  'Amex, Elo, outros': ['amex', 'elo'],
-}
-
-const BANDEIRA_KEYS_CONHECIDAS = ['visa', 'master', 'elo', 'amex', 'hipercard']
-const FORMAS_SIMPLES = ['pix', 'dinheiro', 'debito', 'boleto']
-
-// `entradas.forma_pagamento` chega em dois formatos diferentes dependendo de onde
-// foi lançada a entrada: "Crédito 3x" (Nova Entrada manual) ou "credito" + n_parcelas
-// separado (modal de Registrar Pagamento do agendamento). Normaliza os dois pra
-// chave usada em taxas_pagamento (ex: credito_3x).
-function normalizeFormaKey(formaPagamento: string, nParcelas: number): string | null {
-  const raw = (formaPagamento || '').trim()
-  if (FORMA_PARA_KEY[raw]) return FORMA_PARA_KEY[raw]
-  const lower = raw.toLowerCase()
-  if (lower === 'credito' || lower === 'crédito') return `credito_${nParcelas || 1}x`
-  if (/^credito_\d+x$/.test(lower)) return lower
-  if (FORMAS_SIMPLES.includes(lower)) return lower
-  return null
-}
-
-// `entradas.bandeira` também chega em dois formatos: label ("Visa", "Amex, Elo, outros")
-// do formulário manual, ou key já normalizada ("visa", "amex") do modal de pagamento.
-function normalizeBandeiraKeys(bandeira: string | null): string[] {
-  if (!bandeira) return []
-  const raw = bandeira.trim()
-  const lower = raw.toLowerCase()
-  if (BANDEIRA_KEYS_CONHECIDAS.includes(lower)) return [lower]
-  if (lower === 'todas') return []
-  if (BANDEIRA_PARA_KEY[raw]) return BANDEIRA_PARA_KEY[raw]
-  return []
-}
-
-type TaxaPag = { forma: string; bandeira: string; dias_repasse: number; modo_repasse: 'fixo' | 'parcelado' }
-
-// Resolve prazo de repasse pela mesma lógica de fallback usada para taxa:
-// bandeira específica > 'todas' > default (fixo D+30 se não configurado)
-function getPrazo(taxas: TaxaPag[], formaPagamento: string, bandeira: string | null, nParcelas: number): { dias: number; modo: 'fixo' | 'parcelado' } {
-  const formaKey = normalizeFormaKey(formaPagamento, nParcelas)
-  if (!formaKey) return { dias: 30, modo: 'fixo' }
-  const bandeiraKeys = normalizeBandeiraKeys(bandeira)
-  for (const bKey of bandeiraKeys) {
-    const t = taxas.find(t => t.forma === formaKey && t.bandeira === bKey)
-    if (t) return { dias: t.dias_repasse, modo: t.modo_repasse }
-  }
-  const todas = taxas.find(t => t.forma === formaKey && t.bandeira === 'todas')
-  if (todas) return { dias: todas.dias_repasse, modo: todas.modo_repasse }
-  return { dias: 30, modo: 'fixo' }
-}
+import { gerarParcelas, type TaxaPag } from '@/lib/recebiveis'
 
 const PERIODOS = [
   { value: 'proximos_30', label: 'Próximos 30 dias' },
@@ -88,24 +28,12 @@ function getRange(periodo: string): { from: string; to: string | null } {
   return { from: hoje, to: null }
 }
 
-type Parcela = {
-  key: string
-  entradaId: string
-  data: string
-  parcelaNum: number
-  totalParcelas: number
-  valorLiquido: number
-  pacienteNome: string
-  procedimentoNome: string
-  formaPagamento: string
-}
-
 export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string }) {
   const supabase = createClient()
 
   const [periodo, setPeriodo] = useState('proximos_30')
   const [groupBy, setGroupBy] = useState<'mes' | 'forma' | 'dia'>('mes')
-  const [parcelas, setParcelas] = useState<Parcela[]>([])
+  const [parcelas, setParcelas] = useState<ReturnType<typeof gerarParcelas>>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -114,7 +42,7 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
       try {
         const { data: taxas } = await supabase
           .from('taxas_pagamento')
-          .select('forma, bandeira, dias_repasse, modo_repasse')
+          .select('forma, bandeira, dias_repasse, modo_repasse, intervalo_dias_parcelas')
           .eq('clinic_id', clinicId)
 
         // Vendas parceladas podem levar até 12 parcelas de ~30 dias para
@@ -128,52 +56,9 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
           .eq('clinic_id', clinicId)
           .gte('data_venda', dataMin)
 
-        const taxasList = (taxas || []) as TaxaPag[]
         const hoje = todayBR()
-        const geradas: Parcela[] = []
-
-        for (const e of (entradas || []) as any[]) {
-          const nParcelas = e.n_parcelas || 1
-          const valorLiquido = Number(e.valor_liquido) || 0
-          const { dias, modo } = getPrazo(taxasList, e.forma_pagamento, e.bandeira, nParcelas)
-
-          if (modo === 'fixo' || nParcelas <= 1) {
-            // Todo o valor líquido cai de uma vez, em D+dias
-            const data = addDaysBR(e.data_venda, dias)
-            if (data < hoje) continue
-            geradas.push({
-              key: `${e.id}-1`,
-              entradaId: e.id,
-              data,
-              parcelaNum: 1,
-              totalParcelas: 1,
-              valorLiquido,
-              pacienteNome: e.paciente_nome || 'Paciente',
-              procedimentoNome: e.procedimento_nome || 'Procedimento',
-              formaPagamento: e.forma_pagamento,
-            })
-            continue
-          }
-
-          // Parcelado: 1ª parcela em D+dias, demais a cada 30 dias
-          const valorParcela = valorLiquido / nParcelas
-          for (let i = 1; i <= nParcelas; i++) {
-            const data = addDaysBR(e.data_venda, dias + (i - 1) * 30)
-            if (data < hoje) continue
-            geradas.push({
-              key: `${e.id}-${i}`,
-              entradaId: e.id,
-              data,
-              parcelaNum: i,
-              totalParcelas: nParcelas,
-              valorLiquido: valorParcela,
-              pacienteNome: e.paciente_nome || 'Paciente',
-              procedimentoNome: e.procedimento_nome || 'Procedimento',
-              formaPagamento: e.forma_pagamento,
-            })
-          }
-        }
-
+        const geradas = gerarParcelas((entradas || []) as any[], (taxas || []) as TaxaPag[])
+          .filter(p => p.data >= hoje)
         geradas.sort((a, b) => a.data.localeCompare(b.data))
         setParcelas(geradas)
       } finally {

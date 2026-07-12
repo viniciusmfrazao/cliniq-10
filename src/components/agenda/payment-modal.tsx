@@ -5,10 +5,11 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
+import { getPrazo, type TaxaPag } from '@/lib/recebiveis'
 
-type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number }
+type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; dias_repasse: number; modo_repasse: 'fixo' | 'parcelado'; intervalo_dias_parcelas: number }
 type ProcItem = { id: string; name: string; price: number }
-type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; liquido: number }
+type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; liquido: number; prazoDias: number }
 type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean }
 
 type Props = {
@@ -64,7 +65,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
     async function init() {
       // Taxas
       const { data: taxasData } = await supabase
-        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual').eq('clinic_id', clinicId)
+        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual, dias_repasse, modo_repasse, intervalo_dias_parcelas').eq('clinic_id', clinicId)
       setTaxas(taxasData || [])
 
       // Múltiplos procedimentos
@@ -88,7 +89,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
       const total = procList.reduce((s, p) => s + p.price, 0)
       const initialValor = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : total
-      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
+      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor, prazoDias: 0 }])
 
       // Todos os procedimentos da clínica (para adicionar no pagamento)
       const { data: clinicProcsData } = await supabase
@@ -137,6 +138,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       const u = { ...s, ...changes }
       u.taxa = getTaxa(u.forma, u.bandeira, u.parcelas)
       u.liquido = u.valor * (1 - u.taxa / 100)
+      u.prazoDias = getPrazo(taxas as TaxaPag[], u.forma, u.bandeira || null, u.parcelas).dias
       return u
     }))
   }
@@ -441,14 +443,18 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                       </select>
                     </div>
                   )}
-                  <div className="flex justify-between text-xs text-slate-500">
+                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                    <span>Bruto: {fmt(s.valor)}</span>
                     <span>Taxa: {s.taxa}%</span>
                     <span className="font-medium text-emerald-600">Líquido: {fmt(s.liquido)}</span>
+                    <span className="text-slate-400">
+                      {s.prazoDias > 0 ? `Cai em D+${s.prazoDias}` : 'Cai na hora'}
+                    </span>
                   </div>
                 </div>
               ))}
 
-              <button onClick={() => setSplits(p => [...p, { id: uid(), forma: 'pix', bandeira: '', valor: 0, parcelas: 1, taxa: 0, liquido: 0 }])}
+              <button onClick={() => setSplits(p => [...p, { id: uid(), forma: 'pix', bandeira: '', valor: 0, parcelas: 1, taxa: 0, liquido: 0, prazoDias: 0 }])}
                 className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-violet-300 hover:text-violet-500 transition-colors flex items-center justify-center gap-2">
                 <Icon name="plus" className="w-4 h-4" /> Adicionar forma de pagamento
               </button>

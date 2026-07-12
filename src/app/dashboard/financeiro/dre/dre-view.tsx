@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
-import { todayBR } from '@/lib/datetime'
+import { todayBR, addDaysBR } from '@/lib/datetime'
+import { gerarParcelas, type TaxaPag } from '@/lib/recebiveis'
 
 type Entrada = {
   data_venda: string
@@ -48,6 +49,7 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
   const [mes, setMes] = useState(todayBR().slice(0, 7))
   const [entradas, setEntradas] = useState(initialEntradas)
   const [saidas, setSaidas] = useState(initialSaidas)
+  const [caixaRealMes, setCaixaRealMes] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
 
@@ -79,12 +81,48 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
 
     setEntradas(e || [])
     setSaidas(s || [])
+
+    // Caixa real do mês: parcelas (próprias ou de vendas de meses anteriores)
+    // cujo repasse efetivamente cai dentro do mês selecionado. Só calculamos
+    // se scope='all' — visão de caixa é nível clínica, não por profissional.
+    if (scope === 'all') {
+      // Vendas parceladas podem levar até 12 parcelas de ~30 dias pra quitar —
+      // olhamos 12 meses pra trás pra pegar toda entrada que pode ter parcela
+      // caindo no mês selecionado.
+      const dataMin = addDaysBR(startOfMonth, -365)
+      const [{ data: entradasAmplo }, { data: taxas }] = await Promise.all([
+        supabase
+          .from('entradas')
+          .select('id, data_venda, paciente_nome, procedimento_nome, forma_pagamento, bandeira, valor_liquido, n_parcelas')
+          .eq('clinic_id', clinicId)
+          .gte('data_venda', dataMin)
+          .lte('data_venda', endOfMonth),
+        supabase
+          .from('taxas_pagamento')
+          .select('forma, bandeira, dias_repasse, modo_repasse, intervalo_dias_parcelas')
+          .eq('clinic_id', clinicId)
+      ])
+
+      const parcelas = gerarParcelas((entradasAmplo || []) as any[], (taxas || []) as TaxaPag[])
+      const doMes = parcelas.filter(p => p.data >= startOfMonth && p.data <= endOfMonth)
+      setCaixaRealMes(doMes.reduce((sum, p) => sum + p.valorLiquido, 0))
+    } else {
+      setCaixaRealMes(null)
+    }
+
     setLoading(false)
   }
 
   const receitaBruta = entradas.reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
   const taxas = entradas.reduce((s, e) => s + Number(e.valor_taxa || 0), 0)
   const receitaLiquida = entradas.reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
+
+  // Só exibe a linha de caixa real quando ela diverge de forma relevante da
+  // receita por competência — ou seja, quando existem recebimentos futuros
+  // (parcelas/prazos) puxando dinheiro de um mês pra outro. Se a clínica só
+  // recebe à vista (pix/dinheiro), os dois valores coincidem e a linha extra
+  // só atrapalharia.
+  const mostrarCaixaReal = caixaRealMes !== null && Math.abs(caixaRealMes - receitaLiquida) > 0.01
 
   const despesasPorCategoria = saidas.reduce((acc, s) => {
     const cat = s.categoria_dre || 'Outros'
@@ -147,12 +185,29 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
           </div>
 
           <div className="flex justify-between items-center p-4 bg-emerald-50">
-            <span className="font-semibold text-emerald-800">= RECEITA LÍQUIDA</span>
+            <div>
+              <span className="font-semibold text-emerald-800">= RECEITA LÍQUIDA</span>
+              {mostrarCaixaReal && <span className="text-xs text-emerald-600 ml-2 block sm:inline">(vendas do mês, competência)</span>}
+            </div>
             <div className="text-right">
               <span className="font-bold text-lg text-emerald-700">{fmt(receitaLiquida)}</span>
               <span className="text-xs text-emerald-600 ml-2">(100%)</span>
             </div>
           </div>
+
+          {mostrarCaixaReal && (
+            <div className="flex justify-between items-center p-4 bg-cyan-50">
+              <div>
+                <span className="font-semibold text-cyan-800">CAIXA REAL DO MÊS</span>
+                <span className="text-xs text-cyan-600 ml-2 block sm:inline">(o que efetivamente cai na conta este mês)</span>
+              </div>
+              <div className="text-right">
+                <span className={`font-bold text-lg ${(caixaRealMes ?? 0) >= 0 ? 'text-cyan-700' : 'text-rose-700'}`}>
+                  {fmt(caixaRealMes ?? 0)}
+                </span>
+              </div>
+            </div>
+          )}
 
           {scope === 'all' && (
           <>

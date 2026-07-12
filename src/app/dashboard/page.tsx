@@ -8,6 +8,8 @@ import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import WeeklyChart from '@/components/dashboard/WeeklyChart'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
 import WelcomeCard from '@/components/onboarding/WelcomeCard'
+import { getFinancialAccess } from '@/lib/financial-access'
+import { gerarParcelas, type TaxaPag } from '@/lib/recebiveis'
 import {
   todayBR,
   yesterdayBR,
@@ -178,6 +180,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   let monthlyRevenue = 0
   let todayRevenue = 0
   let monthlySaidas = 0
+  let recebiveis30dias = 0
+  let recebiveis30diasQtd = 0
+  let mostrarRecebiveisCard = false
 
   if (hasModule('/dashboard/financeiro')) {
     const [{ data: entMes }, { data: entHoje }, { data: saidas }] = await Promise.all([
@@ -188,6 +193,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     monthlyRevenue = entMes?.reduce((s, e) => s + (e.valor_liquido || 0), 0) || 0
     todayRevenue = entHoje?.reduce((s, e) => s + (e.valor_liquido || 0), 0) || 0
     monthlySaidas = saidas?.reduce((s, e) => s + (Number(e.valor) || 0), 0) || 0
+
+    // Card de recebíveis: visão de caixa é nível clínica, só calcula pra quem
+    // enxerga o financeiro completo (mesmo critério do DRE).
+    const { scope: financialScope } = await getFinancialAccess(supabase, user.id)
+    mostrarRecebiveisCard = financialScope === 'all'
+    if (financialScope === 'all') {
+      const dataMin = addDaysBR(today, -365)
+      const dataMax = addDaysBR(today, 30)
+      const [{ data: entradasAmplo }, { data: taxas }] = await Promise.all([
+        supabase
+          .from('entradas')
+          .select('id, data_venda, forma_pagamento, bandeira, valor_liquido, n_parcelas')
+          .eq('clinic_id', userData?.clinic_id)
+          .gte('data_venda', dataMin),
+        supabase
+          .from('taxas_pagamento')
+          .select('forma, bandeira, dias_repasse, modo_repasse, intervalo_dias_parcelas')
+          .eq('clinic_id', userData?.clinic_id),
+      ])
+      const parcelas = gerarParcelas((entradasAmplo || []) as any[], (taxas || []) as TaxaPag[])
+        .filter(p => p.data >= today && p.data <= dataMax)
+      recebiveis30dias = parcelas.reduce((s, p) => s + p.valorLiquido, 0)
+      recebiveis30diasQtd = parcelas.length
+    }
   }
 
   const { data: nextAppointments } = await supabase
@@ -373,6 +402,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
             <Link href="/dashboard/financeiro" className="mt-2 text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
               Ver financeiro <Icon name="arrowRight" className="w-3 h-3" />
+            </Link>
+          </div>
+        )}
+
+        {/* Recebíveis - previsão de parcelas futuras, só pra quem vê financeiro completo */}
+        {mostrarRecebiveisCard && (
+          <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20 flex-shrink-0">
+                <Icon name="calendar" className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <p
+              className="text-xl md:text-3xl font-black text-slate-900 truncate"
+              title={formatBRL(recebiveis30dias, { maximumFractionDigits: 0 })}
+            >
+              <span className="md:hidden">{formatBRLCompact(recebiveis30dias)}</span>
+              <span className="hidden md:inline">
+                {formatBRL(recebiveis30dias, { maximumFractionDigits: 0 })}
+              </span>
+            </p>
+            <p className="text-xs md:text-sm text-slate-500 mt-1 truncate">
+              Recebíveis próx. 30 dias {recebiveis30diasQtd > 0 && `(${recebiveis30diasQtd} parcelas)`}
+            </p>
+
+            <Link href="/dashboard/financeiro/previsao-recebimento" className="mt-3 text-xs text-cyan-600 font-semibold inline-flex items-center gap-1">
+              Ver calendário <Icon name="arrowRight" className="w-3 h-3" />
             </Link>
           </div>
         )}
