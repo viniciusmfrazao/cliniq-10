@@ -108,12 +108,28 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
     }
     // testMsgIdx = -1 → mensagem principal; >= 0 → item da sequência
     const tplRaw = testMsgIdx === -1 ? template : (seq[testMsgIdx]?.template ?? '')
-    if (!tplRaw.trim()) {
+    const testModo: EnvioMode = testMsgIdx === -1 ? modo : (seq[testMsgIdx]?.modo ?? 'texto')
+    const testAudioUrl = testMsgIdx === -1 ? audioUrl : (seq[testMsgIdx]?.audioUrl ?? null)
+    if (testModo === 'audio' && !testAudioUrl) {
+      setTestMsg({ kind: 'err', text: 'Grave um áudio antes de testar.' })
+      return
+    }
+    if (testModo !== 'audio' && !tplRaw.trim()) {
       setTestMsg({ kind: 'err', text: 'A mensagem selecionada está vazia.' })
       return
     }
     setTesting(true); setTestMsg(null)
     try {
+      if (testModo === 'audio' || testModo === 'ambos') {
+        const rAudio = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testPhone, type: 'audio', media: testAudioUrl, purpose: 'automation' }),
+        })
+        const jAudio = await rAudio.json()
+        if (!jAudio.ok) { setTestMsg({ kind: 'err', text: jAudio.error || 'Erro ao enviar áudio' }); setTesting(false); return }
+        if (testModo === 'audio') { setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada!' }); setTesting(false); return }
+      }
       const text = renderTestVars(tplRaw)
       const r = await fetch('/api/whatsapp/send', {
         method: 'POST',

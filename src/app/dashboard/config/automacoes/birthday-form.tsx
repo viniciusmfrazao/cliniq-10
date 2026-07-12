@@ -142,26 +142,44 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
       setTestMsg({ kind: 'err', text: 'Informe um telefone para teste (com DDD)' })
       return
     }
+    if (modo === 'audio' && !audioUrl) {
+      setTestMsg({ kind: 'err', text: 'Grave um áudio antes de testar.' })
+      return
+    }
     setTesting(true)
     setTestMsg(null)
     try {
-      const text = renderPreview(template, {
-        nome: 'Você (teste)',
-        primeiro_nome: 'Você',
-        clinica: clinicName,
-        idade: '∞',
-      })
-      const r = await fetch('/api/whatsapp/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
-      })
-      const data = await r.json()
-      if (r.ok && data.ok) {
-        setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada com sucesso!' })
-      } else {
-        setTestMsg({ kind: 'err', text: data.error || `Falha (HTTP ${r.status})` })
+      if (modo === 'audio' || modo === 'ambos') {
+        const rAudio = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testPhone, type: 'audio', media: audioUrl, purpose: 'automation' }),
+        })
+        const dAudio = await rAudio.json()
+        if (!(rAudio.ok && dAudio.ok)) {
+          setTestMsg({ kind: 'err', text: dAudio.error || 'Erro ao enviar áudio' })
+          return
+        }
       }
+      if (modo === 'texto' || modo === 'ambos') {
+        const text = renderPreview(template, {
+          nome: 'Você (teste)',
+          primeiro_nome: 'Você',
+          clinica: clinicName,
+          idade: '∞',
+        })
+        const r = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
+        })
+        const data = await r.json()
+        if (!(r.ok && data.ok)) {
+          setTestMsg({ kind: 'err', text: data.error || `Falha (HTTP ${r.status})` })
+          return
+        }
+      }
+      setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada com sucesso!' })
     } catch (e) {
       setTestMsg({ kind: 'err', text: e instanceof Error ? e.message : 'Erro de rede' })
     } finally {
@@ -337,7 +355,7 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
             <button
               type="button"
               onClick={sendTest}
-              disabled={testing || !template.trim()}
+              disabled={testing || (modo !== 'audio' && !template.trim())}
               className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium flex items-center gap-2"
             >
               {testing ? (
