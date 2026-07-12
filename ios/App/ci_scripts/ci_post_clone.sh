@@ -27,4 +27,8 @@ echo '<html><body>Clinike</body></html>' > out/index.html
 echo "==> Sincronizando Capacitor iOS..."
 npx cap sync ios
 
+echo "==> Permitindo resolução automática de pacotes SPM (Package.swift muda a cada 'cap sync', Package.resolved commitado sempre fica desatualizado)..."
+defaults delete com.apple.dt.Xcode IDEPackageOnlyUseVersionsFromResolvedFile 2>/dev/null || true
+defaults delete com.apple.dt.Xcode IDEDisableAutomaticPackageResolution 2>/dev/null || true
+
 echo "==> Concluído!"
