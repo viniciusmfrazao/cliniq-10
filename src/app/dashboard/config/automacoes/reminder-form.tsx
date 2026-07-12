@@ -159,25 +159,46 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   const preview2h  = useMemo(() => renderPreview(template2h, previewVars), [template2h])
   const previewAgendamento = useMemo(() => renderPreview(templateAgendamento, previewVars), [templateAgendamento])
 
-  async function sendTest(template: string, previewFn: (t: string) => string) {
+  async function sendTest(template: string, previewFn: (t: string) => string, mode: EnvioMode, audioUrl: string | null) {
     if (!testPhone.trim()) {
       setTestMsg({ kind: 'err', text: 'Informe um número com DDD (ex: 5534999999999)' })
+      return
+    }
+    if (mode === 'audio' && !audioUrl) {
+      setTestMsg({ kind: 'err', text: 'Grave um áudio antes de testar.' })
       return
     }
     setTesting(true)
     setTestMsg(null)
     try {
-      const text = previewFn(template)
-        .replace(/\{\{link_confirmacao\}\}/g, 'https://app.clinike.com.br/confirmar/TESTE-LINK')
-        .replace(/\{\{link_agenda\}\}/g, 'https://app.clinike.com.br/api/calendar/teste/google')
-      const r = await fetch('/api/whatsapp/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
-      })
-      const json = await r.json()
-      if (json.ok) setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada com sucesso!' })
-      else setTestMsg({ kind: 'err', text: json.error || 'Erro ao enviar' })
+      if (mode === 'audio' || mode === 'ambos') {
+        const rAudio = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testPhone, type: 'audio', media: audioUrl, purpose: 'automation' }),
+        })
+        const jAudio = await rAudio.json()
+        if (!jAudio.ok) {
+          setTestMsg({ kind: 'err', text: jAudio.error || 'Erro ao enviar áudio' })
+          return
+        }
+      }
+      if (mode === 'texto' || mode === 'ambos') {
+        const text = previewFn(template)
+          .replace(/\{\{link_confirmacao\}\}/g, 'https://app.clinike.com.br/confirmar/TESTE-LINK')
+          .replace(/\{\{link_agenda\}\}/g, 'https://app.clinike.com.br/api/calendar/teste/google')
+        const r = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
+        })
+        const json = await r.json()
+        if (!json.ok) {
+          setTestMsg({ kind: 'err', text: json.error || 'Erro ao enviar' })
+          return
+        }
+      }
+      setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada com sucesso!' })
     } catch {
       setTestMsg({ kind: 'err', text: 'Erro de conexão' })
     } finally {
@@ -533,7 +554,8 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
               .replace(/\{\{data\}\}/g, '08/06/2026')
               .replace(/\{\{hora\}\}/g, '10:00')
               .replace(/\{\{dia_semana\}\}/g, 'Segunda-feira')
-            )}
+            , activeTab === '24h' ? modo24h : activeTab === '2h' ? modo2h : modoAgendamento
+            , activeTab === '24h' ? audio24h : activeTab === '2h' ? audio2h : audioAgendamento)}
             disabled={testing}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium flex items-center gap-2"
           >
