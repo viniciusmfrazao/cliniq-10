@@ -26,6 +26,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>O Clinike usa a câmera para que profissionais de saúde possam fotografar regiões tratadas — por exemplo, registrar fotos antes e depois de procedimentos estéticos como botox ou preenchimento — diretamente no prontuário do paciente.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>O Clinike usa o microfone para gravar mensagens de áudio enviadas aos pacientes pelo WhatsApp diretamente do sistema.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>O Clinike salva fotos de procedimentos estéticos — como registros antes e depois de aplicações de botox ou preenchimento — na galeria do dispositivo para backup e compartilhamento com o paciente.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
