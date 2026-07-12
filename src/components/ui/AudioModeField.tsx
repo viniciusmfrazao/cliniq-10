@@ -37,13 +37,20 @@ export default function AudioModeField({
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const mimeTypeRef = useRef<string>('audio/webm')
 
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       chunksRef.current = []
-      const rec = new MediaRecorder(stream)
+      // Safari/WKWebView (iOS) não suporta webm — precisa detectar o formato
+      // realmente suportado, senão o arquivo grava com o tipo errado e não
+      // toca depois (fica marcado como "Erro" no player).
+      const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac']
+      const mime = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || ''
+      mimeTypeRef.current = mime || 'audio/webm'
+      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
       rec.ondataavailable = (e) => chunksRef.current.push(e.data)
       rec.onstop = () => uploadRecording()
       rec.start()
@@ -66,11 +73,13 @@ export default function AudioModeField({
   async function uploadRecording() {
     setUploading(true)
     try {
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-      const path = `${clinicId}/${automationKey}-${Date.now()}.webm`
+      const mime = mediaRecorderRef.current?.mimeType || mimeTypeRef.current || 'audio/webm'
+      const ext = mime.includes('mp4') ? 'm4a' : mime.includes('aac') ? 'aac' : mime.includes('ogg') ? 'ogg' : 'webm'
+      const blob = new Blob(chunksRef.current, { type: mime })
+      const path = `${clinicId}/${automationKey}-${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage
         .from('automation-audios')
-        .upload(path, blob, { upsert: false, contentType: 'audio/webm' })
+        .upload(path, blob, { upsert: false, contentType: mime })
       if (upErr) {
         toast.error('Erro no upload do áudio: ' + upErr.message)
         return
