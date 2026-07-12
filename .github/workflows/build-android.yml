@@ -45,6 +45,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Add microphone permission (gravação de áudio no WhatsApp usa getUserMedia, sem plugin nativo dedicado)
+        run: |
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
+          grep -B1 -A1 "RECORD_AUDIO" android/app/src/main/AndroidManifest.xml
+
       - name: Generate Android app icons
         run: |
           pip install --quiet Pillow
