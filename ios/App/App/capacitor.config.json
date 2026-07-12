@@ -8,8 +8,8 @@
 	},
 	"webDir": "out",
 	"ios": {
-		"contentInset": "automatic",
-		"backgroundColor": "#fafaf8"
+		"contentInset": "never",
+		"backgroundColor": "#7c3aed"
 	},
 	"android": {
 		"backgroundColor": "#fafaf8",
@@ -27,7 +27,7 @@
 			"splashImmersive": true
 		},
 		"StatusBar": {
-			"style": "DEFAULT",
+			"style": "LIGHT",
 			"backgroundColor": "#7c3aed"
 		},
 		"PushNotifications": {
