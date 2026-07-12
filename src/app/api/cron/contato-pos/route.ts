@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendAutomationContent } from '@/lib/whatsapp'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -51,6 +51,8 @@ export async function GET(request: Request) {
       clinic_id,
       contato_pos_hora,
       template_contato_pos,
+      modo_contato_pos,
+      audio_contato_pos,
       contato_pos_excluir_categorias,
       contato_pos_seq
     `)
@@ -147,9 +149,10 @@ export async function GET(request: Request) {
         clinica: clinicName,
       }
 
+      const modo1: 'texto' | 'audio' | 'ambos' = (auto as any).modo_contato_pos ?? 'texto'
       const msg = renderTemplate(auto.template_contato_pos || '', vars)
       if (!dryRun) {
-        const sendResult = await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+        const sendResult = await sendAutomationContent({ clinicId: auto.clinic_id, phone: patient.phone, mode: modo1, text: msg, audioUrl: (auto as any).audio_contato_pos })
         if (sendResult.ok) {
           sendsThisRun++
         } else {
@@ -169,7 +172,7 @@ export async function GET(request: Request) {
     // ── MENSAGENS SEQUÊNCIA: X dias após o procedimento ────────────────
     const seqItems = auto.contato_pos_seq || []
     for (const seqItem of seqItems) {
-      if (!seqItem.ativo || !seqItem.dias || !seqItem.template) continue
+      if (!seqItem.ativo || !seqItem.dias || (!seqItem.template && !seqItem.audioUrl)) continue
 
       const tipo = `legado_seq_${seqItem.dias}d`
       // Janela larga de 5 dias de lookback pegava atendimento fora do dia
@@ -217,9 +220,10 @@ export async function GET(request: Request) {
           clinica: clinicName,
         }
 
-        const msg = renderTemplate(seqItem.template, vars)
+        const modoSeq: 'texto' | 'audio' | 'ambos' = seqItem.modo ?? 'texto'
+        const msg = seqItem.template ? renderTemplate(seqItem.template, vars) : ''
         if (!dryRun) {
-          const sendResult = await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+          const sendResult = await sendAutomationContent({ clinicId: auto.clinic_id, phone: patient.phone, mode: modoSeq, text: msg, audioUrl: seqItem.audioUrl })
           if (sendResult.ok) {
             sendsThisRun++
           } else {

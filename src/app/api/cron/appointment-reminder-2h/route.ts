@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
+import { sendWhatsappMessage, sendWhatsappButtons, sendWhatsappAudio } from '@/lib/whatsapp'
 import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
   // 2) Carregar dados em paralelo
   const [{ data: automations }, { data: waList }, { data: clinics },
          { data: patients }, { data: profs }, { data: procs }] = await Promise.all([
-    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h').in('clinic_id', clinicIds),
+    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h, modo_lembrete_2h, audio_lembrete_2h').in('clinic_id', clinicIds),
     svc.from('clinic_whatsapp').select('clinic_id, instance_name, status, is_default, role_outbound_automation').in('clinic_id', clinicIds),
     svc.from('clinics').select('id, name, settings').in('id', clinicIds),
     patientIds.length ? svc.from('patients').select('id, name, phone').in('id', patientIds) : { data: [] },
@@ -144,6 +144,9 @@ export async function GET(req: NextRequest) {
     if (!auto?.lembrete_2h) { summary.skipped++; continue }
 
     // Usa template específico de 2h — NUNCA o D-1 (que fala "amanhã")
+    const modo2h: 'texto' | 'audio' | 'ambos' = auto?.modo_lembrete_2h ?? 'texto'
+    const audioUrl2h: string | null = auto?.audio_lembrete_2h ?? null
+    if (modo2h === 'audio' && !audioUrl2h) { summary.skipped++; continue }
     const template = auto?.template_lembrete_2h || DEFAULT_TEMPLATE_2H
 
     const patient = patientMap.get(app.patient_id)
@@ -190,21 +193,38 @@ export async function GET(req: NextRequest) {
 
     if (errLock) { summary.errors.push(`lock ${app.id}: ${errLock.message}`); continue }
 
-    // Envia como botões (CONFIRMAR / CANCELAR / NÃO SOU EU).
-    // Fallback para texto se Evolution não suportar botões na instância.
-    let result = await sendWhatsappButtons({
-      clinicId: app.clinic_id,
-      phone: patient.phone,
-      body: text.replace(/\n{3,}/g, '\n\n').trim(),
-      footer: clinicName2h,
-      buttons: [
-        { id: 'confirm', text: '✅ Confirmar' },
-        { id: 'cancel', text: '❌ Cancelar' },
-        { id: 'reschedule', text: '🔄 Reagendar' },
-      ],
-      purpose: 'automation',
-      instanceName: wa.instance_name,
-    })
+    // Áudio primeiro (se modo audio/ambos). Botões interativos não existem
+    // em mensagem de áudio — a confirmação por botão só é enviada quando o
+    // modo inclui texto (texto ou ambos).
+    let result: Awaited<ReturnType<typeof sendWhatsappMessage>> | null = null
+    if (modo2h === 'audio' || modo2h === 'ambos') {
+      const audioResult = await sendWhatsappAudio({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        audio: audioUrl2h!,
+        purpose: 'automation',
+        instanceName: wa.instance_name,
+      })
+      if (modo2h === 'audio' || !audioResult.ok) result = audioResult
+    }
+
+    if (!result) {
+      // Envia como botões (CONFIRMAR / CANCELAR / NÃO SOU EU).
+      // Fallback para texto se Evolution não suportar botões na instância.
+      result = await sendWhatsappButtons({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        body: text.replace(/\n{3,}/g, '\n\n').trim(),
+        footer: clinicName2h,
+        buttons: [
+          { id: 'confirm', text: '✅ Confirmar' },
+          { id: 'cancel', text: '❌ Cancelar' },
+          { id: 'reschedule', text: '🔄 Reagendar' },
+        ],
+        purpose: 'automation',
+        instanceName: wa.instance_name,
+      })
+    }
     if (!result.ok) {
       result = await sendWhatsappMessage({
         clinicId: app.clinic_id,

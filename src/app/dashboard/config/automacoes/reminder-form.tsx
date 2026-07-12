@@ -4,6 +4,7 @@ import { useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { parseSupabaseError } from '@/lib/error-messages'
+import AudioModeField, { EnvioMode } from '@/components/ui/AudioModeField'
 
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -101,6 +102,12 @@ type Initial = {
   template2h: string
   msgAgendamentoEnabled: boolean
   templateAgendamento: string
+  modo24h: EnvioMode
+  audio24h: string | null
+  modo2h: EnvioMode
+  audio2h: string | null
+  modoAgendamento: EnvioMode
+  audioAgendamento: string | null
 }
 
 type Props = { clinicId: string; clinicName: string; initial: Initial }
@@ -118,6 +125,12 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   const [template2h, setTemplate2h]       = useState(initial.template2h)
   const [msgAgendamento, setMsgAgendamento]   = useState(initial.msgAgendamentoEnabled)
   const [templateAgendamento, setTemplateAgendamento] = useState(initial.templateAgendamento)
+  const [modo24h, setModo24h]             = useState<EnvioMode>(initial.modo24h)
+  const [audio24h, setAudio24h]           = useState<string | null>(initial.audio24h)
+  const [modo2h, setModo2h]               = useState<EnvioMode>(initial.modo2h)
+  const [audio2h, setAudio2h]             = useState<string | null>(initial.audio2h)
+  const [modoAgendamento, setModoAgendamento] = useState<EnvioMode>(initial.modoAgendamento)
+  const [audioAgendamento, setAudioAgendamento] = useState<string | null>(initial.audioAgendamento)
   const [saving, setSaving]               = useState(false)
   const [savedAt, setSavedAt]             = useState<Date | null>(null)
   const [activeTab, setActiveTab]         = useState<'24h' | '2h' | 'agendamento'>('24h')
@@ -188,6 +201,12 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
           template_lembrete_2h: template2h || null,
           msg_agendamento: msgAgendamento,
           template_msg_agendamento: templateAgendamento || null,
+          modo_confirma_24h: modo24h,
+          audio_confirma_24h: audio24h,
+          modo_lembrete_2h: modo2h,
+          audio_lembrete_2h: audio2h,
+          modo_msg_agendamento: modoAgendamento,
+          audio_msg_agendamento: audioAgendamento,
         })
         .eq('clinic_id', clinicId)
       if (error) { alert(parseSupabaseError(error)); return }
@@ -309,7 +328,18 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
               </div>
             </div>
 
+            {/* Modo de envio + áudio */}
+            <AudioModeField
+              clinicId={clinicId}
+              automationKey="confirma-24h"
+              mode={modo24h}
+              onModeChange={setModo24h}
+              audioUrl={audio24h}
+              onAudioChange={setAudio24h}
+            />
+
             {/* Template */}
+            {(modo24h === 'texto' || modo24h === 'ambos') && (
             <div>
               <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem da véspera</label>
               <textarea
@@ -321,9 +351,10 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
                 placeholder="Digite a mensagem de lembrete da véspera..."
               />
             </div>
+            )}
 
             {/* Preview */}
-            {template24h && (
+            {template24h && (modo24h === 'texto' || modo24h === 'ambos') && (
               <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
                 <p className="text-xs font-medium text-emerald-700 mb-2">Preview (véspera):</p>
                 <p className="text-sm text-slate-700 whitespace-pre-line">{preview24h}</p>
@@ -369,7 +400,18 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
                 </div>
               </div>
 
+              {/* Modo de envio + áudio */}
+              <AudioModeField
+                clinicId={clinicId}
+                automationKey="lembrete-2h"
+                mode={modo2h}
+                onModeChange={setModo2h}
+                audioUrl={audio2h}
+                onAudioChange={setAudio2h}
+              />
+
               {/* Template */}
+              {(modo2h === 'texto' || modo2h === 'ambos') && (
               <div className="mb-3">
                 <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem 2h antes</label>
                 <textarea
@@ -381,9 +423,10 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
                   placeholder="Digite a mensagem enviada 2h antes da consulta..."
                 />
               </div>
+              )}
 
               {/* Preview */}
-              {template2h && (
+              {template2h && (modo2h === 'texto' || modo2h === 'ambos') && (
                 <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
                   <p className="text-xs font-medium text-blue-700 mb-2">Preview (2h antes):</p>
                   <p className="text-sm text-slate-700 whitespace-pre-line">{preview2h}</p>
@@ -430,7 +473,18 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
                 </div>
               </div>
 
+              {/* Modo de envio + áudio */}
+              <AudioModeField
+                clinicId={clinicId}
+                automationKey="msg-agendamento"
+                mode={modoAgendamento}
+                onModeChange={setModoAgendamento}
+                audioUrl={audioAgendamento}
+                onAudioChange={setAudioAgendamento}
+              />
+
               {/* Template */}
+              {(modoAgendamento === 'texto' || modoAgendamento === 'ambos') && (
               <div className="mb-3">
                 <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem de confirmação</label>
                 <textarea
@@ -442,9 +496,10 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
                   placeholder="Digite a mensagem enviada ao criar o agendamento..."
                 />
               </div>
+              )}
 
               {/* Preview */}
-              {templateAgendamento && (
+              {templateAgendamento && (modoAgendamento === 'texto' || modoAgendamento === 'ambos') && (
                 <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
                   <p className="text-xs font-medium text-emerald-700 mb-2">Preview (confirmação de agendamento):</p>
                   <p className="text-sm text-slate-700 whitespace-pre-line">{previewAgendamento}</p>

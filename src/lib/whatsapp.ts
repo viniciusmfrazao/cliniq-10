@@ -528,6 +528,41 @@ export async function sendWhatsappAudio(args: {
   )
 }
 
+export type EnvioMode = 'texto' | 'audio' | 'ambos'
+
+/**
+ * Envia o conteúdo de uma automação respeitando o modo configurado
+ * (texto / áudio / ambos). Usado pelos crons de lembrete, aniversário,
+ * contato pós-procedimento e pós-venda.
+ *
+ * Em modo 'ambos', envia o áudio primeiro e depois o texto — se o áudio
+ * falhar (ex: rate_limited pelo pacer anti-ban), aborta sem enviar o texto,
+ * pra não duplicar o disparo em execuções concorrentes do cron.
+ */
+export async function sendAutomationContent(args: {
+  clinicId: string
+  phone: string
+  mode: EnvioMode
+  text: string
+  audioUrl: string | null | undefined
+  instanceName?: string
+  assignedTo?: string | null
+}): Promise<SendResult> {
+  const { clinicId, phone, mode, text, audioUrl, instanceName, assignedTo } = args
+
+  if ((mode === 'audio' || mode === 'ambos') && audioUrl) {
+    const audioResult = await sendWhatsappAudio({
+      clinicId, phone, audio: audioUrl, purpose: 'automation', instanceName, assignedTo,
+    })
+    if (!audioResult.ok) return audioResult
+    if (mode === 'audio') return audioResult
+  }
+
+  return sendWhatsappMessage({
+    clinicId, phone, message: text, purpose: 'automation', instanceName, assignedTo,
+  })
+}
+
 /**
  * Baixa uma mídia recebida via Evolution.
  *

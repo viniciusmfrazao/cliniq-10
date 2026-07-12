@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
+import AudioModeField, { EnvioMode } from '@/components/ui/AudioModeField'
 
 const DEFAULT_TEMPLATE = `Oi {{primeiro_nome}}! 💜
 
@@ -27,6 +28,8 @@ interface SeqItem {
   dias: number
   ativo: boolean
   template: string
+  modo?: EnvioMode
+  audioUrl?: string | null
 }
 
 interface Initial {
@@ -35,6 +38,8 @@ interface Initial {
   template: string | null
   excluirCategorias: string[]
   seq: SeqItem[]
+  modo: EnvioMode
+  audioUrl: string | null
 }
 
 interface Props {
@@ -48,6 +53,8 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
   const [enabled, setEnabled] = useState(initial.enabled)
   const [hora, setHora] = useState(initial.hora)
   const [template, setTemplate] = useState(initial.template || DEFAULT_TEMPLATE)
+  const [modo, setModo] = useState<EnvioMode>(initial.modo)
+  const [audioUrl, setAudioUrl] = useState<string | null>(initial.audioUrl)
   const [excluirCat, setExcluirCat] = useState(initial.excluirCategorias.join(', '))
   const [seq, setSeq] = useState<SeqItem[]>(
     initial.seq?.length > 0 ? initial.seq : []
@@ -128,6 +135,8 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
       contato_pos_procedimento: enabled,
       contato_pos_hora: hora,
       template_contato_pos: template,
+      modo_contato_pos: modo,
+      audio_contato_pos: audioUrl,
       contato_pos_excluir_categorias: cats,
       contato_pos_seq: seq,
     }, { onConflict: 'clinic_id' })
@@ -185,19 +194,31 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
           {/* Mensagem principal */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Mensagem</label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {['{{primeiro_nome}}','{{nome}}','{{procedimento}}','{{profissional}}','{{clinica}}'].map(v => (
-                <button key={v} type="button" onClick={() => setTemplate(t => t + v)}
-                  className="text-xs px-2 py-1 bg-violet-50 text-violet-700 rounded-lg border border-violet-200 hover:bg-violet-100">
-                  {v}
-                </button>
-              ))}
-            </div>
-            <textarea rows={5} value={template} onChange={e => setTemplate(e.target.value)} className="input w-full font-mono text-sm" />
-            <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-100 text-sm text-slate-700 whitespace-pre-wrap">
-              <p className="text-xs font-semibold text-green-700 mb-1 flex items-center gap-1"><Icon name="eye" className="w-3 h-3" /> Preview</p>
-              {preview}
-            </div>
+            <AudioModeField
+              clinicId={clinicId}
+              automationKey="contato-pos"
+              mode={modo}
+              onModeChange={setModo}
+              audioUrl={audioUrl}
+              onAudioChange={setAudioUrl}
+            />
+            {(modo === 'texto' || modo === 'ambos') && (
+              <>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {['{{primeiro_nome}}','{{nome}}','{{procedimento}}','{{profissional}}','{{clinica}}'].map(v => (
+                    <button key={v} type="button" onClick={() => setTemplate(t => t + v)}
+                      className="text-xs px-2 py-1 bg-violet-50 text-violet-700 rounded-lg border border-violet-200 hover:bg-violet-100">
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                <textarea rows={5} value={template} onChange={e => setTemplate(e.target.value)} className="input w-full font-mono text-sm" />
+                <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-100 text-sm text-slate-700 whitespace-pre-wrap">
+                  <p className="text-xs font-semibold text-green-700 mb-1 flex items-center gap-1"><Icon name="eye" className="w-3 h-3" /> Preview</p>
+                  {preview}
+                </div>
+              </>
+            )}
           </div>
 
           {/* ── Sequência adicional ──────────────────────────────── */}
@@ -240,9 +261,20 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
                   <label className="text-sm text-slate-600">dias do procedimento</label>
                 </div>
 
-                <textarea rows={4} value={s.template}
-                  onChange={e => updateSeq(idx, { template: e.target.value })}
-                  className="input w-full font-mono text-sm" />
+                <AudioModeField
+                  clinicId={clinicId}
+                  automationKey={`contato-pos-seq-${idx}`}
+                  mode={s.modo ?? 'texto'}
+                  onModeChange={(m) => updateSeq(idx, { modo: m })}
+                  audioUrl={s.audioUrl ?? null}
+                  onAudioChange={(url) => updateSeq(idx, { audioUrl: url })}
+                />
+
+                {(!s.modo || s.modo === 'texto' || s.modo === 'ambos') && (
+                  <textarea rows={4} value={s.template}
+                    onChange={e => updateSeq(idx, { template: e.target.value })}
+                    className="input w-full font-mono text-sm" />
+                )}
               </div>
             ))}
           </div>

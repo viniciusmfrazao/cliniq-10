@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage, sendWhatsappButtons } from '@/lib/whatsapp'
+import { sendWhatsappMessage, sendWhatsappButtons, sendWhatsappAudio } from '@/lib/whatsapp'
 import { logEva } from '@/lib/eva-logger'
 import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
@@ -115,6 +115,8 @@ type AutomationRow = {
   confirma_24h: boolean | null
   confirma_24h_hora?: number | null
   template_confirma_24h: string | null
+  modo_confirma_24h?: 'texto' | 'audio' | 'ambos' | null
+  audio_confirma_24h?: string | null
 }
 
 type AppointmentRow = {
@@ -181,7 +183,7 @@ export async function GET(req: NextRequest) {
   //    E cujo horário configurado bate com a hora atual
   const { data: automations, error: errAuto } = await svc
     .from('clinic_automations')
-    .select('clinic_id, confirma_24h, confirma_24h_hora, template_confirma_24h')
+    .select('clinic_id, confirma_24h, confirma_24h_hora, template_confirma_24h, modo_confirma_24h, audio_confirma_24h')
     .eq('confirma_24h', true)
 
   if (errAuto) {
@@ -193,7 +195,11 @@ export async function GET(req: NextRequest) {
 
   const enabledClinics =
     (automations as AutomationRow[] | null)?.filter((a) => {
-      if (!a.template_confirma_24h || a.template_confirma_24h.trim().length === 0) return false
+      const modo = a.modo_confirma_24h ?? 'texto'
+      const hasTemplate = !!a.template_confirma_24h && a.template_confirma_24h.trim().length > 0
+      const hasAudio = !!a.audio_confirma_24h
+      if (modo === 'audio' && !hasAudio) return false
+      if (modo !== 'audio' && !hasTemplate) return false
       // Usar horário configurado ou padrão 20h.
       // Antes exigia targetHour === currentHour (uma janela de 1h só por
       // dia); se o timeout cortasse o lote no meio, o resto nunca era
@@ -319,8 +325,12 @@ export async function GET(req: NextRequest) {
 
   // Mapa de templates por clínica
   const templateByClinic = new Map<string, string>()
+  const modeByClinic = new Map<string, 'texto' | 'audio' | 'ambos'>()
+  const audioByClinic = new Map<string, string>()
   for (const c of enabledClinics) {
     if (c.template_confirma_24h) templateByClinic.set(c.clinic_id, c.template_confirma_24h)
+    modeByClinic.set(c.clinic_id, c.modo_confirma_24h ?? 'texto')
+    if (c.audio_confirma_24h) audioByClinic.set(c.clinic_id, c.audio_confirma_24h)
   }
 
   let stoppedEarly = false
@@ -336,8 +346,9 @@ export async function GET(req: NextRequest) {
       continue
     }
 
+    const modo = modeByClinic.get(app.clinic_id) ?? 'texto'
     const template = templateByClinic.get(app.clinic_id)
-    if (!template) {
+    if (modo !== 'audio' && !template) {
       summary.skippedNoTemplate++
       continue
     }
@@ -369,7 +380,7 @@ export async function GET(req: NextRequest) {
       linkAgenda = generateCalendarLinks(getPublicBaseUrl(), event).googleRedirectUrl
     }
 
-    const bodyText = renderTemplate(template, {
+    const bodyText = template ? renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
       clinica: clinicName,
@@ -381,7 +392,7 @@ export async function GET(req: NextRequest) {
       link_confirmacao: '', // não usado — substituído por botões interativos
       endereco,
       link_agenda: linkAgenda,
-    }).replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '')
+    }).replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '') : ''
 
     if (dryRun) {
       summary.sent++
@@ -405,21 +416,38 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Tenta enviar como mensagem com botões; fallback para texto simples
-    // se a instância não suportar (ex.: WhatsApp Personal sem Business API).
-    let result = await sendWhatsappButtons({
-      clinicId: app.clinic_id,
-      phone: patient.phone,
-      body: bodyText,
-      footer: clinicName,
-      buttons: [
-        { id: 'confirm', text: '✅ Confirmar' },
-        { id: 'cancel', text: '❌ Cancelar' },
-        { id: 'reschedule', text: '🔄 Reagendar' },
-      ],
-      purpose: 'automation',
-      instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
-    })
+    // Áudio primeiro (se modo audio/ambos). Botões interativos não existem
+    // em mensagem de áudio — o envio com botões só ocorre quando o modo
+    // inclui texto (texto ou ambos).
+    let result: Awaited<ReturnType<typeof sendWhatsappMessage>> | null = null
+    if (modo === 'audio' || modo === 'ambos') {
+      const audioResult = await sendWhatsappAudio({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        audio: audioByClinic.get(app.clinic_id)!,
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+      if (modo === 'audio' || !audioResult.ok) result = audioResult
+    }
+
+    if (!result) {
+      // Tenta enviar como mensagem com botões; fallback para texto simples
+      // se a instância não suportar (ex.: WhatsApp Personal sem Business API).
+      result = await sendWhatsappButtons({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        body: bodyText,
+        footer: clinicName,
+        buttons: [
+          { id: 'confirm', text: '✅ Confirmar' },
+          { id: 'cancel', text: '❌ Cancelar' },
+          { id: 'reschedule', text: '🔄 Reagendar' },
+        ],
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+    }
 
     if (!result.ok) {
       // Fallback: texto simples com instrução de resposta

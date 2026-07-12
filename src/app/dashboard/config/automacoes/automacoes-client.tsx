@@ -27,13 +27,21 @@ type AutomationRow = {
   aniversario_hora?: number | null
   aniversario_optin_required?: boolean | null
   template_aniversario?: string | null
+  modo_aniversario?: 'texto' | 'audio' | 'ambos' | null
+  audio_aniversario?: string | null
   confirma_24h?: boolean | null
   confirma_24h_hora?: number | null
   template_confirma_24h?: string | null
+  modo_confirma_24h?: 'texto' | 'audio' | 'ambos' | null
+  audio_confirma_24h?: string | null
   lembrete_2h?: boolean | null
   template_lembrete_2h?: string | null
+  modo_lembrete_2h?: 'texto' | 'audio' | 'ambos' | null
+  audio_lembrete_2h?: string | null
   msg_agendamento?: boolean | null
   template_msg_agendamento?: string | null
+  modo_msg_agendamento?: 'texto' | 'audio' | 'ambos' | null
+  audio_msg_agendamento?: string | null
   recall_inativos?: boolean | null
   recall_dias?: number | null
   template_recall?: string | null
@@ -45,11 +53,15 @@ type AutomationRow = {
   contato_pos_procedimento?: boolean | null
   contato_pos_hora?: number | null
   template_contato_pos?: string | null
+  modo_contato_pos?: 'texto' | 'audio' | 'ambos' | null
+  audio_contato_pos?: string | null
   contato_pos_excluir_categorias?: string[] | null
   contato_pos_seq?: any[] | null
   pos_venda_ativo?: boolean | null
   pos_venda_hora?: number | null
   template_pos_venda?: string | null
+  modo_pos_venda?: 'texto' | 'audio' | 'ambos' | null
+  audio_pos_venda?: string | null
   pos_venda_seq?: any[] | null
   alerta_despesas?: boolean | null
   alerta_despesas_dias_antes?: number | null
@@ -337,6 +349,12 @@ export default function AutomacoesClient({
             template2h: auto?.template_lembrete_2h || '',
             msgAgendamentoEnabled: auto?.msg_agendamento ?? false,
             templateAgendamento: auto?.template_msg_agendamento || '',
+            modo24h: auto?.modo_confirma_24h ?? 'texto',
+            audio24h: auto?.audio_confirma_24h ?? null,
+            modo2h: auto?.modo_lembrete_2h ?? 'texto',
+            audio2h: auto?.audio_lembrete_2h ?? null,
+            modoAgendamento: auto?.modo_msg_agendamento ?? 'texto',
+            audioAgendamento: auto?.audio_msg_agendamento ?? null,
           }}
         />
         <ReminderHistory clinicId={clinicId} />
@@ -367,6 +385,8 @@ export default function AutomacoesClient({
               'Atendimento ',
             ],
             seq: auto?.contato_pos_seq ?? [],
+            modo: auto?.modo_contato_pos ?? 'texto',
+            audioUrl: auto?.audio_contato_pos ?? null,
           }}
         />
       </AccordionItem>
@@ -389,6 +409,8 @@ export default function AutomacoesClient({
             hora: auto?.pos_venda_hora ?? 10,
             template: auto?.template_pos_venda || '',
             seq: auto?.pos_venda_seq ?? [],
+            modo: auto?.modo_pos_venda ?? 'texto',
+            audioUrl: auto?.audio_pos_venda ?? null,
           }}
         />
       </AccordionItem>
@@ -463,6 +485,8 @@ export default function AutomacoesClient({
             hour: auto?.aniversario_hora ?? 9,
             optinRequired: auto?.aniversario_optin_required ?? true,
             template: auto?.template_aniversario || '',
+            modo: auto?.modo_aniversario ?? 'texto',
+            audioUrl: auto?.audio_aniversario ?? null,
           }}
         />
         <BirthdayHistory clinicId={clinicId} />
