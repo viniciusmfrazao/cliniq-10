@@ -1,0 +1,111 @@
+name: Build Android AAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: 'Version code (integer, must increase each Play Store upload)'
+        required: true
+        default: '1'
+      version_name:
+        description: 'Version name (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Create placeholder web output
+        run: |
+          mkdir -p out
+          echo "<!DOCTYPE html><html><head><title>Clinike</title></head><body>Clinike</body></html>" > out/index.html
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Add microphone permission (gravação de áudio no WhatsApp usa getUserMedia, sem plugin nativo dedicado)
+        run: |
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
+          grep -B1 -A1 "RECORD_AUDIO" android/app/src/main/AndroidManifest.xml
+
+      - name: Generate Android app icons
+        run: |
+          pip install --quiet Pillow
+          python3 scripts/generate-android-icons.py
+
+      - name: Set version code and name
+        run: |
+          cd android
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.event.inputs.version_code }}/" app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"${{ github.event.inputs.version_name }}\"/" app/build.gradle
+          grep -E "versionCode|versionName" app/build.gradle
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Create keystore.properties
+        run: |
+          cat > android/keystore.properties << EOF
+          storeFile=release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Configure signing in build.gradle
+        run: |
+          cd android
+          sed -i '1i def keystorePropertiesFile = rootProject.file("keystore.properties")\ndef keystoreProperties = new Properties()\nkeystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n' app/build.gradle
+          sed -i '/^android {/a\    signingConfigs {\n        release {\n            storeFile file("release.keystore")\n            storePassword keystoreProperties["storePassword"]\n            keyAlias keystoreProperties["keyAlias"]\n            keyPassword keystoreProperties["keyPassword"]\n        }\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_21\n        targetCompatibility JavaVersion.VERSION_21\n    }' app/build.gradle
+          sed -i '/minifyEnabled false/i\            signingConfig signingConfigs.release' app/build.gradle
+          cat app/build.gradle
+
+      - name: Accept SDK licenses and install compileSdk platform
+        run: |
+          COMPILE_SDK=$(grep -oP 'compileSdkVersion\s*=\s*\K[0-9]+' android/variables.gradle)
+          echo "compileSdkVersion detected: $COMPILE_SDK"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-$COMPILE_SDK" "build-tools;$COMPILE_SDK.0.0" || \
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-$COMPILE_SDK"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build release AAB
+        run: |
+          cd android
+          ./gradlew bundleRelease --no-daemon
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clinike-release-${{ github.event.inputs.version_name }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f android/app/release.keystore android/keystore.properties
