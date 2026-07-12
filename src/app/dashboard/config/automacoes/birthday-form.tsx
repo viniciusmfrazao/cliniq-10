@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { parseSupabaseError } from '@/lib/error-messages'
+import AudioModeField, { EnvioMode } from '@/components/ui/AudioModeField'
 
 
 type Initial = {
@@ -12,6 +13,8 @@ type Initial = {
   hour: number
   optinRequired: boolean
   template: string
+  modo: EnvioMode
+  audioUrl: string | null
 }
 
 type Props = {
@@ -88,6 +91,8 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
   const [hour, setHour] = useState(initial.hour ?? 9)
   const [optinRequired, setOptinRequired] = useState(initial.optinRequired)
   const [template, setTemplate] = useState(initial.template)
+  const [modo, setModo] = useState<EnvioMode>(initial.modo)
+  const [audioUrl, setAudioUrl] = useState<string | null>(initial.audioUrl)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [testPhone, setTestPhone] = useState('')
@@ -116,6 +121,8 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
           template_aniversario: template,
           aniversario_optin_required: optinRequired,
           aniversario_hora: hour,
+          modo_aniversario: modo,
+          audio_aniversario: audioUrl,
         })
         .eq('clinic_id', clinicId)
 
@@ -257,7 +264,18 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
           </div>
         </div>
 
+        {/* Modo de envio + áudio */}
+        <AudioModeField
+          clinicId={clinicId}
+          automationKey="aniversario"
+          mode={modo}
+          onModeChange={setModo}
+          audioUrl={audioUrl}
+          onAudioChange={setAudioUrl}
+        />
+
         {/* Editor */}
+        {(modo === 'texto' || modo === 'ambos') && (
         <div className="space-y-2 mb-2">
           <label className="block text-sm font-medium text-slate-900">Texto da mensagem</label>
           <textarea
@@ -268,8 +286,10 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
             placeholder="Digite a mensagem... use {{primeiro_nome}}, {{clinica}}, {{idade}} pra personalizar"
           />
         </div>
+        )}
 
         {/* Placeholders */}
+        {(modo === 'texto' || modo === 'ambos') && (
         <div className="flex flex-wrap gap-2 mb-6">
           {PLACEHOLDERS.map((p) => (
             <button
@@ -283,9 +303,10 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
             </button>
           ))}
         </div>
+        )}
 
         {/* Preview */}
-        {template.trim() && (
+        {template.trim() && (modo === 'texto' || modo === 'ambos') && (
           <div className="space-y-2 mb-6">
             <label className="block text-sm font-medium text-slate-900">
               Pré-visualização

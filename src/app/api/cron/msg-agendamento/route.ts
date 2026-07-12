@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendAutomationContent } from '@/lib/whatsapp'
 import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
@@ -31,6 +31,8 @@ type AutomationRow = {
   clinic_id: string
   msg_agendamento: boolean | null
   template_msg_agendamento: string | null
+  modo_msg_agendamento: 'texto' | 'audio' | 'ambos' | null
+  audio_msg_agendamento: string | null
 }
 
 type WaRow = { clinic_id: string; status: string }
@@ -162,7 +164,7 @@ export async function GET(req: NextRequest) {
   ] = await Promise.all([
     svc
       .from('clinic_automations')
-      .select('clinic_id, msg_agendamento, template_msg_agendamento')
+      .select('clinic_id, msg_agendamento, template_msg_agendamento, modo_msg_agendamento, audio_msg_agendamento')
       .in('clinic_id', clinicIds),
     svc
       .from('clinic_whatsapp')
@@ -221,7 +223,11 @@ export async function GET(req: NextRequest) {
 
   for (const app of queue) {
     const auto = automationByClinic.get(app.clinic_id)
-    if (!auto || !auto.msg_agendamento || !auto.template_msg_agendamento?.trim()) {
+    const modoAg: 'texto' | 'audio' | 'ambos' = auto?.modo_msg_agendamento ?? 'texto'
+    const hasContent = modoAg === 'audio'
+      ? !!auto?.audio_msg_agendamento
+      : !!auto?.template_msg_agendamento?.trim()
+    if (!auto || !auto.msg_agendamento || !hasContent) {
       // A clinica desligou a automação no meio do caminho — limpa o agendamento
       summary.skippedAutomationOff++
       if (!dryRun) {
@@ -286,7 +292,7 @@ export async function GET(req: NextRequest) {
       linkAgenda = generateCalendarLinks(getPublicBaseUrl(), event).googleRedirectUrl
     }
 
-    const text = renderTemplate(auto.template_msg_agendamento!, {
+    const text = auto.template_msg_agendamento ? renderTemplate(auto.template_msg_agendamento, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
       clinica: clinicName,
@@ -296,7 +302,7 @@ export async function GET(req: NextRequest) {
       hora: dt.time,
       dia_semana: dt.weekday,
       link_agenda: linkAgenda,
-    })
+    }) : ''
 
     if (dryRun) {
       summary.sent++
@@ -320,11 +326,12 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    const result = await sendWhatsappMessage({
+    const result = await sendAutomationContent({
       clinicId: app.clinic_id,
       phone: patient.phone,
-      message: text,
-      purpose: 'automation',
+      mode: modoAg,
+      text,
+      audioUrl: auto.audio_msg_agendamento,
       instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
     })
 

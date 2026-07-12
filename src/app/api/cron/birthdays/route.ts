@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendAutomationContent } from '@/lib/whatsapp'
 
 export const maxDuration = 60
 
@@ -71,6 +71,8 @@ type ClinicSettings = {
   aniversario_hora: number
   aniversario_optin_required: boolean
   template_aniversario: string | null
+  modo_aniversario: 'texto' | 'audio' | 'ambos' | null
+  audio_aniversario: string | null
 }
 
 type WhatsappRow = {
@@ -122,7 +124,7 @@ export async function GET(req: NextRequest) {
   const { data: automations, error: errAuto } = await svc
     .from('clinic_automations')
     .select(
-      'clinic_id, aniversario, aniversario_hora, aniversario_optin_required, template_aniversario',
+      'clinic_id, aniversario, aniversario_hora, aniversario_optin_required, template_aniversario, modo_aniversario, audio_aniversario',
     )
     .eq('aniversario', true)
 
@@ -133,9 +135,11 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const matchingClinics = (automations as ClinicSettings[] | null)?.filter(
-    (a) => a.template_aniversario && a.template_aniversario.trim().length > 0,
-  )
+  const matchingClinics = (automations as ClinicSettings[] | null)?.filter((a) => {
+    const modo = a.modo_aniversario ?? 'texto'
+    if (modo === 'audio') return !!a.audio_aniversario
+    return a.template_aniversario && a.template_aniversario.trim().length > 0
+  })
 
   if (!matchingClinics || matchingClinics.length === 0) {
     return NextResponse.json({
@@ -241,12 +245,13 @@ export async function GET(req: NextRequest) {
 
       const fullName = b.name || ''
       const fname = firstName(fullName)
-      const text = renderTemplate(automation.template_aniversario || '', {
+      const modoAniv: 'texto' | 'audio' | 'ambos' = automation.modo_aniversario ?? 'texto'
+      const text = automation.template_aniversario ? renderTemplate(automation.template_aniversario, {
         nome: fullName,
         primeiro_nome: fname,
         clinica: clinicName,
         idade: b.age,
-      })
+      }) : ''
 
       if (dryRun) {
         summary.sent++
@@ -282,11 +287,12 @@ export async function GET(req: NextRequest) {
       }
 
       // Tenta enviar
-      const result = await sendWhatsappMessage({
+      const result = await sendAutomationContent({
         clinicId: automation.clinic_id,
         phone: b.phone,
-        message: text,
-        purpose: 'automation',
+        mode: modoAniv,
+        text,
+        audioUrl: automation.audio_aniversario,
         instanceName: (waByClinic.get(automation.clinic_id) as any)?.instance_name,
       })
 

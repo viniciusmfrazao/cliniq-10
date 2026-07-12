@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendAutomationContent } from '@/lib/whatsapp'
 import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
   // 2) Carregar dados em paralelo
   const [{ data: automations }, { data: waList }, { data: clinics },
          { data: patients }, { data: profs }, { data: procs }] = await Promise.all([
-    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h').in('clinic_id', clinicIds),
+    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h, modo_lembrete_2h, audio_lembrete_2h').in('clinic_id', clinicIds),
     svc.from('clinic_whatsapp').select('clinic_id, instance_name, status, is_default, role_outbound_automation').in('clinic_id', clinicIds),
     svc.from('clinics').select('id, name, settings').in('id', clinicIds),
     patientIds.length ? svc.from('patients').select('id, name, phone').in('id', patientIds) : { data: [] },
@@ -145,6 +145,9 @@ export async function GET(req: NextRequest) {
     if (!auto?.lembrete_2h) { summary.skipped++; continue }
 
     // Usa template específico de 2h — NUNCA o D-1 (que fala "amanhã")
+    const modo2h: 'texto' | 'audio' | 'ambos' = auto?.modo_lembrete_2h ?? 'texto'
+    const audioUrl2h: string | null = auto?.audio_lembrete_2h ?? null
+    if (modo2h === 'audio' && !audioUrl2h) { summary.skipped++; continue }
     const template = auto?.template_lembrete_2h || DEFAULT_TEMPLATE_2H
 
     const patient = patientMap.get(app.patient_id)
@@ -198,11 +201,12 @@ export async function GET(req: NextRequest) {
 
     // Texto simples — sem botões. Se a clínica quiser pedir confirmação
     // nesse lembrete, deve incluir {{link_confirmacao}} no template.
-    const result = await sendWhatsappMessage({
+    const result = await sendAutomationContent({
       clinicId: app.clinic_id,
       phone: patient.phone,
-      message: text.replace(/\n{3,}/g, '\n\n').trim(),
-      purpose: 'automation',
+      mode: modo2h,
+      text: text.replace(/\n{3,}/g, '\n\n').trim(),
+      audioUrl: audioUrl2h,
       instanceName: wa.instance_name,
     })
 

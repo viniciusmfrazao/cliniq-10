@@ -87,6 +87,7 @@ const P: Record<string, string[]> = {
   mic: ['M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z', 'M19 10v2a7 7 0 01-14 0v-2', 'M12 19v4', 'M8 23h8'],
   smile: ['M12 22a10 10 0 100-20 10 10 0 000 20z', 'M8 14s1.5 2 4 2 4-2 4-2', 'M9 9h.01', 'M15 9h.01'],
   paperclip: ['M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48'],
+  stopSquare: ['M5 5h14v14H5z'],
 }
 
 export default function Icon({ name, className = 'w-5 h-5', style }: { name: string; className?: string; style?: React.CSSProperties }) {

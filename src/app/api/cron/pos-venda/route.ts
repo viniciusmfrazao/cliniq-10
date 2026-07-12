@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendAutomationContent } from '@/lib/whatsapp'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -41,6 +41,8 @@ type SeqItem = {
   unidade: 'dias' | 'horas'
   ativo: boolean
   template: string
+  modo?: 'texto' | 'audio' | 'ambos'
+  audioUrl?: string | null
   // formato antigo (compatibilidade, caso alguma clínica já tenha salvo assim)
   dias?: number
 }
@@ -65,6 +67,8 @@ export async function GET(request: Request) {
       clinic_id,
       pos_venda_hora,
       template_pos_venda,
+      modo_pos_venda,
+      audio_pos_venda,
       pos_venda_seq
     `)
     .eq('pos_venda_ativo', true)
@@ -75,7 +79,9 @@ export async function GET(request: Request) {
 
   for (const auto of automations) {
     if (budgetExceeded()) { stoppedEarly = true; break }
-    if (!auto.template_pos_venda) {
+    const modoPrincipal: 'texto' | 'audio' | 'ambos' = (auto as any).modo_pos_venda ?? 'texto'
+    const hasMainContent = modoPrincipal === 'audio' ? !!(auto as any).audio_pos_venda : !!auto.template_pos_venda
+    if (!hasMainContent) {
       results.push({ clinic_id: auto.clinic_id, skipped: 'sem_template' })
       continue
     }
@@ -125,7 +131,10 @@ export async function GET(request: Request) {
       return !error // erro = já existe (conflito unique) ou falha — não envia
     }
 
-    async function enviarPara(apt: any, template: string, tipo: string, logTipo: string) {
+    async function enviarPara(
+      apt: any, template: string, tipo: string, logTipo: string,
+      mode: 'texto' | 'audio' | 'ambos' = 'texto', audioUrl?: string | null,
+    ) {
       const patient = apt.patients as any
       if (!patient?.phone) return false
       if (!(await travarEnvio(apt.id, logTipo))) return false
@@ -137,9 +146,9 @@ export async function GET(request: Request) {
         profissional: (apt.users as any)?.name || 'sua profissional',
         clinica: clinicName,
       }
-      const msg = renderTemplate(template, vars)
+      const msg = template ? renderTemplate(template, vars) : ''
       if (!dryRun) {
-        await sendWhatsappMessage({ clinicId: auto.clinic_id, phone: patient.phone, message: msg, purpose: 'automation' })
+        await sendAutomationContent({ clinicId: auto.clinic_id, phone: patient.phone, mode, text: msg, audioUrl })
         sendsThisRun++
       }
       results.push({ clinic_id: auto.clinic_id, patient: patient.name, type: tipo, proc: procName })
@@ -155,7 +164,7 @@ export async function GET(request: Request) {
         const dataApt = apt.start_time.slice(0, 10)
         if (dataApt !== ontem) continue
         if (jaEnviado.has(`${apt.id}::main`)) continue
-        await enviarPara(apt, auto.template_pos_venda || '', 'msg1', 'main')
+        await enviarPara(apt, auto.template_pos_venda || '', 'msg1', 'main', modoPrincipal, (auto as any).audio_pos_venda)
       }
     }
 
@@ -163,7 +172,7 @@ export async function GET(request: Request) {
     const seqItems: SeqItem[] = auto.pos_venda_seq || []
     for (let idx = 0; idx < seqItems.length; idx++) {
       const seqItem = seqItems[idx]
-      if (!seqItem.ativo || !seqItem.template) continue
+      if (!seqItem.ativo || (!seqItem.template && !seqItem.audioUrl)) continue
       const tipoLog = `seq_${idx}`
       const unidade = seqItem.unidade || 'dias' // compat com formato antigo (só "dias")
       const valor = seqItem.valor ?? seqItem.dias ?? 0
@@ -178,7 +187,7 @@ export async function GET(request: Request) {
           if (jaEnviado.has(`${apt.id}::${tipoLog}`)) continue
           const horasPassadas = (now.getTime() - new Date(apt.start_time).getTime()) / 36e5
           if (horasPassadas < valor) continue
-          await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}h`, tipoLog)
+          await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}h`, tipoLog, seqItem.modo ?? 'texto', seqItem.audioUrl)
         }
       } else {
         // dias: mantém o comportamento original, só dispara no horário configurado
@@ -189,7 +198,7 @@ export async function GET(request: Request) {
           const dataApt = apt.start_time.slice(0, 10)
           if (dataApt !== diaAlvo) continue
           if (jaEnviado.has(`${apt.id}::${tipoLog}`)) continue
-          await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}d`, tipoLog)
+          await enviarPara(apt, seqItem.template, `${tipoLog}_${valor}d`, tipoLog, seqItem.modo ?? 'texto', seqItem.audioUrl)
         }
       }
       if (stoppedEarly) break
