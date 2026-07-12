@@ -164,18 +164,6 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     setTesting(true)
     setTestMsg(null)
     try {
-      if (mode === 'audio' || mode === 'ambos') {
-        const rAudio = await fetch('/api/whatsapp/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: testPhone, type: 'audio', media: audioUrl, purpose: 'automation' }),
-        })
-        const jAudio = await rAudio.json()
-        if (!jAudio.ok) {
-          setTestMsg({ kind: 'err', text: jAudio.error || 'Erro ao enviar áudio' })
-          return
-        }
-      }
       if (mode === 'texto' || mode === 'ambos') {
         const text = previewFn(template)
           .replace(/\{\{link_confirmacao\}\}/g, 'https://app.clinike.com.br/confirmar/TESTE-LINK')
@@ -187,6 +175,18 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
         const json = await r.json()
         if (!json.ok) {
           setTestMsg({ kind: 'err', text: json.error || 'Erro ao enviar' })
+          return
+        }
+      }
+      if (mode === 'audio' || mode === 'ambos') {
+        const rAudio = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testPhone, type: 'audio', media: audioUrl, purpose: 'automation' }),
+        })
+        const jAudio = await rAudio.json()
+        if (!jAudio.ok) {
+          setTestMsg({ kind: 'err', text: jAudio.error || 'Erro ao enviar áudio' })
           return
         }
       }
