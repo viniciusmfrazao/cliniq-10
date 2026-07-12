@@ -416,22 +416,12 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Áudio primeiro (se modo audio/ambos). Botões interativos não existem
-    // em mensagem de áudio — o envio com botões só ocorre quando o modo
-    // inclui texto (texto ou ambos).
+    // Texto/botões primeiro (se modo texto/ambos), áudio depois. Botões
+    // interativos não existem em mensagem de áudio — o envio com botões
+    // só ocorre quando o modo inclui texto.
     let result: Awaited<ReturnType<typeof sendWhatsappMessage>> | null = null
-    if (modo === 'audio' || modo === 'ambos') {
-      const audioResult = await sendWhatsappAudio({
-        clinicId: app.clinic_id,
-        phone: patient.phone,
-        audio: audioByClinic.get(app.clinic_id)!,
-        purpose: 'automation',
-        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
-      })
-      if (modo === 'audio' || !audioResult.ok) result = audioResult
-    }
 
-    if (!result) {
+    if (modo !== 'audio') {
       // Tenta enviar como mensagem com botões; fallback para texto simples
       // se a instância não suportar (ex.: WhatsApp Personal sem Business API).
       result = await sendWhatsappButtons({
@@ -447,6 +437,20 @@ export async function GET(req: NextRequest) {
         purpose: 'automation',
         instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
       })
+    }
+
+    if ((modo === 'audio' || modo === 'ambos') && (!result || result.ok)) {
+      result = await sendWhatsappAudio({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        audio: audioByClinic.get(app.clinic_id)!,
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+    }
+
+    if (!result) {
+      result = { ok: false, code: 'evolution_error', error: 'Modo de envio inválido' }
     }
 
     if (!result.ok) {

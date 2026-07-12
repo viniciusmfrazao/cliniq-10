@@ -193,22 +193,12 @@ export async function GET(req: NextRequest) {
 
     if (errLock) { summary.errors.push(`lock ${app.id}: ${errLock.message}`); continue }
 
-    // Áudio primeiro (se modo audio/ambos). Botões interativos não existem
-    // em mensagem de áudio — a confirmação por botão só é enviada quando o
-    // modo inclui texto (texto ou ambos).
+    // Texto/botões primeiro (se modo texto/ambos), áudio depois. Botões
+    // interativos não existem em mensagem de áudio — a confirmação por
+    // botão só é enviada quando o modo inclui texto.
     let result: Awaited<ReturnType<typeof sendWhatsappMessage>> | null = null
-    if (modo2h === 'audio' || modo2h === 'ambos') {
-      const audioResult = await sendWhatsappAudio({
-        clinicId: app.clinic_id,
-        phone: patient.phone,
-        audio: audioUrl2h!,
-        purpose: 'automation',
-        instanceName: wa.instance_name,
-      })
-      if (modo2h === 'audio' || !audioResult.ok) result = audioResult
-    }
 
-    if (!result) {
+    if (modo2h !== 'audio') {
       // Envia como botões (CONFIRMAR / CANCELAR / NÃO SOU EU).
       // Fallback para texto se Evolution não suportar botões na instância.
       result = await sendWhatsappButtons({
@@ -224,6 +214,19 @@ export async function GET(req: NextRequest) {
         purpose: 'automation',
         instanceName: wa.instance_name,
       })
+    }
+
+    if ((modo2h === 'audio' || modo2h === 'ambos') && (!result || result.ok)) {
+      result = await sendWhatsappAudio({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        audio: audioUrl2h!,
+        purpose: 'automation',
+        instanceName: wa.instance_name,
+      })
+    }
+    if (!result) {
+      result = { ok: false, code: 'evolution_error', error: 'Modo de envio inválido' }
     }
     if (!result.ok) {
       result = await sendWhatsappMessage({

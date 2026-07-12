@@ -120,6 +120,16 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
     }
     setTesting(true); setTestMsg(null)
     try {
+      if (testModo === 'texto' || testModo === 'ambos') {
+        const text = renderTestVars(tplRaw)
+        const r = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
+        })
+        const json = await r.json()
+        if (!json.ok) { setTestMsg({ kind: 'err', text: json.error || 'Erro ao enviar' }); setTesting(false); return }
+      }
       if (testModo === 'audio' || testModo === 'ambos') {
         const rAudio = await fetch('/api/whatsapp/send', {
           method: 'POST',
@@ -128,17 +138,8 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
         })
         const jAudio = await rAudio.json()
         if (!jAudio.ok) { setTestMsg({ kind: 'err', text: jAudio.error || 'Erro ao enviar áudio' }); setTesting(false); return }
-        if (testModo === 'audio') { setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada!' }); setTesting(false); return }
       }
-      const text = renderTestVars(tplRaw)
-      const r = await fetch('/api/whatsapp/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: testPhone, message: text, purpose: 'automation' }),
-      })
-      const json = await r.json()
-      if (json.ok) setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada!' })
-      else setTestMsg({ kind: 'err', text: json.error || 'Erro ao enviar' })
+      setTestMsg({ kind: 'ok', text: 'Mensagem de teste enviada!' })
     } catch { setTestMsg({ kind: 'err', text: 'Erro de conexão' }) }
     finally { setTesting(false) }
   }

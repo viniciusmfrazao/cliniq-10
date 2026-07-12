@@ -550,17 +550,27 @@ export async function sendAutomationContent(args: {
 }): Promise<SendResult> {
   const { clinicId, phone, mode, text, audioUrl, instanceName, assignedTo } = args
 
-  if ((mode === 'audio' || mode === 'ambos') && audioUrl) {
-    const audioResult = await sendWhatsappAudio({
+  if (mode === 'audio') {
+    if (!audioUrl) {
+      return { ok: false, code: 'evolution_error', error: 'Áudio não configurado para esta automação.' }
+    }
+    return sendWhatsappAudio({
       clinicId, phone, audio: audioUrl, purpose: 'automation', instanceName, assignedTo,
     })
-    if (!audioResult.ok) return audioResult
-    if (mode === 'audio') return audioResult
   }
 
-  return sendWhatsappMessage({
+  const textResult = await sendWhatsappMessage({
     clinicId, phone, message: text, purpose: 'automation', instanceName, assignedTo,
   })
+
+  if (mode === 'ambos' && audioUrl) {
+    if (!textResult.ok) return textResult
+    return sendWhatsappAudio({
+      clinicId, phone, audio: audioUrl, purpose: 'automation', instanceName, assignedTo,
+    })
+  }
+
+  return textResult
 }
 
 /**

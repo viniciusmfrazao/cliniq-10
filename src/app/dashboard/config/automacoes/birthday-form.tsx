@@ -150,18 +150,6 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
     setTesting(true)
     setTestMsg(null)
     try {
-      if (modo === 'audio' || modo === 'ambos') {
-        const rAudio = await fetch('/api/whatsapp/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: testPhone, type: 'audio', media: audioUrl, purpose: 'automation' }),
-        })
-        const dAudio = await rAudio.json()
-        if (!(rAudio.ok && dAudio.ok)) {
-          setTestMsg({ kind: 'err', text: dAudio.error || 'Erro ao enviar áudio' })
-          return
-        }
-      }
       if (modo === 'texto' || modo === 'ambos') {
         const text = renderPreview(template, {
           nome: 'Você (teste)',
@@ -177,6 +165,18 @@ export default function BirthdayAutomationForm({ clinicId, clinicName, initial }
         const data = await r.json()
         if (!(r.ok && data.ok)) {
           setTestMsg({ kind: 'err', text: data.error || `Falha (HTTP ${r.status})` })
+          return
+        }
+      }
+      if (modo === 'audio' || modo === 'ambos') {
+        const rAudio = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testPhone, type: 'audio', media: audioUrl, purpose: 'automation' }),
+        })
+        const dAudio = await rAudio.json()
+        if (!(rAudio.ok && dAudio.ok)) {
+          setTestMsg({ kind: 'err', text: dAudio.error || 'Erro ao enviar áudio' })
           return
         }
       }
