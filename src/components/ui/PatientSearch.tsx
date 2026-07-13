@@ -7,6 +7,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 type Patient = {
   id: string
   name: string
+  phone?: string | null
 }
 
 // Remove acentos pra busca mais flexível ("jose" encontra "José")
@@ -16,6 +17,9 @@ const normalize = (s: string) =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
 
+// Mantém só os dígitos, pra buscar telefone independente de formatação
+const onlyDigits = (s: string) => s.replace(/\D/g, '')
+
 type Props = {
   patients: Patient[]
   value: string
@@ -24,7 +28,7 @@ type Props = {
   required?: boolean
 }
 
-export default function PatientSearch({ patients, value, onChange, placeholder = 'Digite para buscar...', required }: Props) {
+export default function PatientSearch({ patients, value, onChange, placeholder = 'Nome ou telefone...', required }: Props) {
   const [search, setSearch] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(0)
@@ -36,20 +40,36 @@ export default function PatientSearch({ patients, value, onChange, placeholder =
 
   // Index normalizado memoizado (reconstruído só quando `patients` muda)
   const patientsIndex = useMemo(
-    () => patients.map(p => ({ patient: p, normalized: normalize(p.name) })),
+    () => patients.map(p => ({
+      patient: p,
+      normalized: normalize(p.name),
+      phoneDigits: onlyDigits(p.phone || ''),
+    })),
     [patients]
   )
 
   // Encontrar paciente selecionado
   const selectedPatient = patients.find(p => p.id === value)
 
-  // Filtrar pacientes baseado na busca (memoizado)
+  // Filtrar pacientes baseado na busca — por nome OU telefone (memoizado)
   const filteredPatients = useMemo(() => {
     if (debouncedSearch.length === 0) return patients
+    const needleDigits = onlyDigits(debouncedSearch)
+    // Se o usuário digitou majoritariamente números, prioriza busca por telefone
+    const looksLikePhone = needleDigits.length >= 3 && needleDigits.length >= debouncedSearch.replace(/\s/g, '').length - 1
     const needle = normalize(debouncedSearch)
     return patientsIndex
-      .filter(({ normalized }) => normalized.includes(needle))
+      .filter(({ normalized, phoneDigits }) =>
+        normalized.includes(needle) ||
+        (needleDigits.length >= 3 && phoneDigits.includes(needleDigits))
+      )
       .map(({ patient }) => patient)
+      .sort((a, b) => {
+        if (!looksLikePhone) return 0
+        const aMatch = onlyDigits(a.phone || '').includes(needleDigits) ? 0 : 1
+        const bMatch = onlyDigits(b.phone || '').includes(needleDigits) ? 0 : 1
+        return aMatch - bMatch
+      })
   }, [debouncedSearch, patients, patientsIndex])
 
   // Reset highlight quando lista muda
@@ -119,7 +139,12 @@ export default function PatientSearch({ patients, value, onChange, placeholder =
         {selectedPatient ? (
           // Paciente selecionado
           <div className="input flex items-center justify-between bg-violet-50 border-violet-200">
-            <span className="text-slate-900 font-medium">{selectedPatient.name}</span>
+            <span className="text-slate-900 font-medium">
+              {selectedPatient.name}
+              {selectedPatient.phone && (
+                <span className="text-slate-500 font-normal ml-2 text-sm">{selectedPatient.phone}</span>
+              )}
+            </span>
             <button
               type="button"
               onClick={clearSelection}
@@ -181,7 +206,12 @@ export default function PatientSearch({ patients, value, onChange, placeholder =
                       {patient.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <span className="text-sm font-medium">{patient.name}</span>
+                  <div className="min-w-0 leading-tight">
+                    <p className="text-sm font-medium truncate">{patient.name}</p>
+                    {patient.phone && (
+                      <p className="text-xs text-slate-400">{patient.phone}</p>
+                    )}
+                  </div>
                 </div>
               </li>
             ))

@@ -10,7 +10,7 @@ import { todayBR } from '@/lib/datetime'
 import { parseSupabaseError } from '@/lib/error-messages'
 
 
-type Patient = { id: string; name: string }
+type Patient = { id: string; name: string; phone?: string | null }
 type Procedure = { id: string; name: string; duration_minutes: number; price: number; professional_ids?: string[] | null }
 type Professional = { id: string; name: string }
 type Room = { id: string; name: string }
@@ -181,7 +181,7 @@ export default function AppointmentForm({
     loadSlots()
   }, [form.professional_id, form.date, form.duration, clinicId, supabase])
 
-  const handleNewPatient = (patient: { id: string; name: string }) => {
+  const handleNewPatient = (patient: { id: string; name: string; phone?: string | null }) => {
     setPatients(prev => [...prev, patient].sort((a, b) => a.name.localeCompare(b.name)))
     setForm(prev => ({ ...prev, patient_id: patient.id }))
   }

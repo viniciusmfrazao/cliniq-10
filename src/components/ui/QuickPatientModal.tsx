@@ -10,7 +10,7 @@ import { parseSupabaseError } from '@/lib/error-messages'
 
 type Props = {
   clinicId: string
-  onPatientCreated: (patient: { id: string; name: string }) => void
+  onPatientCreated: (patient: { id: string; name: string; phone?: string | null }) => void
   onClose: () => void
 }
 
@@ -22,7 +22,7 @@ export default function QuickPatientModal({ clinicId, onPatientCreated, onClose 
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [createdPatient, setCreatedPatient] = useState<{ id: string; name: string } | null>(null)
+  const [createdPatient, setCreatedPatient] = useState<{ id: string; name: string; phone?: string | null } | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,7 +41,7 @@ export default function QuickPatientModal({ clinicId, onPatientCreated, onClose 
         name: form.name.trim(),
         phone: form.phone || null,
       })
-      .select('id, name')
+      .select('id, name, phone')
       .single()
 
     if (insertError) {
