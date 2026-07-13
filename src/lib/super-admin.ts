@@ -120,19 +120,31 @@ export async function getAdminMetrics() {
 
 export async function getAllClinics() {
   const serviceSupabase = createServiceClient()
-  
-  const { data } = await serviceSupabase
+
+  const { data: clinics } = await serviceSupabase
     .from('clinics')
-    .select(`
-      *,
-      users:users(count),
-      patients:patients(count),
-      appointments:appointments(count)
-    `)
+    .select('*')
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
-  
-  return data
+
+  if (!clinics || clinics.length === 0) return clinics
+
+  const clinicIds = clinics.map((c: any) => c.id)
+
+  const countResults = await Promise.all(
+    clinicIds.flatMap(id => [
+      serviceSupabase.from('users').select('id', { count: 'exact', head: true }).eq('clinic_id', id),
+      serviceSupabase.from('patients').select('id', { count: 'exact', head: true }).eq('clinic_id', id),
+      serviceSupabase.from('appointments').select('id', { count: 'exact', head: true }).eq('clinic_id', id),
+    ])
+  )
+
+  return clinics.map((c: any, i: number) => ({
+    ...c,
+    users: [{ count: countResults[i * 3]?.count ?? 0 }],
+    patients: [{ count: countResults[i * 3 + 1]?.count ?? 0 }],
+    appointments: [{ count: countResults[i * 3 + 2]?.count ?? 0 }],
+  }))
 }
 
 export async function getClinicDetails(clinicId: string) {
