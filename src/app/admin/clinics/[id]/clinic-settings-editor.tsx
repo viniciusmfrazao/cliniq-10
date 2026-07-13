@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type Plan = {
   id: string
@@ -34,6 +35,7 @@ type Props = {
 }
 
 export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
+  const router = useRouter()
   const admins = useMemo(() => users.filter((u) => u.role === 'admin'), [users])
   const initialAdmin = admins[0]
   const initialOverride =
@@ -104,6 +106,7 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar alterações')
       setMessage('Dados da clínica atualizados com sucesso.')
+      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro inesperado')
     } finally {
@@ -188,6 +191,17 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
             />
           </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Telefone da clínica</label>
+          <input
+            type="text"
+            placeholder="Ex: 5534999990000"
+            value={form.clinic_phone}
+            onChange={(e) => setForm((prev) => ({ ...prev, clinic_phone: e.target.value }))}
+            className="w-full md:w-1/3 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+          />
+          <p className="text-xs text-slate-400 mt-1">Telefone de contato geral da clínica (independente do número usado pra cobrança acima)</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notas de cobrança (interno)</label>
