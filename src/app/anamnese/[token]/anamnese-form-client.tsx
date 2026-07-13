@@ -449,10 +449,14 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           border: 1px solid var(--border);
           border-radius: 2px;
           background: var(--cream);
-          font-size: 13px;
+          font-size: 16px;
           color: var(--dark);
           outline: none;
           transition: border-color 0.2s;
+        }
+
+        .anamnese-input[type="date"] {
+          min-width: 170px;
         }
         
         .anamnese-input:focus {
@@ -497,7 +501,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                         defaultValue={anamnese.patients.birth_date.slice(0, 10)}
                         onChange={e => setBirthDateInput(e.target.value)}
                         max={new Date().toISOString().split('T')[0]}
-                        style={{ maxWidth: '200px' }}
+                        style={{ maxWidth: '240px', width: '100%' }}
                       />
                     </div>
                   ) : (
@@ -511,7 +515,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                         value={birthDateInput}
                         onChange={e => setBirthDateInput(e.target.value)}
                         max={new Date().toISOString().split('T')[0]}
-                        style={{ maxWidth: '200px' }}
+                        style={{ maxWidth: '240px', width: '100%' }}
                       />
                     </div>
                   )
