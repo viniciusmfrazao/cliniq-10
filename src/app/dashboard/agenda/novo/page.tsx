@@ -14,10 +14,10 @@ export default async function NovoAgendamentoPage({
   const user = await getCachedUser()
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
 
-  const patients = await getAllPatients<{ id: string; name: string }>(
+  const patients = await getAllPatients<{ id: string; name: string; phone: string | null }>(
     supabase,
     userData?.clinic_id,
-    'id, name'
+    'id, name, phone'
   )
 
   const { data: procedures } = await supabase
