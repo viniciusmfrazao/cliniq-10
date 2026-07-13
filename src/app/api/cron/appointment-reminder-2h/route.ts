@@ -241,7 +241,17 @@ export async function GET(req: NextRequest) {
     if (result.ok) {
       summary.sent++
     } else {
-      // NÃO reverte reminder_2h_sent_at — evita reenvio duplicado.
+      // Falha transitória (adiado pelo pacer anti-ban): desfaz a trava pra
+      // o próximo ciclo tentar de novo, dentro da mesma janela de start_time.
+      // Sem isso, o agendamento ficava marcado como "lembrete enviado" sem a
+      // mensagem nunca ter saído. Outras falhas (ex.: número inválido)
+      // permanecem travadas, já que retentar não resolveria.
+      if (result.code === 'rate_limited') {
+        await svc
+          .from('appointments')
+          .update({ reminder_2h_sent_at: null })
+          .eq('id', app.id)
+      }
       summary.errors.push(`send ${app.id}: ${result.error}`)
     }
   }

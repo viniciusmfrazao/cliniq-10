@@ -338,7 +338,20 @@ export async function GET(req: NextRequest) {
     if (result.ok) {
       summary.sent++
     } else {
-      // NÃO reverte agendamento_sent_at — evita reenvio duplicado em caso de falha de envio
+      // Falha transitória (adiado pelo pacer anti-ban): desfaz a trava pra
+      // o próximo ciclo tentar de novo. Sem isso, o agendamento ficava
+      // marcado como "confirmação enviada" sem a mensagem nunca ter saído.
+      // Outras falhas (ex.: número inválido) permanecem travadas, já que
+      // retentar não resolveria.
+      if (result.code === 'rate_limited') {
+        // A fila exige agendamento_scheduled_at preenchido (além de
+        // agendamento_sent_at nulo) — como o claim já zerou scheduled_at,
+        // é preciso restaurar os dois pra o item voltar a ser elegível.
+        await svc
+          .from('appointments')
+          .update({ agendamento_sent_at: null, agendamento_scheduled_at: new Date().toISOString() })
+          .eq('id', app.id)
+      }
       summary.errors.push({
         clinic_id: app.clinic_id,
         appointment_id: app.id,
