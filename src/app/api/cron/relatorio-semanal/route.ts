@@ -162,17 +162,22 @@ export async function GET(req: NextRequest) {
         : `*📦 Estoque:* ✅ Tudo em dia!`,
     ].filter(l => l !== null).join('\n')
 
-    // Trava ANTES de enviar (não depois): se a function morrer no meio do
-    // envio pros telefones, o cron seguinte não reenvia o relatório inteiro
-    // de novo pra quem já recebeu.
+    // Trava atômica ANTES de enviar: o UPDATE só pega a linha se ela ainda
+    // NÃO foi marcada hoje — condição avaliada no banco, não no JS. Isso
+    // corrige o reenvio a cada 10min (a SELECT inicial retornava
+    // last_relatorio_sent_at stale, então o check em JS nunca barrava) e
+    // também protege contra duas execuções concorrentes: quem "perde" o
+    // update recebe 0 linhas e pula o envio.
+    const todayStartBR = `${todayISO}T00:00:00-03:00`
     const { data: lockedRows } = await svc
       .from('clinic_automations')
       .update({ last_relatorio_sent_at: new Date().toISOString() })
       .eq('clinic_id', clinicId)
       .eq('relatorio_semanal', true)
+      .or(`last_relatorio_sent_at.is.null,last_relatorio_sent_at.lt.${todayStartBR}`)
       .select('clinic_id')
     if (!lockedRows || lockedRows.length === 0) {
-      results.push({ clinic_id: clinicId, skipped: 'lock_failed' })
+      results.push({ clinic_id: clinicId, skipped: 'already_sent_today_or_locked' })
       continue
     }
 
