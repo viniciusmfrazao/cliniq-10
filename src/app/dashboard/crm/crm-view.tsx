@@ -11,6 +11,16 @@ import LeadFollowupPanel from '@/components/crm/LeadFollowupPanel'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import CRMSettingsModal from './crm-settings-modal'
 
+// Remove acentos pra busca mais flexível ("jose" encontra "José")
+const normalize = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+
+// Mantém só os dígitos, pra buscar telefone independente de formatação
+const onlyDigits = (s: string) => s.replace(/\D/g, '')
+
 type Lead = {
   id: string
   name: string
@@ -267,6 +277,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [showNewLead, setShowNewLead] = useState(false)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [filter, setFilter] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState<string>('')
   const [showSettings, setShowSettings] = useState(false)
   const [showLegend, setShowLegend] = useState(false)
   const [showBell, setShowBell] = useState(false)
@@ -552,6 +563,17 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                       ? leadsInScope.filter(l => l.eva_pause_until && new Date(l.eva_pause_until) > new Date())
                       : leadsInScope.filter(l => l.status === filter)
 
+  // Busca por nome OU telefone (por dígitos, ignora formatação) — aplicada
+  // por cima dos filtros de status/temperatura/etc, sem afetar os stats.
+  const searchNeedle = normalize(searchQuery.trim())
+  const searchDigits = onlyDigits(searchQuery)
+  const matchesSearch = (l: Lead) =>
+    searchNeedle.length === 0 ||
+    normalize(l.name).includes(searchNeedle) ||
+    (searchDigits.length >= 3 && onlyDigits(l.phone || '').includes(searchDigits))
+
+  const searchedLeads = searchQuery.trim() === '' ? filteredLeads : filteredLeads.filter(matchesSearch)
+
   // Agrupar por stage para Kanban (respeita os filtros especiais)
   const leadsForKanban =
     filter === 'retorno_agendado'
@@ -577,8 +599,9 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                     : filter === 'eva_paused'
                       ? leadsInScope.filter(l => l.eva_pause_until && new Date(l.eva_pause_until) > new Date())
                       : leadsInScope
+  const searchedKanbanLeads = searchQuery.trim() === '' ? leadsForKanban : leadsForKanban.filter(matchesSearch)
   const leadsByStage = STAGES.reduce((acc, stage) => {
-    acc[stage.id] = leadsForKanban.filter(l => l.status === stage.id)
+    acc[stage.id] = searchedKanbanLeads.filter(l => l.status === stage.id)
     return acc
   }, {} as Record<string, Lead[]>)
 
@@ -1044,6 +1067,25 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
       {/* Filtro de Origem + Período */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative">
+          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Nome ou telefone..."
+            className="input w-auto text-sm pl-9"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 hover:bg-slate-100 rounded-full"
+            >
+              <Icon name="x" className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          )}
+        </div>
         <select
           value={sourceFilter}
           onChange={e => setSourceFilter(e.target.value)}
@@ -1363,7 +1405,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
       {/* List View */}
       {viewMode === 'list' && (
         <div className="card overflow-hidden">
-          {filteredLeads.length === 0 ? (
+          {searchedLeads.length === 0 ? (
             <div className="p-12 text-center">
               <Icon name="users" className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500">Nenhum lead encontrado</p>
@@ -1378,7 +1420,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
             <>
               {/* Mobile: cards */}
               <div className="md:hidden divide-y divide-slate-100">
-                {filteredLeads.map(lead => {
+                {searchedLeads.map(lead => {
                   const stage = STAGES.find(s => s.id === lead.status)
                   const source = SOURCES.find(s => s.id === lead.source)
                   return (
@@ -1429,7 +1471,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredLeads.map(lead => {
+                {searchedLeads.map(lead => {
                   const stage = STAGES.find(s => s.id === lead.status)
                   const source = SOURCES.find(s => s.id === lead.source)
                   return (
