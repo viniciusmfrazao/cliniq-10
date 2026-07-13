@@ -266,7 +266,7 @@ export default function LogsPage() {
         <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 p-4">
           <p className="text-sm text-emerald-600">Criações</p>
           <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-            {logs.filter(l => l.action.includes('create')).length}
+            {logs.filter(l => l.action.includes('create') || l.action.includes('insert')).length}
           </p>
         </div>
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
