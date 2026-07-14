@@ -117,6 +117,7 @@ type AutomationRow = {
   template_confirma_24h: string | null
   modo_confirma_24h?: 'texto' | 'audio' | 'ambos' | null
   audio_confirma_24h?: string | null
+  confirma_24h_solicitar_resposta?: boolean | null
 }
 
 type AppointmentRow = {
@@ -183,7 +184,7 @@ export async function GET(req: NextRequest) {
   //    E cujo horário configurado bate com a hora atual
   const { data: automations, error: errAuto } = await svc
     .from('clinic_automations')
-    .select('clinic_id, confirma_24h, confirma_24h_hora, template_confirma_24h, modo_confirma_24h, audio_confirma_24h')
+    .select('clinic_id, confirma_24h, confirma_24h_hora, template_confirma_24h, modo_confirma_24h, audio_confirma_24h, confirma_24h_solicitar_resposta')
     .eq('confirma_24h', true)
 
   if (errAuto) {
@@ -327,10 +328,12 @@ export async function GET(req: NextRequest) {
   const templateByClinic = new Map<string, string>()
   const modeByClinic = new Map<string, 'texto' | 'audio' | 'ambos'>()
   const audioByClinic = new Map<string, string>()
+  const solicitarRespostaByClinic = new Map<string, boolean>()
   for (const c of enabledClinics) {
     if (c.template_confirma_24h) templateByClinic.set(c.clinic_id, c.template_confirma_24h)
     modeByClinic.set(c.clinic_id, c.modo_confirma_24h ?? 'texto')
     if (c.audio_confirma_24h) audioByClinic.set(c.clinic_id, c.audio_confirma_24h)
+    solicitarRespostaByClinic.set(c.clinic_id, c.confirma_24h_solicitar_resposta ?? true)
   }
 
   let stoppedEarly = false
@@ -420,8 +423,9 @@ export async function GET(req: NextRequest) {
     // interativos não existem em mensagem de áudio — o envio com botões
     // só ocorre quando o modo inclui texto.
     let result: Awaited<ReturnType<typeof sendWhatsappMessage>> | null = null
+    const solicitarResposta = solicitarRespostaByClinic.get(app.clinic_id) ?? true
 
-    if (modo !== 'audio') {
+    if (modo !== 'audio' && solicitarResposta) {
       // Tenta enviar como mensagem com botões; fallback para texto simples
       // se a instância não suportar (ex.: WhatsApp Personal sem Business API).
       result = await sendWhatsappButtons({
@@ -434,6 +438,15 @@ export async function GET(req: NextRequest) {
           { id: 'cancel', text: '❌ Cancelar' },
           { id: 'reschedule', text: '🔄 Reagendar' },
         ],
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+    } else if (modo !== 'audio' && !solicitarResposta) {
+      // Clínica desativou os botões de confirmação: manda só o texto informativo.
+      result = await sendWhatsappMessage({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        message: bodyText,
         purpose: 'automation',
         instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
       })
@@ -454,11 +467,11 @@ export async function GET(req: NextRequest) {
     }
 
     if (!result.ok) {
-      // Fallback: texto simples com instrução de resposta
+      // Fallback: texto simples (com instrução de resposta só se a clínica pediu botões)
       result = await sendWhatsappMessage({
         clinicId: app.clinic_id,
         phone: patient.phone,
-        message: bodyText + '\n\nResponda *Confirmar* ou *Cancelar*.',
+        message: solicitarResposta ? bodyText + '\n\nResponda *Confirmar* ou *Cancelar*.' : bodyText,
         purpose: 'automation',
         instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
       })

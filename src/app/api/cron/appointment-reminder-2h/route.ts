@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
   // 2) Carregar dados em paralelo
   const [{ data: automations }, { data: waList }, { data: clinics },
          { data: patients }, { data: profs }, { data: procs }] = await Promise.all([
-    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h, modo_lembrete_2h, audio_lembrete_2h').in('clinic_id', clinicIds),
+    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h, modo_lembrete_2h, audio_lembrete_2h, confirma_24h_solicitar_resposta').in('clinic_id', clinicIds),
     svc.from('clinic_whatsapp').select('clinic_id, instance_name, status, is_default, role_outbound_automation').in('clinic_id', clinicIds),
     svc.from('clinics').select('id, name, settings').in('id', clinicIds),
     patientIds.length ? svc.from('patients').select('id, name, phone').in('id', patientIds) : { data: [] },
@@ -197,8 +197,9 @@ export async function GET(req: NextRequest) {
     // interativos não existem em mensagem de áudio — a confirmação por
     // botão só é enviada quando o modo inclui texto.
     let result: Awaited<ReturnType<typeof sendWhatsappMessage>> | null = null
+    const solicitarResposta2h: boolean = auto?.confirma_24h_solicitar_resposta ?? true
 
-    if (modo2h !== 'audio') {
+    if (modo2h !== 'audio' && solicitarResposta2h) {
       // Envia como botões (CONFIRMAR / CANCELAR / NÃO SOU EU).
       // Fallback para texto se Evolution não suportar botões na instância.
       result = await sendWhatsappButtons({
@@ -211,6 +212,15 @@ export async function GET(req: NextRequest) {
           { id: 'cancel', text: '❌ Cancelar' },
           { id: 'reschedule', text: '🔄 Reagendar' },
         ],
+        purpose: 'automation',
+        instanceName: wa.instance_name,
+      })
+    } else if (modo2h !== 'audio' && !solicitarResposta2h) {
+      // Clínica desativou os botões de confirmação: manda só o texto informativo.
+      result = await sendWhatsappMessage({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        message: text.replace(/\n{3,}/g, '\n\n').trim(),
         purpose: 'automation',
         instanceName: wa.instance_name,
       })
@@ -232,7 +242,7 @@ export async function GET(req: NextRequest) {
       result = await sendWhatsappMessage({
         clinicId: app.clinic_id,
         phone: patient.phone,
-        message: text + '\n\nResponda *Confirmar* ou *Cancelar*.',
+        message: solicitarResposta2h ? text + '\n\nResponda *Confirmar* ou *Cancelar*.' : text,
         purpose: 'automation',
         instanceName: wa.instance_name,
       })
