@@ -31,6 +31,7 @@ export default function LogsPage() {
     search: '',
     dateFrom: '',
     dateTo: '',
+    origin: '',
   })
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function LogsPage() {
       if (filters.search) params.set('search', filters.search)
       if (filters.dateFrom) params.set('date_from', filters.dateFrom)
       if (filters.dateTo) params.set('date_to', filters.dateTo)
+      if (filters.origin) params.set('origin', filters.origin)
 
       const res = await fetch(`/api/admin/logs?${params.toString()}`)
       if (res.ok) {
@@ -229,6 +231,18 @@ export default function LogsPage() {
             </select>
           </div>
           <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Origem</label>
+            <select
+              value={filters.origin}
+              onChange={e => setFilters(prev => ({ ...prev, origin: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+            >
+              <option value="">Todas</option>
+              <option value="user">👤 Usuários</option>
+              <option value="system">🤖 Sistema</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Data Início</label>
             <input
               type="date"
@@ -258,7 +272,7 @@ export default function LogsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
           <p className="text-sm text-slate-500">Total de Logs</p>
           <p className="text-2xl font-bold text-slate-900 dark:text-white">{logs.length}</p>
@@ -279,6 +293,12 @@ export default function LogsPage() {
           <p className="text-sm text-red-600">Exclusões</p>
           <p className="text-2xl font-bold text-red-700 dark:text-red-400">
             {logs.filter(l => l.action.includes('delete')).length}
+          </p>
+        </div>
+        <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-200 dark:border-violet-800 p-4">
+          <p className="text-sm text-violet-600">🤖 Ações de Sistema</p>
+          <p className="text-2xl font-bold text-violet-700 dark:text-violet-400">
+            {logs.filter(l => !l.user_id).length}
           </p>
         </div>
       </div>
@@ -345,7 +365,13 @@ export default function LogsPage() {
                           {log.clinic_name || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">
-                          {log.user_name || '-'}
+                          {log.user_name ? (
+                            <span>👤 {log.user_name}</span>
+                          ) : (
+                            <span className="text-xs px-2 py-1 rounded-full font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                              🤖 Sistema
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${getActionColor(log.action)}`}>
@@ -372,7 +398,10 @@ export default function LogsPage() {
                           <td className="px-4 py-2 pl-9 text-xs text-slate-500 whitespace-nowrap">
                             ↳ {formatTime(sub.created_at)}
                           </td>
-                          <td className="px-4 py-2" colSpan={2} />
+                          <td className="px-4 py-2" />
+                          <td className="px-4 py-2 text-xs text-slate-500">
+                            {sub.user_name ? `👤 ${sub.user_name}` : '🤖 Sistema'}
+                          </td>
                           <td className="px-4 py-2">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getActionColor(sub.action)}`}>
                               {sub.action}

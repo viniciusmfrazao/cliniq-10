@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')
     const date_from = searchParams.get('date_from')
     const date_to = searchParams.get('date_to')
+    const origin = searchParams.get('origin') // 'user' | 'system'
 
     const supabase = createServiceClient()
 
@@ -34,6 +35,12 @@ export async function GET(request: NextRequest) {
 
     if (clinic_id) {
       query = query.eq('clinic_id', clinic_id)
+    }
+
+    if (origin === 'system') {
+      query = query.is('user_id', null)
+    } else if (origin === 'user') {
+      query = query.not('user_id', 'is', null)
     }
 
     // Sanitiza tudo que vai pra .ilike()/.or() do PostgREST. Sem isso,
