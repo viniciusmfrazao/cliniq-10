@@ -38,12 +38,18 @@ export default async function NovoAgendamentoPage({
     .select('id, name, role, professional_role, active')
     .eq('clinic_id', userData?.clinic_id)
   
-  const professionals = (allUsers || []).filter(u =>
+  const professionalsFiltered = (allUsers || []).filter(u =>
     u.active !== false && (
       PURE_PROFESSIONAL_ROLES.includes(u.role) ||
       (u.professional_role && PURE_PROFESSIONAL_ROLES.includes(u.professional_role))
     )
   )
+  // Se não houver profissionais com role específico (ex: clínica solo onde o único
+  // usuário é admin sem professional_role definido), usar admins como fallback
+  // — evita tela de agendamento sem nenhuma opção de profissional.
+  const professionals = professionalsFiltered.length > 0
+    ? professionalsFiltered
+    : (allUsers || []).filter(u => u.role === 'admin' && u.active !== false)
 
   const { data: rooms } = await supabase
     .from('rooms')
