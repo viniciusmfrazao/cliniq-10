@@ -262,7 +262,7 @@ export default function LogsPage() {
           </div>
           <div className="flex items-end">
             <button
-              onClick={() => setFilters({ clinic_id: '', action: '', entity_type: '', search: '', dateFrom: '', dateTo: '' })}
+              onClick={() => setFilters({ clinic_id: '', action: '', entity_type: '', search: '', dateFrom: '', dateTo: '', origin: '' })}
               className="w-full px-3 py-2 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm transition"
             >
               Limpar Filtros
