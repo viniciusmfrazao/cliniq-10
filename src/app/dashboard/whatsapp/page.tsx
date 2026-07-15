@@ -255,6 +255,21 @@ export default function WhatsAppPage() {
   const [showFollowupModal, setShowFollowupModal] = useState(false)
   const [completingFollowup, setCompletingFollowup] = useState(false)
 
+  // Atualiza uma conversa tanto na lista quanto no selectedConversation
+  // (sao estados separados) — sem isso, os botoes do header (que leem
+  // selectedConversation) ficavam com dado velho ate reload da pagina.
+  function patchConversation(id: string, patch: Partial<Conversation>) {
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    setSelectedConversation((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev))
+  }
+
+  // Quando o envio manual (texto/imagem/video/audio) conclui automaticamente
+  // um follow-up pendente no backend, zera o sininho/badge na hora.
+  function clearFollowupIfAutoCompleted(followupCompletedId?: string | null) {
+    if (!followupCompletedId || !selectedConversation) return
+    patchConversation(selectedConversation.id, { followupAt: null, followupId: null })
+  }
+
   async function completeFollowup() {
     if (!selectedConversation?.followupId) return
     if (!confirm('Marcar esse follow-up como concluído?')) return
@@ -270,10 +285,7 @@ export default function WhatsAppPage() {
         alert(`Falha ao concluir follow-up: ${data.error || res.status}`)
         return
       }
-      const tid = selectedConversation.id
-      setConversations((prev) =>
-        prev.map((c) => (c.id === tid ? { ...c, followupAt: null, followupId: null } : c)),
-      )
+      patchConversation(selectedConversation.id, { followupAt: null, followupId: null })
     } catch {
       alert('Erro inesperado ao concluir follow-up')
     } finally {
@@ -972,6 +984,7 @@ export default function WhatsAppPage() {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
         // Envio manual pausa Eva nessa conversa (UI imediata; backend ja salvou)
         setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+        clearFollowupIfAutoCompleted(data.persisted?.followup_completed_id)
       }
     } catch (error) {
       console.error('Error sending:', error)
@@ -1022,6 +1035,7 @@ export default function WhatsAppPage() {
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
         setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+        clearFollowupIfAutoCompleted(data.persisted?.followup_completed_id)
       }
     } catch (error) {
       console.error('Error sending image:', error)
@@ -1073,6 +1087,7 @@ export default function WhatsAppPage() {
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
         setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+        clearFollowupIfAutoCompleted(data.persisted?.followup_completed_id)
       }
     } catch (error) {
       console.error('Error sending video:', error)
@@ -1121,6 +1136,7 @@ export default function WhatsAppPage() {
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
         setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+        clearFollowupIfAutoCompleted(data.persisted?.followup_completed_id)
       }
     } catch (error) {
       console.error('Error sending audio:', error)
@@ -1585,12 +1601,9 @@ export default function WhatsAppPage() {
           leadId={crmLead.id}
           leadName={crmLead.name}
           onClose={() => setShowFollowupModal(false)}
-          onScheduled={(scheduledAt) => {
+          onScheduled={(scheduledAt, followupId) => {
             if (!selectedConversation) return
-            const tid = selectedConversation.id
-            setConversations((prev) =>
-              prev.map((c) => (c.id === tid ? { ...c, followupAt: scheduledAt } : c)),
-            )
+            patchConversation(selectedConversation.id, { followupAt: scheduledAt, followupId: followupId || null })
           }}
         />
       )}
