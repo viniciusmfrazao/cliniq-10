@@ -30,6 +30,8 @@ type Conversation = {
   unread: number
   /** Horário do próximo follow-up manual pendente (lead_followups), se houver */
   followupAt: string | null
+  /** id do follow-up pendente (lead_followups.id), pra poder marcar como concluído */
+  followupId: string | null
 }
 
 type Message = {
@@ -172,6 +174,7 @@ function buildConversationFromRow(
     // realtime local nao refletia).
     unread: isFromPatient ? (prev?.unread ?? 0) + 1 : 0,
     followupAt: prev?.followupAt ?? null,
+    followupId: prev?.followupId ?? null,
   }
 }
 
@@ -250,6 +253,33 @@ export default function WhatsAppPage() {
   const [schedulePatient, setSchedulePatient] = useState<any>(null)
   // Modal de follow-up manual direto pelo chat
   const [showFollowupModal, setShowFollowupModal] = useState(false)
+  const [completingFollowup, setCompletingFollowup] = useState(false)
+
+  async function completeFollowup() {
+    if (!selectedConversation?.followupId) return
+    if (!confirm('Marcar esse follow-up como concluído?')) return
+    setCompletingFollowup(true)
+    try {
+      const res = await fetch('/api/crm/followups', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedConversation.followupId }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(`Falha ao concluir follow-up: ${data.error || res.status}`)
+        return
+      }
+      const tid = selectedConversation.id
+      setConversations((prev) =>
+        prev.map((c) => (c.id === tid ? { ...c, followupAt: null, followupId: null } : c)),
+      )
+    } catch {
+      alert('Erro inesperado ao concluir follow-up')
+    } finally {
+      setCompletingFollowup(false)
+    }
+  }
 
   // Mantem ref atualizada pra o handler de realtime saber qual conversa esta aberta
   useEffect(() => {
@@ -679,19 +709,21 @@ export default function WhatsAppPage() {
       const leadIds = Array.from(leadIdByPhone.values())
       const { data: followupsData } = await supabase
         .from('lead_followups')
-        .select('lead_id, scheduled_at')
+        .select('id, lead_id, scheduled_at')
         .eq('clinic_id', clinicId)
         .in('lead_id', leadIds)
         .is('done_at', null)
         .order('scheduled_at', { ascending: true })
       if (followupsData && followupsData.length > 0) {
-        const earliestByLead = new Map<string, string>()
+        const earliestByLead = new Map<string, { id: string; scheduled_at: string }>()
         for (const f of followupsData) {
-          if (!earliestByLead.has(f.lead_id)) earliestByLead.set(f.lead_id, f.scheduled_at)
+          if (!earliestByLead.has(f.lead_id)) earliestByLead.set(f.lead_id, { id: f.id, scheduled_at: f.scheduled_at })
         }
         convs.forEach(c => {
           const leadId = leadIdByPhone.get(c.phone)
-          c.followupAt = leadId ? earliestByLead.get(leadId) ?? null : null
+          const fu = leadId ? earliestByLead.get(leadId) : undefined
+          c.followupAt = fu?.scheduled_at ?? null
+          c.followupId = fu?.id ?? null
         })
       }
     }
@@ -1431,6 +1463,17 @@ export default function WhatsAppPage() {
                   >
                     <Icon name="bell" className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Follow-up</span>
+                  </button>
+                )}
+                {hasCrmModule && selectedConversation.followupId && (
+                  <button
+                    onClick={completeFollowup}
+                    disabled={completingFollowup}
+                    className="px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-medium border border-emerald-200 flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                    title="Marcar follow-up como concluído"
+                  >
+                    <Icon name="check" className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{completingFollowup ? 'Concluindo…' : 'Concluir'}</span>
                   </button>
                 )}
                 <button

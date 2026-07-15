@@ -15,8 +15,7 @@ export default function FollowupModal({ leadId, leadName, onClose, onScheduled }
   const [error, setError] = useState('')
 
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
-  const nowPlus1h = new Date(Date.now() + 60 * 60 * 1000)
-  const defaultTime = nowPlus1h.toLocaleTimeString('sv-SE', {
+  const defaultTime = new Date().toLocaleTimeString('sv-SE', {
     timeZone: 'America/Sao_Paulo',
     hour: '2-digit',
     minute: '2-digit',
