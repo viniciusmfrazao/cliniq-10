@@ -486,6 +486,59 @@ export async function sendWhatsappImage(args: {
 }
 
 /**
+ * Envia um vídeo (com caption opcional) via Evolution API.
+ * Mesmo endpoint generico de midia usado pra imagem, so troca o mediatype.
+ * `media` aceita base64 puro (sem o prefixo data:) ou URL pública.
+ */
+export async function sendWhatsappVideo(args: {
+  clinicId: string
+  phone: string
+  media: string // base64 ou url
+  mimetype: string
+  caption?: string
+  fileName?: string
+  purpose?: SendPurpose
+  instanceName?: string
+  assignedTo?: string | null
+}): Promise<SendResult> {
+  const {
+    clinicId, phone, media, mimetype, caption, fileName,
+    purpose, instanceName, assignedTo,
+  } = args
+
+  if (!isValidPhone(phone)) {
+    return {
+      ok: false,
+      code: 'evolution_error',
+      error: `Número inválido: "${phone}" não é um telefone WhatsApp válido. Este lead pode ter vindo de anúncio no Facebook/Instagram sem número de telefone real.`,
+    }
+  }
+
+  const r = await resolveInstance(clinicId, { purpose, instanceName, assignedTo })
+  if (!r.ok) return r.error
+
+  if (purpose === 'automation') {
+    const canSend = await paceAutomatedSend(r.data.instanceName, Date.now() + 50_000)
+    if (!canSend) {
+      return { ok: false, code: 'rate_limited', error: 'Envio adiado para respeitar espaçamento anti-bloqueio; será tentado no próximo ciclo.' }
+    }
+  }
+
+  return postEvolution(
+    `${r.data.baseUrl}/message/sendMedia/${r.data.instanceName}`,
+    r.data.apiKey,
+    {
+      number: normalizePhone(phone),
+      mediatype: 'video',
+      mimetype,
+      media,
+      caption: caption ?? '',
+      fileName: fileName ?? `video-${Date.now()}.mp4`,
+    },
+  )
+}
+
+/**
  * Envia áudio como PTT (push-to-talk, mensagem de voz).
  * `audio` aceita base64 puro ou URL pública. Evolution converte automaticamente.
  */
