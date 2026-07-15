@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { useWaLine } from '@/contexts/WaLineContext'
 import ScheduleModal from './schedule-modal'
+import FollowupModal from './followup-modal'
 
 type MessageKind =
   | 'text'
@@ -162,7 +163,12 @@ function buildConversationFromRow(
     lastMessage: r.content.length > 50 ? r.content.slice(0, 50) + '…' : r.content,
     lastMessageTime: r.created_at,
     lastRole: r.role === 'assistant' ? 'assistant' : 'user',
-    unread: isFromPatient ? (prev?.unread ?? 0) + 1 : prev?.unread ?? 0,
+    // Qualquer mensagem 'assistant' zera o nao lido — Eva, painel OU reply
+    // dado direto no celular (fromMe=true chega aqui como 'assistant').
+    // Sem isso, conversas respondidas pelo celular ficavam presas como
+    // "nao lida" ate o reload da pagina (RPC recalcula certo, mas o
+    // realtime local nao refletia).
+    unread: isFromPatient ? (prev?.unread ?? 0) + 1 : 0,
   }
 }
 
@@ -239,6 +245,8 @@ export default function WhatsAppPage() {
   // Modal de agendamento direto pelo chat
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [schedulePatient, setSchedulePatient] = useState<any>(null)
+  // Modal de follow-up manual direto pelo chat
+  const [showFollowupModal, setShowFollowupModal] = useState(false)
 
   // Mantem ref atualizada pra o handler de realtime saber qual conversa esta aberta
   useEffect(() => {
@@ -1308,6 +1316,16 @@ export default function WhatsAppPage() {
                     </button>
                   )
                 )}
+                {hasCrmModule && crmLead && (
+                  <button
+                    onClick={() => setShowFollowupModal(true)}
+                    className="px-2 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg text-xs font-medium border border-amber-200 flex items-center gap-1.5 transition-colors"
+                    title="Agendar follow-up"
+                  >
+                    <Icon name="bell" className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Follow-up</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setSchedulePatient(patient)
@@ -1406,6 +1424,16 @@ export default function WhatsAppPage() {
           clinicId={clinicId}
           patient={schedulePatient || (selectedConversation ? { id: patient?.id || '', name: selectedConversation.name, phone: selectedConversation.phone } : null)}
           onClose={() => setShowScheduleModal(false)}
+          onScheduled={() => {}}
+        />
+      )}
+
+      {/* Modal de follow-up manual */}
+      {showFollowupModal && crmLead && (
+        <FollowupModal
+          leadId={crmLead.id}
+          leadName={crmLead.name}
+          onClose={() => setShowFollowupModal(false)}
           onScheduled={() => {}}
         />
       )}
