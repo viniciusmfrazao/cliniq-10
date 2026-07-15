@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import {
   sendWhatsappMessage,
   sendWhatsappImage,
+  sendWhatsappVideo,
   sendWhatsappAudio,
   base64ToBuffer,
   cleanMimeType,
@@ -15,8 +16,8 @@ type SendBody = {
   clinic_id?: string
   phone?: string
   message?: string
-  /** 'text' (default) | 'image' | 'audio' */
-  type?: 'text' | 'image' | 'audio'
+  /** 'text' (default) | 'image' | 'video' | 'audio' */
+  type?: 'text' | 'image' | 'video' | 'audio'
   purpose?: 'manual' | 'automation'
   /** base64 (puro ou data URL) ou URL pública pra mídia */
   media?: string
@@ -34,7 +35,7 @@ type SendBody = {
  * 3 modos de autenticação:
  *
  * 1) Usuário logado (UI):
- *    Body: { phone, message } | { phone, type:'image', media, mimetype, caption? } | { phone, type:'audio', media }
+ *    Body: { phone, message } | { phone, type:'image'|'video', media, mimetype, caption? } | { phone, type:'audio', media }
  *
  * 2) Server-to-server CRON (pg_cron, jobs internos):
  *    Header: x-cron-secret: <CRON_SECRET (env)>
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     )
   }
-  if ((type === 'image' || type === 'audio') && !media) {
+  if ((type === 'image' || type === 'video' || type === 'audio') && !media) {
     return NextResponse.json(
       { ok: false, error: 'media (base64 ou url) é obrigatório pra mídia' },
       { status: 400 },
@@ -134,19 +135,29 @@ export async function POST(req: NextRequest) {
           fileName,
           ...sharedOpts,
         })
-      : type === 'audio'
-        ? await sendWhatsappAudio({
+      : type === 'video'
+        ? await sendWhatsappVideo({
             clinicId: clinicId!,
             phone,
-            audio: media!,
+            media: media!,
+            mimetype: mimetype || 'video/mp4',
+            caption,
+            fileName,
             ...sharedOpts,
           })
-        : await sendWhatsappMessage({
-            clinicId: clinicId!,
-            phone,
-            message: message!,
-            ...sharedOpts,
-          })
+        : type === 'audio'
+          ? await sendWhatsappAudio({
+              clinicId: clinicId!,
+              phone,
+              audio: media!,
+              ...sharedOpts,
+            })
+          : await sendWhatsappMessage({
+              clinicId: clinicId!,
+              phone,
+              message: message!,
+              ...sharedOpts,
+            })
 
   if (!result.ok) {
     const status =
@@ -197,7 +208,7 @@ const PAUSE_INDEFINITE_ISO = '2099-12-31T23:59:59.999Z'
 async function persistOutboundMessage(args: {
   clinicId: string
   phone: string
-  type: 'text' | 'image' | 'audio'
+  type: 'text' | 'image' | 'video' | 'audio'
   message?: string
   caption?: string
   media?: string
@@ -219,14 +230,14 @@ async function persistOutboundMessage(args: {
   let mediaUrl: string | null = null
   let cleanedMime: string | null = null
 
-  if ((args.type === 'image' || args.type === 'audio') && args.media) {
+  if ((args.type === 'image' || args.type === 'video' || args.type === 'audio') && args.media) {
     try {
       // Detecta mime do data URL se nao veio explicito
       const decoded = base64ToBuffer(args.media)
       const inferredMime =
         cleanMimeType(args.mimetype) ||
         cleanMimeType(decoded.detectedMime) ||
-        (args.type === 'image' ? 'image/jpeg' : 'audio/ogg')
+        (args.type === 'image' ? 'image/jpeg' : args.type === 'video' ? 'video/mp4' : 'audio/ogg')
       cleanedMime = inferredMime
       const ext = extFromMime(inferredMime)
       const safeId = (evolutionMessageId ?? `${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-')
@@ -259,7 +270,7 @@ async function persistOutboundMessage(args: {
 
   // Conteudo textual + preview
   const previewByKind =
-    args.type === 'image' ? '🖼️ Imagem' : args.type === 'audio' ? '🎤 Mensagem de voz' : ''
+    args.type === 'image' ? '🖼️ Imagem' : args.type === 'video' ? '🎬 Vídeo' : args.type === 'audio' ? '🎤 Mensagem de voz' : ''
   const content = args.message || args.caption || previewByKind
 
   // Dedupe: se ja temos uma row com esse evolution_message_id, nao duplica

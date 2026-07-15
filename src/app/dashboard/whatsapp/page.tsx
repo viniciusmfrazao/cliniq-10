@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { useWaLine } from '@/contexts/WaLineContext'
 import ScheduleModal from './schedule-modal'
+import FollowupModal from './followup-modal'
 
 type MessageKind =
   | 'text'
@@ -27,6 +28,10 @@ type Conversation = {
   lastMessageTime: string
   lastRole: 'user' | 'assistant'
   unread: number
+  /** Horário do próximo follow-up manual pendente (lead_followups), se houver */
+  followupAt: string | null
+  /** id do follow-up pendente (lead_followups.id), pra poder marcar como concluído */
+  followupId: string | null
 }
 
 type Message = {
@@ -162,7 +167,14 @@ function buildConversationFromRow(
     lastMessage: r.content.length > 50 ? r.content.slice(0, 50) + '…' : r.content,
     lastMessageTime: r.created_at,
     lastRole: r.role === 'assistant' ? 'assistant' : 'user',
-    unread: isFromPatient ? (prev?.unread ?? 0) + 1 : prev?.unread ?? 0,
+    // Qualquer mensagem 'assistant' zera o nao lido — Eva, painel OU reply
+    // dado direto no celular (fromMe=true chega aqui como 'assistant').
+    // Sem isso, conversas respondidas pelo celular ficavam presas como
+    // "nao lida" ate o reload da pagina (RPC recalcula certo, mas o
+    // realtime local nao refletia).
+    unread: isFromPatient ? (prev?.unread ?? 0) + 1 : 0,
+    followupAt: prev?.followupAt ?? null,
+    followupId: prev?.followupId ?? null,
   }
 }
 
@@ -234,11 +246,40 @@ export default function WhatsAppPage() {
 
   // Busca e filtro de status
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'followup'>('all')
 
   // Modal de agendamento direto pelo chat
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [schedulePatient, setSchedulePatient] = useState<any>(null)
+  // Modal de follow-up manual direto pelo chat
+  const [showFollowupModal, setShowFollowupModal] = useState(false)
+  const [completingFollowup, setCompletingFollowup] = useState(false)
+
+  async function completeFollowup() {
+    if (!selectedConversation?.followupId) return
+    if (!confirm('Marcar esse follow-up como concluído?')) return
+    setCompletingFollowup(true)
+    try {
+      const res = await fetch('/api/crm/followups', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedConversation.followupId }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(`Falha ao concluir follow-up: ${data.error || res.status}`)
+        return
+      }
+      const tid = selectedConversation.id
+      setConversations((prev) =>
+        prev.map((c) => (c.id === tid ? { ...c, followupAt: null, followupId: null } : c)),
+      )
+    } catch {
+      alert('Erro inesperado ao concluir follow-up')
+    } finally {
+      setCompletingFollowup(false)
+    }
+  }
 
   // Mantem ref atualizada pra o handler de realtime saber qual conversa esta aberta
   useEffect(() => {
@@ -626,13 +667,15 @@ export default function WhatsAppPage() {
 
     // Buscar nomes dos leads para enriquecer a lista
     const phones = convs.map(c => c.phone).filter(Boolean)
+    let leadIdByPhone = new Map<string, string>()
     if (phones.length > 0 && clinicId) {
       const { data: leadsData } = await supabase
         .from('leads')
-        .select('phone, name')
+        .select('id, phone, name')
         .eq('clinic_id', clinicId)
         .in('phone', phones)
       if (leadsData && leadsData.length > 0) {
+        leadIdByPhone = new Map(leadsData.map(l => [l.phone, l.id]))
         const leadNameMap = new Map(leadsData.map(l => [l.phone, l.name]))
         convs.forEach(c => {
           const leadName = leadNameMap.get(c.phone)
@@ -657,6 +700,30 @@ export default function WhatsAppPage() {
           if (patientName && patientName.trim().length > 2) {
             c.name = patientName
           }
+        })
+      }
+    }
+    // Follow-ups manuais pendentes — usa pra mostrar o sininho na lista e
+    // alimentar o filtro "Follow-ups". Pega o mais próximo por lead.
+    if (leadIdByPhone.size > 0 && clinicId) {
+      const leadIds = Array.from(leadIdByPhone.values())
+      const { data: followupsData } = await supabase
+        .from('lead_followups')
+        .select('id, lead_id, scheduled_at')
+        .eq('clinic_id', clinicId)
+        .in('lead_id', leadIds)
+        .is('done_at', null)
+        .order('scheduled_at', { ascending: true })
+      if (followupsData && followupsData.length > 0) {
+        const earliestByLead = new Map<string, { id: string; scheduled_at: string }>()
+        for (const f of followupsData) {
+          if (!earliestByLead.has(f.lead_id)) earliestByLead.set(f.lead_id, { id: f.id, scheduled_at: f.scheduled_at })
+        }
+        convs.forEach(c => {
+          const leadId = leadIdByPhone.get(c.phone)
+          const fu = leadId ? earliestByLead.get(leadId) : undefined
+          c.followupAt = fu?.scheduled_at ?? null
+          c.followupId = fu?.id ?? null
         })
       }
     }
@@ -965,6 +1032,57 @@ export default function WhatsAppPage() {
     }
   }
 
+  async function sendVideo(file: File, caption?: string) {
+    if (!selectedConversation || !config) return
+    setSending(true)
+    const previewUrl = URL.createObjectURL(file)
+    const optimisticId = `tmp-${Date.now()}`
+    const optimistic: Message = {
+      id: optimisticId,
+      content: caption || '🎬 Vídeo',
+      role: 'assistant',
+      created_at: new Date().toISOString(),
+      kind: 'video',
+      mediaUrl: previewUrl,
+      mimetype: file.type,
+      caption: caption || null,
+    }
+    setMessages((prev) => [...prev, optimistic])
+
+    try {
+      const base64 = await fileToBase64(file)
+      const response = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: selectedConversation.phone,
+          type: 'video',
+          media: base64,
+          mimetype: file.type || 'video/mp4',
+          caption,
+          fileName: file.name,
+          ...(selectedConversation.instanceName
+            ? { instance_name: selectedConversation.instanceName }
+            : {}),
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+        alert(`Falha ao enviar vídeo: ${data.error || response.status}`)
+      } else {
+        reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
+        setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+      }
+    } catch (error) {
+      console.error('Error sending video:', error)
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+      alert('Erro inesperado ao enviar vídeo')
+    } finally {
+      setSending(false)
+    }
+  }
+
   async function sendAudio(blob: Blob) {
     if (!selectedConversation || !config) return
     setSending(true)
@@ -1147,6 +1265,17 @@ export default function WhatsAppPage() {
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => setStatusFilter('followup')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${statusFilter === 'followup' ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700'}`}
+              >
+                Follow-ups
+                {conversations.filter(c => c.followupAt && (!lineFilter || c.instanceName === lineFilter)).length > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${statusFilter === 'followup' ? 'bg-white/30 text-white' : 'bg-amber-500 text-white'}`}>
+                    {conversations.filter(c => c.followupAt && (!lineFilter || c.instanceName === lineFilter)).length}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -1163,11 +1292,16 @@ export default function WhatsAppPage() {
                 .filter(c => {
                   if (lineFilter && c.instanceName !== lineFilter) return false
                   if (statusFilter === 'waiting' && c.unread === 0) return false
+                  if (statusFilter === 'followup' && !c.followupAt) return false
                   if (searchQuery.trim()) {
                     const q = searchQuery.toLowerCase()
                     return c.name.toLowerCase().includes(q) || c.phone.includes(q)
                   }
                   return true
+                })
+                .sort((a, b) => {
+                  if (statusFilter !== 'followup') return 0
+                  return new Date(a.followupAt || 0).getTime() - new Date(b.followupAt || 0).getTime()
                 })
                 .map(conv => {
                 const isInbound = conv.instanceName
@@ -1189,6 +1323,14 @@ export default function WhatsAppPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <p className="font-semibold text-slate-900 dark:text-white truncate">{conv.name}</p>
+                        {conv.followupAt && (
+                          <span
+                            title={`Follow-up: ${new Date(conv.followupAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+                            className="flex-shrink-0"
+                          >
+                            <Icon name="bell" className="w-3 h-3 text-amber-500" />
+                          </span>
+                        )}
                       </div>
                       {conv.instanceName ? (
                         <div className="flex items-center gap-1 mt-0.5">
@@ -1214,6 +1356,11 @@ export default function WhatsAppPage() {
                       {conv.unread > 0 && (
                         <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
                           {conv.unread > 9 ? '9+' : conv.unread}
+                        </span>
+                      )}
+                      {conv.followupAt && (
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap">
+                          {new Date(conv.followupAt).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' })}
                         </span>
                       )}
                     </div>
@@ -1308,6 +1455,27 @@ export default function WhatsAppPage() {
                     </button>
                   )
                 )}
+                {hasCrmModule && crmLead && (
+                  <button
+                    onClick={() => setShowFollowupModal(true)}
+                    className="px-2 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg text-xs font-medium border border-amber-200 flex items-center gap-1.5 transition-colors"
+                    title="Agendar follow-up"
+                  >
+                    <Icon name="bell" className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Follow-up</span>
+                  </button>
+                )}
+                {hasCrmModule && selectedConversation.followupId && (
+                  <button
+                    onClick={completeFollowup}
+                    disabled={completingFollowup}
+                    className="px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-medium border border-emerald-200 flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                    title="Marcar follow-up como concluído"
+                  >
+                    <Icon name="check" className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{completingFollowup ? 'Concluindo…' : 'Concluir'}</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setSchedulePatient(patient)
@@ -1385,6 +1553,7 @@ export default function WhatsAppPage() {
                 onChange={setNewMessage}
                 onSendText={sendMessage}
                 onSendImage={sendImage}
+                onSendVideo={sendVideo}
                 onSendAudio={sendAudio}
                 disabled={sending}
               />
@@ -1407,6 +1576,22 @@ export default function WhatsAppPage() {
           patient={schedulePatient || (selectedConversation ? { id: patient?.id || '', name: selectedConversation.name, phone: selectedConversation.phone } : null)}
           onClose={() => setShowScheduleModal(false)}
           onScheduled={() => {}}
+        />
+      )}
+
+      {/* Modal de follow-up manual */}
+      {showFollowupModal && crmLead && (
+        <FollowupModal
+          leadId={crmLead.id}
+          leadName={crmLead.name}
+          onClose={() => setShowFollowupModal(false)}
+          onScheduled={(scheduledAt) => {
+            if (!selectedConversation) return
+            const tid = selectedConversation.id
+            setConversations((prev) =>
+              prev.map((c) => (c.id === tid ? { ...c, followupAt: scheduledAt } : c)),
+            )
+          }}
         />
       )}
     </div>
@@ -1555,6 +1740,7 @@ type ComposerProps = {
   onChange: (v: string) => void
   onSendText: () => void
   onSendImage: (file: File, caption?: string) => void
+  onSendVideo: (file: File, caption?: string) => void
   onSendAudio: (blob: Blob) => void
   disabled?: boolean
 }
@@ -1564,13 +1750,14 @@ function ChatComposer({
   onChange,
   onSendText,
   onSendImage,
+  onSendVideo,
   onSendAudio,
   disabled,
 }: ComposerProps) {
   const [showEmoji, setShowEmoji] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
-  const [pendingImage, setPendingImage] = useState<{ file: File; preview: string } | null>(null)
+  const [pendingMedia, setPendingMedia] = useState<{ file: File; preview: string; kind: 'image' | 'video' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -1584,26 +1771,32 @@ function ChatComposer({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 16 * 1024 * 1024) {
-      alert('Imagem muito grande (máximo 16MB)')
+    const isVideo = file.type.startsWith('video/')
+    const maxSize = isVideo ? 64 * 1024 * 1024 : 16 * 1024 * 1024
+    if (file.size > maxSize) {
+      alert(isVideo ? 'Vídeo muito grande (máximo 64MB)' : 'Imagem muito grande (máximo 16MB)')
       e.target.value = ''
       return
     }
-    setPendingImage({ file, preview: URL.createObjectURL(file) })
+    setPendingMedia({ file, preview: URL.createObjectURL(file), kind: isVideo ? 'video' : 'image' })
     e.target.value = ''
   }
 
-  const confirmImage = (caption: string) => {
-    if (!pendingImage) return
-    onSendImage(pendingImage.file, caption || undefined)
-    URL.revokeObjectURL(pendingImage.preview)
-    setPendingImage(null)
+  const confirmMedia = (caption: string) => {
+    if (!pendingMedia) return
+    if (pendingMedia.kind === 'video') {
+      onSendVideo(pendingMedia.file, caption || undefined)
+    } else {
+      onSendImage(pendingMedia.file, caption || undefined)
+    }
+    URL.revokeObjectURL(pendingMedia.preview)
+    setPendingMedia(null)
     onChange('')
   }
 
-  const cancelImage = () => {
-    if (pendingImage) URL.revokeObjectURL(pendingImage.preview)
-    setPendingImage(null)
+  const cancelMedia = () => {
+    if (pendingMedia) URL.revokeObjectURL(pendingMedia.preview)
+    setPendingMedia(null)
   }
 
   const startRecording = async () => {
@@ -1654,21 +1847,29 @@ function ChatComposer({
     setRecordingTime(0)
   }
 
-  // Modal de pré-visualização da imagem
-  if (pendingImage) {
+  // Modal de pré-visualização de imagem/vídeo
+  if (pendingMedia) {
     return (
       <div className="border-t border-slate-100 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-900">
         <div className="flex items-start gap-3 mb-3">
-          <img
-            src={pendingImage.preview}
-            alt="Pré-visualização"
-            className="w-24 h-24 rounded-lg object-cover border border-slate-200"
-          />
+          {pendingMedia.kind === 'video' ? (
+            <video
+              src={pendingMedia.preview}
+              className="w-24 h-24 rounded-lg object-cover border border-slate-200 bg-black"
+              muted
+            />
+          ) : (
+            <img
+              src={pendingMedia.preview}
+              alt="Pré-visualização"
+              className="w-24 h-24 rounded-lg object-cover border border-slate-200"
+            />
+          )}
           <input
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && confirmImage(value)}
+            onKeyDown={(e) => e.key === 'Enter' && confirmMedia(value)}
             placeholder="Legenda (opcional)"
             className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800"
             autoFocus
@@ -1676,18 +1877,18 @@ function ChatComposer({
         </div>
         <div className="flex gap-2 justify-end">
           <button
-            onClick={cancelImage}
+            onClick={cancelMedia}
             disabled={disabled}
             className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
           >
             Cancelar
           </button>
           <button
-            onClick={() => confirmImage(value)}
+            onClick={() => confirmMedia(value)}
             disabled={disabled}
             className="px-4 py-2 text-sm font-semibold bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50"
           >
-            {disabled ? 'Enviando…' : 'Enviar imagem'}
+            {disabled ? 'Enviando…' : pendingMedia.kind === 'video' ? 'Enviar vídeo' : 'Enviar imagem'}
           </button>
         </div>
       </div>
@@ -1764,14 +1965,14 @@ function ChatComposer({
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
           className="w-10 h-10 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center disabled:opacity-50"
-          title="Enviar imagem"
+          title="Enviar imagem ou vídeo"
         >
           <Icon name="image" className="w-5 h-5" />
         </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           className="hidden"
           onChange={handleFileChange}
         />
