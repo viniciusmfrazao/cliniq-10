@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
     fileName,
     evolutionResult: result.result,
     purpose,
+    userId,
   })
 
   return NextResponse.json({
@@ -195,6 +196,8 @@ type PersistResult = {
   conversation_id?: string
   evolution_message_id?: string | null
   media_path?: string | null
+  /** id do follow-up (lead_followups) marcado como concluído automaticamente, se houver */
+  followup_completed_id?: string | null
   warnings: string[]
 }
 
@@ -216,6 +219,7 @@ async function persistOutboundMessage(args: {
   fileName?: string
   evolutionResult: unknown
   purpose: 'manual' | 'automation'
+  userId?: string | null
 }): Promise<PersistResult> {
   const warnings: string[] = []
   const svc = createServiceClient()
@@ -347,6 +351,7 @@ async function persistOutboundMessage(args: {
   // INTERVENCAO HUMANA — quando a secretaria responde manualmente pelo painel,
   // pausamos a Eva indefinidamente naquele lead. So volta ao automatico quando
   // alguem clicar "Devolver pra Eva" no painel (limpa eva_pause_until + needs_human_review).
+  let followupCompletedId: string | null = null
   if (args.purpose === 'manual') {
     const upd = await svc
       .from('leads')
@@ -357,8 +362,47 @@ async function persistOutboundMessage(args: {
       })
       .eq('clinic_id', args.clinicId)
       .eq('phone', normalizedPhone)
+      .select('id')
+      .maybeSingle()
     if (upd.error) {
       warnings.push(`pause eva on manual: ${upd.error.message}`)
+    }
+
+    // Conclui automaticamente o follow-up manual pendente desse lead — a
+    // atendente respondendo pelo painel JA E o contato que o follow-up
+    // pedia. Nao mexe em eva_pause_until/eva_next_followup_at aqui (fica
+    // como o bloco acima ja deixou: pausada indefinidamente ate "Devolver
+    // pra Eva"), diferente do PATCH /api/crm/followups que libera a Eva.
+    const leadId = upd.data?.id
+    if (leadId) {
+      const { data: pending } = await svc
+        .from('lead_followups')
+        .select('id, note, type')
+        .eq('clinic_id', args.clinicId)
+        .eq('lead_id', leadId)
+        .is('done_at', null)
+        .order('scheduled_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (pending) {
+        const doneUpd = await svc
+          .from('lead_followups')
+          .update({ done_at: new Date().toISOString(), done_by: args.userId || null })
+          .eq('id', pending.id)
+        if (doneUpd.error) {
+          warnings.push(`auto-complete followup: ${doneUpd.error.message}`)
+        } else {
+          followupCompletedId = pending.id
+          await svc.from('lead_contacts').insert({
+            clinic_id: args.clinicId,
+            lead_id: leadId,
+            created_by: args.userId || null,
+            type: pending.type || 'whatsapp',
+            note: pending.note || 'Follow-up concluído automaticamente (atendente respondeu pelo WhatsApp)',
+            followup_id: pending.id,
+          })
+        }
+      }
     }
   }
 
@@ -367,6 +411,7 @@ async function persistOutboundMessage(args: {
     conversation_id: insertRes.data?.id,
     evolution_message_id: evolutionMessageId,
     media_path: mediaPath,
+    followup_completed_id: followupCompletedId,
     warnings,
   }
 }

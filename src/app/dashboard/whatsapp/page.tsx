@@ -255,6 +255,16 @@ export default function WhatsAppPage() {
   const [showFollowupModal, setShowFollowupModal] = useState(false)
   const [completingFollowup, setCompletingFollowup] = useState(false)
 
+  // Quando o envio manual (texto/imagem/video/audio) conclui automaticamente
+  // um follow-up pendente no backend, zera o sininho/badge na hora.
+  function clearFollowupIfAutoCompleted(followupCompletedId?: string | null) {
+    if (!followupCompletedId || !selectedConversation) return
+    const tid = selectedConversation.id
+    setConversations((prev) =>
+      prev.map((c) => (c.id === tid ? { ...c, followupAt: null, followupId: null } : c)),
+    )
+  }
+
   async function completeFollowup() {
     if (!selectedConversation?.followupId) return
     if (!confirm('Marcar esse follow-up como concluído?')) return
@@ -972,6 +982,7 @@ export default function WhatsAppPage() {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
         // Envio manual pausa Eva nessa conversa (UI imediata; backend ja salvou)
         setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+        clearFollowupIfAutoCompleted(data.persisted?.followup_completed_id)
       }
     } catch (error) {
       console.error('Error sending:', error)
@@ -1022,6 +1033,7 @@ export default function WhatsAppPage() {
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
         setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+        clearFollowupIfAutoCompleted(data.persisted?.followup_completed_id)
       }
     } catch (error) {
       console.error('Error sending image:', error)
@@ -1073,6 +1085,7 @@ export default function WhatsAppPage() {
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
         setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+        clearFollowupIfAutoCompleted(data.persisted?.followup_completed_id)
       }
     } catch (error) {
       console.error('Error sending video:', error)
@@ -1121,6 +1134,7 @@ export default function WhatsAppPage() {
       } else {
         reconcileOptimistic(optimisticId, data.persisted?.conversation_id)
         setLeadEvaStatus((prev) => ({ ...prev, paused: true }))
+        clearFollowupIfAutoCompleted(data.persisted?.followup_completed_id)
       }
     } catch (error) {
       console.error('Error sending audio:', error)
