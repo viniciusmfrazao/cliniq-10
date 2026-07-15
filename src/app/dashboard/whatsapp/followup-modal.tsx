@@ -7,7 +7,7 @@ type Props = {
   leadId: string
   leadName: string
   onClose: () => void
-  onScheduled: (scheduledAt: string) => void
+  onScheduled: (scheduledAt: string, followupId: string) => void
 }
 
 export default function FollowupModal({ leadId, leadName, onClose, onScheduled }: Props) {
@@ -47,7 +47,7 @@ export default function FollowupModal({ leadId, leadName, onClose, onScheduled }
           setError(json.error || 'Erro ao agendar follow-up.')
           return
         }
-        onScheduled(scheduledAt)
+        onScheduled(scheduledAt, json.data?.id)
         onClose()
       } catch {
         setError('Erro ao agendar follow-up.')
