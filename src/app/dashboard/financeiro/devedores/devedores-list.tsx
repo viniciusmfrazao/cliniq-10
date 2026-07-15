@@ -26,6 +26,17 @@ type Paciente = {
   phone: string | null
 }
 
+type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number }
+
+// Mesma lista de Configurações → Taxas de Pagamento
+const BANDEIRAS_ESPECIFICAS = [
+  { key: 'visa', label: 'Visa' },
+  { key: 'master', label: 'Mastercard' },
+  { key: 'elo', label: 'Elo' },
+  { key: 'amex', label: 'American Express' },
+  { key: 'hipercard', label: 'Hipercard' },
+]
+
 type Props = {
   debitos: Debito[]
   pacientes: Paciente[]
@@ -162,6 +173,29 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
   const [pagandoParcial, setPagandoParcial] = useState<Debito | null>(null)
   const [valorParcial, setValorParcial] = useState('')
   const [formaParcial, setFormaParcial] = useState('pix')
+  const [bandeiraParcial, setBandeiraParcial] = useState('')
+  const [parcelasParcial, setParcelasParcial] = useState(1)
+  const [taxas, setTaxas] = useState<Taxa[]>([])
+
+  useEffect(() => {
+    async function loadTaxas() {
+      const { data } = await supabase
+        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual').eq('clinic_id', clinicId)
+      setTaxas(data || [])
+    }
+    loadTaxas()
+  }, [clinicId])
+
+  function getTaxaParcial(forma: string, bandeira: string, parcelas: number = 1) {
+    const formaKey = forma === 'credito' ? `credito_${parcelas}x` : forma
+    return (
+      taxas.find(t => t.forma === formaKey && t.bandeira === bandeira)?.taxa_percentual ??
+      taxas.find(t => t.forma === formaKey && (t.bandeira === 'todas' || !t.bandeira))?.taxa_percentual ??
+      taxas.find(t => t.forma === forma && t.bandeira === bandeira)?.taxa_percentual ??
+      taxas.find(t => t.forma === forma && (t.bandeira === 'todas' || !t.bandeira))?.taxa_percentual ??
+      0
+    )
+  }
   const [editingPromessa, setEditingPromessa] = useState<string | null>(null)
   const [promessaForm, setPromessaForm] = useState({ data: '', observacao: '' })
 
@@ -259,9 +293,19 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
       alert(`Valor inválido. Máximo: ${Number(pagandoParcial.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`)
       return
     }
+    if ((formaParcial === 'credito' || formaParcial === 'debito') && !bandeiraParcial) {
+      alert('Selecione a bandeira do cartão')
+      return
+    }
+
     setLoadingId(pagandoParcial.id)
     const hoje = new Date().toISOString().split('T')[0]
     const restante = Math.round((pagandoParcial.valor - valor) * 100) / 100
+
+    const isCartao = formaParcial === 'credito' || formaParcial === 'debito'
+    const taxaPct = isCartao ? getTaxaParcial(formaParcial, bandeiraParcial, formaParcial === 'credito' ? parcelasParcial : 1) : 0
+    const valorTaxa = Math.round(valor * taxaPct) / 100
+    const valorLiquido = Math.round((valor - valorTaxa) * 100) / 100
 
     // Criar entrada do valor pago
     await supabase.from('entradas').insert({
@@ -271,10 +315,12 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
       paciente_nome: pagandoParcial.patients?.name || '',
       procedimento_nome: pagandoParcial.descricao,
       forma_pagamento: formaParcial,
+      bandeira: isCartao ? bandeiraParcial : null,
+      n_parcelas: formaParcial === 'credito' ? parcelasParcial : 1,
       valor_bruto: valor,
-      taxa_percentual: 0,
-      valor_taxa: 0,
-      valor_liquido: valor,
+      taxa_percentual: taxaPct,
+      valor_taxa: valorTaxa,
+      valor_liquido: valorLiquido,
       observacoes: `Pagamento parcial de débito (restante: ${restante.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})`,
     })
 
@@ -282,7 +328,7 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
       // Atualizar débito com novo valor restante
       const { error: errUpdate } = await supabase.from('debitos').update({
         valor: restante,
-        observacoes: `Pagou ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em ${new Date().toLocaleDateString('pt-BR')}. Restante: ${restante.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+        observacao_cobranca: `Pagou ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em ${new Date().toLocaleDateString('pt-BR')}. Restante: ${restante.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
       }).eq('id', pagandoParcial.id)
       if (errUpdate) {
         alert('Erro ao atualizar débito: ' + errUpdate.message)
@@ -296,6 +342,9 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
 
     setPagandoParcial(null)
     setValorParcial('')
+    setFormaParcial('pix')
+    setBandeiraParcial('')
+    setParcelasParcial(1)
     setLoadingId(null)
     router.refresh()
   }
@@ -534,7 +583,7 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
                             className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Marcar como pago total">
                             <Icon name="check" className="w-5 h-5" />
                           </button>
-                          <button onClick={() => { setPagandoParcial(debito); setValorParcial('') }} disabled={isLoading}
+                          <button onClick={() => { setPagandoParcial(debito); setValorParcial(''); setFormaParcial('pix'); setBandeiraParcial(''); setParcelasParcial(1) }} disabled={isLoading}
                             className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Pagamento parcial">
                             <Icon name="dollarSign" className="w-5 h-5" />
                           </button>
@@ -581,7 +630,7 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
 
       {/* Modal de pagamento parcial */}
       {pagandoParcial && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setPagandoParcial(null)}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setPagandoParcial(null); setFormaParcial('pix'); setBandeiraParcial(''); setParcelasParcial(1) }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-slate-900 mb-1">Pagamento parcial</h3>
             <p className="text-sm text-slate-500 mb-4">
@@ -625,17 +674,61 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
 
               <div>
                 <label className="text-xs text-slate-500 mb-1 block">Forma de pagamento</label>
-                <select value={formaParcial} onChange={e => setFormaParcial(e.target.value)} className="input w-full text-sm">
+                <select value={formaParcial} onChange={e => { setFormaParcial(e.target.value); setBandeiraParcial(''); setParcelasParcial(1) }} className="input w-full text-sm">
                   <option value="pix">PIX</option>
                   <option value="dinheiro">Dinheiro</option>
                   <option value="credito">Crédito</option>
                   <option value="debito">Débito</option>
                 </select>
               </div>
+
+              {formaParcial === 'credito' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Parcelas</label>
+                    <select value={parcelasParcial} onChange={e => setParcelasParcial(parseInt(e.target.value))} className="input w-full text-sm">
+                      {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => <option key={p} value={p}>{p}x</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Bandeira *</label>
+                    <select value={bandeiraParcial} onChange={e => setBandeiraParcial(e.target.value)}
+                      className={`input w-full text-sm ${!bandeiraParcial ? 'border-amber-400' : ''}`}>
+                      <option value="">Selecione...</option>
+                      {BANDEIRAS_ESPECIFICAS.map(b => (
+                        <option key={b.key} value={b.key}>{b.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+              {formaParcial === 'debito' && (
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Bandeira *</label>
+                  <select value={bandeiraParcial} onChange={e => setBandeiraParcial(e.target.value)}
+                    className={`input w-full text-sm ${!bandeiraParcial ? 'border-amber-400' : ''}`}>
+                    <option value="">Selecione...</option>
+                    {BANDEIRAS_ESPECIFICAS.map(b => (
+                      <option key={b.key} value={b.key}>{b.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {(formaParcial === 'credito' || formaParcial === 'debito') && bandeiraParcial && valorParcial && parseFloat(valorParcial) > 0 && (() => {
+                const taxaPct = getTaxaParcial(formaParcial, bandeiraParcial, formaParcial === 'credito' ? parcelasParcial : 1)
+                const valor = parseFloat(valorParcial)
+                const liquido = valor * (1 - taxaPct / 100)
+                return (
+                  <div className="flex justify-between text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
+                    <span>Taxa: {taxaPct}%</span>
+                    <span className="font-medium text-emerald-600">Líquido: {liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  </div>
+                )
+              })()}
             </div>
 
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setPagandoParcial(null)}
+              <button onClick={() => { setPagandoParcial(null); setFormaParcial('pix'); setBandeiraParcial(''); setParcelasParcial(1) }}
                 className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
                 Cancelar
               </button>
