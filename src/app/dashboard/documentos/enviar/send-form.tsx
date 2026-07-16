@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -27,17 +27,22 @@ type Props = {
   templates: Template[]
   patients: Patient[]
   userId: string
+  userName?: string
   preSelectedPatient?: string
   appointmentId?: string
 }
 
-export default function SendDocumentForm({ clinicId, clinicName, templates, patients, userId, preSelectedPatient, appointmentId }: Props) {
+export default function SendDocumentForm({ clinicId, clinicName, templates, patients, userId, userName, preSelectedPatient, appointmentId }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(1)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [content, setContent] = useState('')
+  const [signerRole, setSignerRole] = useState<'paciente' | 'profissional'>('paciente')
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [hasProfSignature, setHasProfSignature] = useState(false)
   const [searchPatient, setSearchPatient] = useState('')
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [generatedLink, setGeneratedLink] = useState('')
@@ -60,8 +65,67 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
     }
   }, [preSelectedPatient, patients])
 
+  useEffect(() => {
+    if (signerRole !== 'profissional' || step !== 3) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * 2
+    canvas.height = rect.height * 2
+    ctx.scale(2, 2)
+    ctx.strokeStyle = '#1e293b'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+  }, [signerRole, step])
+
+  const getPosition = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    if ('touches' in e) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top }
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }
+
+  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    const ctx = canvasRef.current?.getContext('2d')
+    if (!ctx) return
+    setIsDrawing(true)
+    const { x, y } = getPosition(e)
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+  }
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    if (!isDrawing) return
+    const ctx = canvasRef.current?.getContext('2d')
+    if (!ctx) return
+    const { x, y } = getPosition(e)
+    ctx.lineTo(x, y)
+    ctx.stroke()
+    setHasProfSignature(true)
+  }
+
+  const stopDrawing = () => setIsDrawing(false)
+
+  const clearProfSignature = () => {
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!ctx || !canvas) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setHasProfSignature(false)
+  }
+
   const selectTemplate = (template: Template) => {
     setSelectedTemplate(template)
+    setSignerRole('paciente')
+    setHasProfSignature(false)
     
     // Se for anamnese, não precisa editar conteúdo - vai direto para confirmação
     if (template.category === 'anamnese') {
@@ -89,6 +153,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
 
   const handleSubmit = async () => {
     if (!selectedPatient || !selectedTemplate) return
+    if (selectedTemplate.category !== 'anamnese' && signerRole === 'profissional' && !hasProfSignature) return
     setLoading(true)
 
     try {
@@ -113,8 +178,35 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
 
         if (error) throw error
         signUrl = `${window.location.origin}/anamnese/${token}`
+      } else if (signerRole === 'profissional') {
+        // Assinado pela profissional na hora — documento já sai "signed", sem pendencia pro paciente
+        const profSignature = canvasRef.current?.toDataURL('image/png') || ''
+        const now = new Date().toISOString()
+        const { data: sentDoc, error } = await supabase
+          .from('documents_sent')
+          .insert({
+            clinic_id: clinicId,
+            template_id: selectedTemplate.id,
+            patient_id: selectedPatient.id,
+            appointment_id: appointmentId || null,
+            name: selectedTemplate.name,
+            content,
+            status: 'signed',
+            signer_role: 'profissional',
+            signature_data: profSignature,
+            signed_at: now,
+            sent_by: userId,
+            sign_token: token,
+            expires_at: expiresAt.toISOString(),
+          })
+          .select('id')
+          .single()
+
+        if (error) throw error
+        setGeneratedDocId(sentDoc?.id || '')
+        signUrl = `${window.location.origin}/assinar/${token}`
       } else {
-        // Documento normal
+        // Documento normal — paciente assina
         const { data: sentDoc, error } = await supabase
           .from('documents_sent')
           .insert({
@@ -125,6 +217,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
             name: selectedTemplate.name,
             content,
             status: 'pending',
+            signer_role: 'paciente',
             sent_by: userId,
             sign_token: token,
             expires_at: expiresAt.toISOString(),
@@ -179,8 +272,11 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
       } else {
         // Fallback: WhatsApp Web
         const phone = selectedPatient?.phone?.replace(/\D/g, '') || ''
+        const isProfSigned = signerRole === 'profissional' && selectedTemplate?.category !== 'anamnese'
         const message = encodeURIComponent(
-          `Olá ${selectedPatient?.name}!\n\nSegue o link para assinar o documento "${selectedTemplate?.name}":\n\n${generatedLink}\n\nO link expira em 7 dias.`
+          isProfSigned
+            ? `Olá ${selectedPatient?.name}!\n\nSegue o documento "${selectedTemplate?.name}" já assinado:\n\n${generatedLink}\n\nO link expira em 7 dias.`
+            : `Olá ${selectedPatient?.name}!\n\nSegue o link para assinar o documento "${selectedTemplate?.name}":\n\n${generatedLink}\n\nO link expira em 7 dias.`
         )
         window.open(`https://wa.me/55${phone}?text=${message}`, '_blank')
       }
@@ -213,15 +309,21 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
               <Icon name="check" className="w-8 h-8 text-emerald-600" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900 mb-2">Documento enviado!</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">
+              {signerRole === 'profissional' && selectedTemplate?.category !== 'anamnese' ? 'Documento assinado!' : 'Documento enviado!'}
+            </h2>
             <p className="text-sm text-slate-600">
-              Link de assinatura gerado para <strong>{selectedPatient?.name}</strong>
+              {signerRole === 'profissional' && selectedTemplate?.category !== 'anamnese'
+                ? <>Link do documento já assinado, pronto para <strong>{selectedPatient?.name}</strong></>
+                : <>Link de assinatura gerado para <strong>{selectedPatient?.name}</strong></>}
             </p>
           </div>
 
           {/* Link display */}
           <div className="bg-slate-50 rounded-xl p-3 mb-4">
-            <p className="text-xs text-slate-500 mb-1">Link para assinatura:</p>
+            <p className="text-xs text-slate-500 mb-1">
+              {signerRole === 'profissional' && selectedTemplate?.category !== 'anamnese' ? 'Link do documento:' : 'Link para assinatura:'}
+            </p>
             <p className="text-sm text-slate-700 break-all font-mono">{generatedLink}</p>
           </div>
 
@@ -427,18 +529,79 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
               </div>
             </div>
           ) : (
-            <div className="card p-6">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Conteudo do documento</label>
-              <textarea
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow] font-mono text-sm resize-none"
-                rows={15}
-              />
-              <p className="text-xs text-slate-500 mt-2">
-                Voce pode editar o conteudo antes de enviar
-              </p>
-            </div>
+            <>
+              <div className="card p-6">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Conteudo do documento</label>
+                <textarea
+                  value={content}
+                  onChange={e => setContent(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow] font-mono text-sm resize-none"
+                  rows={15}
+                />
+                <p className="text-xs text-slate-500 mt-2">
+                  Voce pode editar o conteudo antes de enviar
+                </p>
+              </div>
+
+              <div className="card p-6">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Quem assina?</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSignerRole('paciente')}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                      signerRole === 'paciente'
+                        ? 'bg-violet-500 border-violet-500 text-white'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300'
+                    }`}
+                  >
+                    Paciente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSignerRole('profissional')}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                      signerRole === 'profissional'
+                        ? 'bg-violet-500 border-violet-500 text-white'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300'
+                    }`}
+                  >
+                    Eu (profissional)
+                  </button>
+                </div>
+
+                {signerRole === 'profissional' && (
+                  <div className="mt-4">
+                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
+                      Assinatura eletrônica simples — válida como atestado/orientação assinada por {userName || 'você'}.
+                      Não tem validade como receita de medicamento controlado (exige certificado ICP-Brasil).
+                    </p>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-slate-700">Sua assinatura</span>
+                      {hasProfSignature && (
+                        <button type="button" onClick={clearProfSignature} className="text-xs text-slate-500 hover:text-slate-700">
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+                    <div className="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 overflow-hidden">
+                      <canvas
+                        ref={canvasRef}
+                        className="w-full h-40 cursor-crosshair touch-none"
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={stopDrawing}
+                        onTouchStart={startDrawing}
+                        onTouchMove={draw}
+                        onTouchEnd={stopDrawing}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 text-center">Desenhe sua assinatura acima</p>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           <div className="flex gap-3">
@@ -450,15 +613,15 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading}
-              className="btn-primary flex-1 flex items-center justify-center gap-2"
+              disabled={loading || (selectedTemplate?.category !== 'anamnese' && signerRole === 'profissional' && !hasProfSignature)}
+              className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading ? (
                 <span className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
               ) : (
                 <>
                   <Icon name="share" className="w-4 h-4" />
-                  Gerar link de assinatura
+                  {selectedTemplate?.category !== 'anamnese' && signerRole === 'profissional' ? 'Assinar e enviar' : 'Gerar link de assinatura'}
                 </>
               )}
             </button>

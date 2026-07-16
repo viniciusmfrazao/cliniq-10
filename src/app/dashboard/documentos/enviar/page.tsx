@@ -12,7 +12,7 @@ export default async function EnviarDocumentoPage({ searchParams }: { searchPara
 
   const { data: userData } = await supabase
     .from('users')
-    .select('clinic_id')
+    .select('clinic_id, name')
     .eq('id', user.id)
     .single()
 
@@ -53,6 +53,7 @@ export default async function EnviarDocumentoPage({ searchParams }: { searchPara
         templates={templates || []}
         patients={patients || []}
         userId={user.id}
+        userName={userData?.name || ''}
         preSelectedPatient={searchParams.patient}
         appointmentId={searchParams.appointment}
       />

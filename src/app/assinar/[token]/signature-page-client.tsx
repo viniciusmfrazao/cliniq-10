@@ -9,6 +9,7 @@ type DocumentData = {
   content: string
   status: string
   signed_at?: string
+  signer_role?: string
   questions?: { id: string; text: string }[]
   patients: { name: string }
   clinics: { name: string }
@@ -75,25 +76,36 @@ export default function SignaturePageClient({ token }: { token: string }) {
   }
 
   if (doc.status === 'signed') {
+    const signedByProfessional = doc.signer_role === 'profissional'
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-        <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-100 flex items-center justify-center">
-            <svg className="w-10 h-10 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+        <div className="max-w-2xl mx-auto py-8">
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-4">
+            <div className="bg-emerald-50 px-6 py-5 border-b border-emerald-100 text-center">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-emerald-100 flex items-center justify-center">
+                <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h1 className="text-lg font-bold text-slate-900">
+                {signedByProfessional ? `Documento assinado por ${doc.clinics?.name || 'sua clínica'}` : 'Documento já assinado'}
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">
+                {doc.signed_at && new Date(doc.signed_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                })}
+              </p>
+            </div>
+            <div className="p-6 whitespace-pre-wrap text-slate-700 font-mono text-sm leading-relaxed max-h-[70vh] overflow-y-auto">
+              {doc.content}
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Documento já assinado</h1>
-          <p className="text-slate-600">
-            Este documento foi assinado em{' '}
-            {doc.signed_at && new Date(doc.signed_at).toLocaleDateString('pt-BR', {
-              day: '2-digit',
-              month: 'long',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </p>
+          {signedByProfessional && (
+            <p className="text-xs text-slate-400 text-center px-4">
+              Assinatura eletrônica simples. Este documento não substitui receita de medicamento controlado,
+              que exige certificado digital ICP-Brasil.
+            </p>
+          )}
         </div>
       </div>
     )

@@ -51,11 +51,16 @@ export async function POST(req: NextRequest) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://app.clinike.com.br'
   const link = `${siteUrl}/assinar/${doc.sign_token}`
 
-  const message =
-    `Olá ${firstName}! 👋\n\n` +
-    `A ${clinicName} enviou o documento *"${templateName}"* para você assinar digitalmente:\n\n` +
-    `${link}\n\n` +
-    `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
+  const alreadySigned = doc.status === 'signed' && doc.signer_role === 'profissional'
+  const message = alreadySigned
+    ? `Olá ${firstName}! 👋\n\n` +
+      `A ${clinicName} enviou o documento *"${templateName}"* já assinado:\n\n` +
+      `${link}\n\n` +
+      `Qualquer dúvida é só chamar! 🤍`
+    : `Olá ${firstName}! 👋\n\n` +
+      `A ${clinicName} enviou o documento *"${templateName}"* para você assinar digitalmente:\n\n` +
+      `${link}\n\n` +
+      `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
 
   const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
 
