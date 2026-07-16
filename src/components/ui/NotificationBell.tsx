@@ -1,124 +1,17 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState } from 'react'
+import { useNotifications } from '@/contexts/NotificationsContext'
 import Icon from './Icon'
 
-type Notification = {
-  id: string
-  type: string
-  title: string
-  message: string | null
-  link: string | null
-  read_at: string | null
-  created_at: string
-}
-
-export default function NotificationBell({ userId }: { userId: string }) {
-  const [notifications, setNotifications] = useState<Notification[]>([])
+// userId aceito por compatibilidade de assinatura (Sidebar/TopBar ja passam),
+// mas nao e mais usado aqui: o fetch/realtime/polling agora vive uma unica
+// vez em NotificationsProvider (ver contexts/NotificationsContext.tsx) —
+// antes, Sidebar (desktop) e TopBar (mobile) montavam essa logica em
+// dobro, ja que o CSS so esconde a versao fora de uso, nao desmonta.
+export default function NotificationBell({ userId: _userId }: { userId: string }) {
+  const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications()
   const [isOpen, setIsOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
-
-  const unreadCount = notifications.filter(n => !n.read_at).length
-
-  const loadNotifications = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20)
-
-      if (!error && data) setNotifications(data)
-    } catch (e) {
-      console.log('Erro ao carregar notificações:', e)
-    }
-    setLoading(false)
-  }, [userId, supabase])
-
-  useEffect(() => {
-    if (!userId) return
-
-    loadNotifications()
-
-    // Nome de canal unico por mount (evita colisao com remount no Strict Mode)
-    const uniq = Math.random().toString(36).slice(2, 10)
-    let channel: ReturnType<typeof supabase.channel> | null = null
-
-    try {
-      channel = supabase
-        .channel(`rt:notifications:${userId}:${uniq}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 20))
-            } else if (payload.eventType === 'UPDATE') {
-              setNotifications(prev =>
-                prev.map(n => (n.id === (payload.new as Notification).id ? (payload.new as Notification) : n))
-              )
-            } else if (payload.eventType === 'DELETE') {
-              const oldId = (payload.old as { id?: string })?.id
-              if (oldId) setNotifications(prev => prev.filter(n => n.id !== oldId))
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            // Realtime nao habilitado ou rede caiu — ok, polling cobre
-          }
-        })
-    } catch (e) {
-      console.warn('[NotificationBell] realtime indisponivel, usando polling', e)
-    }
-
-    // Fallback: polling a cada 2 min (funciona mesmo se o realtime falhar)
-    const interval = setInterval(loadNotifications, 120000)
-
-    return () => {
-      if (channel) {
-        try {
-          supabase.removeChannel(channel)
-        } catch {
-          /* noop */
-        }
-      }
-      clearInterval(interval)
-    }
-  }, [userId, supabase, loadNotifications])
-
-  async function markAsRead(notificationId: string) {
-    await supabase
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('id', notificationId)
-
-    setNotifications(prev =>
-      prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n)
-    )
-  }
-
-  async function markAllAsRead() {
-    const unreadIds = notifications.filter(n => !n.read_at).map(n => n.id)
-    if (unreadIds.length === 0) return
-
-    await supabase
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .in('id', unreadIds)
-
-    setNotifications(prev =>
-      prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() }))
-    )
-  }
 
   function getTimeAgo(date: string): string {
     const diff = Date.now() - new Date(date).getTime()
@@ -138,9 +31,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
     alert: { icon: 'bell', color: 'text-amber-500 bg-amber-100' },
     info: { icon: 'info', color: 'text-slate-500 bg-slate-100' },
   }
-
-  // Proteção após os hooks
-  if (!userId) return null
 
   return (
     <div className="relative">
