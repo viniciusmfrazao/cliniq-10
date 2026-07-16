@@ -21,6 +21,12 @@ type Patient = {
   cpf: string | null
 }
 
+type Professional = {
+  id: string
+  name: string
+  professional_registration: string | null
+}
+
 type Props = {
   clinicId: string
   clinicName: string
@@ -29,11 +35,12 @@ type Props = {
   userId: string
   userName?: string
   userRegistration?: string
+  professionals?: Professional[]
   preSelectedPatient?: string
   appointmentId?: string
 }
 
-export default function SendDocumentForm({ clinicId, clinicName, templates, patients, userId, userName, userRegistration, preSelectedPatient, appointmentId }: Props) {
+export default function SendDocumentForm({ clinicId, clinicName, templates, patients, userId, userName, userRegistration, professionals = [], preSelectedPatient, appointmentId }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(1)
@@ -41,9 +48,16 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [content, setContent] = useState('')
   const [signerRole, setSignerRole] = useState<'paciente' | 'profissional'>('paciente')
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState(
+    professionals.find(p => p.id === userId)?.id || professionals[0]?.id || ''
+  )
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasProfSignature, setHasProfSignature] = useState(false)
+
+  const signingProfessional = professionals.length > 0
+    ? (professionals.find(p => p.id === selectedProfessionalId) || null)
+    : { id: userId, name: userName || '', professional_registration: userRegistration || null }
   const [searchPatient, setSearchPatient] = useState('')
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [generatedLink, setGeneratedLink] = useState('')
@@ -155,6 +169,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
   const handleSubmit = async () => {
     if (!selectedPatient || !selectedTemplate) return
     if (selectedTemplate.category !== 'anamnese' && signerRole === 'profissional' && !hasProfSignature) return
+    if (selectedTemplate.category !== 'anamnese' && signerRole === 'profissional' && !signingProfessional?.id) return
     setLoading(true)
 
     try {
@@ -194,6 +209,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
             name: selectedTemplate.name,
             content,
             signature: profSignature,
+            signerUserId: signingProfessional?.id || null,
           }),
         })
         const data = await res.json()
@@ -561,17 +577,33 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
                         : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300'
                     }`}
                   >
-                    Eu (profissional)
+                    Profissional
                   </button>
                 </div>
 
                 {signerRole === 'profissional' && (
                   <div className="mt-4">
+                    {professionals.length > 0 && (
+                      <div className="mb-3">
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Quem está assinando</label>
+                        <select
+                          value={selectedProfessionalId}
+                          onChange={e => setSelectedProfessionalId(e.target.value)}
+                          className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                        >
+                          {professionals.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}{p.professional_registration ? ` — ${p.professional_registration}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
-                      Assinatura eletrônica simples — válida como atestado/orientação assinada por {userName || 'você'}.
+                      Assinatura eletrônica simples — válida como atestado/orientação assinada por {signingProfessional?.name || 'você'}.
                       Não tem validade como receita de medicamento controlado (exige certificado ICP-Brasil).
                     </p>
-                    {!userRegistration && (
+                    {!signingProfessional?.professional_registration && (
                       <p className="text-xs text-slate-400 mb-3">
                         Sem CRM/CRO cadastrado. Adicione em{' '}
                         <a href="/dashboard/equipe" className="text-[var(--color-primary)] hover:underline">Equipe</a> pra aparecer no documento.
@@ -579,7 +611,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
                     )}
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-slate-700">
-                        Sua assinatura{userName ? ` — ${userName}` : ''}{userRegistration ? ` (${userRegistration})` : ''}
+                        Assinatura{signingProfessional?.name ? ` — ${signingProfessional.name}` : ''}{signingProfessional?.professional_registration ? ` (${signingProfessional.professional_registration})` : ''}
                       </span>
                       {hasProfSignature && (
                         <button type="button" onClick={clearProfSignature} className="text-xs text-slate-500 hover:text-slate-700">

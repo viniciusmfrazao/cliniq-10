@@ -10,6 +10,7 @@ type DocumentData = {
   status: string
   signed_at?: string
   signer_role?: string
+  signer_name?: string
   signer_registration?: string
   signature_ip?: string
   signature_country?: string
@@ -104,7 +105,7 @@ export default function SignaturePageClient({ token }: { token: string }) {
                 </svg>
               </div>
               <h1 className="text-lg font-bold text-slate-900">
-                {signedByProfessional ? `Documento assinado por ${doc.users?.name || doc.clinics?.name || 'sua clínica'}` : 'Documento já assinado'}
+                {signedByProfessional ? `Documento assinado por ${doc.signer_name || doc.users?.name || doc.clinics?.name || 'sua clínica'}` : 'Documento já assinado'}
               </h1>
               {signedByProfessional && doc.signer_registration && (
                 <p className="text-xs text-slate-500 mt-0.5">{doc.signer_registration}</p>
