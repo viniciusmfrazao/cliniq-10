@@ -16,7 +16,7 @@ export async function GET(
     const { token } = params
     const { data: doc, error } = await getAdmin()
       .from('documents_sent')
-      .select('*, patients(name), clinics(name), document_templates(questions)')
+      .select('*, patients(name), clinics(name), document_templates(questions), users!documents_sent_sent_by_fkey(name)')
       .eq('sign_token', token)
       .maybeSingle()
 

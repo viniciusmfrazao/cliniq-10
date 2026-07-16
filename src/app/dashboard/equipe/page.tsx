@@ -24,7 +24,7 @@ export default async function EquipePage() {
   // Buscar membros da equipe (ativos e inativos)
   const { data: allMembers } = await supabase
     .from('users')
-    .select('id, name, email, role, professional_role, permissions, active, created_at')
+    .select('id, name, email, role, professional_role, professional_registration, permissions, active, created_at')
     .eq('clinic_id', currentUser.clinic_id)
     .order('active', { ascending: false }) // Ativos primeiro
     .order('name')

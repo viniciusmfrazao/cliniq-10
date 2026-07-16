@@ -28,11 +28,12 @@ type Props = {
   patients: Patient[]
   userId: string
   userName?: string
+  userRegistration?: string
   preSelectedPatient?: string
   appointmentId?: string
 }
 
-export default function SendDocumentForm({ clinicId, clinicName, templates, patients, userId, userName, preSelectedPatient, appointmentId }: Props) {
+export default function SendDocumentForm({ clinicId, clinicName, templates, patients, userId, userName, userRegistration, preSelectedPatient, appointmentId }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(1)
@@ -193,6 +194,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
             content,
             status: 'signed',
             signer_role: 'profissional',
+            signer_registration: userRegistration || null,
             signature_data: profSignature,
             signed_at: now,
             sent_by: userId,
@@ -576,8 +578,16 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
                       Assinatura eletrônica simples — válida como atestado/orientação assinada por {userName || 'você'}.
                       Não tem validade como receita de medicamento controlado (exige certificado ICP-Brasil).
                     </p>
+                    {!userRegistration && (
+                      <p className="text-xs text-slate-400 mb-3">
+                        Sem CRM/CRO cadastrado. Adicione em{' '}
+                        <a href="/dashboard/equipe" className="text-[var(--color-primary)] hover:underline">Equipe</a> pra aparecer no documento.
+                      </p>
+                    )}
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-slate-700">Sua assinatura</span>
+                      <span className="text-sm font-medium text-slate-700">
+                        Sua assinatura{userName ? ` — ${userName}` : ''}{userRegistration ? ` (${userRegistration})` : ''}
+                      </span>
                       {hasProfSignature && (
                         <button type="button" onClick={clearProfSignature} className="text-xs text-slate-500 hover:text-slate-700">
                           Limpar

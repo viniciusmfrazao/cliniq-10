@@ -10,9 +10,11 @@ type DocumentData = {
   status: string
   signed_at?: string
   signer_role?: string
+  signer_registration?: string
   questions?: { id: string; text: string }[]
   patients: { name: string }
   clinics: { name: string }
+  users?: { name: string }
 }
 
 export default function SignaturePageClient({ token }: { token: string }) {
@@ -88,8 +90,11 @@ export default function SignaturePageClient({ token }: { token: string }) {
                 </svg>
               </div>
               <h1 className="text-lg font-bold text-slate-900">
-                {signedByProfessional ? `Documento assinado por ${doc.clinics?.name || 'sua clínica'}` : 'Documento já assinado'}
+                {signedByProfessional ? `Documento assinado por ${doc.users?.name || doc.clinics?.name || 'sua clínica'}` : 'Documento já assinado'}
               </h1>
+              {signedByProfessional && doc.signer_registration && (
+                <p className="text-xs text-slate-500 mt-0.5">{doc.signer_registration}</p>
+              )}
               <p className="text-sm text-slate-500 mt-1">
                 {doc.signed_at && new Date(doc.signed_at).toLocaleDateString('pt-BR', {
                   day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',

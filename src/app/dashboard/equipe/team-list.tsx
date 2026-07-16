@@ -73,6 +73,9 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
   const [editingSchedules, setEditingSchedules] = useState<Member | null>(null)
   const [editingUnavail, setEditingUnavail] = useState<Member | null>(null)
   const [editingProfRole, setEditingProfRole] = useState<string | null>(null)
+  const [editingRegistration, setEditingRegistration] = useState<string | null>(null)
+  const [registrationValue, setRegistrationValue] = useState('')
+  const [savingRegistration, setSavingRegistration] = useState(false)
   const [editingName, setEditingName] = useState<string | null>(null)
   const [nameValue, setNameValue] = useState('')
   const [savingName, setSavingName] = useState(false)
@@ -115,6 +118,20 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
     } catch {}
     setSavingName(false)
     setEditingName(null)
+    router.refresh()
+  }
+
+  async function handleSaveRegistration(memberId: string) {
+    setSavingRegistration(true)
+    try {
+      await fetch(`/api/team/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicId, professional_registration: registrationValue.trim() })
+      })
+    } catch {}
+    setSavingRegistration(false)
+    setEditingRegistration(null)
     router.refresh()
   }
 
@@ -285,6 +302,51 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
                 >
                   {(member as any).professional_role ? '✏️' : '+ Clínico'}
                 </button>
+              )}
+
+              {(member as any).professional_role && (
+                editingRegistration === member.id ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={registrationValue}
+                      onChange={e => setRegistrationValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSaveRegistration(member.id)
+                        if (e.key === 'Escape') setEditingRegistration(null)
+                      }}
+                      placeholder="Ex: CRM 123456-SP"
+                      className="text-xs border border-violet-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 w-32"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleSaveRegistration(member.id)}
+                      disabled={savingRegistration}
+                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                      title="Salvar"
+                    >
+                      <Icon name="check" className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingRegistration(null)}
+                      className="p-1 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="Cancelar"
+                    >
+                      <Icon name="x" className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditingRegistration(member.id)
+                      setRegistrationValue((member as any).professional_registration || '')
+                    }}
+                    className="text-xs text-slate-400 hover:text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-50 transition-colors"
+                    title="Registro no conselho (CRM/CRO/CRBM/COREN...)"
+                  >
+                    {(member as any).professional_registration || '+ CRM/CRO'}
+                  </button>
+                )
               )}
               
               {!showReactivate && (
