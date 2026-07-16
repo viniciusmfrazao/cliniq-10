@@ -183,6 +183,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [editTime, setEditTime] = useState('')
   const [editProcIds, setEditProcIds] = useState<string[]>([])
   const [savingSchedule, setSavingSchedule] = useState(false)
+  const [editingDuration, setEditingDuration] = useState(false)
+  const [editDuration, setEditDuration] = useState('')
+  const [savingDuration, setSavingDuration] = useState(false)
   const [procList, setProcList] = useState<{ id: string; name: string; duration_minutes: number; price: number }[]>([])
   const [procListLoaded, setProcListLoaded] = useState(false)
   const [savingProc, setSavingProc] = useState(false)
@@ -351,6 +354,24 @@ const AppointmentCard = React.memo(function AppointmentCard({
     router.refresh()
   }
 
+  async function saveDuration() {
+    const minutes = parseInt(editDuration)
+    if (!minutes || minutes <= 0) return
+    setSavingDuration(true)
+    const start = new Date(apt.start_time)
+    const end = new Date(start.getTime() + minutes * 60000)
+    const { error } = await supabaseCard.from('appointments').update({
+      end_time: end.toISOString(),
+    }).eq('id', apt.id)
+    setSavingDuration(false)
+    if (error) {
+      toast.error(parseSupabaseError(error))
+      return
+    }
+    setEditingDuration(false)
+    router.refresh()
+  }
+
   async function saveNotes() {
     setSavingNotes(true)
     await supabaseCard.from('appointments').update({ notes: notes.trim() || null }).eq('id', apt.id)
@@ -469,6 +490,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
     }, 150)
   }
   const aptTime = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+  const aptDurationMin = apt.end_time
+    ? Math.round((new Date(apt.end_time).getTime() - new Date(apt.start_time).getTime()) / 60000)
+    : (apt.appointment_procedures?.reduce((s, p) => s + (p.duration_minutes || 30), 0) || apt.procedures?.duration_minutes || 30)
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.phone)
   const isConfirmed = apt.status === 'confirmed'
   const isCancelled = apt.status === 'cancelled' || apt.status === 'no_show'
@@ -673,7 +697,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
                   : apt.procedures?.name || '-'}
               </p>
               <p><span className="text-slate-400">Profissional:</span> {apt.professional?.name || '-'}</p>
-              <p><span className="text-slate-400">Horário:</span> {aptTime} — {apt.procedures?.duration_minutes || 30}min</p>
+              <p><span className="text-slate-400">Horário:</span> {aptTime} — {aptDurationMin}min</p>
             </div>
 
             {/* Observações */}
@@ -1022,7 +1046,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
               <span className="text-slate-500">Horário:</span>
               <div className="flex items-center gap-1.5">
                 <span className="font-medium text-slate-700 text-right">
-                  {aptTime} — {apt.procedures?.duration_minutes || 30}min
+                  {aptTime} — {aptDurationMin}min
                 </span>
                 {!editingSchedule && (
                   <button
@@ -1181,9 +1205,45 @@ const AppointmentCard = React.memo(function AppointmentCard({
               <span className="text-slate-500">Profissional:</span>
               <span className="font-medium text-slate-700">{apt.professional?.name || '-'}</span>
             </div>
-            <div className="flex justify-between">
+            <div className={`flex justify-between items-center ${editingDuration ? 'bg-violet-50 dark:bg-violet-900/20 -mx-1.5 px-1.5 py-1 rounded-lg' : ''}`}>
               <span className="text-slate-500">Duração:</span>
-              <span className="font-medium text-slate-700">{apt.procedures?.duration_minutes || 30} min</span>
+              {editingDuration ? (
+                <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                  <input
+                    type="number"
+                    min="5"
+                    step="5"
+                    autoFocus
+                    value={editDuration}
+                    onChange={e => setEditDuration(e.target.value)}
+                    className="w-16 px-1.5 py-0.5 text-xs border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-right"
+                  />
+                  <span className="text-slate-500">min</span>
+                  <button
+                    onClick={saveDuration}
+                    disabled={savingDuration || !editDuration}
+                    className="text-[10px] font-semibold text-violet-600 hover:text-violet-800 disabled:opacity-50 flex-shrink-0"
+                  >
+                    {savingDuration ? '...' : 'Salvar'}
+                  </button>
+                  <button
+                    onClick={() => setEditingDuration(false)}
+                    className="text-[10px] text-slate-400 hover:text-slate-600 flex-shrink-0"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium text-slate-700 text-right">{aptDurationMin} min</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditDuration(String(aptDurationMin)); setEditingDuration(true) }}
+                    className="text-[10px] text-violet-600 hover:text-violet-800 font-medium flex-shrink-0"
+                  >
+                    Alterar
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Status:</span>
