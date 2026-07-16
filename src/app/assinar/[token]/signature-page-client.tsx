@@ -116,28 +116,41 @@ export default function SignaturePageClient({ token }: { token: string }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h1 className="text-lg font-bold text-slate-900">
-                {signedByProfessional ? `Documento assinado por ${doc.signer_name || doc.users?.name || doc.clinics?.name || 'sua clínica'}` : 'Documento já assinado'}
-              </h1>
-              {signedByProfessional && doc.signer_registration && (
-                <p className="text-xs text-slate-500 mt-0.5">{doc.signer_registration}</p>
+              <h1 className="text-lg font-bold text-slate-900">{doc.name}</h1>
+              {!signedByProfessional && (
+                <p className="text-sm text-slate-500 mt-1">
+                  Assinado em{' '}
+                  {doc.signed_at && new Date(doc.signed_at).toLocaleDateString('pt-BR', {
+                    day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                  })}
+                </p>
               )}
-              {doc.patients?.name && (
-                <p className="text-xs text-slate-500 mt-0.5">Paciente: {doc.patients.name}</p>
-              )}
-              <p className="text-sm text-slate-500 mt-1">
-                {doc.signed_at && new Date(doc.signed_at).toLocaleDateString('pt-BR', {
-                  day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                })}
-              </p>
             </div>
             <div className="p-6 whitespace-pre-wrap text-slate-700 font-mono text-sm leading-relaxed max-h-[70vh] overflow-y-auto print:max-h-none print:overflow-visible">
               {doc.content}
             </div>
-            {signedByProfessional && doc.signature_data && (
+            {signedByProfessional && (
               <div className="px-6 pb-4">
-                <p className="text-xs text-slate-400 mb-1">Assinatura:</p>
-                <img src={doc.signature_data} alt="Assinatura" className="h-20 border-b border-slate-200" />
+                {doc.signature_data && (
+                  <>
+                    <p className="text-xs text-slate-400 mb-1">Assinatura:</p>
+                    <img src={doc.signature_data} alt="Assinatura" className="h-20 border-b border-slate-200 mb-2" />
+                  </>
+                )}
+                <p className="text-sm font-medium text-slate-900">
+                  Documento assinado por {doc.signer_name || doc.users?.name || doc.clinics?.name || 'sua clínica'}
+                </p>
+                {doc.signer_registration && (
+                  <p className="text-xs text-slate-500">{doc.signer_registration}</p>
+                )}
+                {doc.patients?.name && (
+                  <p className="text-xs text-slate-500">Paciente: {doc.patients.name}</p>
+                )}
+                <p className="text-xs text-slate-500">
+                  {doc.signed_at && new Date(doc.signed_at).toLocaleDateString('pt-BR', {
+                    day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                  })}
+                </p>
               </div>
             )}
             {signedByProfessional && (
