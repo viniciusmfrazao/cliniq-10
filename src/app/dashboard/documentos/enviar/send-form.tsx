@@ -180,33 +180,26 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
         if (error) throw error
         signUrl = `${window.location.origin}/anamnese/${token}`
       } else if (signerRole === 'profissional') {
-        // Assinado pela profissional na hora — documento já sai "signed", sem pendencia pro paciente
+        // Assinado pela profissional na hora — endpoint captura IP/UA no
+        // servidor (mesmo conjunto probatorio usado na assinatura do paciente)
+        // e documento ja sai "signed", sem pendencia pro paciente
         const profSignature = canvasRef.current?.toDataURL('image/png') || ''
-        const now = new Date().toISOString()
-        const { data: sentDoc, error } = await supabase
-          .from('documents_sent')
-          .insert({
-            clinic_id: clinicId,
-            template_id: selectedTemplate.id,
-            patient_id: selectedPatient.id,
-            appointment_id: appointmentId || null,
+        const res = await fetch('/api/documento/sign-as-professional', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateId: selectedTemplate.id,
+            patientId: selectedPatient.id,
+            appointmentId: appointmentId || null,
             name: selectedTemplate.name,
             content,
-            status: 'signed',
-            signer_role: 'profissional',
-            signer_registration: userRegistration || null,
-            signature_data: profSignature,
-            signed_at: now,
-            sent_by: userId,
-            sign_token: token,
-            expires_at: expiresAt.toISOString(),
-          })
-          .select('id')
-          .single()
-
-        if (error) throw error
-        setGeneratedDocId(sentDoc?.id || '')
-        signUrl = `${window.location.origin}/assinar/${token}`
+            signature: profSignature,
+          }),
+        })
+        const data = await res.json()
+        if (!data.ok) throw new Error(data.error || 'erro_ao_assinar')
+        setGeneratedDocId(data.id)
+        signUrl = `${window.location.origin}/assinar/${data.token}`
       } else {
         // Documento normal — paciente assina
         const { data: sentDoc, error } = await supabase

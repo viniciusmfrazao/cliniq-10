@@ -11,9 +11,11 @@ type DocumentData = {
   signed_at?: string
   signer_role?: string
   signer_registration?: string
+  signature_ip?: string
+  signature_country?: string
   questions?: { id: string; text: string }[]
   patients: { name: string }
-  clinics: { name: string }
+  clinics: { name: string; cnpj?: string; clinic_phone?: string }
   users?: { name: string }
 }
 
@@ -79,10 +81,22 @@ export default function SignaturePageClient({ token }: { token: string }) {
 
   if (doc.status === 'signed') {
     const signedByProfessional = doc.signer_role === 'profissional'
+    const shortId = doc.id?.slice(0, 8).toUpperCase()
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
         <div className="max-w-2xl mx-auto py-8">
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-4">
+            {signedByProfessional && (
+              <div className="px-6 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-slate-900 text-sm">{doc.clinics?.name || 'Clínica'}</p>
+                  <p className="text-xs text-slate-400">
+                    {[doc.clinics?.cnpj && `CNPJ ${doc.clinics.cnpj}`, doc.clinics?.clinic_phone].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                {shortId && <p className="text-[10px] text-slate-300 font-mono">Doc. {shortId}</p>}
+              </div>
+            )}
             <div className="bg-emerald-50 px-6 py-5 border-b border-emerald-100 text-center">
               <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-emerald-100 flex items-center justify-center">
                 <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -104,11 +118,21 @@ export default function SignaturePageClient({ token }: { token: string }) {
             <div className="p-6 whitespace-pre-wrap text-slate-700 font-mono text-sm leading-relaxed max-h-[70vh] overflow-y-auto">
               {doc.content}
             </div>
+            {signedByProfessional && (
+              <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
+                <p className="text-[11px] text-slate-400 font-mono leading-relaxed">
+                  Assinatura eletrônica simples (Lei 14.063/2020) · Assinado em{' '}
+                  {doc.signed_at && new Date(doc.signed_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+                  {doc.signature_ip && <> · IP {doc.signature_ip}</>}
+                  {doc.signature_country && <> · {doc.signature_country}</>}
+                  {shortId && <> · Documento nº {shortId}</>}
+                </p>
+              </div>
+            )}
           </div>
           {signedByProfessional && (
             <p className="text-xs text-slate-400 text-center px-4">
-              Assinatura eletrônica simples. Este documento não substitui receita de medicamento controlado,
-              que exige certificado digital ICP-Brasil.
+              Este documento não substitui receita de medicamento controlado, que exige certificado digital ICP-Brasil.
             </p>
           )}
         </div>
