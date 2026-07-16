@@ -12,7 +12,7 @@ export default async function EnviarDocumentoPage({ searchParams }: { searchPara
 
   const { data: userData } = await supabase
     .from('users')
-    .select('clinic_id')
+    .select('clinic_id, name, professional_registration')
     .eq('id', user.id)
     .single()
 
@@ -27,6 +27,14 @@ export default async function EnviarDocumentoPage({ searchParams }: { searchPara
     .select('*')
     .eq('clinic_id', userData?.clinic_id)
     .eq('is_active', true)
+    .order('name')
+
+  const { data: professionals } = await supabase
+    .from('users')
+    .select('id, name, professional_registration')
+    .eq('clinic_id', userData?.clinic_id)
+    .eq('active', true)
+    .not('professional_role', 'is', null)
     .order('name')
 
   const patients = await getAllPatients<{ id: string; name: string; email: string | null; phone: string | null; cpf: string | null }>(
@@ -53,6 +61,9 @@ export default async function EnviarDocumentoPage({ searchParams }: { searchPara
         templates={templates || []}
         patients={patients || []}
         userId={user.id}
+        userName={userData?.name || ''}
+        userRegistration={userData?.professional_registration || ''}
+        professionals={professionals || []}
         preSelectedPatient={searchParams.patient}
         appointmentId={searchParams.appointment}
       />
