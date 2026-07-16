@@ -76,6 +76,7 @@ export default async function DashboardLayout({ children, searchParams }: { chil
       userRole={userData?.role || 'viewer'}
       activeModules={activeModules}
       clinicId={userData.clinic_id}
+      userId={user.id}
     >
       <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden fixed inset-0 w-full">
         <Sidebar clinicName={clinic?.name || 'Clinike'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} userPermissions={userPermissions} />
