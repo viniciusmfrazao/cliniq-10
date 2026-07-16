@@ -339,10 +339,16 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
   // Os contadores de follow-up ("em 6 min") e o status "pendente" dependem só
   // da passagem do tempo — não há evento de banco para o realtime captar.
-  // Por isso atualizamos a tela periodicamente (a cada 60s).
+  // Antes isso chamava router.refresh() a cada 60s, o que re-executava TODA
+  // a arvore de server components (layout + página inteira: leads, procedures,
+  // crm_settings, templates, clinic_whatsapp, clinics...) só pra atualizar um
+  // texto — e esses labels já são calculados via Date.now() em cima de dado
+  // que já esta na tela (leads/manualFollowups como prop), entao só precisa
+  // forçar o React a re-renderizar, sem ida nenhuma ao servidor.
+  const [, forceTimeTick] = useState(0)
   useEffect(() => {
     const interval = setInterval(() => {
-      router.refresh()
+      forceTimeTick(t => t + 1)
     }, 60000)
     return () => clearInterval(interval)
   // eslint-disable-next-line react-hooks/exhaustive-deps
