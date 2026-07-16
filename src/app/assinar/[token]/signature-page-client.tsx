@@ -14,6 +14,7 @@ type DocumentData = {
   signer_registration?: string
   signature_ip?: string
   signature_country?: string
+  signature_data?: string
   questions?: { id: string; text: string }[]
   patients: { name: string }
   clinics: { name: string; cnpj?: string; clinic_phone?: string }
@@ -84,9 +85,20 @@ export default function SignaturePageClient({ token }: { token: string }) {
     const signedByProfessional = doc.signer_role === 'profissional'
     const shortId = doc.id?.slice(0, 8).toUpperCase()
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-        <div className="max-w-2xl mx-auto py-8">
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 print:bg-white print:p-0">
+        <div className="max-w-2xl mx-auto py-8 print:py-0">
+          <div className="flex justify-end mb-3 print:hidden">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl px-4 py-2 hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+              </svg>
+              Imprimir / Salvar PDF
+            </button>
+          </div>
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-4 print:shadow-none print:rounded-none">
             {signedByProfessional && (
               <div className="px-6 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
                 <div>
@@ -98,8 +110,8 @@ export default function SignaturePageClient({ token }: { token: string }) {
                 {shortId && <p className="text-[10px] text-slate-300 font-mono">Doc. {shortId}</p>}
               </div>
             )}
-            <div className="bg-emerald-50 px-6 py-5 border-b border-emerald-100 text-center">
-              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-emerald-100 flex items-center justify-center">
+            <div className="bg-emerald-50 px-6 py-5 border-b border-emerald-100 text-center print:bg-white">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-emerald-100 flex items-center justify-center print:hidden">
                 <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
@@ -110,17 +122,26 @@ export default function SignaturePageClient({ token }: { token: string }) {
               {signedByProfessional && doc.signer_registration && (
                 <p className="text-xs text-slate-500 mt-0.5">{doc.signer_registration}</p>
               )}
+              {doc.patients?.name && (
+                <p className="text-xs text-slate-500 mt-0.5">Paciente: {doc.patients.name}</p>
+              )}
               <p className="text-sm text-slate-500 mt-1">
                 {doc.signed_at && new Date(doc.signed_at).toLocaleDateString('pt-BR', {
                   day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
                 })}
               </p>
             </div>
-            <div className="p-6 whitespace-pre-wrap text-slate-700 font-mono text-sm leading-relaxed max-h-[70vh] overflow-y-auto">
+            <div className="p-6 whitespace-pre-wrap text-slate-700 font-mono text-sm leading-relaxed max-h-[70vh] overflow-y-auto print:max-h-none print:overflow-visible">
               {doc.content}
             </div>
+            {signedByProfessional && doc.signature_data && (
+              <div className="px-6 pb-4">
+                <p className="text-xs text-slate-400 mb-1">Assinatura:</p>
+                <img src={doc.signature_data} alt="Assinatura" className="h-20 border-b border-slate-200" />
+              </div>
+            )}
             {signedByProfessional && (
-              <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
+              <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 print:bg-white">
                 <p className="text-[11px] text-slate-400 font-mono leading-relaxed">
                   Assinatura eletrônica simples (Lei 14.063/2020) · Assinado em{' '}
                   {doc.signed_at && new Date(doc.signed_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
