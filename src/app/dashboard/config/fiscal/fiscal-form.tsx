@@ -55,6 +55,8 @@ type InitialConfig = {
   aliquota_pis_padrao: number | null
   cst_cofins_padrao: string | null
   aliquota_cofins_padrao: number | null
+  isento_inscricao_municipal: boolean | null
+  emite_nfse: boolean | null
 } | null
 
 type Props = {
@@ -103,6 +105,8 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [aliquotaPisPadrao, setAliquotaPisPadrao] = useState(String(initialConfig?.aliquota_pis_padrao ?? '0'))
   const [cstCofinsPadrao, setCstCofinsPadrao] = useState(initialConfig?.cst_cofins_padrao || '07')
   const [aliquotaCofinsPadrao, setAliquotaCofinsPadrao] = useState(String(initialConfig?.aliquota_cofins_padrao ?? '0'))
+  const [isentoIM, setIsentoIM] = useState(!!initialConfig?.isento_inscricao_municipal)
+  const [emiteNfse, setEmiteNfse] = useState(initialConfig?.emite_nfse !== false)
 
   async function handleValidar() {
     setValidando(true)
@@ -161,6 +165,8 @@ export default function FiscalForm({ initialConfig }: Props) {
           aliquota_pis_padrao: aliquotaPisPadrao,
           cst_cofins_padrao: cstCofinsPadrao,
           aliquota_cofins_padrao: aliquotaCofinsPadrao,
+          isento_inscricao_municipal: isentoIM,
+          emite_nfse: emiteNfse,
         }),
       })
       if (!res.ok) {
@@ -183,8 +189,15 @@ export default function FiscalForm({ initialConfig }: Props) {
   return (
     <div className="space-y-6">
       <div className="card p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-slate-900">Dados fiscais da clínica</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Dados fiscais da clínica</h2>
+          <label className="flex items-center gap-2 text-xs text-slate-600 mt-2">
+            <input type="checkbox" checked={!emiteNfse} onChange={e => setEmiteNfse(!e.target.checked)} />
+            Esta clínica não emite NFS-e (só vende produto, via NFe)
+          </label>
+        </div>
 
+        {emiteNfse && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-slate-500 mb-1 block">CNPJ</label>
@@ -197,10 +210,17 @@ export default function FiscalForm({ initialConfig }: Props) {
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Inscrição Municipal (CCM)</label>
             <input value={inscricaoMunicipal} onChange={e => setInscricaoMunicipal(e.target.value)}
-              className="input w-full text-sm" />
+              disabled={isentoIM} placeholder={isentoIM ? 'Isento' : undefined}
+              className="input w-full text-sm disabled:bg-slate-50 disabled:text-slate-400" />
+            <label className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+              <input type="checkbox" checked={isentoIM} onChange={e => setIsentoIM(e.target.checked)} />
+              Isento de Inscrição Municipal
+            </label>
           </div>
         </div>
+        )}
 
+        {emiteNfse && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Código do município (IBGE, 7 dígitos)</label>
@@ -213,6 +233,7 @@ export default function FiscalForm({ initialConfig }: Props) {
               className="input w-full text-sm" />
           </div>
         </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -223,22 +244,7 @@ export default function FiscalForm({ initialConfig }: Props) {
               <option value="lucro_presumido">Lucro Presumido</option>
               <option value="lucro_real">Lucro Real</option>
             </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Código opção Simples Nacional</label>
-            <input value={codigoSimples} onChange={e => setCodigoSimples(e.target.value)} type="number"
-              className="input w-full text-sm" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Padrão de NFS-e</label>
-            <select value={padraoNfse} onChange={e => setPadraoNfse(e.target.value)}
-              className="input w-full text-sm">
-              <option value="municipal">Municipal (padrão específico da prefeitura)</option>
-              <option value="nacional">NFS-e Nacional</option>
-            </select>
+            <p className="text-xs text-slate-400 mt-1">Usado tanto pra NFS-e quanto pra NFe</p>
           </div>
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Ambiente ativo</label>
@@ -249,6 +255,24 @@ export default function FiscalForm({ initialConfig }: Props) {
             </select>
           </div>
         </div>
+
+        {emiteNfse && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Código opção Simples Nacional</label>
+            <input value={codigoSimples} onChange={e => setCodigoSimples(e.target.value)} type="number"
+              className="input w-full text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Padrão de NFS-e</label>
+            <select value={padraoNfse} onChange={e => setPadraoNfse(e.target.value)}
+              className="input w-full text-sm">
+              <option value="municipal">Municipal (padrão específico da prefeitura)</option>
+              <option value="nacional">NFS-e Nacional</option>
+            </select>
+          </div>
+        </div>
+        )}
       </div>
 
       <div className="card p-6 space-y-4">

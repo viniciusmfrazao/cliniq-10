@@ -34,9 +34,9 @@ export async function POST(req: NextRequest) {
   const avisos: string[] = []
   const erros: string[] = [...errosFormato]
 
-  // 2. Validação contra a base da Focus — só roda se o formato básico já está ok
-  //    e existe token pro ambiente selecionado (senão não tem como consultar).
-  if (errosFormato.length === 0 && focusToken(config)) {
+  // 2. Validação contra a base da Focus — só roda se o formato básico já está ok,
+  //    a clínica realmente emite NFS-e, e existe token pro ambiente selecionado.
+  if (config.emite_nfse !== false && errosFormato.length === 0 && focusToken(config)) {
     try {
       const { httpStatus: statusMun, data: dataMun } = await consultarMunicipioFocus(config, config.codigo_municipio_ibge!)
       if (statusMun === 404) {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     } catch {
       avisos.push('Não foi possível conectar com a Focus para validar automaticamente — confira os dados manualmente')
     }
-  } else if (!focusToken(config)) {
+  } else if (config.emite_nfse !== false && !focusToken(config)) {
     avisos.push('Sem token cadastrado para o ambiente atual — só foi possível validar o formato dos campos, não a base da Focus')
   }
 

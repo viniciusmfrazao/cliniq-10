@@ -28,10 +28,17 @@ export function validarFormatoFiscal(config: {
   inscricao_municipal: string | null
   codigo_municipio_ibge: string | null
   codigo_tributacao_nacional_iss: string | null
+  isento_inscricao_municipal?: boolean | null
+  emite_nfse?: boolean | null
 }): string[] {
+  // Clínica que só usa NFe (produto) não precisa desses campos de NFS-e
+  if (config.emite_nfse === false) return []
+
   const erros: string[] = []
   if (!config.cnpj || !validarCnpj(config.cnpj)) erros.push('CNPJ inválido (dígito verificador não bate)')
-  if (!config.inscricao_municipal?.trim()) erros.push('Inscrição Municipal não preenchida')
+  if (!config.isento_inscricao_municipal && !config.inscricao_municipal?.trim()) {
+    erros.push('Inscrição Municipal não preenchida (ou marque "Isento" se aplicável)')
+  }
   if (!config.codigo_municipio_ibge || !/^\d{7}$/.test(config.codigo_municipio_ibge)) {
     erros.push('Código do município deve ter exatamente 7 dígitos (padrão IBGE)')
   }
@@ -76,6 +83,8 @@ type FiscalConfig = {
   aliquota_pis_padrao: number | null
   cst_cofins_padrao: string | null
   aliquota_cofins_padrao: number | null
+  isento_inscricao_municipal: boolean | null
+  emite_nfse: boolean | null
 }
 
 // Resolve qual CNPJ usar pra NFe: o dedicado se existir, senão o mesmo da NFS-e
@@ -107,7 +116,7 @@ export function fiscalConfigCompleta(config: FiscalConfig | null): { ok: boolean
   const faltando: string[] = []
   if (!config) return { ok: false, faltando: ['configuração fiscal não cadastrada'] }
   if (!config.cnpj) faltando.push('CNPJ')
-  if (!config.inscricao_municipal) faltando.push('Inscrição Municipal')
+  if (!config.isento_inscricao_municipal && !config.inscricao_municipal) faltando.push('Inscrição Municipal')
   if (!config.codigo_municipio_ibge) faltando.push('Código do município')
   if (!config.codigo_tributacao_nacional_iss) faltando.push('Código de tributação do serviço')
   if (!focusToken(config)) faltando.push(`Token de ${config.ambiente === 'producao' ? 'produção' : 'homologação'}`)
@@ -157,7 +166,7 @@ export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomad
     optante_simples_nacional: config.regime_tributario === 'simples_nacional',
     prestador: {
       cnpj: cnpjLimpo,
-      inscricao_municipal: config.inscricao_municipal,
+      inscricao_municipal: config.isento_inscricao_municipal ? 'ISENTO' : config.inscricao_municipal,
       codigo_municipio: config.codigo_municipio_ibge,
     },
     tomador: cpfLimpo
