@@ -5,11 +5,10 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
-import { getPrazo, type TaxaPag } from '@/lib/recebiveis'
 
-type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; dias_repasse: number; modo_repasse: 'fixo' | 'parcelado'; intervalo_dias_parcelas: number }
+type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number }
 type ProcItem = { id: string; name: string; price: number }
-type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; liquido: number; prazoDias: number }
+type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; liquido: number }
 type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean }
 
 type Props = {
@@ -41,6 +40,8 @@ const BANDEIRAS_ESPECIFICAS = [
 ]
 
 function uid() { return Math.random().toString(36).slice(2) }
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function asProcUuid(id: string) { return UUID_RE.test(id) ? id : null }
 
 export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, onClose, onSuccess }: Props) {
   const supabase = createClient()
@@ -65,7 +66,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
     async function init() {
       // Taxas
       const { data: taxasData } = await supabase
-        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual, dias_repasse, modo_repasse, intervalo_dias_parcelas').eq('clinic_id', clinicId)
+        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual').eq('clinic_id', clinicId)
       setTaxas(taxasData || [])
 
       // Múltiplos procedimentos
@@ -89,7 +90,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
       const total = procList.reduce((s, p) => s + p.price, 0)
       const initialValor = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : total
-      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor, prazoDias: 0 }])
+      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
 
       // Todos os procedimentos da clínica (para adicionar no pagamento)
       const { data: clinicProcsData } = await supabase
@@ -138,7 +139,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       const u = { ...s, ...changes }
       u.taxa = getTaxa(u.forma, u.bandeira, u.parcelas)
       u.liquido = u.valor * (1 - u.taxa / 100)
-      u.prazoDias = getPrazo(taxas as TaxaPag[], u.forma, u.bandeira || null, u.parcelas).dias
       return u
     }))
   }
@@ -180,26 +180,44 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
         .split('/').reverse().join('-')
 
-      // Entradas por procedimento
-      for (const proc of procs) {
-        const proporcao = totalProcs > 0 ? proc.price / totalProcs : 1 / procs.length
-        for (const s of splits) {
-          if (s.valor <= 0) continue
-          const val = Math.round(s.valor * proporcao * 100) / 100
-          const taxa = Math.round(val * s.taxa) / 100
-          const liquido = Math.round((val - taxa) * 100) / 100
-          await supabase.from('entradas').insert({
-            clinic_id: clinicId, data_venda: hoje,
-            paciente_id: patientId, paciente_nome: patientName,
+      // Uma entrada por forma de pagamento (não mais uma por procedimento).
+      // Quando há mais de um procedimento no mesmo pagamento, o nome vem combinado
+      // ("Botox + Preenchimento") e o detalhe por procedimento fica em entrada_procedimentos
+      // (usado pelos relatórios por procedimento: ranking, contagem em /procedimentos, etc).
+      const procedimentoNomeCombinado = procs.map(p => p.name).join(' + ')
+      for (const s of splits) {
+        if (s.valor <= 0) continue
+        const taxa = Math.round(s.valor * s.taxa) / 100
+        const liquido = Math.round((s.valor - taxa) * 100) / 100
+        const { data: entradaInserida, error: errEntrada } = await supabase.from('entradas').insert({
+          clinic_id: clinicId, data_venda: hoje,
+          paciente_id: patientId, paciente_nome: patientName,
+          procedimento_id: procs.length === 1 ? asProcUuid(procs[0].id) : null,
+          procedimento_nome: procedimentoNomeCombinado,
+          profissional_id: professionalId, profissional_nome: professionalName,
+          forma_pagamento: s.forma, bandeira: s.bandeira || null,
+          valor_bruto: s.valor, taxa_percentual: s.taxa,
+          valor_taxa: taxa, valor_liquido: liquido,
+          n_parcelas: s.parcelas, observacoes: obs || null,
+          appointment_id: appointmentId,
+        }).select('id').single()
+
+        if (errEntrada) { console.error('Erro ao criar entrada:', errEntrada); continue }
+
+        // Detalhe por procedimento (rateio proporcional ao preço de cada procedimento
+        // dentro do valor deste split de pagamento)
+        const detalhes = procs.map(proc => {
+          const proporcao = totalProcs > 0 ? proc.price / totalProcs : 1 / procs.length
+          return {
+            entrada_id: entradaInserida.id,
+            clinic_id: clinicId,
+            procedimento_id: asProcUuid(proc.id),
             procedimento_nome: proc.name,
-            profissional_id: professionalId, profissional_nome: professionalName,
-            forma_pagamento: s.forma, bandeira: s.bandeira || null,
-            valor_bruto: val, taxa_percentual: s.taxa,
-            valor_taxa: taxa, valor_liquido: liquido,
-            n_parcelas: s.parcelas, observacoes: obs || null,
-            appointment_id: appointmentId,
-          })
-        }
+            valor: Math.round(s.valor * proporcao * 100) / 100,
+          }
+        })
+        const { error: errDetalhe } = await supabase.from('entrada_procedimentos').insert(detalhes)
+        if (errDetalhe) console.error('Erro ao criar detalhe de procedimentos:', errDetalhe)
       }
 
       // Quitar débitos marcados — com data de pagamento real
@@ -443,18 +461,14 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                       </select>
                     </div>
                   )}
-                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-xs text-slate-500">
-                    <span>Bruto: {fmt(s.valor)}</span>
+                  <div className="flex justify-between text-xs text-slate-500">
                     <span>Taxa: {s.taxa}%</span>
                     <span className="font-medium text-emerald-600">Líquido: {fmt(s.liquido)}</span>
-                    <span className="text-slate-400">
-                      {s.prazoDias > 0 ? `Cai em D+${s.prazoDias}` : 'Cai na hora'}
-                    </span>
                   </div>
                 </div>
               ))}
 
-              <button onClick={() => setSplits(p => [...p, { id: uid(), forma: 'pix', bandeira: '', valor: 0, parcelas: 1, taxa: 0, liquido: 0, prazoDias: 0 }])}
+              <button onClick={() => setSplits(p => [...p, { id: uid(), forma: 'pix', bandeira: '', valor: 0, parcelas: 1, taxa: 0, liquido: 0 }])}
                 className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-violet-300 hover:text-violet-500 transition-colors flex items-center justify-center gap-2">
                 <Icon name="plus" className="w-4 h-4" /> Adicionar forma de pagamento
               </button>

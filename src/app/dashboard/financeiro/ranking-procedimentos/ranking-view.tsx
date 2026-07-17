@@ -48,22 +48,37 @@ export default function RankingProcedimentosView({ clinicId }: { clinicId: strin
 
   async function load(from: string, to: string) {
     setLoading(true)
+    // Filtra as entradas do período e usa o detalhe por procedimento (entrada_procedimentos)
+    // para não misturar pagamentos com múltiplos procedimentos numa única categoria combinada.
     const { data: entradas } = await supabase
       .from('entradas')
-      .select('procedimento_nome, valor_bruto, valor_liquido')
+      .select('id, valor_bruto, valor_liquido')
       .eq('clinic_id', clinicId)
       .gte('data_venda', from)
       .lte('data_venda', to)
-      .not('procedimento_nome', 'is', null)
 
-    // Agrupar por procedimento
+    const entradaIds = (entradas || []).map(e => e.id)
+    const liquidoPorEntrada = new Map((entradas || []).map(e => [e.id, { bruto: e.valor_bruto || 0, liquido: e.valor_liquido || 0 }]))
+
+    const { data: detalhes } = entradaIds.length > 0
+      ? await supabase
+          .from('entrada_procedimentos')
+          .select('entrada_id, procedimento_nome, valor')
+          .in('entrada_id', entradaIds)
+      : { data: [] }
+
+    // Agrupar por procedimento — usa o valor rateado do detalhe para faturamento,
+    // e distribui o líquido proporcionalmente ao peso do detalhe dentro da entrada.
     const map = new Map<string, ProcRanking>()
-    for (const e of entradas || []) {
-      const nome = e.procedimento_nome || 'Sem nome'
+    for (const d of detalhes || []) {
+      const nome = d.procedimento_nome || 'Sem nome'
+      const totais = liquidoPorEntrada.get(d.entrada_id)
+      const proporcaoLiquido = totais && totais.bruto > 0 ? (d.valor || 0) / totais.bruto : 0
+      const liquidoRateado = totais ? Math.round(totais.liquido * proporcaoLiquido * 100) / 100 : 0
       const cur = map.get(nome) || { procedimento: nome, quantidade: 0, faturamento: 0, liquido: 0, ticket_medio: 0 }
       cur.quantidade++
-      cur.faturamento += e.valor_bruto || 0
-      cur.liquido += e.valor_liquido || 0
+      cur.faturamento += d.valor || 0
+      cur.liquido += liquidoRateado
       map.set(nome, cur)
     }
 
