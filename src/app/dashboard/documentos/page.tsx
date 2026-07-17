@@ -117,7 +117,7 @@ export default async function DocumentosPage() {
 
       {/* Receita/exame com validade em farmácia (CFM/CFO) */}
       <div className="card p-5 mb-6 bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <h2 className="text-sm font-bold text-slate-900">Receita e pedido de exame com validade em farmácia</h2>
             <p className="text-xs text-slate-500 mt-1 max-w-xl">
@@ -126,12 +126,12 @@ export default async function DocumentosPage() {
               oficial e gratuita do seu conselho (exige certificado digital ICP-Brasil próprio).
             </p>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <a
               href="https://prescricaoeletronica.cfm.org.br"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-secondary w-auto px-4 flex items-center gap-2 text-sm"
+              className="btn-secondary w-full sm:w-auto px-4 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
             >
               CRM — Prescrição CFM
             </a>
@@ -139,7 +139,7 @@ export default async function DocumentosPage() {
               href="https://prescricao.cfo.org.br"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-secondary w-auto px-4 flex items-center gap-2 text-sm"
+              className="btn-secondary w-full sm:w-auto px-4 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
             >
               CRO — Prescrição CFO
             </a>
