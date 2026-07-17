@@ -52,6 +52,7 @@ export default async function ConfigPage() {
 
   const activeModules: string[] = clinic?.settings?.active_modules || []
   const hasEva = activeModules.length === 0 || activeModules.includes('eva_ia')
+  const hasNfse = activeModules.includes('nfse')
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -180,7 +181,7 @@ export default async function ConfigPage() {
                 className="flex items-center gap-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 rounded-xl transition-colors border border-emerald-200"
               >
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow">
-                  <Icon name="fileText" className="w-5 h-5 text-white" />
+                  <Icon name="receipt" className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-emerald-900">Ficha de Anamnese</p>
@@ -230,6 +231,22 @@ export default async function ConfigPage() {
                 </div>
                 <Icon name="chevronRight" className="w-5 h-5 text-teal-400" />
               </Link>
+
+              {hasNfse && (
+                <Link
+                  href="/dashboard/config/fiscal"
+                  className="flex items-center gap-4 p-4 bg-gradient-to-br from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 rounded-xl transition-colors border border-orange-200"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow">
+                    <Icon name="receipt" className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-orange-900">Nota Fiscal (NFS-e)</p>
+                    <p className="text-xs text-orange-700">Cadastro fiscal da clínica e integração com a Focus NFe</p>
+                  </div>
+                  <Icon name="chevronRight" className="w-5 h-5 text-orange-400" />
+                </Link>
+              )}
             </div>
           </div>
         )}
