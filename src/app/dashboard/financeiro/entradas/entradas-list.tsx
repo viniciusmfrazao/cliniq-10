@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
 import { todayBR } from '@/lib/datetime'
@@ -11,6 +11,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 type Entrada = {
   id: string
   data_venda: string
+  paciente_id?: string | null
   paciente_nome: string
   procedimento_nome: string
   profissional_nome: string
@@ -351,6 +352,34 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     const [municipio, setMunicipio] = useState('')
     const [uf, setUf] = useState('')
     const [cep, setCep] = useState('')
+    const [carregandoPaciente, setCarregandoPaciente] = useState(!!entrada.paciente_id)
+
+    useEffect(() => {
+      if (!entrada.paciente_id) { setCarregandoPaciente(false); return }
+      let cancelado = false
+      async function carregar() {
+        const { data } = await supabase.from('patients').select('cpf, address, city, state, zip_code')
+          .eq('id', entrada.paciente_id).maybeSingle()
+        if (cancelado) return
+        if (data) {
+          if (data.cpf) setCpf(data.cpf)
+          if (data.city) setMunicipio(data.city)
+          if (data.state) setUf(data.state.toUpperCase().slice(0, 2))
+          if (data.zip_code) setCep(data.zip_code)
+          // "address" é texto livre (ex: "Rua Duque de Caxias, 450, Centro") — separa
+          // em logradouro/número/bairro por vírgula como melhor esforço; sempre editável.
+          if (data.address) {
+            const partes = data.address.split(',').map((p: string) => p.trim()).filter(Boolean)
+            if (partes[0]) setLogradouro(partes[0])
+            if (partes[1]) setNumero(partes[1])
+            if (partes[2]) setBairro(partes[2])
+          }
+        }
+        setCarregandoPaciente(false)
+      }
+      carregar()
+      return () => { cancelado = true }
+    }, [entrada.paciente_id])
 
     const cpfLimpo = cpf.replace(/\D/g, '')
     const podeEnviar = cpfLimpo.length === 11 && logradouro && numero && bairro && municipio && uf
@@ -382,6 +411,16 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             </button>
           </div>
           <div className="p-5 overflow-y-auto space-y-3">
+            {carregandoPaciente && (
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <LoadingSpinner size="sm" /> Buscando dados do cadastro do paciente...
+              </div>
+            )}
+            {!carregandoPaciente && entrada.paciente_id && (
+              <p className="text-xs text-slate-400">
+                Pré-preenchido com o cadastro do paciente — confira antes de emitir.
+              </p>
+            )}
             <div>
               <label className="text-xs text-slate-500 mb-1 block">CPF *</label>
               <input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" className="input w-full text-sm" />
@@ -424,7 +463,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
               Cancelar
             </button>
-            <button onClick={confirmar} disabled={!podeEnviar}
+            <button onClick={confirmar} disabled={!podeEnviar || carregandoPaciente}
               className="flex-1 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
               Emitir NFe
             </button>
