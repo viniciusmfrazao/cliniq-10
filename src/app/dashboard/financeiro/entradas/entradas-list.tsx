@@ -392,55 +392,56 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
   }
 
-  function NotaFiscalCell({ entrada }: { entrada: Entrada }) {
-    if (entrada.tipo_receita && entrada.tipo_receita !== 'servico') {
-      return <span className="text-xs text-slate-300">-</span>
+  function NotaFiscalIconButton({ entrada }: { entrada: Entrada }) {
+    // Produto: NFe/NFC-e ainda não implementada — ícone desabilitado, só sinaliza o que falta
+    if (entrada.tipo_receita === 'produto') {
+      return (
+        <span title="NFe de produto ainda não implementada"
+          className="p-2 text-slate-300 rounded-lg cursor-not-allowed inline-flex">
+          <Icon name="box" className="w-4 h-4" />
+        </span>
+      )
     }
+
     const status = entrada.nota_fiscal_status || 'nao_emitida'
     const carregando = emitindo === entrada.id
 
     if (status === 'autorizada') {
       return (
-        <div className="flex items-center gap-1.5">
-          <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium">
-            Nº {entrada.nota_fiscal_numero || '-'}
-          </span>
-          {entrada.nota_fiscal_url_pdf && (
-            <a href={entrada.nota_fiscal_url_pdf} target="_blank" rel="noopener noreferrer"
-              className="text-violet-500 hover:text-violet-700" title="Ver PDF">
-              <Icon name="file" className="w-4 h-4" />
-            </a>
-          )}
-        </div>
+        <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
+          title={`NFS-e nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
+          onClick={e => e.stopPropagation()}
+          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
+          <Icon name="receipt" className="w-4 h-4" />
+        </a>
       )
     }
 
     if (status === 'processando') {
       return (
-        <button onClick={() => consultarNota(entrada.id)} disabled={carregando}
-          className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-100 transition">
-          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-3.5 h-3.5" />}
-          Processando
+        <button onClick={e => { e.stopPropagation(); consultarNota(entrada.id) }} disabled={carregando}
+          title="Processando — clique para atualizar status"
+          className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-4 h-4" />}
         </button>
       )
     }
 
     if (status === 'erro') {
       return (
-        <button onClick={() => emitirNota(entrada.id)} disabled={carregando}
-          title={entrada.nota_fiscal_erro || 'Erro ao emitir'}
-          className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 text-rose-700 rounded-lg text-xs font-medium hover:bg-rose-100 transition">
-          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-3.5 h-3.5" />}
-          Erro — tentar de novo
+        <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
+          title={entrada.nota_fiscal_erro || 'Erro ao emitir — clique para tentar de novo'}
+          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
         </button>
       )
     }
 
     return (
-      <button onClick={() => emitirNota(entrada.id)} disabled={carregando}
-        className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-200 transition">
-        {carregando ? <LoadingSpinner size="sm" /> : <Icon name="receipt" className="w-3.5 h-3.5" />}
-        Emitir NFS-e
+      <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
+        title="Emitir NFS-e"
+        className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
+        {carregando ? <LoadingSpinner size="sm" /> : <Icon name="receipt" className="w-4 h-4" />}
       </button>
     )
   }
@@ -572,7 +573,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
               {isPending ? 'Buscando...' : 'Nenhuma entrada encontrada'}
             </div>
           ) : filteredList.map(e => (
-            <div key={e.id} className="p-4">
+            <div key={e.id} className="p-4 cursor-pointer" onClick={() => setEditEntry(e)}>
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900">{e.paciente_nome || '-'}</p>
@@ -600,19 +601,11 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                       </p>
                     )
                   })()}
-                  {nfseAtivo && (
-                    <div className="mt-1.5 flex justify-end">
-                      <NotaFiscalCell entrada={e} />
-                    </div>
-                  )}
                   <div className="flex items-center justify-end gap-1 mt-1">
-                    <button onClick={() => setEditEntry(e)}
-                      className="p-1.5 text-violet-400 hover:bg-violet-50 rounded-lg transition">
-                      <Icon name="edit" className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
-                      className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition">
-                      <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-3.5 h-3.5" />
+                    {nfseAtivo && <NotaFiscalIconButton entrada={e} />}
+                    <button onClick={e2 => { e2.stopPropagation(); handleDelete(e.id) }} disabled={deleting === e.id}
+                      className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition">
+                      <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -639,22 +632,19 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     <th className="text-right px-4 py-3 text-xs font-semibold text-indigo-600 uppercase">Clínica</th>
                   </>
                 )}
-                {nfseAtivo && (
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-orange-600 uppercase">NF-e</th>
-                )}
                 <th className="text-center px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={(comissaoAtiva ? 10 : 8) + (nfseAtivo ? 1 : 0)} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={comissaoAtiva ? 10 : 8} className="px-4 py-12 text-center text-slate-500">
                     {isPending ? 'Buscando...' : 'Nenhuma entrada encontrada'}
                   </td>
                 </tr>
               ) : (
                 filteredList.map(e => (
-                  <tr key={e.id} className="hover:bg-slate-50">
+                  <tr key={e.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setEditEntry(e)}>
                     <td className="px-4 py-3 text-sm">
                       {new Date(e.data_venda + 'T12:00:00').toLocaleDateString('pt-BR')}
                     </td>
@@ -689,19 +679,10 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                         </>
                       )
                     })()}
-                    {nfseAtivo && (
-                      <td className="px-4 py-3 text-sm">
-                        <NotaFiscalCell entrada={e} />
-                      </td>
-                    )}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => setEditEntry(e)}
-                          className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
-                          title="Editar">
-                          <Icon name="edit" className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
+                        {nfseAtivo && <NotaFiscalIconButton entrada={e} />}
+                        <button onClick={e2 => { e2.stopPropagation(); handleDelete(e.id) }} disabled={deleting === e.id}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
                           title="Excluir">
                           <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
