@@ -392,17 +392,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
   }
 
-  function NotaFiscalIconButton({ entrada }: { entrada: Entrada }) {
-    // Produto: NFe/NFC-e ainda não implementada — ícone desabilitado, só sinaliza o que falta
-    if (entrada.tipo_receita === 'produto') {
-      return (
-        <span title="NFe de produto ainda não implementada"
-          className="p-2 text-slate-300 rounded-lg cursor-not-allowed inline-flex">
-          <Icon name="box" className="w-4 h-4" />
-        </span>
-      )
-    }
-
+  function BotaoNfse({ entrada }: { entrada: Entrada }) {
     const status = entrada.nota_fiscal_status || 'nao_emitida'
     const carregando = emitindo === entrada.id
 
@@ -420,7 +410,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     if (status === 'processando') {
       return (
         <button onClick={e => { e.stopPropagation(); consultarNota(entrada.id) }} disabled={carregando}
-          title="Processando — clique para atualizar status"
+          title="NFS-e processando — clique para atualizar status"
           className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition">
           {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-4 h-4" />}
         </button>
@@ -430,7 +420,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     if (status === 'erro') {
       return (
         <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
-          title={entrada.nota_fiscal_erro || 'Erro ao emitir — clique para tentar de novo'}
+          title={entrada.nota_fiscal_erro || 'Erro ao emitir NFS-e — clique para tentar de novo'}
           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
           {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
         </button>
@@ -439,9 +429,20 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
     return (
       <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
-        title="Emitir NFS-e"
+        title="Emitir NFS-e (nota de serviço)"
         className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
         {carregando ? <LoadingSpinner size="sm" /> : <Icon name="receipt" className="w-4 h-4" />}
+      </button>
+    )
+  }
+
+  function BotaoNfe() {
+    return (
+      <button
+        onClick={e => { e.stopPropagation(); toast.info('Emissão de NFe (nota de produto) ainda não está implementada') }}
+        title="Emitir NFe (nota de produto) — ainda não implementado"
+        className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
+        <Icon name="box" className="w-4 h-4" />
       </button>
     )
   }
@@ -573,7 +574,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
               {isPending ? 'Buscando...' : 'Nenhuma entrada encontrada'}
             </div>
           ) : filteredList.map(e => (
-            <div key={e.id} className="p-4 cursor-pointer" onClick={() => setEditEntry(e)}>
+            <div key={e.id} className="p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900">{e.paciente_nome || '-'}</p>
@@ -602,8 +603,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     )
                   })()}
                   <div className="flex items-center justify-end gap-1 mt-1">
-                    {nfseAtivo && <NotaFiscalIconButton entrada={e} />}
-                    <button onClick={e2 => { e2.stopPropagation(); handleDelete(e.id) }} disabled={deleting === e.id}
+                    {nfseAtivo && <BotaoNfse entrada={e} />}
+                    {nfseAtivo && <BotaoNfe />}
+                    <button onClick={() => setEditEntry(e)}
+                      className="p-2 text-violet-400 hover:bg-violet-50 rounded-lg transition">
+                      <Icon name="edit" className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
                       className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition">
                       <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
                     </button>
@@ -644,7 +650,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                 </tr>
               ) : (
                 filteredList.map(e => (
-                  <tr key={e.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setEditEntry(e)}>
+                  <tr key={e.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 text-sm">
                       {new Date(e.data_venda + 'T12:00:00').toLocaleDateString('pt-BR')}
                     </td>
@@ -681,8 +687,14 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     })()}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {nfseAtivo && <NotaFiscalIconButton entrada={e} />}
-                        <button onClick={e2 => { e2.stopPropagation(); handleDelete(e.id) }} disabled={deleting === e.id}
+                        {nfseAtivo && <BotaoNfse entrada={e} />}
+                        {nfseAtivo && <BotaoNfe />}
+                        <button onClick={() => setEditEntry(e)}
+                          className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
+                          title="Editar">
+                          <Icon name="edit" className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
                           title="Excluir">
                           <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
