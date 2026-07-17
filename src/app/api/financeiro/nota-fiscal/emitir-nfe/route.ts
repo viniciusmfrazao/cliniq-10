@@ -17,8 +17,19 @@ export async function POST(req: NextRequest) {
   }
 
   const clinicId = userData!.clinic_id
-  const { entrada_id } = await req.json()
+  const {
+    entrada_id, destinatario_logradouro, destinatario_numero, destinatario_bairro,
+    destinatario_municipio, destinatario_uf, destinatario_cep,
+  } = await req.json()
   if (!entrada_id) return NextResponse.json({ error: 'entrada_id é obrigatório' }, { status: 400 })
+
+  const camposEndereco: Record<string, string | undefined> = {
+    destinatario_logradouro, destinatario_numero, destinatario_bairro, destinatario_municipio, destinatario_uf,
+  }
+  const enderecoFaltando = Object.entries(camposEndereco).filter(([, v]) => !v).map(([k]) => k)
+  if (enderecoFaltando.length > 0) {
+    return NextResponse.json({ error: `Endereço do destinatário incompleto: ${enderecoFaltando.join(', ')}` }, { status: 400 })
+  }
 
   const { data: clinic } = await supabase
     .from('clinics').select('settings').eq('id', clinicId).single()
@@ -74,6 +85,12 @@ export async function POST(req: NextRequest) {
       dataVenda: entrada.data_venda,
       destinatarioCpf,
       destinatarioNome: entrada.paciente_nome,
+      destinatarioLogradouro: destinatario_logradouro,
+      destinatarioNumero: destinatario_numero,
+      destinatarioBairro: destinatario_bairro,
+      destinatarioMunicipio: destinatario_municipio,
+      destinatarioUf: destinatario_uf,
+      destinatarioCep: destinatario_cep,
     })
 
     if (httpStatus === 201 || httpStatus === 202 || data?.status === 'processando_autorizacao') {

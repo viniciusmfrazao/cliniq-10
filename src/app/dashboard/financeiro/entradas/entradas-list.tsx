@@ -341,15 +341,98 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
   }
 
   const [emitindo, setEmitindo] = useState<string | null>(null)
+  const [enderecoModalEntrada, setEnderecoModalEntrada] = useState<Entrada | null>(null)
 
-  async function emitirNota(entradaId: string, tipo: 'nfse' | 'nfe' = 'nfse') {
+  function EnderecoDestinatarioModal({ entrada, onClose }: { entrada: Entrada; onClose: () => void }) {
+    const [logradouro, setLogradouro] = useState('')
+    const [numero, setNumero] = useState('')
+    const [bairro, setBairro] = useState('')
+    const [municipio, setMunicipio] = useState('')
+    const [uf, setUf] = useState('')
+    const [cep, setCep] = useState('')
+
+    const podeEnviar = logradouro && numero && bairro && municipio && uf
+
+    function confirmar() {
+      onClose()
+      emitirNota(entrada.id, 'nfe', {
+        destinatario_logradouro: logradouro,
+        destinatario_numero: numero,
+        destinatario_bairro: bairro,
+        destinatario_municipio: municipio,
+        destinatario_uf: uf,
+        destinatario_cep: cep,
+      })
+    }
+
+    return createPortal(
+      <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+            <div>
+              <h2 className="font-bold text-slate-900">Endereço do comprador</h2>
+              <p className="text-sm text-slate-500 mt-0.5">{entrada.paciente_nome} — obrigatório na NFe</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+              <Icon name="x" className="w-4 h-4 text-slate-400" />
+            </button>
+          </div>
+          <div className="p-5 overflow-y-auto space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs text-slate-500 mb-1 block">Logradouro *</label>
+                <input value={logradouro} onChange={e => setLogradouro(e.target.value)} className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Número *</label>
+                <input value={numero} onChange={e => setNumero(e.target.value)} className="input w-full text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Bairro *</label>
+                <input value={bairro} onChange={e => setBairro(e.target.value)} className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">CEP</label>
+                <input value={cep} onChange={e => setCep(e.target.value)} className="input w-full text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs text-slate-500 mb-1 block">Município *</label>
+                <input value={municipio} onChange={e => setMunicipio(e.target.value)} className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">UF *</label>
+                <input value={uf} onChange={e => setUf(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} className="input w-full text-sm" />
+              </div>
+            </div>
+          </div>
+          <div className="p-5 border-t border-slate-100 flex gap-3 flex-shrink-0">
+            <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button onClick={confirmar} disabled={!podeEnviar}
+              className="flex-1 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
+              Emitir NFe
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
+  async function emitirNota(entradaId: string, tipo: 'nfse' | 'nfe' = 'nfse', extra?: Record<string, string>) {
     setEmitindo(entradaId)
     const endpointEmitir = tipo === 'nfe' ? '/api/financeiro/nota-fiscal/emitir-nfe' : '/api/financeiro/nota-fiscal/emitir'
     try {
       const res = await fetch(endpointEmitir, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entrada_id: entradaId }),
+        body: JSON.stringify({ entrada_id: entradaId, ...extra }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -465,7 +548,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
     if (status === 'erro') {
       return (
-        <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id, 'nfe') }} disabled={carregando}
+        <button onClick={e => { e.stopPropagation(); setEnderecoModalEntrada(entrada) }} disabled={carregando}
           title={entrada.nota_fiscal_erro || 'Erro ao emitir NFe — clique para tentar de novo'}
           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
           {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
@@ -474,7 +557,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
 
     return (
-      <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id, 'nfe') }} disabled={carregando}
+      <button onClick={e => { e.stopPropagation(); setEnderecoModalEntrada(entrada) }} disabled={carregando}
         title="Emitir NFe (nota de produto)"
         className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
         {carregando ? <LoadingSpinner size="sm" /> : <Icon name="box" className="w-4 h-4" />}
@@ -489,6 +572,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
           entrada={editEntry}
           onSave={handleSaveEdit}
           onClose={() => setEditEntry(null)}
+        />
+      )}
+
+      {enderecoModalEntrada && (
+        <EnderecoDestinatarioModal
+          entrada={enderecoModalEntrada}
+          onClose={() => setEnderecoModalEntrada(null)}
         />
       )}
 

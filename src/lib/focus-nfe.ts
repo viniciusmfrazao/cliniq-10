@@ -269,9 +269,19 @@ type EmitirNfeParams = {
   dataVenda: string // YYYY-MM-DD
   destinatarioCpf: string | null
   destinatarioNome: string | null
+  destinatarioLogradouro: string
+  destinatarioNumero: string
+  destinatarioBairro: string
+  destinatarioMunicipio: string
+  destinatarioUf: string
+  destinatarioCep?: string
 }
 
-export async function emitirNfeProduto({ config, ref, valor, dataVenda, destinatarioCpf, destinatarioNome }: EmitirNfeParams) {
+export async function emitirNfeProduto({
+  config, ref, valor, dataVenda, destinatarioCpf, destinatarioNome,
+  destinatarioLogradouro, destinatarioNumero, destinatarioBairro, destinatarioMunicipio,
+  destinatarioUf, destinatarioCep,
+}: EmitirNfeParams) {
   const token = tokenNfe(config)
   if (!token) throw new Error('Token de NFe não configurado para este ambiente')
 
@@ -336,6 +346,13 @@ export async function emitirNfeProduto({ config, ref, valor, dataVenda, destinat
 
     ...(cpfLimpo ? { cpf_destinatario: cpfLimpo, nome_destinatario: destinatarioNome || undefined } : {}),
     indicador_inscricao_estadual_destinatario: 9, // 9 = não contribuinte (consumidor final pessoa física)
+    logradouro_destinatario: destinatarioLogradouro,
+    numero_destinatario: destinatarioNumero,
+    bairro_destinatario: destinatarioBairro,
+    municipio_destinatario: destinatarioMunicipio,
+    uf_destinatario: destinatarioUf,
+    cep_destinatario: (destinatarioCep || '').replace(/\D/g, '') || undefined,
+    pais_destinatario: 'Brasil',
 
     valor_produtos: valor,
     valor_total: valor,
