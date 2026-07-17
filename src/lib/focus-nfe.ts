@@ -112,6 +112,27 @@ function authHeader(token: string) {
   return 'Basic ' + Buffer.from(`${token}:`).toString('base64')
 }
 
+// A Focus às vezes devolve só um resumo em "mensagem" (ex: "Erro na validação do
+// Schema XML, verifique o detalhamento dos erros") e o detalhe de verdade — qual campo,
+// qual regra — vem em "erros" (array) ou "mensagem_sefaz"/"detalhes". Sem isso é
+// impossível saber o que corrigir, então sempre tentamos extrair o máximo de detalhe.
+export function extrairErroFocus(data: Record<string, unknown> | undefined, httpStatus: number): string {
+  if (!data) return `Erro HTTP ${httpStatus} sem corpo de resposta`
+  const partes: string[] = []
+  if (typeof data.mensagem === 'string') partes.push(data.mensagem)
+  if (typeof data.mensagem_sefaz === 'string') partes.push(`SEFAZ: ${data.mensagem_sefaz}`)
+  if (Array.isArray(data.erros)) {
+    for (const e of data.erros as Array<Record<string, unknown>>) {
+      const campo = typeof e.campo === 'string' ? `[${e.campo}] ` : ''
+      const msg = typeof e.mensagem === 'string' ? e.mensagem : JSON.stringify(e)
+      const correcao = typeof e.correcao === 'string' ? ` — correção: ${e.correcao}` : ''
+      partes.push(`${campo}${msg}${correcao}`)
+    }
+  }
+  if (partes.length === 0) return JSON.stringify(data).slice(0, 500)
+  return partes.join(' | ')
+}
+
 export function fiscalConfigCompleta(config: FiscalConfig | null): { ok: boolean; faltando: string[] } {
   const faltando: string[] = []
   if (!config) return { ok: false, faltando: ['configuração fiscal não cadastrada'] }

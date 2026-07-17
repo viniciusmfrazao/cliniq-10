@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal } from '@/lib/focus-nfe'
+import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal, extrairErroFocus } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, status: 'processando' })
     }
 
-    const mensagemErro = data?.mensagem || `Erro HTTP ${httpStatus} ao emitir nota`
+    const mensagemErro = extrairErroFocus(data, httpStatus)
     await supabase.from('entradas').update({
       nota_fiscal_status: 'erro',
       nota_fiscal_erro: mensagemErro,
