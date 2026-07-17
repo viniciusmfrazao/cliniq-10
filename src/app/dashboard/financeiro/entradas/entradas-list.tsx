@@ -344,6 +344,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
   const [enderecoModalEntrada, setEnderecoModalEntrada] = useState<Entrada | null>(null)
 
   function EnderecoDestinatarioModal({ entrada, onClose }: { entrada: Entrada; onClose: () => void }) {
+    const [cpf, setCpf] = useState('')
     const [logradouro, setLogradouro] = useState('')
     const [numero, setNumero] = useState('')
     const [bairro, setBairro] = useState('')
@@ -351,11 +352,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     const [uf, setUf] = useState('')
     const [cep, setCep] = useState('')
 
-    const podeEnviar = logradouro && numero && bairro && municipio && uf
+    const cpfLimpo = cpf.replace(/\D/g, '')
+    const podeEnviar = cpfLimpo.length === 11 && logradouro && numero && bairro && municipio && uf
 
     function confirmar() {
       onClose()
       emitirNota(entrada.id, 'nfe', {
+        destinatario_cpf: cpfLimpo,
         destinatario_logradouro: logradouro,
         destinatario_numero: numero,
         destinatario_bairro: bairro,
@@ -371,14 +374,21 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
         <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
             <div>
-              <h2 className="font-bold text-slate-900">Endereço do comprador</h2>
-              <p className="text-sm text-slate-500 mt-0.5">{entrada.paciente_nome} — obrigatório na NFe</p>
+              <h2 className="font-bold text-slate-900">Dados do comprador</h2>
+              <p className="text-sm text-slate-500 mt-0.5">{entrada.paciente_nome} — CPF e endereço são obrigatórios na NFe</p>
             </div>
             <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
               <Icon name="x" className="w-4 h-4 text-slate-400" />
             </button>
           </div>
           <div className="p-5 overflow-y-auto space-y-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">CPF *</label>
+              <input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" className="input w-full text-sm" />
+              {cpf && cpfLimpo.length !== 11 && (
+                <p className="text-xs text-rose-600 mt-1">CPF precisa ter 11 dígitos</p>
+              )}
+            </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
                 <label className="text-xs text-slate-500 mb-1 block">Logradouro *</label>

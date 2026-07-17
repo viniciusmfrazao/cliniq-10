@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const clinicId = userData!.clinic_id
   const {
     entrada_id, destinatario_logradouro, destinatario_numero, destinatario_bairro,
-    destinatario_municipio, destinatario_uf, destinatario_cep,
+    destinatario_municipio, destinatario_uf, destinatario_cep, destinatario_cpf,
   } = await req.json()
   if (!entrada_id) return NextResponse.json({ error: 'entrada_id é obrigatório' }, { status: 400 })
 
@@ -68,11 +68,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Configuração fiscal de NFe incompleta: ${check.faltando.join(', ')}` }, { status: 400 })
   }
 
-  let destinatarioCpf: string | null = null
-  if (entrada.paciente_id) {
+  let destinatarioCpf: string | null = destinatario_cpf || null
+  if (!destinatarioCpf && entrada.paciente_id) {
     const { data: paciente } = await supabase
       .from('patients').select('cpf').eq('id', entrada.paciente_id).maybeSingle()
     destinatarioCpf = paciente?.cpf || null
+  }
+
+  if (!destinatarioCpf) {
+    return NextResponse.json({ error: 'CPF do comprador é obrigatório pra NFe — o paciente não tem CPF cadastrado e nenhum foi informado agora' }, { status: 400 })
   }
 
   const ref = `produto-${entrada.id}`
