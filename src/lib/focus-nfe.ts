@@ -105,6 +105,22 @@ export function focusBaseUrl(ambiente: string) {
     : 'https://homologacao.focusnfe.com.br/v2'
 }
 
+// A Focus às vezes devolve caminhos relativos pra arquivos (ex: DANFE de NFe), que
+// precisam ser completados com o host — diferente da NFS-e, onde url_danfse já vem
+// absoluta. Sem isso o link abre relativo ao domínio do Clinike e dá 404.
+export function focusRootUrl(ambiente: string) {
+  return ambiente === 'producao'
+    ? 'https://api.focusnfe.com.br'
+    : 'https://homologacao.focusnfe.com.br'
+}
+
+export function resolverUrlArquivo(caminho: string | null | undefined, ambiente: string): string | null {
+  if (!caminho) return null
+  if (/^https?:\/\//i.test(caminho)) return caminho
+  const path = caminho.startsWith('/') ? caminho : `/${caminho}`
+  return `${focusRootUrl(ambiente)}${path}`
+}
+
 export function focusToken(config: FiscalConfig): string | null {
   return config.ambiente === 'producao' ? config.token_producao : config.token_homologacao
 }

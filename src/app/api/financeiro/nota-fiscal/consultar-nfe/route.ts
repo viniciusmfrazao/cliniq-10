@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { consultarNfeProduto } from '@/lib/focus-nfe'
+import { consultarNfeProduto, resolverUrlArquivo } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,14 +47,15 @@ export async function GET(req: NextRequest) {
   }
 
   if (data?.status === 'autorizado') {
+    const urlPdf = resolverUrlArquivo(data.caminho_danfe || data.url, config.ambiente)
     await supabase.from('entradas').update({
       nota_fiscal_status: 'autorizada',
       nota_fiscal_numero: data.numero || null,
-      nota_fiscal_url_pdf: data.caminho_danfe || data.url || null,
+      nota_fiscal_url_pdf: urlPdf,
       nota_fiscal_erro: null,
       nota_fiscal_emitida_em: data.data_emissao || new Date().toISOString(),
     }).eq('id', entrada.id)
-    return NextResponse.json({ status: 'autorizada', numero: data.numero, url_pdf: data.caminho_danfe || data.url })
+    return NextResponse.json({ status: 'autorizada', numero: data.numero, url_pdf: urlPdf })
   }
 
   if (data?.status === 'erro_autorizacao' || data?.status === 'rejeitado') {
