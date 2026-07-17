@@ -134,6 +134,11 @@ export default async function AgendaPage({
   // Validar IDs selecionados — se algum ID não existe na lista atual, ignorar (evita tela vazia)
   const validProfIds = new Set(professionals.map((p: any) => p.id))
   const selectedProfIds = rawSelectedProfIds.filter(id => validProfIds.has(id))
+  // IMPORTANTE: usar sempre a versao validada pra frente (URL pode trazer IDs
+  // de outra clinica — link antigo, autocomplete do navegador, troca de conta
+  // na mesma aba etc). Passar a string crua pro client faz ele re-filtrar sem
+  // validar e zerar a agenda inteira quando o ID nao pertence a clinica atual.
+  const safeSelectedProfessional = selectedProfIds.length > 0 ? selectedProfIds.join(',') : 'all'
   const appointments = appointmentsResult.data || []
   const todayAppointments = todayAppointmentsResult.data || []
   const blocks = blocksResult.data || []
@@ -210,7 +215,7 @@ export default async function AgendaPage({
         <AgendaFilters 
           currentDate={selectedDate}
           currentView={viewMode}
-          currentProfessional={selectedProfessional}
+          currentProfessional={safeSelectedProfessional}
           currentStatus={selectedStatus}
           professionals={professionals || []}
         />
@@ -228,7 +233,7 @@ export default async function AgendaPage({
         viewMode={viewMode}
         selectedDate={selectedDate}
         professionals={professionals || []}
-        selectedProfessional={selectedProfessional}
+        selectedProfessional={safeSelectedProfessional}
         clinicId={clinicId}
         clinicName={clinicName}
       />
