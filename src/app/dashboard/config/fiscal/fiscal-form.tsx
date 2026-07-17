@@ -39,6 +39,16 @@ type InitialConfig = {
   cfop_padrao: string | null
   csosn_padrao: string | null
   descricao_produto_padrao: string | null
+  cnpj_nfe: string | null
+  razao_social_nfe: string | null
+  logradouro_nfe: string | null
+  numero_nfe: string | null
+  bairro_nfe: string | null
+  municipio_nfe: string | null
+  uf_nfe: string | null
+  cep_nfe: string | null
+  token_homologacao_nfe_mask: string | null
+  token_producao_nfe_mask: string | null
 } | null
 
 type Props = {
@@ -70,6 +80,17 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [descricaoProdutoPadrao, setDescricaoProdutoPadrao] = useState(
     initialConfig?.descricao_produto_padrao || 'Venda de produto conforme registro interno'
   )
+  const [cnpjDiferente, setCnpjDiferente] = useState(!!initialConfig?.cnpj_nfe)
+  const [cnpjNfe, setCnpjNfe] = useState(initialConfig?.cnpj_nfe || '')
+  const [razaoSocialNfe, setRazaoSocialNfe] = useState(initialConfig?.razao_social_nfe || '')
+  const [logradouroNfe, setLogradouroNfe] = useState(initialConfig?.logradouro_nfe || '')
+  const [numeroNfe, setNumeroNfe] = useState(initialConfig?.numero_nfe || '')
+  const [bairroNfe, setBairroNfe] = useState(initialConfig?.bairro_nfe || '')
+  const [municipioNfe, setMunicipioNfe] = useState(initialConfig?.municipio_nfe || '')
+  const [ufNfe, setUfNfe] = useState(initialConfig?.uf_nfe || '')
+  const [cepNfe, setCepNfe] = useState(initialConfig?.cep_nfe || '')
+  const [tokenHomologacaoNfe, setTokenHomologacaoNfe] = useState('')
+  const [tokenProducaoNfe, setTokenProducaoNfe] = useState('')
 
   async function handleValidar() {
     setValidando(true)
@@ -112,6 +133,16 @@ export default function FiscalForm({ initialConfig }: Props) {
           cfop_padrao: cfopPadrao,
           csosn_padrao: csosnPadrao,
           descricao_produto_padrao: descricaoProdutoPadrao,
+          cnpj_nfe: cnpjDiferente ? cnpjNfe : null,
+          razao_social_nfe: cnpjDiferente ? razaoSocialNfe : null,
+          logradouro_nfe: logradouroNfe,
+          numero_nfe: numeroNfe,
+          bairro_nfe: bairroNfe,
+          municipio_nfe: municipioNfe,
+          uf_nfe: ufNfe,
+          cep_nfe: cepNfe,
+          token_homologacao_nfe: tokenHomologacaoNfe,
+          token_producao_nfe: tokenProducaoNfe,
         }),
       })
       if (!res.ok) {
@@ -121,6 +152,8 @@ export default function FiscalForm({ initialConfig }: Props) {
       toast.success('Configuração fiscal salva')
       setTokenHomologacao('')
       setTokenProducao('')
+      setTokenHomologacaoNfe('')
+      setTokenProducaoNfe('')
       router.refresh()
     } catch (err) {
       toast.error('Erro ao salvar', { description: err instanceof Error ? err.message : undefined })
@@ -234,12 +267,31 @@ export default function FiscalForm({ initialConfig }: Props) {
 
       <div className="card p-6 space-y-4 border-amber-100">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">NFe (produto) — em construção</h2>
-          <p className="text-xs text-amber-600 mt-1">
-            Estes campos ficam salvos e prontos, mas o envio real de NFe pra Focus ainda não foi
-            implementado. Usa o mesmo token acima (a empresa na Focus cobre os dois tipos de nota).
+          <h2 className="text-sm font-semibold text-slate-900">NFe (produto)</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Emissão real de NFe (nota de produto). Se a clínica usa o mesmo CNPJ pra serviço e
+            produto, deixa "CNPJ diferente" desligado — usa o CNPJ e token da NFS-e acima. Se
+            usa um CNPJ separado (ex: uma empresa só pra venda de produto), liga o toggle.
           </p>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={cnpjDiferente} onChange={e => setCnpjDiferente(e.target.checked)} />
+          Esta clínica usa um CNPJ diferente para NFe (produto)
+        </label>
+
+        {cnpjDiferente && (
+          <div className="grid grid-cols-2 gap-3 bg-amber-50/50 p-3 rounded-xl">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">CNPJ (NFe)</label>
+              <input value={cnpjNfe} onChange={e => setCnpjNfe(e.target.value)} className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Razão Social (NFe)</label>
+              <input value={razaoSocialNfe} onChange={e => setRazaoSocialNfe(e.target.value)} className="input w-full text-sm" />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -272,6 +324,68 @@ export default function FiscalForm({ initialConfig }: Props) {
           <input value={descricaoProdutoPadrao} onChange={e => setDescricaoProdutoPadrao(e.target.value)}
             className="input w-full text-sm" />
         </div>
+
+        <div className="pt-2 border-t border-slate-100">
+          <p className="text-xs text-slate-500 mb-2">
+            Endereço do emitente (obrigatório pra NFe — diferente da NFS-e, que não exige)
+          </p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Logradouro</label>
+              <input value={logradouroNfe} onChange={e => setLogradouroNfe(e.target.value)} className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Número</label>
+              <input value={numeroNfe} onChange={e => setNumeroNfe(e.target.value)} className="input w-full text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Bairro</label>
+              <input value={bairroNfe} onChange={e => setBairroNfe(e.target.value)} className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Município</label>
+              <input value={municipioNfe} onChange={e => setMunicipioNfe(e.target.value)} placeholder="Nome da cidade" className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">UF</label>
+              <input value={ufNfe} onChange={e => setUfNfe(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} className="input w-full text-sm" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="text-xs text-slate-500 mb-1 block">CEP</label>
+            <input value={cepNfe} onChange={e => setCepNfe(e.target.value)} className="input w-full text-sm max-w-[200px]" />
+          </div>
+        </div>
+
+        {cnpjDiferente && (
+          <div className="pt-2 border-t border-slate-100">
+            <p className="text-xs text-slate-500 mb-2">
+              Tokens de NFe (só preencher se o CNPJ de NFe for diferente — outra empresa na Focus)
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">
+                  Token de Homologação (NFe) {initialConfig?.token_homologacao_nfe_mask && (
+                    <span className="text-slate-400">(atual: {initialConfig.token_homologacao_nfe_mask})</span>
+                  )}
+                </label>
+                <input value={tokenHomologacaoNfe} onChange={e => setTokenHomologacaoNfe(e.target.value)} type="password"
+                  placeholder="Cole o token aqui" className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">
+                  Token de Produção (NFe) {initialConfig?.token_producao_nfe_mask && (
+                    <span className="text-slate-400">(atual: {initialConfig.token_producao_nfe_mask})</span>
+                  )}
+                </label>
+                <input value={tokenProducaoNfe} onChange={e => setTokenProducaoNfe(e.target.value)} type="password"
+                  placeholder="Cole o token aqui" className="input w-full text-sm" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {resultadoValidacao && (

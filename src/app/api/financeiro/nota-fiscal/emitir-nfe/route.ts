@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { fiscalConfigCompletaNfe } from '@/lib/focus-nfe'
+import { fiscalConfigCompletaNfe, emitirNfeProduto } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
-// IMPORTANTE: este endpoint valida se a clínica tem os campos fiscais de NFe (produto)
-// completos e prontos, mas NÃO envia a nota pra Focus ainda — a emissão de NFe (modelo 55)
-// é bem mais complexa que NFS-e (blocos de ICMS/PIS/COFINS por item, NCM, CFOP, unidade
-// de medida, quantidade) e ainda não foi construída. Isso é intencional: é melhor dizer
-// claramente "ainda não emite" do que arriscar montar um payload fiscal incorreto.
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -25,16 +20,30 @@ export async function POST(req: NextRequest) {
   const { entrada_id } = await req.json()
   if (!entrada_id) return NextResponse.json({ error: 'entrada_id é obrigatório' }, { status: 400 })
 
+  const { data: clinic } = await supabase
+    .from('clinics').select('settings').eq('id', clinicId).single()
+  const activeModules: string[] = clinic?.settings?.active_modules || []
+  if (!activeModules.includes('nfse')) {
+    return NextResponse.json({ error: 'módulo de Nota Fiscal não está ativo para esta clínica' }, { status: 403 })
+  }
+
   const { data: entrada } = await supabase
     .from('entradas')
-    .select('id, clinic_id, tipo_receita')
+    .select('id, clinic_id, valor_bruto, data_venda, paciente_id, paciente_nome, tipo_receita, nota_fiscal_status')
     .eq('id', entrada_id)
     .eq('clinic_id', clinicId)
     .single()
 
   if (!entrada) return NextResponse.json({ error: 'entrada não encontrada' }, { status: 404 })
+
   if (entrada.tipo_receita !== 'produto') {
     return NextResponse.json({ error: 'esta entrada não é de produto — emissão de NFe não se aplica' }, { status: 400 })
+  }
+  if (entrada.nota_fiscal_status === 'autorizada') {
+    return NextResponse.json({ error: 'esta entrada já tem nota fiscal autorizada' }, { status: 400 })
+  }
+  if (entrada.nota_fiscal_status === 'processando') {
+    return NextResponse.json({ error: 'já existe uma emissão em processamento para esta entrada' }, { status: 400 })
   }
 
   const { data: config } = await supabase
@@ -45,14 +54,58 @@ export async function POST(req: NextRequest) {
 
   const check = fiscalConfigCompletaNfe(config)
   if (!check.ok) {
-    return NextResponse.json({
-      error: `Configuração fiscal de NFe incompleta: ${check.faltando.join(', ')}`,
-      pronto: false,
-    }, { status: 400 })
+    return NextResponse.json({ error: `Configuração fiscal de NFe incompleta: ${check.faltando.join(', ')}` }, { status: 400 })
   }
 
-  return NextResponse.json({
-    pronto: true,
-    aviso: 'Os campos fiscais de NFe estão completos, mas o envio real para a Focus (emissão de NF-e de produto) ainda não foi implementado.',
-  }, { status: 501 })
+  let destinatarioCpf: string | null = null
+  if (entrada.paciente_id) {
+    const { data: paciente } = await supabase
+      .from('patients').select('cpf').eq('id', entrada.paciente_id).maybeSingle()
+    destinatarioCpf = paciente?.cpf || null
+  }
+
+  const ref = `produto-${entrada.id}`
+
+  try {
+    const { httpStatus, data } = await emitirNfeProduto({
+      config: config!,
+      ref,
+      valor: Number(entrada.valor_bruto),
+      dataVenda: entrada.data_venda,
+      destinatarioCpf,
+      destinatarioNome: entrada.paciente_nome,
+    })
+
+    if (httpStatus === 201 || httpStatus === 202 || data?.status === 'processando_autorizacao') {
+      await supabase.from('entradas').update({
+        nota_fiscal_status: 'processando',
+        nota_fiscal_ref: ref,
+        nota_fiscal_erro: null,
+      }).eq('id', entrada.id)
+      return NextResponse.json({ success: true, status: 'processando' })
+    }
+
+    if (data?.codigo === 'nfe_autorizada') {
+      await supabase.from('entradas').update({
+        nota_fiscal_status: 'processando',
+        nota_fiscal_ref: ref,
+        nota_fiscal_erro: null,
+      }).eq('id', entrada.id)
+      return NextResponse.json({ success: true, status: 'processando' })
+    }
+
+    const mensagemErro = data?.mensagem || `Erro HTTP ${httpStatus} ao emitir NFe`
+    await supabase.from('entradas').update({
+      nota_fiscal_status: 'erro',
+      nota_fiscal_erro: mensagemErro,
+    }).eq('id', entrada.id)
+    return NextResponse.json({ error: mensagemErro }, { status: 422 })
+  } catch (err) {
+    const mensagem = err instanceof Error ? err.message : 'Erro desconhecido ao emitir NFe'
+    await supabase.from('entradas').update({
+      nota_fiscal_status: 'erro',
+      nota_fiscal_erro: mensagem,
+    }).eq('id', entrada.id)
+    return NextResponse.json({ error: mensagem }, { status: 500 })
+  }
 }

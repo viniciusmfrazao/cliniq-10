@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
     regime_tributario, codigo_opcao_simples_nacional, ambiente, padrao_nfse,
     token_homologacao, token_producao,
     inscricao_estadual, ncm_padrao, cfop_padrao, csosn_padrao, descricao_produto_padrao,
+    cnpj_nfe, razao_social_nfe, logradouro_nfe, numero_nfe, bairro_nfe, municipio_nfe,
+    uf_nfe, cep_nfe, token_homologacao_nfe, token_producao_nfe,
   } = body
 
   const update: Record<string, unknown> = {
@@ -42,6 +44,21 @@ export async function POST(req: NextRequest) {
     cfop_padrao: cfop_padrao || '5102',
     csosn_padrao: csosn_padrao || '102',
     descricao_produto_padrao: descricao_produto_padrao || 'Venda de produto conforme registro interno',
+    cnpj_nfe: cnpj_nfe || null,
+    razao_social_nfe: razao_social_nfe || null,
+    logradouro_nfe: logradouro_nfe || null,
+    numero_nfe: numero_nfe || null,
+    bairro_nfe: bairro_nfe || null,
+    municipio_nfe: municipio_nfe || null,
+    uf_nfe: uf_nfe || null,
+    cep_nfe: cep_nfe || null,
+  }
+
+  if (typeof token_homologacao_nfe === 'string' && token_homologacao_nfe.trim()) {
+    update.token_homologacao_nfe = token_homologacao_nfe.trim()
+  }
+  if (typeof token_producao_nfe === 'string' && token_producao_nfe.trim()) {
+    update.token_producao_nfe = token_producao_nfe.trim()
   }
 
   // Só sobrescreve os tokens se o usuário digitou algo novo (campo em branco = mantém o atual)

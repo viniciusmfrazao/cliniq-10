@@ -28,7 +28,7 @@ export default async function FiscalPage() {
   // Busca config existente via rota server-only (mascara tokens antes de chegar no client)
   const { data: config } = await supabase
     .from('clinic_fiscal_config')
-    .select('cnpj, inscricao_municipal, codigo_municipio_ibge, codigo_tributacao_nacional_iss, regime_tributario, codigo_opcao_simples_nacional, ambiente, padrao_nfse, token_homologacao, token_producao, updated_at, inscricao_estadual, ncm_padrao, cfop_padrao, csosn_padrao, descricao_produto_padrao')
+    .select('cnpj, inscricao_municipal, codigo_municipio_ibge, codigo_tributacao_nacional_iss, regime_tributario, codigo_opcao_simples_nacional, ambiente, padrao_nfse, token_homologacao, token_producao, updated_at, inscricao_estadual, ncm_padrao, cfop_padrao, csosn_padrao, descricao_produto_padrao, cnpj_nfe, razao_social_nfe, logradouro_nfe, numero_nfe, bairro_nfe, municipio_nfe, uf_nfe, cep_nfe, token_homologacao_nfe, token_producao_nfe')
     .eq('clinic_id', userData!.clinic_id)
     .maybeSingle()
 
@@ -52,6 +52,16 @@ export default async function FiscalPage() {
     cfop_padrao: config.cfop_padrao,
     csosn_padrao: config.csosn_padrao,
     descricao_produto_padrao: config.descricao_produto_padrao,
+    cnpj_nfe: config.cnpj_nfe,
+    razao_social_nfe: config.razao_social_nfe,
+    logradouro_nfe: config.logradouro_nfe,
+    numero_nfe: config.numero_nfe,
+    bairro_nfe: config.bairro_nfe,
+    municipio_nfe: config.municipio_nfe,
+    uf_nfe: config.uf_nfe,
+    cep_nfe: config.cep_nfe,
+    token_homologacao_nfe_mask: mask(config.token_homologacao_nfe),
+    token_producao_nfe_mask: mask(config.token_producao_nfe),
   } : null
 
   return (
@@ -68,9 +78,8 @@ export default async function FiscalPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">Nota Fiscal (NFS-e e NFe)</h1>
         <p className="text-slate-500 mt-1">
-          Cadastro fiscal da clínica para emissão via Focus NFe. NFS-e (serviço) já emite de
-          verdade; NFe (produto) tem os campos salvos aqui, mas o envio ainda não está
-          implementado. Os tokens ficam armazenados apenas no servidor — nunca são exibidos por
+          Cadastro fiscal da clínica para emissão via Focus NFe — serviço (NFS-e) e produto
+          (NFe). Os tokens ficam armazenados apenas no servidor — nunca são exibidos por
           completo aqui.
         </p>
       </div>

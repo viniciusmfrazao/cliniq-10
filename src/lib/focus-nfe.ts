@@ -57,6 +57,28 @@ type FiscalConfig = {
   cfop_padrao: string | null
   csosn_padrao: string | null
   descricao_produto_padrao: string | null
+  // Campos dedicados de NFe — usados quando a clínica tem um CNPJ diferente pra produto.
+  // Quando nulos, cai no CNPJ/token de NFS-e acima (caso de CNPJ único pros dois tipos).
+  cnpj_nfe: string | null
+  razao_social_nfe: string | null
+  logradouro_nfe: string | null
+  numero_nfe: string | null
+  bairro_nfe: string | null
+  municipio_nfe: string | null
+  uf_nfe: string | null
+  cep_nfe: string | null
+  token_homologacao_nfe: string | null
+  token_producao_nfe: string | null
+}
+
+// Resolve qual CNPJ usar pra NFe: o dedicado se existir, senão o mesmo da NFS-e
+function cnpjNfe(config: FiscalConfig): string | null {
+  return config.cnpj_nfe || config.cnpj
+}
+
+function tokenNfe(config: FiscalConfig): string | null {
+  const dedicado = config.ambiente === 'producao' ? config.token_producao_nfe : config.token_homologacao_nfe
+  return dedicado || focusToken(config)
 }
 
 export function focusBaseUrl(ambiente: string) {
@@ -88,11 +110,13 @@ export function fiscalConfigCompleta(config: FiscalConfig | null): { ok: boolean
 export function fiscalConfigCompletaNfe(config: FiscalConfig | null): { ok: boolean; faltando: string[] } {
   const faltando: string[] = []
   if (!config) return { ok: false, faltando: ['configuração fiscal não cadastrada'] }
-  if (!config.cnpj) faltando.push('CNPJ')
+  if (!validarCnpj(cnpjNfe(config) || '')) faltando.push('CNPJ (de NFe, ou o mesmo de NFS-e)')
   if (!config.inscricao_estadual) faltando.push('Inscrição Estadual')
   if (!config.ncm_padrao) faltando.push('NCM padrão do produto')
   if (!config.cfop_padrao) faltando.push('CFOP padrão')
-  if (!focusToken(config)) faltando.push(`Token de ${config.ambiente === 'producao' ? 'produção' : 'homologação'}`)
+  if (!(config.municipio_nfe || config.codigo_municipio_ibge)) faltando.push('Município do emitente (NFe)')
+  if (!config.uf_nfe) faltando.push('UF do emitente (NFe)')
+  if (!tokenNfe(config)) faltando.push(`Token de NFe (ou de NFS-e) para ${config.ambiente === 'producao' ? 'produção' : 'homologação'}`)
   return { ok: faltando.length === 0, faltando }
 }
 type EmitirNfseParams = {
@@ -180,6 +204,112 @@ export async function consultarCodigoTributarioFocus(config: FiscalConfig, codig
   if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
   const url = `${focusBaseUrl(config.ambiente)}/municipios/${encodeURIComponent(codigoIbge)}/codigos_tributarios_municipio/${encodeURIComponent(codigo)}`
   const res = await fetch(url, { headers: { 'Authorization': authHeader(token) } })
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
+// ── NFe (produto) ──────────────────────────────────────────────────────────
+// Campos baseados nos exemplos oficiais da Focus (focusnfe.com.br/php e
+// doc.focusnfe.com.br/reference/emitir_nfe). Como é uma nota fiscal de produto de
+// verdade (efeito tributário real), o item CSOSN/CFOP/NCM usado aqui vem do "padrão"
+// configurado pela clínica — sem catálogo de produto ainda, é tratado como 1 item por
+// venda. Recomendo validar com o contador da clínica antes de usar em produção,
+// principalmente os campos de PIS/COFINS abaixo (usei CST 07 - isento, comum pra
+// optantes do Simples Nacional, mas isso pode variar).
+type EmitirNfeParams = {
+  config: FiscalConfig
+  ref: string
+  valor: number
+  dataVenda: string // YYYY-MM-DD
+  destinatarioCpf: string | null
+  destinatarioNome: string | null
+}
+
+export async function emitirNfeProduto({ config, ref, valor, dataVenda, destinatarioCpf, destinatarioNome }: EmitirNfeParams) {
+  const token = tokenNfe(config)
+  if (!token) throw new Error('Token de NFe não configurado para este ambiente')
+
+  const cnpjLimpo = (cnpjNfe(config) || '').replace(/\D/g, '')
+  const cpfLimpo = (destinatarioCpf || '').replace(/\D/g, '')
+  const razaoSocial = config.razao_social_nfe || undefined
+  const regimeTributarioEmitente = config.regime_tributario === 'simples_nacional' ? 1 : 3
+
+  const payload: Record<string, unknown> = {
+    natureza_operacao: 'Venda de mercadoria',
+    data_emissao: `${dataVenda}T12:00:00-03:00`,
+    tipo_documento: 1, // 1 = saída (venda)
+    finalidade_emissao: 1, // normal
+    local_destino: 1, // operação interna (mesmo estado) — assume padrão
+    consumidor_final: 1,
+    presenca_comprador: 1, // presencial
+
+    cnpj_emitente: cnpjLimpo,
+    nome_emitente: razaoSocial,
+    logradouro_emitente: config.logradouro_nfe || undefined,
+    numero_emitente: config.numero_nfe || undefined,
+    bairro_emitente: config.bairro_nfe || undefined,
+    municipio_emitente: config.municipio_nfe || undefined,
+    uf_emitente: config.uf_nfe || undefined,
+    cep_emitente: (config.cep_nfe || '').replace(/\D/g, '') || undefined,
+    inscricao_estadual_emitente: config.inscricao_estadual || undefined,
+    regime_tributario_emitente: regimeTributarioEmitente,
+
+    ...(cpfLimpo ? { cpf_destinatario: cpfLimpo, nome_destinatario: destinatarioNome || undefined } : {}),
+    indicador_inscricao_estadual_destinatario: 9, // 9 = não contribuinte (consumidor final pessoa física)
+
+    valor_produtos: valor,
+    valor_total: valor,
+    valor_frete: 0,
+    valor_seguro: 0,
+    valor_desconto: 0,
+    valor_outras_despesas: 0,
+    modalidade_frete: 9, // sem frete
+
+    items: [
+      {
+        numero_item: '1',
+        codigo_produto: ref,
+        descricao: config.descricao_produto_padrao || 'Venda de produto conforme registro interno',
+        codigo_ncm: config.ncm_padrao,
+        cfop: config.cfop_padrao,
+        unidade_comercial: 'UN',
+        unidade_tributavel: 'UN',
+        quantidade_comercial: '1.00',
+        quantidade_tributavel: '1.00',
+        valor_unitario_comercial: valor.toFixed(2),
+        valor_unitario_tributavel: valor.toFixed(2),
+        valor_bruto: valor.toFixed(2),
+        valor_desconto: '0.00',
+        icms_origem: '0',
+        icms_situacao_tributaria: config.csosn_padrao || '102',
+        pis_situacao_tributaria: '07',
+        cofins_situacao_tributaria: '07',
+      },
+    ],
+  }
+
+  const url = `${focusBaseUrl(config.ambiente)}/nfe?ref=${encodeURIComponent(ref)}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': authHeader(token),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
+export async function consultarNfeProduto(config: FiscalConfig, ref: string) {
+  const token = tokenNfe(config)
+  if (!token) throw new Error('Token de NFe não configurado para este ambiente')
+
+  const url = `${focusBaseUrl(config.ambiente)}/nfe/${encodeURIComponent(ref)}`
+  const res = await fetch(url, {
+    headers: { 'Authorization': authHeader(token) },
+  })
   const data = await res.json().catch(() => ({}))
   return { httpStatus: res.status, data }
 }

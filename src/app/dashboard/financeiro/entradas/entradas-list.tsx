@@ -342,10 +342,11 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
   const [emitindo, setEmitindo] = useState<string | null>(null)
 
-  async function emitirNota(entradaId: string) {
+  async function emitirNota(entradaId: string, tipo: 'nfse' | 'nfe' = 'nfse') {
     setEmitindo(entradaId)
+    const endpointEmitir = tipo === 'nfe' ? '/api/financeiro/nota-fiscal/emitir-nfe' : '/api/financeiro/nota-fiscal/emitir'
     try {
-      const res = await fetch('/api/financeiro/nota-fiscal/emitir', {
+      const res = await fetch(endpointEmitir, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entrada_id: entradaId }),
@@ -359,7 +360,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
       setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'processando' } : e))
       toast.success('Nota fiscal enviada, aguardando autorização')
       // Consulta automática após alguns segundos (a autorização é assíncrona)
-      setTimeout(() => consultarNota(entradaId, true), 6000)
+      setTimeout(() => consultarNota(entradaId, tipo, true), 6000)
     } catch (err) {
       toast.error('Erro ao emitir nota', { description: err instanceof Error ? err.message : undefined })
     } finally {
@@ -367,10 +368,11 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
   }
 
-  async function consultarNota(entradaId: string, silencioso = false) {
+  async function consultarNota(entradaId: string, tipo: 'nfse' | 'nfe' = 'nfse', silencioso = false) {
     if (!silencioso) setEmitindo(entradaId)
+    const endpointConsultar = tipo === 'nfe' ? '/api/financeiro/nota-fiscal/consultar-nfe' : '/api/financeiro/nota-fiscal/consultar'
     try {
-      const res = await fetch(`/api/financeiro/nota-fiscal/consultar?entrada_id=${entradaId}`)
+      const res = await fetch(`${endpointConsultar}?entrada_id=${entradaId}`)
       const data = await res.json()
       if (!res.ok) {
         if (!silencioso) toast.error('Erro ao consultar nota', { description: data.error })
@@ -437,30 +439,42 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
   }
 
   function BotaoNfe({ entrada }: { entrada: Entrada }) {
+    const status = entrada.nota_fiscal_status || 'nao_emitida'
     const carregando = emitindo === entrada.id
-    async function handleClick(ev: React.MouseEvent) {
-      ev.stopPropagation()
-      setEmitindo(entrada.id)
-      try {
-        const res = await fetch('/api/financeiro/nota-fiscal/emitir-nfe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entrada_id: entrada.id }),
-        })
-        const data = await res.json()
-        if (res.status === 501) {
-          toast.info(data.aviso || 'Campos completos, mas emissão de NFe ainda não implementada')
-        } else if (!res.ok) {
-          toast.error('Faltam dados pra emitir NFe', { description: data.error })
-        }
-      } catch (err) {
-        toast.error('Erro ao verificar NFe', { description: err instanceof Error ? err.message : undefined })
-      } finally {
-        setEmitindo(null)
-      }
+
+    if (status === 'autorizada') {
+      return (
+        <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
+          title={`NFe nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
+          onClick={e => e.stopPropagation()}
+          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
+          <Icon name="box" className="w-4 h-4" />
+        </a>
+      )
     }
+
+    if (status === 'processando') {
+      return (
+        <button onClick={e => { e.stopPropagation(); consultarNota(entrada.id, 'nfe') }} disabled={carregando}
+          title="NFe processando — clique para atualizar status"
+          className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-4 h-4" />}
+        </button>
+      )
+    }
+
+    if (status === 'erro') {
+      return (
+        <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id, 'nfe') }} disabled={carregando}
+          title={entrada.nota_fiscal_erro || 'Erro ao emitir NFe — clique para tentar de novo'}
+          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
+        </button>
+      )
+    }
+
     return (
-      <button onClick={handleClick} disabled={carregando}
+      <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id, 'nfe') }} disabled={carregando}
         title="Emitir NFe (nota de produto)"
         className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
         {carregando ? <LoadingSpinner size="sm" /> : <Icon name="box" className="w-4 h-4" />}
