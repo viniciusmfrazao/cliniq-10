@@ -16,6 +16,14 @@ const nextConfig = {
   // mapeando pra um caminho que nem todas as versoes do SDK expoem.)
   experimental: {
     optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr'],
+    // Router Cache (client-side) do Next 14 guarda o RSC payload de rotas
+    // dinamicas por 30s por padrao, mesmo com `dynamic = 'force-dynamic'`
+    // nas paginas (isso so controla o server, nao o cache do cliente).
+    // Causava dados desatualizados em navegacao soft (ex: profissional
+    // "aparece e some" na Agenda apos mudar o papel em Equipe). Zerando
+    // aqui forca toda navegacao client-side em rota dinamica a buscar
+    // RSC fresco do servidor.
+    staleTimes: { dynamic: 0 },
   },
 
   compress: true,
