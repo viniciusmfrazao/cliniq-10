@@ -54,6 +54,7 @@ export default async function EntradasPage() {
     .single()
 
   const comissaoAtiva = !!clinic?.settings?.comissao_ativa
+  const nfseAtivo = (clinic?.settings?.active_modules || []).includes('nfse')
 
   // Mapa de comissão por profissional, independente do filtro de role acima
   // (entradas podem referenciar qualquer papel clínico: dentista, enfermeiro, etc.)
@@ -95,6 +96,7 @@ export default async function EntradasPage() {
         clinicId={clinicId ?? ''}
         comissaoAtiva={comissaoAtiva}
         comissaoConfig={comissaoConfig || []}
+        nfseAtivo={nfseAtivo}
       />
     </div>
   )

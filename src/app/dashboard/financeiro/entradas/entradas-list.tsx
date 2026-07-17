@@ -20,6 +20,11 @@ type Entrada = {
   valor_bruto: number
   valor_liquido: number
   taxa_percentual: number
+  tipo_receita?: string
+  nota_fiscal_status?: string | null
+  nota_fiscal_numero?: string | null
+  nota_fiscal_url_pdf?: string | null
+  nota_fiscal_erro?: string | null
 }
 
 type ComissaoConfig = {
@@ -36,6 +41,7 @@ type Props = {
   clinicId: string
   comissaoAtiva?: boolean
   comissaoConfig?: ComissaoConfig[]
+  nfseAtivo?: boolean
 }
 
 function fmt(v: number) {
@@ -204,7 +210,7 @@ function EditEntradaModal({
   return createPortal(modal, document.body)
 }
 
-export default function EntradasList({ entradas, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoConfig = [] }: Props) {
+export default function EntradasList({ entradas, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoConfig = [], nfseAtivo = false }: Props) {
   const [list, setList] = useState(entradas)
   const comissaoMap = new Map(comissaoConfig.map(c => [c.id, c]))
 
@@ -306,6 +312,111 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
   function handleSaveEdit(updated: Entrada) {
     setList(prev => prev.map(e => e.id === updated.id ? updated : e))
+  }
+
+  const [emitindo, setEmitindo] = useState<string | null>(null)
+
+  async function emitirNota(entradaId: string) {
+    setEmitindo(entradaId)
+    try {
+      const res = await fetch('/api/financeiro/nota-fiscal/emitir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entrada_id: entradaId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error('Erro ao emitir nota', { description: data.error })
+        setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'erro', nota_fiscal_erro: data.error } : e))
+        return
+      }
+      setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'processando' } : e))
+      toast.success('Nota fiscal enviada, aguardando autorização')
+      // Consulta automática após alguns segundos (a autorização é assíncrona)
+      setTimeout(() => consultarNota(entradaId, true), 6000)
+    } catch (err) {
+      toast.error('Erro ao emitir nota', { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setEmitindo(null)
+    }
+  }
+
+  async function consultarNota(entradaId: string, silencioso = false) {
+    if (!silencioso) setEmitindo(entradaId)
+    try {
+      const res = await fetch(`/api/financeiro/nota-fiscal/consultar?entrada_id=${entradaId}`)
+      const data = await res.json()
+      if (!res.ok) {
+        if (!silencioso) toast.error('Erro ao consultar nota', { description: data.error })
+        return
+      }
+      if (data.status === 'autorizada') {
+        setList(prev => prev.map(e => e.id === entradaId
+          ? { ...e, nota_fiscal_status: 'autorizada', nota_fiscal_numero: data.numero, nota_fiscal_url_pdf: data.url_pdf }
+          : e))
+        if (!silencioso) toast.success('Nota fiscal autorizada')
+      } else if (data.status === 'erro') {
+        setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'erro', nota_fiscal_erro: data.erro } : e))
+        if (!silencioso) toast.error('Nota fiscal com erro', { description: data.erro })
+      } else if (!silencioso) {
+        toast.info('Ainda processando, tente novamente em alguns segundos')
+      }
+    } finally {
+      if (!silencioso) setEmitindo(null)
+    }
+  }
+
+  function NotaFiscalCell({ entrada }: { entrada: Entrada }) {
+    if (entrada.tipo_receita && entrada.tipo_receita !== 'servico') {
+      return <span className="text-xs text-slate-300">-</span>
+    }
+    const status = entrada.nota_fiscal_status || 'nao_emitida'
+    const carregando = emitindo === entrada.id
+
+    if (status === 'autorizada') {
+      return (
+        <div className="flex items-center gap-1.5">
+          <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium">
+            Nº {entrada.nota_fiscal_numero || '-'}
+          </span>
+          {entrada.nota_fiscal_url_pdf && (
+            <a href={entrada.nota_fiscal_url_pdf} target="_blank" rel="noopener noreferrer"
+              className="text-violet-500 hover:text-violet-700" title="Ver PDF">
+              <Icon name="file" className="w-4 h-4" />
+            </a>
+          )}
+        </div>
+      )
+    }
+
+    if (status === 'processando') {
+      return (
+        <button onClick={() => consultarNota(entrada.id)} disabled={carregando}
+          className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-100 transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-3.5 h-3.5" />}
+          Processando
+        </button>
+      )
+    }
+
+    if (status === 'erro') {
+      return (
+        <button onClick={() => emitirNota(entrada.id)} disabled={carregando}
+          title={entrada.nota_fiscal_erro || 'Erro ao emitir'}
+          className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 text-rose-700 rounded-lg text-xs font-medium hover:bg-rose-100 transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-3.5 h-3.5" />}
+          Erro — tentar de novo
+        </button>
+      )
+    }
+
+    return (
+      <button onClick={() => emitirNota(entrada.id)} disabled={carregando}
+        className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-200 transition">
+        {carregando ? <LoadingSpinner size="sm" /> : <Icon name="receipt" className="w-3.5 h-3.5" />}
+        Emitir NFS-e
+      </button>
+    )
   }
 
   return (
@@ -463,6 +574,11 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                       </p>
                     )
                   })()}
+                  {nfseAtivo && (
+                    <div className="mt-1.5 flex justify-end">
+                      <NotaFiscalCell entrada={e} />
+                    </div>
+                  )}
                   <div className="flex items-center justify-end gap-1 mt-1">
                     <button onClick={() => setEditEntry(e)}
                       className="p-1.5 text-violet-400 hover:bg-violet-50 rounded-lg transition">
@@ -497,13 +613,16 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     <th className="text-right px-4 py-3 text-xs font-semibold text-indigo-600 uppercase">Clínica</th>
                   </>
                 )}
+                {nfseAtivo && (
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-orange-600 uppercase">NF-e</th>
+                )}
                 <th className="text-center px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={comissaoAtiva ? 10 : 8} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={(comissaoAtiva ? 10 : 8) + (nfseAtivo ? 1 : 0)} className="px-4 py-12 text-center text-slate-500">
                     {isPending ? 'Buscando...' : 'Nenhuma entrada encontrada'}
                   </td>
                 </tr>
@@ -544,6 +663,11 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                         </>
                       )
                     })()}
+                    {nfseAtivo && (
+                      <td className="px-4 py-3 text-sm">
+                        <NotaFiscalCell entrada={e} />
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => setEditEntry(e)}
