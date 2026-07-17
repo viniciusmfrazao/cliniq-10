@@ -358,7 +358,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
       if (!entrada.paciente_id) { setCarregandoPaciente(false); return }
       let cancelado = false
       async function carregar() {
-        const { data } = await supabase.from('patients').select('cpf, address, city, state, zip_code')
+        const { data } = await supabase.from('patients').select('cpf, address, address_number, neighborhood, city, state, zip_code')
           .eq('id', entrada.paciente_id).maybeSingle()
         if (cancelado) return
         if (data) {
@@ -366,9 +366,12 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
           if (data.city) setMunicipio(data.city)
           if (data.state) setUf(data.state.toUpperCase().slice(0, 2))
           if (data.zip_code) setCep(data.zip_code)
-          // "address" é texto livre (ex: "Rua Duque de Caxias, 450, Centro") — separa
-          // em logradouro/número/bairro por vírgula como melhor esforço; sempre editável.
-          if (data.address) {
+          if (data.address) setLogradouro(data.address)
+          if (data.address_number) setNumero(data.address_number)
+          if (data.neighborhood) setBairro(data.neighborhood)
+          // Compatibilidade com cadastros antigos (antes de Número/Bairro existirem como
+          // campos próprios): se não tiver os campos novos, tenta separar por vírgula.
+          if (!data.address_number && !data.neighborhood && data.address?.includes(',')) {
             const partes = data.address.split(',').map((p: string) => p.trim()).filter(Boolean)
             if (partes[0]) setLogradouro(partes[0])
             if (partes[1]) setNumero(partes[1])
@@ -418,7 +421,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             )}
             {!carregandoPaciente && entrada.paciente_id && (
               <p className="text-xs text-slate-400">
-                Pré-preenchido com o cadastro do paciente — confira antes de emitir.
+                Pré-preenchido com o cadastro do paciente (número/bairro só vêm certos se o
+                cadastro já tiver esses campos preenchidos) — confira antes de emitir.
               </p>
             )}
             <div>

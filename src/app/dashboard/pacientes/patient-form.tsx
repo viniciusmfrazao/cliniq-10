@@ -16,6 +16,8 @@ type Patient = {
   birth_date: string
   gender: string
   address: string
+  address_number: string
+  neighborhood: string
   city: string
   state: string
   zip_code: string
@@ -31,6 +33,8 @@ const EMPTY_PATIENT: Patient = {
   birth_date: '',
   gender: '',
   address: '',
+  address_number: '',
+  neighborhood: '',
   city: '',
   state: '',
   zip_code: '',
@@ -62,6 +66,7 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
         setForm(prev => ({
           ...prev,
           address: data.logradouro || prev.address,
+          neighborhood: data.bairro || prev.neighborhood,
           city: data.localidade || prev.city,
           state: data.uf || prev.state,
         }))
@@ -123,6 +128,8 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
       phone: form.phone || null,
       cpf: form.cpf || null,
       address: form.address || null,
+      address_number: form.address_number || null,
+      neighborhood: form.neighborhood || null,
       city: form.city || null,
       state: form.state || null,
       zip_code: form.zip_code || null,
@@ -296,13 +303,35 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
         </div>
 
         <div className="md:col-span-2">
-          <label className="label">Endereco</label>
+          <label className="label">Logradouro</label>
           <input
             className="input"
             type="text"
-            placeholder="Rua, numero, complemento"
+            placeholder="Rua, avenida..."
             value={form.address}
             onChange={e => update('address', e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="label">Número</label>
+          <input
+            className="input"
+            type="text"
+            placeholder="123"
+            value={form.address_number}
+            onChange={e => update('address_number', e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="label">Bairro</label>
+          <input
+            className="input"
+            type="text"
+            placeholder="Centro"
+            value={form.neighborhood}
+            onChange={e => update('neighborhood', e.target.value)}
           />
         </div>
 

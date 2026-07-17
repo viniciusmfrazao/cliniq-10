@@ -32,6 +32,8 @@ export default async function EditarPacientePage({ params }: { params: { id: str
           birth_date: patient.birth_date || '',
           gender: patient.gender || '',
           address: patient.address || '',
+          address_number: patient.address_number || '',
+          neighborhood: patient.neighborhood || '',
           city: patient.city || '',
           state: patient.state || '',
           zip_code: patient.zip_code || '',
