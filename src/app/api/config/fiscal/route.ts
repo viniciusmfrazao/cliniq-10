@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
     inscricao_estadual, ncm_padrao, cfop_padrao, csosn_padrao, descricao_produto_padrao,
     cnpj_nfe, razao_social_nfe, logradouro_nfe, numero_nfe, bairro_nfe, municipio_nfe,
     uf_nfe, cep_nfe, token_homologacao_nfe, token_producao_nfe,
+    cst_icms_padrao, aliquota_icms_padrao, cst_pis_padrao, aliquota_pis_padrao,
+    cst_cofins_padrao, aliquota_cofins_padrao,
   } = body
 
   const update: Record<string, unknown> = {
@@ -52,6 +54,12 @@ export async function POST(req: NextRequest) {
     municipio_nfe: municipio_nfe || null,
     uf_nfe: uf_nfe || null,
     cep_nfe: cep_nfe || null,
+    cst_icms_padrao: cst_icms_padrao || null,
+    aliquota_icms_padrao: aliquota_icms_padrao !== '' && aliquota_icms_padrao != null ? Number(aliquota_icms_padrao) : null,
+    cst_pis_padrao: cst_pis_padrao || '07',
+    aliquota_pis_padrao: aliquota_pis_padrao !== '' && aliquota_pis_padrao != null ? Number(aliquota_pis_padrao) : 0,
+    cst_cofins_padrao: cst_cofins_padrao || '07',
+    aliquota_cofins_padrao: aliquota_cofins_padrao !== '' && aliquota_cofins_padrao != null ? Number(aliquota_cofins_padrao) : 0,
   }
 
   if (typeof token_homologacao_nfe === 'string' && token_homologacao_nfe.trim()) {

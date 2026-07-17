@@ -49,6 +49,12 @@ type InitialConfig = {
   cep_nfe: string | null
   token_homologacao_nfe_mask: string | null
   token_producao_nfe_mask: string | null
+  cst_icms_padrao: string | null
+  aliquota_icms_padrao: number | null
+  cst_pis_padrao: string | null
+  aliquota_pis_padrao: number | null
+  cst_cofins_padrao: string | null
+  aliquota_cofins_padrao: number | null
 } | null
 
 type Props = {
@@ -91,6 +97,12 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [cepNfe, setCepNfe] = useState(initialConfig?.cep_nfe || '')
   const [tokenHomologacaoNfe, setTokenHomologacaoNfe] = useState('')
   const [tokenProducaoNfe, setTokenProducaoNfe] = useState('')
+  const [cstIcmsPadrao, setCstIcmsPadrao] = useState(initialConfig?.cst_icms_padrao || '')
+  const [aliquotaIcmsPadrao, setAliquotaIcmsPadrao] = useState(String(initialConfig?.aliquota_icms_padrao ?? ''))
+  const [cstPisPadrao, setCstPisPadrao] = useState(initialConfig?.cst_pis_padrao || '07')
+  const [aliquotaPisPadrao, setAliquotaPisPadrao] = useState(String(initialConfig?.aliquota_pis_padrao ?? '0'))
+  const [cstCofinsPadrao, setCstCofinsPadrao] = useState(initialConfig?.cst_cofins_padrao || '07')
+  const [aliquotaCofinsPadrao, setAliquotaCofinsPadrao] = useState(String(initialConfig?.aliquota_cofins_padrao ?? '0'))
 
   async function handleValidar() {
     setValidando(true)
@@ -143,6 +155,12 @@ export default function FiscalForm({ initialConfig }: Props) {
           cep_nfe: cepNfe,
           token_homologacao_nfe: tokenHomologacaoNfe,
           token_producao_nfe: tokenProducaoNfe,
+          cst_icms_padrao: cstIcmsPadrao,
+          aliquota_icms_padrao: aliquotaIcmsPadrao,
+          cst_pis_padrao: cstPisPadrao,
+          aliquota_pis_padrao: aliquotaPisPadrao,
+          cst_cofins_padrao: cstCofinsPadrao,
+          aliquota_cofins_padrao: aliquotaCofinsPadrao,
         }),
       })
       if (!res.ok) {
@@ -312,12 +330,56 @@ export default function FiscalForm({ initialConfig }: Props) {
             <input value={cfopPadrao} onChange={e => setCfopPadrao(e.target.value)}
               className="input w-full text-sm" />
           </div>
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">CSOSN padrão (Simples Nacional)</label>
-            <input value={csosnPadrao} onChange={e => setCsosnPadrao(e.target.value)}
-              className="input w-full text-sm" />
-          </div>
+          {regimeTributario === 'simples_nacional' ? (
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">CSOSN padrão (ICMS — Simples Nacional)</label>
+              <input value={csosnPadrao} onChange={e => setCsosnPadrao(e.target.value)}
+                className="input w-full text-sm" />
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">CST do ICMS (Regime Normal)</label>
+              <input value={cstIcmsPadrao} onChange={e => setCstIcmsPadrao(e.target.value)}
+                placeholder="Ex: 00, 40, 60" className="input w-full text-sm" />
+            </div>
+          )}
         </div>
+
+        {regimeTributario !== 'simples_nacional' && (
+          <div className="bg-amber-50/50 p-3 rounded-xl space-y-3">
+            <p className="text-xs text-amber-700">
+              Regime Normal (Lucro Presumido/Real) precisa de alíquotas reais, não só um código —
+              confirma esses valores com o contador da clínica antes de emitir de verdade.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Alíquota ICMS (%)</label>
+                <input value={aliquotaIcmsPadrao} onChange={e => setAliquotaIcmsPadrao(e.target.value)}
+                  type="number" step="0.01" className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">CST PIS</label>
+                <input value={cstPisPadrao} onChange={e => setCstPisPadrao(e.target.value)} className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Alíquota PIS (%)</label>
+                <input value={aliquotaPisPadrao} onChange={e => setAliquotaPisPadrao(e.target.value)}
+                  type="number" step="0.01" className="input w-full text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">CST COFINS</label>
+                <input value={cstCofinsPadrao} onChange={e => setCstCofinsPadrao(e.target.value)} className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Alíquota COFINS (%)</label>
+                <input value={aliquotaCofinsPadrao} onChange={e => setAliquotaCofinsPadrao(e.target.value)}
+                  type="number" step="0.01" className="input w-full text-sm" />
+              </div>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="text-xs text-slate-500 mb-1 block">Descrição padrão do produto na nota</label>

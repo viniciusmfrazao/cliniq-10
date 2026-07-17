@@ -69,6 +69,13 @@ type FiscalConfig = {
   cep_nfe: string | null
   token_homologacao_nfe: string | null
   token_producao_nfe: string | null
+  // Regime Normal (Lucro Presumido/Real) usa CST + base/alíquota reais em vez de CSOSN
+  cst_icms_padrao: string | null
+  aliquota_icms_padrao: number | null
+  cst_pis_padrao: string | null
+  aliquota_pis_padrao: number | null
+  cst_cofins_padrao: string | null
+  aliquota_cofins_padrao: number | null
 }
 
 // Resolve qual CNPJ usar pra NFe: o dedicado se existir, senão o mesmo da NFS-e
@@ -117,6 +124,15 @@ export function fiscalConfigCompletaNfe(config: FiscalConfig | null): { ok: bool
   if (!(config.municipio_nfe || config.codigo_municipio_ibge)) faltando.push('Município do emitente (NFe)')
   if (!config.uf_nfe) faltando.push('UF do emitente (NFe)')
   if (!tokenNfe(config)) faltando.push(`Token de NFe (ou de NFS-e) para ${config.ambiente === 'producao' ? 'produção' : 'homologação'}`)
+
+  if (config.regime_tributario === 'simples_nacional') {
+    if (!config.csosn_padrao) faltando.push('CSOSN padrão (ICMS — Simples Nacional)')
+  } else {
+    // Lucro Presumido/Real: precisa de CST + alíquota real, não dá pra assumir um valor
+    if (!config.cst_icms_padrao) faltando.push('CST do ICMS (regime não é Simples Nacional)')
+    if (config.aliquota_icms_padrao == null) faltando.push('Alíquota do ICMS (regime não é Simples Nacional)')
+  }
+
   return { ok: faltando.length === 0, faltando }
 }
 type EmitirNfseParams = {
@@ -234,6 +250,40 @@ export async function emitirNfeProduto({ config, ref, valor, dataVenda, destinat
   const razaoSocial = config.razao_social_nfe || undefined
   const regimeTributarioEmitente = config.regime_tributario === 'simples_nacional' ? 1 : 3
 
+  const isSimples = config.regime_tributario === 'simples_nacional'
+
+  // ICMS: Simples Nacional usa CSOSN (só código — o recolhimento é via DAS, não
+  // calculado nota a nota). Regime Normal (Lucro Presumido/Real) usa CST + base de
+  // cálculo + alíquota + valor real do imposto.
+  const icmsBlock: Record<string, unknown> = isSimples
+    ? {
+        icms_origem: '0',
+        icms_situacao_tributaria: config.csosn_padrao || '102',
+      }
+    : {
+        icms_origem: '0',
+        icms_situacao_tributaria: config.cst_icms_padrao,
+        icms_modalidade_base_calculo: '3', // valor da operação
+        icms_base_calculo: valor.toFixed(2),
+        icms_aliquota: (config.aliquota_icms_padrao ?? 0).toFixed(2),
+        icms_valor: (valor * ((config.aliquota_icms_padrao ?? 0) / 100)).toFixed(2),
+      }
+
+  const pisCofinsBlock: Record<string, unknown> = {
+    pis_situacao_tributaria: config.cst_pis_padrao || '07',
+    cofins_situacao_tributaria: config.cst_cofins_padrao || '07',
+    ...(config.aliquota_pis_padrao ? {
+      pis_base_calculo: valor.toFixed(2),
+      pis_aliquota_percentual: config.aliquota_pis_padrao.toFixed(2),
+      pis_valor: (valor * (config.aliquota_pis_padrao / 100)).toFixed(2),
+    } : {}),
+    ...(config.aliquota_cofins_padrao ? {
+      cofins_base_calculo: valor.toFixed(2),
+      cofins_aliquota_percentual: config.aliquota_cofins_padrao.toFixed(2),
+      cofins_valor: (valor * (config.aliquota_cofins_padrao / 100)).toFixed(2),
+    } : {}),
+  }
+
   const payload: Record<string, unknown> = {
     natureza_operacao: 'Venda de mercadoria',
     data_emissao: `${dataVenda}T12:00:00-03:00`,
@@ -280,10 +330,8 @@ export async function emitirNfeProduto({ config, ref, valor, dataVenda, destinat
         valor_unitario_tributavel: valor.toFixed(2),
         valor_bruto: valor.toFixed(2),
         valor_desconto: '0.00',
-        icms_origem: '0',
-        icms_situacao_tributaria: config.csosn_padrao || '102',
-        pis_situacao_tributaria: '07',
-        cofins_situacao_tributaria: '07',
+        ...icmsBlock,
+        ...pisCofinsBlock,
       },
     ],
   }
