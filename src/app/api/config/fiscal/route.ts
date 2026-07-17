@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     aliquota_cofins_padrao: aliquota_cofins_padrao !== '' && aliquota_cofins_padrao != null ? Number(aliquota_cofins_padrao) : 0,
     isento_inscricao_municipal: !!isento_inscricao_municipal,
     emite_nfse: emite_nfse !== false,
-    ibs_cbs_classificacao_padrao: ibs_cbs_classificacao_padrao || '000001',
+    ibs_cbs_classificacao_padrao: ibs_cbs_classificacao_padrao || null,
     ibs_cbs_situacao_padrao: ibs_cbs_situacao_padrao || null,
   }
 

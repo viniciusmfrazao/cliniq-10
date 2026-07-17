@@ -165,7 +165,11 @@ export function fiscalConfigCompletaNfe(config: FiscalConfig | null): { ok: bool
     if (config.aliquota_icms_padrao == null) faltando.push('Alíquota do ICMS (regime não é Simples Nacional)')
   }
 
-  // Reforma Tributária (IBS/CBS) — exigido pela SEFAZ desde 2026
+  // Reforma Tributária (IBS/CBS) — exigido pela SEFAZ desde 2026. O XML exige CST
+  // (situação tributária) e cClassTrib (classificação) juntos, nessa ordem — não dá pra
+  // mandar um sem o outro. Os dois são pareados por regra tributária real (o par certo
+  // depende do regime/operação), então não assumo nenhum valor "padrão" aqui.
+  if (!config.ibs_cbs_situacao_padrao) faltando.push('Situação Tributária IBS/CBS (CST)')
   if (!config.ibs_cbs_classificacao_padrao) faltando.push('Classificação Tributária IBS/CBS (cClassTrib)')
 
   return { ok: faltando.length === 0, faltando }
@@ -330,12 +334,12 @@ export async function emitirNfeProduto({
   }
 
   // Reforma Tributária (IBS/CBS) — exigido pela SEFAZ desde 2026, além do ICMS/PIS/COFINS
-  // tradicionais. Nomes de campo confirmados em exemplos oficiais da Focus (guias de NFS-e
-  // por município); não encontrei essa mesma tabela documentada especificamente pra NFe,
-  // então a suposição é que o nome do campo se repete — validar se a Focus rejeitar.
+  // tradicionais. O XSD exige CST (situação) ANTES de cClassTrib (classificação) na
+  // sequência do XML — por isso a ordem das chaves aqui importa. fiscalConfigCompletaNfe()
+  // já bloqueia a emissão se qualquer um dos dois estiver vazio.
   const ibsCbsBlock: Record<string, unknown> = {
-    ibs_cbs_classificacao_tributaria: config.ibs_cbs_classificacao_padrao || '000001',
-    ...(config.ibs_cbs_situacao_padrao ? { ibs_cbs_situacao_tributaria: config.ibs_cbs_situacao_padrao } : {}),
+    ibs_cbs_situacao_tributaria: config.ibs_cbs_situacao_padrao,
+    ibs_cbs_classificacao_tributaria: config.ibs_cbs_classificacao_padrao,
   }
 
   const payload: Record<string, unknown> = {

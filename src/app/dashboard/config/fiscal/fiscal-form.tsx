@@ -109,7 +109,7 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [aliquotaCofinsPadrao, setAliquotaCofinsPadrao] = useState(String(initialConfig?.aliquota_cofins_padrao ?? '0'))
   const [isentoIM, setIsentoIM] = useState(!!initialConfig?.isento_inscricao_municipal)
   const [emiteNfse, setEmiteNfse] = useState(initialConfig?.emite_nfse !== false)
-  const [ibsCbsClassificacao, setIbsCbsClassificacao] = useState(initialConfig?.ibs_cbs_classificacao_padrao || '000001')
+  const [ibsCbsClassificacao, setIbsCbsClassificacao] = useState(initialConfig?.ibs_cbs_classificacao_padrao || '')
   const [ibsCbsSituacao, setIbsCbsSituacao] = useState(initialConfig?.ibs_cbs_situacao_padrao || '')
 
   async function handleValidar() {
@@ -420,18 +420,19 @@ export default function FiscalForm({ initialConfig }: Props) {
         <div className="bg-amber-50/50 p-3 rounded-xl space-y-3">
           <p className="text-xs text-amber-700">
             Reforma Tributária (IBS/CBS) — exigido pela SEFAZ desde 2026, além do ICMS/PIS/COFINS
-            acima. "000001" é o código genérico que aparece em vários exemplos oficiais da Focus,
-            mas confirma com o contador ou o suporte da Focus antes de usar em produção.
+            acima. Os dois códigos são pareados por regra tributária real (o par certo depende do
+            seu regime/operação) — confirma com o contador ou o suporte da Focus antes de
+            preencher. Não deixe em branco nem copie um valor de exemplo sem confirmar.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Classificação Tributária IBS/CBS (cClassTrib)</label>
-              <input value={ibsCbsClassificacao} onChange={e => setIbsCbsClassificacao(e.target.value)}
+              <label className="text-xs text-slate-500 mb-1 block">Situação Tributária IBS/CBS (CST) *</label>
+              <input value={ibsCbsSituacao} onChange={e => setIbsCbsSituacao(e.target.value)}
                 className="input w-full text-sm" />
             </div>
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Situação Tributária IBS/CBS (CST) — opcional</label>
-              <input value={ibsCbsSituacao} onChange={e => setIbsCbsSituacao(e.target.value)}
+              <label className="text-xs text-slate-500 mb-1 block">Classificação Tributária IBS/CBS (cClassTrib) *</label>
+              <input value={ibsCbsClassificacao} onChange={e => setIbsCbsClassificacao(e.target.value)}
                 className="input w-full text-sm" />
             </div>
           </div>
