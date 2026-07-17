@@ -82,6 +82,9 @@ function EditEntradaModal({
   const [bandeira, setBandeira] = useState(entrada.bandeira || '')
   const [bruto, setBruto] = useState(String(entrada.valor_bruto || ''))
   const [liquido, setLiquido] = useState(String(entrada.valor_liquido || ''))
+  const [tipoReceita, setTipoReceita] = useState<'servico' | 'produto'>(
+    entrada.tipo_receita === 'produto' ? 'produto' : 'servico'
+  )
 
   // Ao mudar bruto, recalcula liquido mantendo mesma taxa
   function handleBrutoChange(val: string) {
@@ -111,6 +114,7 @@ function EditEntradaModal({
       valor_bruto: vb,
       valor_liquido: vl,
       valor_taxa: Math.round((vb - vl) * 100) / 100,
+      tipo_receita: tipoReceita,
     }).eq('id', entrada.id)
     setSaving(false)
 
@@ -120,7 +124,7 @@ function EditEntradaModal({
     }
 
     toast.success('Entrada atualizada')
-    onSave({ ...entrada, data_venda: data, paciente_nome: paciente, procedimento_nome: procedimento, profissional_nome: profissional, forma_pagamento: forma, bandeira: bandeira || null, valor_bruto: vb, valor_liquido: vl })
+    onSave({ ...entrada, data_venda: data, paciente_nome: paciente, procedimento_nome: procedimento, profissional_nome: profissional, forma_pagamento: forma, bandeira: bandeira || null, valor_bruto: vb, valor_liquido: vl, tipo_receita: tipoReceita })
     onClose()
   }
 
@@ -164,6 +168,28 @@ function EditEntradaModal({
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Paciente</label>
             <input type="text" value={paciente} onChange={e => setPaciente(e.target.value)} className="input w-full text-sm" />
+          </div>
+
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Tipo de receita</label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setTipoReceita('servico')}
+                className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition ${
+                  tipoReceita === 'servico'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                Serviço
+              </button>
+              <button type="button" onClick={() => setTipoReceita('produto')}
+                className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition ${
+                  tipoReceita === 'produto'
+                    ? 'bg-amber-50 border-amber-300 text-amber-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                Produto
+              </button>
+            </div>
           </div>
 
           <div>
