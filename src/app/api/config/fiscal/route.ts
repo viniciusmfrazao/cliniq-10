@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     cnpj, inscricao_municipal, codigo_municipio_ibge, codigo_tributacao_nacional_iss,
     regime_tributario, codigo_opcao_simples_nacional, ambiente, padrao_nfse,
     token_homologacao, token_producao,
+    inscricao_estadual, ncm_padrao, cfop_padrao, csosn_padrao, descricao_produto_padrao,
   } = body
 
   const update: Record<string, unknown> = {
@@ -36,6 +37,11 @@ export async function POST(req: NextRequest) {
     padrao_nfse: padrao_nfse === 'nacional' ? 'nacional' : 'municipal',
     updated_at: new Date().toISOString(),
     updated_by: user.id,
+    inscricao_estadual: inscricao_estadual || null,
+    ncm_padrao: ncm_padrao || null,
+    cfop_padrao: cfop_padrao || '5102',
+    csosn_padrao: csosn_padrao || '102',
+    descricao_produto_padrao: descricao_produto_padrao || 'Venda de produto conforme registro interno',
   }
 
   // Só sobrescreve os tokens se o usuário digitou algo novo (campo em branco = mantém o atual)

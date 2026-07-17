@@ -436,13 +436,34 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     )
   }
 
-  function BotaoNfe() {
+  function BotaoNfe({ entrada }: { entrada: Entrada }) {
+    const carregando = emitindo === entrada.id
+    async function handleClick(ev: React.MouseEvent) {
+      ev.stopPropagation()
+      setEmitindo(entrada.id)
+      try {
+        const res = await fetch('/api/financeiro/nota-fiscal/emitir-nfe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entrada_id: entrada.id }),
+        })
+        const data = await res.json()
+        if (res.status === 501) {
+          toast.info(data.aviso || 'Campos completos, mas emissão de NFe ainda não implementada')
+        } else if (!res.ok) {
+          toast.error('Faltam dados pra emitir NFe', { description: data.error })
+        }
+      } catch (err) {
+        toast.error('Erro ao verificar NFe', { description: err instanceof Error ? err.message : undefined })
+      } finally {
+        setEmitindo(null)
+      }
+    }
     return (
-      <button
-        onClick={e => { e.stopPropagation(); toast.info('Emissão de NFe (nota de produto) ainda não está implementada') }}
-        title="Emitir NFe (nota de produto) — ainda não implementado"
+      <button onClick={handleClick} disabled={carregando}
+        title="Emitir NFe (nota de produto)"
         className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
-        <Icon name="box" className="w-4 h-4" />
+        {carregando ? <LoadingSpinner size="sm" /> : <Icon name="box" className="w-4 h-4" />}
       </button>
     )
   }
@@ -604,7 +625,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                   })()}
                   <div className="flex items-center justify-end gap-1 mt-1">
                     {nfseAtivo && <BotaoNfse entrada={e} />}
-                    {nfseAtivo && <BotaoNfe />}
+                    {nfseAtivo && <BotaoNfe entrada={e} />}
                     <button onClick={() => setEditEntry(e)}
                       className="p-2 text-violet-400 hover:bg-violet-50 rounded-lg transition">
                       <Icon name="edit" className="w-4 h-4" />
@@ -688,7 +709,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         {nfseAtivo && <BotaoNfse entrada={e} />}
-                        {nfseAtivo && <BotaoNfe />}
+                        {nfseAtivo && <BotaoNfe entrada={e} />}
                         <button onClick={() => setEditEntry(e)}
                           className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
                           title="Editar">

@@ -34,6 +34,11 @@ type InitialConfig = {
   token_homologacao_mask: string | null
   token_producao_mask: string | null
   updated_at: string | null
+  inscricao_estadual: string | null
+  ncm_padrao: string | null
+  cfop_padrao: string | null
+  csosn_padrao: string | null
+  descricao_produto_padrao: string | null
 } | null
 
 type Props = {
@@ -58,6 +63,13 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [padraoNfse, setPadraoNfse] = useState(initialConfig?.padrao_nfse || 'municipal')
   const [tokenHomologacao, setTokenHomologacao] = useState('')
   const [tokenProducao, setTokenProducao] = useState('')
+  const [inscricaoEstadual, setInscricaoEstadual] = useState(initialConfig?.inscricao_estadual || '')
+  const [ncmPadrao, setNcmPadrao] = useState(initialConfig?.ncm_padrao || '')
+  const [cfopPadrao, setCfopPadrao] = useState(initialConfig?.cfop_padrao || '5102')
+  const [csosnPadrao, setCsosnPadrao] = useState(initialConfig?.csosn_padrao || '102')
+  const [descricaoProdutoPadrao, setDescricaoProdutoPadrao] = useState(
+    initialConfig?.descricao_produto_padrao || 'Venda de produto conforme registro interno'
+  )
 
   async function handleValidar() {
     setValidando(true)
@@ -95,6 +107,11 @@ export default function FiscalForm({ initialConfig }: Props) {
           padrao_nfse: padraoNfse,
           token_homologacao: tokenHomologacao,
           token_producao: tokenProducao,
+          inscricao_estadual: inscricaoEstadual,
+          ncm_padrao: ncmPadrao,
+          cfop_padrao: cfopPadrao,
+          csosn_padrao: csosnPadrao,
+          descricao_produto_padrao: descricaoProdutoPadrao,
         }),
       })
       if (!res.ok) {
@@ -212,6 +229,48 @@ export default function FiscalForm({ initialConfig }: Props) {
               placeholder={initialConfig?.token_producao_mask ? 'Deixe em branco para manter' : 'Cole o token aqui'}
               className="input w-full text-sm" />
           </div>
+        </div>
+      </div>
+
+      <div className="card p-6 space-y-4 border-amber-100">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">NFe (produto) — em construção</h2>
+          <p className="text-xs text-amber-600 mt-1">
+            Estes campos ficam salvos e prontos, mas o envio real de NFe pra Focus ainda não foi
+            implementado. Usa o mesmo token acima (a empresa na Focus cobre os dois tipos de nota).
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Inscrição Estadual</label>
+            <input value={inscricaoEstadual} onChange={e => setInscricaoEstadual(e.target.value)}
+              placeholder="Ou 'ISENTO' se aplicável" className="input w-full text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">NCM padrão do produto</label>
+            <input value={ncmPadrao} onChange={e => setNcmPadrao(e.target.value)}
+              placeholder="Ex: 33049900 (cosméticos)" className="input w-full text-sm" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">CFOP padrão</label>
+            <input value={cfopPadrao} onChange={e => setCfopPadrao(e.target.value)}
+              className="input w-full text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">CSOSN padrão (Simples Nacional)</label>
+            <input value={csosnPadrao} onChange={e => setCsosnPadrao(e.target.value)}
+              className="input w-full text-sm" />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-slate-500 mb-1 block">Descrição padrão do produto na nota</label>
+          <input value={descricaoProdutoPadrao} onChange={e => setDescricaoProdutoPadrao(e.target.value)}
+            className="input w-full text-sm" />
         </div>
       </div>
 

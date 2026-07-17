@@ -52,6 +52,11 @@ type FiscalConfig = {
   descricao_servico_padrao: string | null
   token_homologacao: string | null
   token_producao: string | null
+  inscricao_estadual: string | null
+  ncm_padrao: string | null
+  cfop_padrao: string | null
+  csosn_padrao: string | null
+  descricao_produto_padrao: string | null
 }
 
 export function focusBaseUrl(ambiente: string) {
@@ -80,6 +85,16 @@ export function fiscalConfigCompleta(config: FiscalConfig | null): { ok: boolean
   return { ok: faltando.length === 0, faltando }
 }
 
+export function fiscalConfigCompletaNfe(config: FiscalConfig | null): { ok: boolean; faltando: string[] } {
+  const faltando: string[] = []
+  if (!config) return { ok: false, faltando: ['configuração fiscal não cadastrada'] }
+  if (!config.cnpj) faltando.push('CNPJ')
+  if (!config.inscricao_estadual) faltando.push('Inscrição Estadual')
+  if (!config.ncm_padrao) faltando.push('NCM padrão do produto')
+  if (!config.cfop_padrao) faltando.push('CFOP padrão')
+  if (!focusToken(config)) faltando.push(`Token de ${config.ambiente === 'producao' ? 'produção' : 'homologação'}`)
+  return { ok: faltando.length === 0, faltando }
+}
 type EmitirNfseParams = {
   config: FiscalConfig
   ref: string
