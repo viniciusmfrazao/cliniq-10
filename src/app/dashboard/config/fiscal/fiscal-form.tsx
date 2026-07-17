@@ -57,6 +57,8 @@ type InitialConfig = {
   aliquota_cofins_padrao: number | null
   isento_inscricao_municipal: boolean | null
   emite_nfse: boolean | null
+  ibs_cbs_classificacao_padrao: string | null
+  ibs_cbs_situacao_padrao: string | null
 } | null
 
 type Props = {
@@ -107,6 +109,8 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [aliquotaCofinsPadrao, setAliquotaCofinsPadrao] = useState(String(initialConfig?.aliquota_cofins_padrao ?? '0'))
   const [isentoIM, setIsentoIM] = useState(!!initialConfig?.isento_inscricao_municipal)
   const [emiteNfse, setEmiteNfse] = useState(initialConfig?.emite_nfse !== false)
+  const [ibsCbsClassificacao, setIbsCbsClassificacao] = useState(initialConfig?.ibs_cbs_classificacao_padrao || '000001')
+  const [ibsCbsSituacao, setIbsCbsSituacao] = useState(initialConfig?.ibs_cbs_situacao_padrao || '')
 
   async function handleValidar() {
     setValidando(true)
@@ -167,6 +171,8 @@ export default function FiscalForm({ initialConfig }: Props) {
           aliquota_cofins_padrao: aliquotaCofinsPadrao,
           isento_inscricao_municipal: isentoIM,
           emite_nfse: emiteNfse,
+          ibs_cbs_classificacao_padrao: ibsCbsClassificacao,
+          ibs_cbs_situacao_padrao: ibsCbsSituacao,
         }),
       })
       if (!res.ok) {
@@ -409,6 +415,26 @@ export default function FiscalForm({ initialConfig }: Props) {
           <label className="text-xs text-slate-500 mb-1 block">Descrição padrão do produto na nota</label>
           <input value={descricaoProdutoPadrao} onChange={e => setDescricaoProdutoPadrao(e.target.value)}
             className="input w-full text-sm" />
+        </div>
+
+        <div className="bg-amber-50/50 p-3 rounded-xl space-y-3">
+          <p className="text-xs text-amber-700">
+            Reforma Tributária (IBS/CBS) — exigido pela SEFAZ desde 2026, além do ICMS/PIS/COFINS
+            acima. "000001" é o código genérico que aparece em vários exemplos oficiais da Focus,
+            mas confirma com o contador ou o suporte da Focus antes de usar em produção.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Classificação Tributária IBS/CBS (cClassTrib)</label>
+              <input value={ibsCbsClassificacao} onChange={e => setIbsCbsClassificacao(e.target.value)}
+                className="input w-full text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Situação Tributária IBS/CBS (CST) — opcional</label>
+              <input value={ibsCbsSituacao} onChange={e => setIbsCbsSituacao(e.target.value)}
+                className="input w-full text-sm" />
+            </div>
+          </div>
         </div>
 
         <div className="pt-2 border-t border-slate-100">

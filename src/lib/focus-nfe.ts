@@ -85,6 +85,8 @@ type FiscalConfig = {
   aliquota_cofins_padrao: number | null
   isento_inscricao_municipal: boolean | null
   emite_nfse: boolean | null
+  ibs_cbs_classificacao_padrao: string | null
+  ibs_cbs_situacao_padrao: string | null
 }
 
 // Resolve qual CNPJ usar pra NFe: o dedicado se existir, senão o mesmo da NFS-e
@@ -162,6 +164,9 @@ export function fiscalConfigCompletaNfe(config: FiscalConfig | null): { ok: bool
     if (!config.cst_icms_padrao) faltando.push('CST do ICMS (regime não é Simples Nacional)')
     if (config.aliquota_icms_padrao == null) faltando.push('Alíquota do ICMS (regime não é Simples Nacional)')
   }
+
+  // Reforma Tributária (IBS/CBS) — exigido pela SEFAZ desde 2026
+  if (!config.ibs_cbs_classificacao_padrao) faltando.push('Classificação Tributária IBS/CBS (cClassTrib)')
 
   return { ok: faltando.length === 0, faltando }
 }
@@ -324,6 +329,15 @@ export async function emitirNfeProduto({
     } : {}),
   }
 
+  // Reforma Tributária (IBS/CBS) — exigido pela SEFAZ desde 2026, além do ICMS/PIS/COFINS
+  // tradicionais. Nomes de campo confirmados em exemplos oficiais da Focus (guias de NFS-e
+  // por município); não encontrei essa mesma tabela documentada especificamente pra NFe,
+  // então a suposição é que o nome do campo se repete — validar se a Focus rejeitar.
+  const ibsCbsBlock: Record<string, unknown> = {
+    ibs_cbs_classificacao_tributaria: config.ibs_cbs_classificacao_padrao || '000001',
+    ...(config.ibs_cbs_situacao_padrao ? { ibs_cbs_situacao_tributaria: config.ibs_cbs_situacao_padrao } : {}),
+  }
+
   const payload: Record<string, unknown> = {
     natureza_operacao: 'Venda de mercadoria',
     data_emissao: `${dataVenda}T12:00:00-03:00`,
@@ -379,6 +393,7 @@ export async function emitirNfeProduto({
         valor_desconto: '0.00',
         ...icmsBlock,
         ...pisCofinsBlock,
+        ...ibsCbsBlock,
       },
     ],
   }

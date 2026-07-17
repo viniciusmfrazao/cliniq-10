@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     cst_icms_padrao, aliquota_icms_padrao, cst_pis_padrao, aliquota_pis_padrao,
     cst_cofins_padrao, aliquota_cofins_padrao,
     isento_inscricao_municipal, emite_nfse,
+    ibs_cbs_classificacao_padrao, ibs_cbs_situacao_padrao,
   } = body
 
   const update: Record<string, unknown> = {
@@ -63,6 +64,8 @@ export async function POST(req: NextRequest) {
     aliquota_cofins_padrao: aliquota_cofins_padrao !== '' && aliquota_cofins_padrao != null ? Number(aliquota_cofins_padrao) : 0,
     isento_inscricao_municipal: !!isento_inscricao_municipal,
     emite_nfse: emite_nfse !== false,
+    ibs_cbs_classificacao_padrao: ibs_cbs_classificacao_padrao || '000001',
+    ibs_cbs_situacao_padrao: ibs_cbs_situacao_padrao || null,
   }
 
   if (typeof token_homologacao_nfe === 'string' && token_homologacao_nfe.trim()) {
