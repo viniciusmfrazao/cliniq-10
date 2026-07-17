@@ -115,6 +115,38 @@ export default async function DocumentosPage() {
         </div>
       </div>
 
+      {/* Receita/exame com validade em farmácia (CFM/CFO) */}
+      <div className="card p-5 mb-6 bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Receita e pedido de exame com validade em farmácia</h2>
+            <p className="text-xs text-slate-500 mt-1 max-w-xl">
+              Os documentos que você assina aqui no Clinike são assinatura eletrônica simples — válidos como
+              atestado/orientação, mas não substituem receita de medicamento controlado. Para isso, use a plataforma
+              oficial e gratuita do seu conselho (exige certificado digital ICP-Brasil próprio).
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <a
+              href="https://prescricaoeletronica.cfm.org.br"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary w-auto px-4 flex items-center gap-2 text-sm"
+            >
+              CRM — Prescrição CFM
+            </a>
+            <a
+              href="https://prescricao.cfo.org.br"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary w-auto px-4 flex items-center gap-2 text-sm"
+            >
+              CRO — Prescrição CFO
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* Lista de documentos */}
       <DocumentsList documents={recentDocs || []} />
     </div>
