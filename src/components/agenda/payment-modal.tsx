@@ -40,6 +40,8 @@ const BANDEIRAS_ESPECIFICAS = [
 ]
 
 function uid() { return Math.random().toString(36).slice(2) }
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function asProcUuid(id: string) { return UUID_RE.test(id) ? id : null }
 
 export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, onClose, onSuccess }: Props) {
   const supabase = createClient()
@@ -178,26 +180,44 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
         .split('/').reverse().join('-')
 
-      // Entradas por procedimento
-      for (const proc of procs) {
-        const proporcao = totalProcs > 0 ? proc.price / totalProcs : 1 / procs.length
-        for (const s of splits) {
-          if (s.valor <= 0) continue
-          const val = Math.round(s.valor * proporcao * 100) / 100
-          const taxa = Math.round(val * s.taxa) / 100
-          const liquido = Math.round((val - taxa) * 100) / 100
-          await supabase.from('entradas').insert({
-            clinic_id: clinicId, data_venda: hoje,
-            paciente_id: patientId, paciente_nome: patientName,
+      // Uma entrada por forma de pagamento (não mais uma por procedimento).
+      // Quando há mais de um procedimento no mesmo pagamento, o nome vem combinado
+      // ("Botox + Preenchimento") e o detalhe por procedimento fica em entrada_procedimentos
+      // (usado pelos relatórios por procedimento: ranking, contagem em /procedimentos, etc).
+      const procedimentoNomeCombinado = procs.map(p => p.name).join(' + ')
+      for (const s of splits) {
+        if (s.valor <= 0) continue
+        const taxa = Math.round(s.valor * s.taxa) / 100
+        const liquido = Math.round((s.valor - taxa) * 100) / 100
+        const { data: entradaInserida, error: errEntrada } = await supabase.from('entradas').insert({
+          clinic_id: clinicId, data_venda: hoje,
+          paciente_id: patientId, paciente_nome: patientName,
+          procedimento_id: procs.length === 1 ? asProcUuid(procs[0].id) : null,
+          procedimento_nome: procedimentoNomeCombinado,
+          profissional_id: professionalId, profissional_nome: professionalName,
+          forma_pagamento: s.forma, bandeira: s.bandeira || null,
+          valor_bruto: s.valor, taxa_percentual: s.taxa,
+          valor_taxa: taxa, valor_liquido: liquido,
+          n_parcelas: s.parcelas, observacoes: obs || null,
+          appointment_id: appointmentId,
+        }).select('id').single()
+
+        if (errEntrada) { console.error('Erro ao criar entrada:', errEntrada); continue }
+
+        // Detalhe por procedimento (rateio proporcional ao preço de cada procedimento
+        // dentro do valor deste split de pagamento)
+        const detalhes = procs.map(proc => {
+          const proporcao = totalProcs > 0 ? proc.price / totalProcs : 1 / procs.length
+          return {
+            entrada_id: entradaInserida.id,
+            clinic_id: clinicId,
+            procedimento_id: asProcUuid(proc.id),
             procedimento_nome: proc.name,
-            profissional_id: professionalId, profissional_nome: professionalName,
-            forma_pagamento: s.forma, bandeira: s.bandeira || null,
-            valor_bruto: val, taxa_percentual: s.taxa,
-            valor_taxa: taxa, valor_liquido: liquido,
-            n_parcelas: s.parcelas, observacoes: obs || null,
-            appointment_id: appointmentId,
-          })
-        }
+            valor: Math.round(s.valor * proporcao * 100) / 100,
+          }
+        })
+        const { error: errDetalhe } = await supabase.from('entrada_procedimentos').insert(detalhes)
+        if (errDetalhe) console.error('Erro ao criar detalhe de procedimentos:', errDetalhe)
       }
 
       // Quitar débitos marcados — com data de pagamento real

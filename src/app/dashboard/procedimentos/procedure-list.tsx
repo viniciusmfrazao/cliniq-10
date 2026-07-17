@@ -62,7 +62,7 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
       // Conta referencias em paralelo (head:true so traz o count, sem dados)
       const [apptRes, entradaRes, leadRes, waitRes] = await Promise.all([
         supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('procedure_id', id),
-        supabase.from('entradas').select('id', { count: 'exact', head: true }).eq('procedimento_id', id),
+        supabase.from('entrada_procedimentos').select('id', { count: 'exact', head: true }).eq('procedimento_id', id),
         supabase.from('leads').select('id', { count: 'exact', head: true }).eq('procedure_id', id),
         supabase.from('waiting_list').select('id', { count: 'exact', head: true }).eq('procedure_id', id),
       ])
