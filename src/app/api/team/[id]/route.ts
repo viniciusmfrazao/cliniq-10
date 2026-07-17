@@ -102,13 +102,21 @@ export async function PATCH(
     if (!['admin', 'super_admin', 'manager'].includes(currentUser?.role || ''))
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
-    const { professional_role, professional_registration, permissions, name } = await request.json()
+    const { professional_role, professional_registration, permissions, name, recebe_comissao, comissao_percentual } = await request.json()
 
     const updateData: Record<string, unknown> = {}
     if (professional_role !== undefined) updateData.professional_role = professional_role || null
     if (professional_registration !== undefined) updateData.professional_registration = professional_registration?.trim() || null
     if (permissions !== undefined) updateData.permissions = permissions
     if (name !== undefined && name.trim()) updateData.name = name.trim()
+    if (recebe_comissao !== undefined) updateData.recebe_comissao = !!recebe_comissao
+    if (comissao_percentual !== undefined) {
+      const pct = comissao_percentual === null || comissao_percentual === '' ? null : Number(comissao_percentual)
+      if (pct !== null && (isNaN(pct) || pct < 0 || pct > 100)) {
+        return NextResponse.json({ error: 'Percentual de comissão deve estar entre 0 e 100' }, { status: 400 })
+      }
+      updateData.comissao_percentual = pct
+    }
 
     if (Object.keys(updateData).length === 0)
       return NextResponse.json({ error: 'Nada para atualizar' }, { status: 400 })

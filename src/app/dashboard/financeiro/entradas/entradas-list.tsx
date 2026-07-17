@@ -14,11 +14,18 @@ type Entrada = {
   paciente_nome: string
   procedimento_nome: string
   profissional_nome: string
+  profissional_id: string | null
   forma_pagamento: string
   bandeira: string | null
   valor_bruto: number
   valor_liquido: number
   taxa_percentual: number
+}
+
+type ComissaoConfig = {
+  id: string
+  recebe_comissao: boolean
+  comissao_percentual: number | null
 }
 
 type Props = {
@@ -27,6 +34,8 @@ type Props = {
   procedimentos: { id: string; name: string; price: number }[]
   profissionais: { id: string; name: string }[]
   clinicId: string
+  comissaoAtiva?: boolean
+  comissaoConfig?: ComissaoConfig[]
 }
 
 function fmt(v: number) {
@@ -195,8 +204,16 @@ function EditEntradaModal({
   return createPortal(modal, document.body)
 }
 
-export default function EntradasList({ entradas, clinicId }: Props) {
+export default function EntradasList({ entradas, clinicId, comissaoAtiva = false, comissaoConfig = [] }: Props) {
   const [list, setList] = useState(entradas)
+  const comissaoMap = new Map(comissaoConfig.map(c => [c.id, c]))
+
+  function comissaoDoProfissional(profissionalId: string | null) {
+    if (!comissaoAtiva || !profissionalId) return null
+    const cfg = comissaoMap.get(profissionalId)
+    if (!cfg?.recebe_comissao || cfg.comissao_percentual == null) return null
+    return cfg.comissao_percentual
+  }
   const [search, setSearch] = useState('')
   const [dataInicio, setDataInicio] = useState(primeiroDiaMes())
   const [dataFim, setDataFim] = useState(ultimoDiaMes())
@@ -231,6 +248,12 @@ export default function EntradasList({ entradas, clinicId }: Props) {
   const totalBruto = filteredList.reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
   const totalLiquido = filteredList.reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
   const totalTaxas = totalBruto - totalLiquido
+
+  const totalComissao = filteredList.reduce((s, e) => {
+    const pct = comissaoDoProfissional(e.profissional_id)
+    if (pct == null) return s
+    return s + Number(e.valor_bruto || 0) * (pct / 100)
+  }, 0)
 
   const porProcedimento = filteredList.reduce((acc, e) => {
     const proc = e.procedimento_nome || 'Sem procedimento'
@@ -331,6 +354,16 @@ export default function EntradasList({ entradas, clinicId }: Props) {
             <span className="font-medium">Taxas:</span> {fmt(totalTaxas)}
           </div>
         )}
+        {comissaoAtiva && totalComissao > 0 && (
+          <>
+            <div className="bg-teal-50 text-teal-700 px-4 py-2 rounded-xl">
+              <span className="font-medium">Comissões:</span> {fmt(totalComissao)}
+            </div>
+            <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl">
+              <span className="font-medium">Fica com a clínica:</span> {fmt(totalBruto - totalComissao)}
+            </div>
+          </>
+        )}
         <div className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl">
           <span className="font-medium">{filteredList.length}</span> registros
         </div>
@@ -385,6 +418,16 @@ export default function EntradasList({ entradas, clinicId }: Props) {
                 <div className="text-right flex-shrink-0 ml-3">
                   <p className="font-bold text-emerald-600">{fmt(e.valor_liquido)}</p>
                   <p className="text-xs text-slate-400">{fmt(e.valor_bruto)} bruto</p>
+                  {(() => {
+                    const pct = comissaoDoProfissional(e.profissional_id)
+                    if (pct == null) return null
+                    const valorComissao = Number(e.valor_bruto || 0) * (pct / 100)
+                    return (
+                      <p className="text-xs text-teal-600 mt-0.5">
+                        {pct}% = {fmt(valorComissao)} · clínica {fmt(Number(e.valor_bruto || 0) - valorComissao)}
+                      </p>
+                    )
+                  })()}
                   <div className="flex items-center justify-end gap-1 mt-1">
                     <button onClick={() => setEditEntry(e)}
                       className="p-1.5 text-violet-400 hover:bg-violet-50 rounded-lg transition">
@@ -413,13 +456,19 @@ export default function EntradasList({ entradas, clinicId }: Props) {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Forma</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Bruto</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Líquido</th>
+                {comissaoAtiva && (
+                  <>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-teal-600 uppercase">Profissional</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-indigo-600 uppercase">Clínica</th>
+                  </>
+                )}
                 <th className="text-center px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={comissaoAtiva ? 10 : 8} className="px-4 py-12 text-center text-slate-500">
                     {isPending ? 'Buscando...' : 'Nenhuma entrada encontrada'}
                   </td>
                 </tr>
@@ -445,6 +494,21 @@ export default function EntradasList({ entradas, clinicId }: Props) {
                         <span className="text-xs text-slate-400 ml-1">(-{(e.taxa_percentual * 100).toFixed(1)}%)</span>
                       )}
                     </td>
+                    {comissaoAtiva && (() => {
+                      const pct = comissaoDoProfissional(e.profissional_id)
+                      if (pct == null) return (<><td className="px-4 py-3 text-sm text-right text-slate-300">-</td><td className="px-4 py-3 text-sm text-right text-slate-300">-</td></>)
+                      const valorComissao = Number(e.valor_bruto || 0) * (pct / 100)
+                      return (
+                        <>
+                          <td className="px-4 py-3 text-sm text-right text-teal-700 font-medium">
+                            {fmt(valorComissao)} <span className="text-xs text-teal-400">({pct}%)</span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right text-indigo-700 font-medium">
+                            {fmt(Number(e.valor_bruto || 0) - valorComissao)}
+                          </td>
+                        </>
+                      )
+                    })()}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => setEditEntry(e)}
