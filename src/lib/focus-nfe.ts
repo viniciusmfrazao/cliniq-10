@@ -1,6 +1,45 @@
 // Helper server-only de integração com a Focus NFe (NFS-e municipal).
 // NUNCA importar este arquivo em componentes client — ele lida com tokens.
 
+export function validarCnpj(cnpjBruto: string): boolean {
+  const cnpj = (cnpjBruto || '').replace(/\D/g, '')
+  if (cnpj.length !== 14) return false
+  if (/^(\d)\1{13}$/.test(cnpj)) return false // todos os dígitos iguais
+
+  const calcDigito = (base: string, pesos: number[]) => {
+    const soma = base.split('').reduce((acc, d, i) => acc + Number(d) * pesos[i], 0)
+    const resto = soma % 11
+    return resto < 2 ? 0 : 11 - resto
+  }
+
+  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+
+  const d1 = calcDigito(cnpj.slice(0, 12), pesos1)
+  if (d1 !== Number(cnpj[12])) return false
+  const d2 = calcDigito(cnpj.slice(0, 13), pesos2)
+  if (d2 !== Number(cnpj[13])) return false
+
+  return true
+}
+
+export function validarFormatoFiscal(config: {
+  cnpj: string | null
+  inscricao_municipal: string | null
+  codigo_municipio_ibge: string | null
+  codigo_tributacao_nacional_iss: string | null
+}): string[] {
+  const erros: string[] = []
+  if (!config.cnpj || !validarCnpj(config.cnpj)) erros.push('CNPJ inválido (dígito verificador não bate)')
+  if (!config.inscricao_municipal?.trim()) erros.push('Inscrição Municipal não preenchida')
+  if (!config.codigo_municipio_ibge || !/^\d{7}$/.test(config.codigo_municipio_ibge)) {
+    erros.push('Código do município deve ter exatamente 7 dígitos (padrão IBGE)')
+  }
+  if (!config.codigo_tributacao_nacional_iss?.trim()) erros.push('Código de tributação do serviço não preenchido')
+  return erros
+}
+
+
 type FiscalConfig = {
   cnpj: string | null
   inscricao_municipal: string | null
@@ -105,6 +144,27 @@ export async function consultarNfseMunicipal(config: FiscalConfig, ref: string) 
   const res = await fetch(url, {
     headers: { 'Authorization': authHeader(token) },
   })
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
+// Consultas de referência (município + código tributário) usadas pra validar os dados
+// cadastrados antes de tentar emitir de fato — evita descobrir um erro de digitação só
+// na hora da nota real.
+export async function consultarMunicipioFocus(config: FiscalConfig, codigoIbge: string) {
+  const token = focusToken(config)
+  if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
+  const url = `${focusBaseUrl(config.ambiente)}/municipios/${encodeURIComponent(codigoIbge)}`
+  const res = await fetch(url, { headers: { 'Authorization': authHeader(token) } })
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
+export async function consultarCodigoTributarioFocus(config: FiscalConfig, codigoIbge: string, codigo: string) {
+  const token = focusToken(config)
+  if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
+  const url = `${focusBaseUrl(config.ambiente)}/municipios/${encodeURIComponent(codigoIbge)}/codigos_tributarios_municipio/${encodeURIComponent(codigo)}`
+  const res = await fetch(url, { headers: { 'Authorization': authHeader(token) } })
   const data = await res.json().catch(() => ({}))
   return { httpStatus: res.status, data }
 }

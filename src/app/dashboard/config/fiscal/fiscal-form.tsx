@@ -5,6 +5,23 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
+// Validação client-side (feedback instantâneo, sem chamar o servidor). A validação
+// autoritativa — incluindo consulta na base da Focus — acontece em /api/config/fiscal/validar.
+function cnpjValido(cnpjBruto: string): boolean {
+  const cnpj = (cnpjBruto || '').replace(/\D/g, '')
+  if (cnpj.length !== 14) return false
+  if (/^(\d)\1{13}$/.test(cnpj)) return false
+  const calc = (base: string, pesos: number[]) => {
+    const soma = base.split('').reduce((acc, d, i) => acc + Number(d) * pesos[i], 0)
+    const resto = soma % 11
+    return resto < 2 ? 0 : 11 - resto
+  }
+  const d1 = calc(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+  if (d1 !== Number(cnpj[12])) return false
+  const d2 = calc(cnpj.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+  return d2 === Number(cnpj[13])
+}
+
 type InitialConfig = {
   cnpj: string | null
   inscricao_municipal: string | null
@@ -28,6 +45,8 @@ export default function FiscalForm({ initialConfig }: Props) {
   const router = useRouter()
   const toast = useToast()
   const [saving, setSaving] = useState(false)
+  const [validando, setValidando] = useState(false)
+  const [resultadoValidacao, setResultadoValidacao] = useState<{ ok: boolean; erros: string[]; avisos: string[] } | null>(null)
 
   const [cnpj, setCnpj] = useState(initialConfig?.cnpj || '')
   const [inscricaoMunicipal, setInscricaoMunicipal] = useState(initialConfig?.inscricao_municipal || '')
@@ -39,6 +58,25 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [padraoNfse, setPadraoNfse] = useState(initialConfig?.padrao_nfse || 'municipal')
   const [tokenHomologacao, setTokenHomologacao] = useState('')
   const [tokenProducao, setTokenProducao] = useState('')
+
+  async function handleValidar() {
+    setValidando(true)
+    setResultadoValidacao(null)
+    try {
+      const res = await fetch('/api/config/fiscal/validar', { method: 'POST' })
+      const data = await res.json()
+      setResultadoValidacao(data)
+      if (data.ok) {
+        toast.success('Dados válidos')
+      } else {
+        toast.error('Encontrei problemas nos dados fiscais')
+      }
+    } catch (err) {
+      toast.error('Erro ao validar', { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setValidando(false)
+    }
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -84,6 +122,9 @@ export default function FiscalForm({ initialConfig }: Props) {
             <label className="text-xs text-slate-500 mb-1 block">CNPJ</label>
             <input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0000-00"
               className="input w-full text-sm" />
+            {cnpj.replace(/\D/g, '').length === 14 && !cnpjValido(cnpj) && (
+              <p className="text-xs text-rose-600 mt-1">Dígito verificador não confere — confira o CNPJ</p>
+            )}
           </div>
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Inscrição Municipal (CCM)</label>
@@ -174,7 +215,30 @@ export default function FiscalForm({ initialConfig }: Props) {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      {resultadoValidacao && (
+        <div className={`card p-4 space-y-2 ${resultadoValidacao.ok ? 'border-emerald-200' : 'border-rose-200'}`}>
+          {resultadoValidacao.erros.map((e, i) => (
+            <p key={`erro-${i}`} className="text-sm text-rose-700 flex items-start gap-2">
+              <span>✕</span> {e}
+            </p>
+          ))}
+          {resultadoValidacao.avisos.map((a, i) => (
+            <p key={`aviso-${i}`} className="text-sm text-slate-600 flex items-start gap-2">
+              <span>ℹ</span> {a}
+            </p>
+          ))}
+          {resultadoValidacao.ok && resultadoValidacao.erros.length === 0 && resultadoValidacao.avisos.length === 0 && (
+            <p className="text-sm text-emerald-700">Dados válidos</p>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-3">
+        <button onClick={handleValidar} disabled={validando}
+          className="flex items-center gap-2 border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition disabled:opacity-60 text-sm">
+          {validando && <LoadingSpinner size="sm" />}
+          Validar dados
+        </button>
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition disabled:opacity-60 text-sm">
           {saving && <LoadingSpinner size="sm" />}

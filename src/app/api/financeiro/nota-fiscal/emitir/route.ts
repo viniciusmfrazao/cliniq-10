@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { fiscalConfigCompleta, emitirNfseMunicipal } from '@/lib/focus-nfe'
+import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +56,11 @@ export async function POST(req: NextRequest) {
   const check = fiscalConfigCompleta(config)
   if (!check.ok) {
     return NextResponse.json({ error: `Configuração fiscal incompleta: ${check.faltando.join(', ')}` }, { status: 400 })
+  }
+
+  const errosFormato = validarFormatoFiscal(config!)
+  if (errosFormato.length > 0) {
+    return NextResponse.json({ error: `Configuração fiscal com erro: ${errosFormato.join('; ')}` }, { status: 400 })
   }
 
   let tomadorCpf: string | null = null
