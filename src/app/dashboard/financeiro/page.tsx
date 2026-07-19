@@ -6,6 +6,7 @@ import { formatBRL, formatBRLCompact } from '@/lib/format'
 import { todayBR, startOfMonthBR, endOfMonthBR, parseDateBR } from '@/lib/datetime'
 import { getFinancialAccess } from '@/lib/financial-access'
 import RentabilidadeFiltro from './RentabilidadeFiltro'
+import RentabilidadeTendenciaChart from './RentabilidadeTendenciaChart'
 
 function fmt(v: number) { return formatBRL(v || 0) }
 function fmtCompact(v: number) { return formatBRLCompact(v || 0) }
@@ -19,12 +20,6 @@ type RentabilidadeRow = {
   fixos_por_atendimento: number
   lucro_operacional: number
   atendimentos: number
-}
-
-function mesLabelCurto(dateStr: string) {
-  const d = new Date(dateStr + 'T12:00:00')
-  const l = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
-  return l.replace('.', '').replace(/^\w/, (c) => c.toUpperCase())
 }
 
 export default async function FinanceiroPage({
@@ -124,7 +119,6 @@ export default async function FinanceiroPage({
     ? { data: [] }
     : await supabase.rpc('rentabilidade_tendencia_mensal', { p_clinic_id: clinicId, p_meses: 6 })
   const tendencia = (tendenciaData || []) as (RentabilidadeRow & { mes: string })[]
-  const maiorReceitaTendencia = Math.max(1, ...tendencia.map((t) => t.receita))
 
   const rentMargemColor = rent.margem_pct >= 50 ? 'text-emerald-600' : rent.margem_pct >= 20 ? 'text-amber-600' : 'text-red-600'
   const rentMargemBg = rent.margem_pct >= 50 ? 'bg-emerald-50 border-emerald-200' : rent.margem_pct >= 20 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
@@ -307,33 +301,9 @@ export default async function FinanceiroPage({
         {/* Tendência últimos 6 meses */}
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Últimos 6 meses</p>
-          <div className="space-y-2">
-            {tendencia.map((t) => {
-              const barPct = Math.max(4, (t.receita / maiorReceitaTendencia) * 100)
-              return (
-                <div key={t.mes} className="flex items-center gap-3">
-                  <span className="text-xs text-slate-500 w-16 flex-shrink-0">{mesLabelCurto(t.mes)}</span>
-                  <div className="flex-1 h-6 bg-slate-50 rounded-lg overflow-hidden relative">
-                    <div
-                      className="h-full bg-violet-200 rounded-lg"
-                      style={{ width: `${barPct}%` }}
-                    />
-                  </div>
-                  <span className="text-xs font-semibold text-slate-700 w-24 text-right flex-shrink-0" title="Receita">
-                    {fmtCompact(t.receita)}
-                  </span>
-                  <span
-                    className={`text-xs font-bold w-24 text-right flex-shrink-0 ${t.lucro_operacional >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-                    title="Lucro operacional"
-                  >
-                    {fmtCompact(t.lucro_operacional)}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          <p className="mt-3 text-xs text-slate-400">
-            📊 Barra e 1ª coluna = receita do mês · 2ª coluna = lucro operacional (receita − estoque consumido − custos fixos pagos)
+          <RentabilidadeTendenciaChart tendencia={tendencia} />
+          <p className="mt-2 text-xs text-slate-400">
+            📊 Barra = receita do mês · linha = lucro operacional (receita − estoque consumido − custos fixos pagos)
           </p>
         </div>
       </div>
