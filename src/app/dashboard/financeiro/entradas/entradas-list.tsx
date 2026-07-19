@@ -53,6 +53,11 @@ function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
 
+function dataPagaBR(iso: string | null | undefined) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('pt-BR')
+}
+
 function primeiroDiaMes() {
   return todayBR().slice(0, 7) + '-01'
 }
@@ -872,13 +877,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                             className={`mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                               e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                             }`}>
-                            {e.comissao_paga ? 'Comissão paga' : 'Comissão pendente'}
+                            {e.comissao_paga ? `Paga em ${dataPagaBR(e.comissao_paga_em)}` : 'Comissão pendente'}
                           </button>
                         ) : (
                           <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                             e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                           }`}>
-                            {e.comissao_paga ? 'Paga' : 'Pendente'}
+                            {e.comissao_paga ? `Paga em ${dataPagaBR(e.comissao_paga_em)}` : 'Pendente'}
                           </span>
                         )}
                       </div>
@@ -967,16 +972,17 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                             <div>
                               {!readOnly ? (
                                 <button onClick={ev => { ev.stopPropagation(); handleToggleComissaoPaga(e) }}
+                                  title={e.comissao_paga ? `Paga em ${dataPagaBR(e.comissao_paga_em)} — clique pra desmarcar` : 'Clique pra marcar como paga'}
                                   className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                                     e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                                   }`}>
-                                  {e.comissao_paga ? 'Paga' : 'Pendente'}
+                                  {e.comissao_paga ? `Paga ${dataPagaBR(e.comissao_paga_em)}` : 'Pendente'}
                                 </button>
                               ) : (
                                 <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                                   e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                                 }`}>
-                                  {e.comissao_paga ? 'Paga' : 'Pendente'}
+                                  {e.comissao_paga ? `Paga ${dataPagaBR(e.comissao_paga_em)}` : 'Pendente'}
                                 </span>
                               )}
                             </div>

@@ -123,7 +123,7 @@ export default function MinhasComissoesView({ entradasIniciais, percentual, comi
                   <span className={`inline-block mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                     e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                   }`}>
-                    {e.comissao_paga ? 'Paga' : 'Pendente'}
+                    {e.comissao_paga && e.comissao_paga_em ? `Paga em ${dataBR(e.comissao_paga_em.slice(0, 10))}` : e.comissao_paga ? 'Paga' : 'Pendente'}
                   </span>
                 </div>
               </div>
