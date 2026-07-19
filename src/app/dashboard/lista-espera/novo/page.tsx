@@ -3,6 +3,7 @@ import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
 import { redirect } from 'next/navigation'
 import WaitingListForm from './waiting-list-form'
+import { PROFESSIONAL_ROLES } from '@/lib/constants'
 
 export default async function NovaListaEsperaPage() {
   const supabase = await createClient()
@@ -31,7 +32,7 @@ export default async function NovaListaEsperaPage() {
     .from('users')
     .select('id, name')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician'])
+    .in('role', [...PROFESSIONAL_ROLES, 'admin'])
 
   return (
     <div className="max-w-2xl mx-auto">

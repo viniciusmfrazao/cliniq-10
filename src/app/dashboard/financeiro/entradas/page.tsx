@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import EntradasList from './entradas-list'
 import { getFinancialAccess } from '@/lib/financial-access'
+import { PROFESSIONAL_ROLES } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,7 +45,7 @@ export default async function EntradasPage() {
     .from('users')
     .select('id, name')
     .eq('clinic_id', clinicId)
-    .in('role', ['doctor', 'esthetician', 'admin'])
+    .in('role', [...PROFESSIONAL_ROLES, 'admin'])
     .order('name')
 
   const { data: clinic } = await supabase

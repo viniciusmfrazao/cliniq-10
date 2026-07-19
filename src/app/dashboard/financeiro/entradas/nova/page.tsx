@@ -4,6 +4,7 @@ import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import EntradaForm from './entrada-form'
+import { PROFESSIONAL_ROLES } from '@/lib/constants'
 
 export default async function NovaEntradaPage() {
   const supabase = await createClient()
@@ -28,7 +29,7 @@ export default async function NovaEntradaPage() {
     .from('users')
     .select('id, name')
     .eq('clinic_id', clinicId)
-    .in('role', ['doctor', 'esthetician', 'admin'])
+    .in('role', [...PROFESSIONAL_ROLES, 'admin'])
     .order('name')
 
   const { data: taxasPagamento } = await supabase

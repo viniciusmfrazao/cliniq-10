@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import WaitingListTable from './waiting-list-table'
+import { PROFESSIONAL_ROLES } from '@/lib/constants'
 
 export default async function WaitingListPage() {
   const supabase = await createClient()
@@ -58,7 +59,7 @@ export default async function WaitingListPage() {
     .from('users')
     .select('id, name')
     .eq('clinic_id', userData?.clinic_id)
-    .in('role', ['admin', 'doctor', 'esthetician'])
+    .in('role', [...PROFESSIONAL_ROLES, 'admin'])
 
   return (
     <div className="space-y-6">
