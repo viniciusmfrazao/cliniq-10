@@ -40,6 +40,7 @@ export default async function DashboardLayout({ children, searchParams }: { chil
   const clinic = clinicResult.data
   const clinicUsers = usersResult.data
   const activeModules = clinic?.settings?.active_modules || []
+  const comissaoAtiva = !!clinic?.settings?.comissao_ativa
   let userPermissions: string[] = Array.isArray(userData?.permissions) ? userData.permissions as string[] : []
   // Sem override individual -> cai pro default do papel na clinica, ou pro factory default
   if (userPermissions.length === 0 && userData?.role && !['admin', 'super_admin'].includes(userData.role)) {
@@ -84,9 +85,10 @@ export default async function DashboardLayout({ children, searchParams }: { chil
       activeModules={activeModules}
       clinicId={userData.clinic_id}
       userId={user.id}
+      comissaoAtiva={comissaoAtiva}
     >
       <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden fixed inset-0 w-full">
-        <Sidebar clinicName={clinic?.name || 'Clinike'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} userPermissions={userPermissions} />
+        <Sidebar clinicName={clinic?.name || 'Clinike'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} userPermissions={userPermissions} comissaoAtiva={comissaoAtiva} />
         <div className="flex-1 flex flex-col min-w-0">
           <TopBar
             clinicName={clinic?.name || 'Clinike'}

@@ -19,11 +19,12 @@ type Props = {
   userId?: string
   activeModules?: ModuleId[]
   userPermissions?: string[]
+  comissaoAtiva?: boolean
 }
 
 import { useTheme } from '@/contexts/ThemeContext'
 
-export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId, activeModules = [], userPermissions = [] }: Props) {
+export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft, userId, activeModules = [], userPermissions = [], comissaoAtiva = false }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -61,6 +62,12 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
     // Verifica módulos
     if (activeModules.length === 0) return true
     return isRouteEnabled(i.href, activeModules)
+  }).map(i => {
+    // "Minhas Comissões" só faz sentido se a clínica tiver o toggle de comissão ativo
+    if (i.children && !comissaoAtiva) {
+      return { ...i, children: i.children.filter(c => c.href !== '/dashboard/comissoes/minhas') }
+    }
+    return i
   })
   const isActive = (href: string) => href === '/dashboard' ? pathname === href : pathname.startsWith(href)
   

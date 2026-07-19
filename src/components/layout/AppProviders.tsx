@@ -11,6 +11,7 @@ type Props = {
   activeModules: ModuleId[]
   clinicId: string
   userId: string
+  comissaoAtiva?: boolean
   children: React.ReactNode
 }
 
@@ -19,6 +20,7 @@ export default function AppProviders({
   activeModules,
   clinicId,
   userId,
+  comissaoAtiva = false,
   children,
 }: Props) {
   return (
@@ -29,6 +31,7 @@ export default function AppProviders({
             userRole={userRole}
             activeModules={activeModules}
             clinicId={clinicId}
+            comissaoAtiva={comissaoAtiva}
           >
             {children}
           </CommandPaletteProvider>
