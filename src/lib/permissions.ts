@@ -164,14 +164,14 @@ export const EDITABLE_ROLES: string[] = [
 
 /** Permissoes padrao "de fabrica" por papel — usado como fallback. */
 export const FACTORY_DEFAULTS: Record<string, PermissionId[]> = {
-  doctor: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
-  dentist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
-  biomedic: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
-  nurse: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
-  esthetician: ['agenda_view', 'agenda_edit', 'patients_view', 'records_view', 'records_edit', 'stock_view'],
-  physiotherapist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
-  nutritionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
-  psychologist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
+  doctor: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view', 'financial_view_own'],
+  dentist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view', 'financial_view_own'],
+  biomedic: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view', 'financial_view_own'],
+  nurse: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view', 'financial_view_own'],
+  esthetician: ['agenda_view', 'agenda_edit', 'patients_view', 'records_view', 'records_edit', 'stock_view', 'financial_view_own'],
+  physiotherapist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'financial_view_own'],
+  nutritionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'financial_view_own'],
+  psychologist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'financial_view_own'],
   receptionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'crm_view', 'crm_edit'],
   financial: ['agenda_view', 'patients_view', 'financial_view_all', 'financial_edit', 'reports_view'],
   manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view_all', 'reports_view', 'crm_view', 'crm_edit'],

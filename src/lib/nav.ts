@@ -51,6 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Relatórios',  href: '/dashboard/financeiro/dre' },
     ]
   },
+  { label: 'Minhas Comissões', href: '/dashboard/comissoes/minhas', icon: 'dollarSign', roles: ALL_PROFESSIONALS },
   { label: 'Equipe',          href: '/dashboard/equipe',        icon: 'users',     roles: ADMIN_ONLY },
   { label: 'Auditoria',       href: '/dashboard/auditoria',     icon: 'shield',    roles: ADMIN_ONLY },
   { label: 'Configuracoes',   href: '/dashboard/config',        icon: 'settings',  roles: ALL_STAFF },

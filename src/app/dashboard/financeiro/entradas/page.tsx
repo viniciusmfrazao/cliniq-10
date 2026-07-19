@@ -54,6 +54,7 @@ export default async function EntradasPage() {
     .single()
 
   const comissaoAtiva = !!clinic?.settings?.comissao_ativa
+  const comissaoBase: 'bruto' | 'liquido' = clinic?.settings?.comissao_base === 'liquido' ? 'liquido' : 'bruto'
   const nfseAtivo = (clinic?.settings?.active_modules || []).includes('nfse')
 
   // Mapa de comissão por profissional, independente do filtro de role acima
@@ -79,13 +80,15 @@ export default async function EntradasPage() {
             </p>
           </div>
         </div>
-        <Link
-          href="/dashboard/financeiro/entradas/nova"
-          className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition"
-        >
-          <Icon name="plus" className="w-5 h-5" />
-          Nova Entrada
-        </Link>
+        {scope === 'all' && (
+          <Link
+            href="/dashboard/financeiro/entradas/nova"
+            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition"
+          >
+            <Icon name="plus" className="w-5 h-5" />
+            Nova Entrada
+          </Link>
+        )}
       </div>
 
       <EntradasList
@@ -95,8 +98,10 @@ export default async function EntradasPage() {
         profissionais={profissionais || []}
         clinicId={clinicId ?? ''}
         comissaoAtiva={comissaoAtiva}
+        comissaoBase={comissaoBase}
         comissaoConfig={comissaoConfig || []}
         nfseAtivo={nfseAtivo}
+        readOnly={scope !== 'all'}
       />
     </div>
   )

@@ -19,16 +19,19 @@ type Profissional = {
 type Props = {
   clinicId: string
   initialAtiva: boolean
+  initialBase: 'bruto' | 'liquido'
   profissionais: Profissional[]
 }
 
-export default function ComissoesForm({ clinicId, initialAtiva, profissionais }: Props) {
+export default function ComissoesForm({ clinicId, initialAtiva, initialBase, profissionais }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
 
   const [ativa, setAtiva] = useState(initialAtiva)
   const [savingToggle, setSavingToggle] = useState(false)
+  const [base, setBase] = useState<'bruto' | 'liquido'>(initialBase)
+  const [savingBase, setSavingBase] = useState(false)
   const [list, setList] = useState(profissionais)
   const [savingId, setSavingId] = useState<string | null>(null)
 
@@ -51,6 +54,28 @@ export default function ComissoesForm({ clinicId, initialAtiva, profissionais }:
     }
 
     toast.success(novoValor ? 'Comissões ativadas' : 'Comissões desativadas')
+    router.refresh()
+  }
+
+  async function handleChangeBase(novaBase: 'bruto' | 'liquido') {
+    const anterior = base
+    setBase(novaBase)
+    setSavingBase(true)
+
+    const { data: clinic } = await supabase.from('clinics').select('settings').eq('id', clinicId).single()
+    const { error } = await supabase.from('clinics').update({
+      settings: { ...(clinic?.settings || {}), comissao_base: novaBase }
+    }).eq('id', clinicId)
+
+    setSavingBase(false)
+
+    if (error) {
+      setBase(anterior)
+      toast.error('Erro ao salvar', { description: error.message })
+      return
+    }
+
+    toast.success('Base de cálculo atualizada')
     router.refresh()
   }
 
@@ -110,12 +135,45 @@ export default function ComissoesForm({ clinicId, initialAtiva, profissionais }:
         </div>
       </div>
 
+      {/* Base de cálculo */}
+      {ativa && (
+        <div className="card p-6">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Comissão calculada sobre</h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Bruto é o valor total cobrado do paciente. Líquido é o valor bruto menos a taxa de cartão/Pix — o que a
+            clínica de fato recebe. Isso muda quanto a profissional vê como "vai receber".
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => handleChangeBase('bruto')}
+              disabled={savingBase}
+              className={`p-3 rounded-xl border-2 text-left transition-colors disabled:opacity-60 ${
+                base === 'bruto' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <p className="text-sm font-semibold text-slate-900">Valor Bruto</p>
+              <p className="text-xs text-slate-500 mt-0.5">Total cobrado do paciente, antes da taxa</p>
+            </button>
+            <button
+              onClick={() => handleChangeBase('liquido')}
+              disabled={savingBase}
+              className={`p-3 rounded-xl border-2 text-left transition-colors disabled:opacity-60 ${
+                base === 'liquido' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <p className="text-sm font-semibold text-slate-900">Valor Líquido</p>
+              <p className="text-xs text-slate-500 mt-0.5">Depois de descontar a taxa de cartão/Pix</p>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Profissionais */}
       {ativa && (
         <div className="card p-6">
           <h2 className="text-sm font-semibold text-slate-900 mb-1">Percentual por profissional</h2>
           <p className="text-xs text-slate-500 mb-4">
-            Marque quem recebe comissão e defina o %. Calculado sobre o valor bruto de cada entrada.
+            Marque quem recebe comissão e defina o %. Calculado sobre o valor {base} de cada entrada.
           </p>
 
           {list.length === 0 ? (

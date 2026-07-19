@@ -26,6 +26,8 @@ type Entrada = {
   nota_fiscal_numero?: string | null
   nota_fiscal_url_pdf?: string | null
   nota_fiscal_erro?: string | null
+  comissao_paga?: boolean
+  comissao_paga_em?: string | null
 }
 
 type ComissaoConfig = {
@@ -41,8 +43,10 @@ type Props = {
   profissionais: { id: string; name: string }[]
   clinicId: string
   comissaoAtiva?: boolean
+  comissaoBase?: 'bruto' | 'liquido'
   comissaoConfig?: ComissaoConfig[]
   nfseAtivo?: boolean
+  readOnly?: boolean
 }
 
 function fmt(v: number) {
@@ -237,7 +241,7 @@ function EditEntradaModal({
   return createPortal(modal, document.body)
 }
 
-export default function EntradasList({ entradas, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoConfig = [], nfseAtivo = false }: Props) {
+export default function EntradasList({ entradas, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoBase = 'bruto', comissaoConfig = [], nfseAtivo = false, readOnly = false }: Props) {
   const [list, setList] = useState(entradas)
   const comissaoMap = new Map(comissaoConfig.map(c => [c.id, c]))
 
@@ -246,6 +250,10 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     const cfg = comissaoMap.get(profissionalId)
     if (!cfg?.recebe_comissao || cfg.comissao_percentual == null) return null
     return cfg.comissao_percentual
+  }
+
+  function baseComissao(e: Entrada) {
+    return Number((comissaoBase === 'liquido' ? e.valor_liquido : e.valor_bruto) || 0)
   }
   const [search, setSearch] = useState('')
   const [dataInicio, setDataInicio] = useState(primeiroDiaMes())
@@ -293,7 +301,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
   const totalComissao = filteredList.reduce((s, e) => {
     const pct = comissaoDoProfissional(e.profissional_id)
     if (pct == null) return s
-    return s + Number(e.valor_bruto || 0) * (pct / 100)
+    return s + baseComissao(e) * (pct / 100)
   }, 0)
 
   const porProcedimento = filteredList.reduce((acc, e) => {
@@ -303,6 +311,21 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     acc[proc].qtd += 1
     return acc
   }, {} as Record<string, { valor: number; qtd: number }>)
+
+  async function handleToggleComissaoPaga(entrada: Entrada) {
+    const novoValor = !entrada.comissao_paga
+    setList(prev => prev.map(e => e.id === entrada.id
+      ? { ...e, comissao_paga: novoValor, comissao_paga_em: novoValor ? new Date().toISOString() : null }
+      : e))
+    const { error } = await supabase.from('entradas').update({
+      comissao_paga: novoValor,
+      comissao_paga_em: novoValor ? new Date().toISOString() : null,
+    }).eq('id', entrada.id)
+    if (error) {
+      setList(prev => prev.map(e => e.id === entrada.id ? { ...e, comissao_paga: !novoValor } : e))
+      toast.error('Erro ao atualizar', { description: error.message })
+    }
+  }
 
   async function handleDelete(id: string) {
     const removed = list.find(e => e.id === id)
@@ -584,11 +607,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
             <Icon name="receipt" className="w-4 h-4" />
           </a>
-          <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
-            title="Cancelar NFS-e"
-            className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
-            <Icon name="x" className="w-4 h-4" />
-          </button>
+          {!readOnly && (
+            <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
+              title="Cancelar NFS-e"
+              className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
+              <Icon name="x" className="w-4 h-4" />
+            </button>
+          )}
         </>
       )
     }
@@ -643,11 +668,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
             <Icon name="box" className="w-4 h-4" />
           </a>
-          <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
-            title="Cancelar NFe"
-            className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
-            <Icon name="x" className="w-4 h-4" />
-          </button>
+          {!readOnly && (
+            <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
+              title="Cancelar NFe"
+              className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
+              <Icon name="x" className="w-4 h-4" />
+            </button>
+          )}
         </>
       )
     }
@@ -836,24 +863,42 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                   {(() => {
                     const pct = comissaoDoProfissional(e.profissional_id)
                     if (pct == null) return null
-                    const valorComissao = Number(e.valor_bruto || 0) * (pct / 100)
+                    const valorComissao = baseComissao(e) * (pct / 100)
                     return (
-                      <p className="text-xs text-teal-600 mt-0.5">
-                        {pct}% = {fmt(valorComissao)} · clínica {fmt(Number(e.valor_bruto || 0) - valorComissao)}
-                      </p>
+                      <div className="text-xs text-teal-600 mt-0.5">
+                        <p>{pct}% = {fmt(valorComissao)} · clínica {fmt(baseComissao(e) - valorComissao)}</p>
+                        {!readOnly ? (
+                          <button onClick={ev => { ev.stopPropagation(); handleToggleComissaoPaga(e) }}
+                            className={`mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                              e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                            {e.comissao_paga ? 'Comissão paga' : 'Comissão pendente'}
+                          </button>
+                        ) : (
+                          <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                            e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {e.comissao_paga ? 'Paga' : 'Pendente'}
+                          </span>
+                        )}
+                      </div>
                     )
                   })()}
                   <div className="flex items-center justify-end gap-1 mt-1">
                     {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
                     {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
-                    <button onClick={() => setEditEntry(e)}
-                      className="p-2 text-violet-400 hover:bg-violet-50 rounded-lg transition">
-                      <Icon name="edit" className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
-                      className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition">
-                      <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
-                    </button>
+                    {!readOnly && (
+                      <>
+                        <button onClick={() => setEditEntry(e)}
+                          className="p-2 text-violet-400 hover:bg-violet-50 rounded-lg transition">
+                          <Icon name="edit" className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
+                          className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition">
+                          <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -914,14 +959,30 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     {comissaoAtiva && (() => {
                       const pct = comissaoDoProfissional(e.profissional_id)
                       if (pct == null) return (<><td className="px-4 py-3 text-sm text-right text-slate-300">-</td><td className="px-4 py-3 text-sm text-right text-slate-300">-</td></>)
-                      const valorComissao = Number(e.valor_bruto || 0) * (pct / 100)
+                      const valorComissao = baseComissao(e) * (pct / 100)
                       return (
                         <>
                           <td className="px-4 py-3 text-sm text-right text-teal-700 font-medium">
                             {fmt(valorComissao)} <span className="text-xs text-teal-400">({pct}%)</span>
+                            <div>
+                              {!readOnly ? (
+                                <button onClick={ev => { ev.stopPropagation(); handleToggleComissaoPaga(e) }}
+                                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                  {e.comissao_paga ? 'Paga' : 'Pendente'}
+                                </button>
+                              ) : (
+                                <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  e.comissao_paga ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {e.comissao_paga ? 'Paga' : 'Pendente'}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-right text-indigo-700 font-medium">
-                            {fmt(Number(e.valor_bruto || 0) - valorComissao)}
+                            {fmt(baseComissao(e) - valorComissao)}
                           </td>
                         </>
                       )
@@ -930,16 +991,20 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                       <div className="flex items-center justify-center gap-1">
                         {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
                         {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
-                        <button onClick={() => setEditEntry(e)}
-                          className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
-                          title="Editar">
-                          <Icon name="edit" className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
-                          title="Excluir">
-                          <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
-                        </button>
+                        {!readOnly && (
+                          <>
+                            <button onClick={() => setEditEntry(e)}
+                              className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
+                              title="Editar">
+                              <Icon name="edit" className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
+                              title="Excluir">
+                              <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
