@@ -94,7 +94,7 @@ function cnpjNfe(config: FiscalConfig): string | null {
   return config.cnpj_nfe || config.cnpj
 }
 
-function tokenNfe(config: FiscalConfig): string | null {
+export function tokenNfe(config: FiscalConfig): string | null {
   const dedicado = config.ambiente === 'producao' ? config.token_producao_nfe : config.token_homologacao_nfe
   return dedicado || focusToken(config)
 }
@@ -123,6 +123,17 @@ export function resolverUrlArquivo(caminho: string | null | undefined, ambiente:
 
 export function focusToken(config: FiscalConfig): string | null {
   return config.ambiente === 'producao' ? config.token_producao : config.token_homologacao
+}
+
+// Baixa o conteúdo do XML autorizado a partir do caminho relativo devolvido pela Focus
+// na consulta (campo caminho_xml_nota_fiscal, igual pra NFe e NFS-e municipal). O
+// documento fiscal de verdade é o XML — o PDF/DANFE é só representação visual.
+export async function baixarXmlAutorizado(caminhoXml: string | null | undefined, ambiente: string, token: string): Promise<string> {
+  const url = resolverUrlArquivo(caminhoXml, ambiente)
+  if (!url) throw new Error('Caminho do XML não informado pela Focus')
+  const res = await fetch(url, { headers: { 'Authorization': authHeader(token) } })
+  if (!res.ok) throw new Error(`Falha ao baixar XML da nota (HTTP ${res.status})`)
+  return res.text()
 }
 
 function authHeader(token: string) {
