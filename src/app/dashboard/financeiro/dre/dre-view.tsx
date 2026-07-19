@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { todayBR, addDaysBR } from '@/lib/datetime'
 import { gerarParcelas, type TaxaPag } from '@/lib/recebiveis'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts'
 
 type Entrada = {
   data_venda: string
@@ -43,6 +44,21 @@ function fmt(v: number) {
 
 function fmtPct(v: number) {
   return (v * 100).toFixed(1) + '%'
+}
+
+const CAT_SHADES = ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe', '#f3f0ff']
+
+function CategoriaTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const row = payload[0]?.payload
+  if (!row) return null
+  const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-lg px-3 py-2 text-xs">
+      <p className="font-bold text-slate-900 mb-1">{row.categoria}</p>
+      <p className="text-slate-600">{fmt(row.valor)}</p>
+    </div>
+  )
 }
 
 export default function DreView({ entradas: initialEntradas, saidas: initialSaidas, clinicId, scope = 'all' }: Props) {
@@ -288,25 +304,38 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
             <Icon name="barChart" className="w-5 h-5 text-violet-600" />
             Resumo por Categoria
           </h4>
-          <div className="space-y-3">
-            {CATEGORIAS_DRE.map(cat => {
-              const val = despesasPorCategoria[cat] || 0
-              const pct = totalDespesas > 0 ? (val / totalDespesas) * 100 : 0
+          <div className="space-y-1">
+            {(() => {
+              const chartData = CATEGORIAS_DRE
+                .map(cat => ({ categoria: cat, valor: despesasPorCategoria[cat] || 0 }))
+                .filter(d => d.valor > 0)
+              if (chartData.length === 0) {
+                return <p className="text-sm text-slate-400 text-center py-6">Nenhuma despesa no período</p>
+              }
               return (
-                <div key={cat}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-600">{cat}</span>
-                    <span className="font-medium text-slate-900">{fmt(val)}</span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-violet-500 to-purple-500 rounded-full transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+                <div style={{ width: '100%', height: chartData.length * 34 + 10 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
+                      <XAxis type="number" hide />
+                      <YAxis
+                        type="category"
+                        dataKey="categoria"
+                        width={140}
+                        tick={{ fill: '#475569', fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip content={<CategoriaTooltip />} cursor={{ fill: '#f8fafc' }} />
+                      <Bar dataKey="valor" radius={[0, 6, 6, 0]} barSize={16}>
+                        {chartData.map((_, i) => (
+                          <Cell key={i} fill={CAT_SHADES[i % CAT_SHADES.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               )
-            })}
+            })()}
           </div>
         </div>
 
