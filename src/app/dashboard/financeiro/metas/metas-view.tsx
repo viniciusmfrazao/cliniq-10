@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { parseSupabaseError } from '@/lib/error-messages'
+import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts'
 
 
 type Meta = {
@@ -174,20 +175,32 @@ export default function MetasView({ metas, receitaMesAtual, atendimentosMesAtual
                 <p className="text-white/80 text-sm">Mês Atual</p>
                 <p className="text-2xl font-black">{getMesLabel(currentMonth)}</p>
               </div>
-              <div className="text-right">
-                <p className="text-4xl font-black">{pctReceita}%</p>
-                <p className="text-white/80 text-sm">da meta</p>
+              <div style={{ width: 84, height: 84 }} className="relative flex-shrink-0">
+                <ResponsiveContainer>
+                  <RadialBarChart
+                    innerRadius="70%"
+                    outerRadius="100%"
+                    data={[{ value: pctReceita }]}
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+                    <RadialBar
+                      background={{ fill: 'rgba(255,255,255,0.2)' }}
+                      dataKey="value"
+                      cornerRadius={8}
+                      fill="#ffffff"
+                    />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-lg font-black">{pctReceita}%</span>
+                </div>
               </div>
             </div>
 
             {metaAtual ? (
               <>
-                <div className="h-4 bg-white/20 rounded-full overflow-hidden mb-4">
-                  <div 
-                    className="h-full bg-white rounded-full transition-all duration-500"
-                    style={{ width: `${pctReceita}%` }}
-                  />
-                </div>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <p className="text-sm text-white/80">Realizado</p>

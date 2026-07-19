@@ -6,6 +6,21 @@ import Icon from '@/components/ui/Icon'
 import { formatBRL } from '@/lib/format'
 import { todayBR, addDaysBR, startOfMonthBR, endOfMonthBR, parseDateBR } from '@/lib/datetime'
 import { gerarParcelas, type TaxaPag } from '@/lib/recebiveis'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts'
+
+const RECEB_SHADES = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#eff6ff', '#f5f8ff']
+
+function RecebimentoTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const row = payload[0]?.payload
+  if (!row) return null
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-lg px-3 py-2 text-xs">
+      <p className="font-bold text-slate-900 mb-1 capitalize">{row.label}</p>
+      <p className="text-slate-600">{formatBRL(row.total)}</p>
+    </div>
+  )
+}
 
 const PERIODOS = [
   { value: 'proximos_30', label: 'Próximos 30 dias' },
@@ -153,6 +168,27 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
         <Icon name="alertCircle" className="w-4 h-4 flex-shrink-0" />
         Projeta apenas parcelas de vendas já lançadas em Entradas. Prazo de repasse por bandeira/parcela vem de Configurações → Taxas de Pagamento.
       </div>
+
+      {/* Gráfico de recebíveis */}
+      {!loading && grouped.length > 0 && (
+        <div className="card p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Recebíveis por {groupBy === 'mes' ? 'mês' : groupBy === 'forma' ? 'forma de pagamento' : 'dia'}
+          </p>
+          <div style={{ width: '100%', height: Math.min(8, grouped.length) * 34 + 10 }}>
+            <ResponsiveContainer>
+              <BarChart data={grouped.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="label" width={130} tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip content={<RecebimentoTooltip />} cursor={{ fill: '#f8fafc' }} />
+                <Bar dataKey="total" radius={[0, 6, 6, 0]} barSize={16}>
+                  {grouped.slice(0, 8).map((_, i) => <Cell key={i} fill={RECEB_SHADES[i % RECEB_SHADES.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="card p-8 text-center text-slate-400">Carregando...</div>

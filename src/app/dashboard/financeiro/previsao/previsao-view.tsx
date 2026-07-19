@@ -6,6 +6,7 @@ import Icon from '@/components/ui/Icon'
 import { formatBRL } from '@/lib/format'
 import { todayBR, addDaysBR, startOfMonthBR, endOfMonthBR, startOfDayBR, endOfDayBR, parseDateBR } from '@/lib/datetime'
 import { PROFESSIONAL_ROLES, APPOINTMENT_STATUS_LABELS } from '@/lib/constants'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts'
 
 // Status que ainda podem virar receita — 'completed' já é receita realizada
 // (entra em Entradas/Fluxo de Caixa) e nunca deve entrar numa previsão.
@@ -45,6 +46,20 @@ type Row = {
 }
 
 type Professional = { id: string; name: string }
+
+const PREV_SHADES = ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe', '#f3f0ff', '#f5f3ff']
+
+function PrevisaoTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const row = payload[0]?.payload
+  if (!row) return null
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-lg px-3 py-2 text-xs">
+      <p className="font-bold text-slate-900 mb-1">{row.label}</p>
+      <p className="text-slate-600">{formatBRL(row.total)}</p>
+    </div>
+  )
+}
 
 export default function PrevisaoFaturamentoView({ clinicId }: { clinicId: string }) {
   const supabase = createClient()
@@ -315,6 +330,40 @@ export default function PrevisaoFaturamentoView({ clinicId }: { clinicId: string
         <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
           <Icon name="alertCircle" className="w-4 h-4 flex-shrink-0" />
           {jaLancadoCount} agendamento(s) do período já têm entrada financeira lançada e foram excluídos da previsão para evitar contar a receita duas vezes.
+        </div>
+      )}
+
+      {/* Gráfico de previsão */}
+      {!loading && grouped.length > 0 && (
+        <div className="card p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            {groupBy === 'dia' ? 'Previsão por dia' : `Top previsto por ${groupBy}`}
+          </p>
+          {groupBy === 'dia' ? (
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer>
+                <LineChart data={grouped} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <YAxis hide />
+                  <Tooltip content={<PrevisaoTooltip />} cursor={{ stroke: '#e2e8f0' }} />
+                  <Line type="monotone" dataKey="total" stroke="#7c3aed" strokeWidth={2.5} dot={{ r: 3, fill: '#7c3aed', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div style={{ width: '100%', height: Math.min(8, grouped.length) * 34 + 10 }}>
+              <ResponsiveContainer>
+                <BarChart data={grouped.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="label" width={130} tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<PrevisaoTooltip />} cursor={{ fill: '#f8fafc' }} />
+                  <Bar dataKey="total" radius={[0, 6, 6, 0]} barSize={16}>
+                    {grouped.slice(0, 8).map((_, i) => <Cell key={i} fill={PREV_SHADES[i % PREV_SHADES.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       )}
 
