@@ -47,6 +47,7 @@ type ProviderProps = {
   userRole: string
   activeModules: ModuleId[]
   clinicId: string
+  comissaoAtiva?: boolean
 }
 
 export default function CommandPaletteProvider({
@@ -54,6 +55,7 @@ export default function CommandPaletteProvider({
   userRole,
   activeModules,
   clinicId,
+  comissaoAtiva = false,
 }: ProviderProps) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -91,6 +93,7 @@ export default function CommandPaletteProvider({
           userRole={userRole}
           activeModules={activeModules}
           clinicId={clinicId}
+          comissaoAtiva={comissaoAtiva}
         />
       ) : null}
     </CommandContext.Provider>
@@ -108,11 +111,13 @@ function CommandPaletteDialog({
   userRole,
   activeModules,
   clinicId,
+  comissaoAtiva,
 }: {
   onClose: () => void
   userRole: string
   activeModules: ModuleId[]
   clinicId: string
+  comissaoAtiva: boolean
 }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -188,6 +193,7 @@ function CommandPaletteDialog({
       // Filhos (financeiro tem sub-itens)
       if (item.children) {
         for (const c of item.children) {
+          if (c.href === '/dashboard/comissoes/minhas' && !comissaoAtiva) continue
           items.push({
             id: `nav-${c.href}`,
             label: c.label,
@@ -204,7 +210,7 @@ function CommandPaletteDialog({
       }
     }
     return items
-  }, [userRole, activeModules, router, onClose])
+  }, [userRole, activeModules, comissaoAtiva, router, onClose])
 
   // Acoes rapidas (criar coisas + atalhos uteis)
   const actionItems = useMemo<CommandItem[]>(() => {
