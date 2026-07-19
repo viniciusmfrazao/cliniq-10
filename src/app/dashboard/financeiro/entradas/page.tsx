@@ -47,6 +47,24 @@ export default async function EntradasPage() {
     .in('role', ['doctor', 'esthetician', 'admin'])
     .order('name')
 
+  const { data: clinic } = await supabase
+    .from('clinics')
+    .select('settings')
+    .eq('id', clinicId)
+    .single()
+
+  const comissaoAtiva = !!clinic?.settings?.comissao_ativa
+  const nfseAtivo = (clinic?.settings?.active_modules || []).includes('nfse')
+
+  // Mapa de comissão por profissional, independente do filtro de role acima
+  // (entradas podem referenciar qualquer papel clínico: dentista, enfermeiro, etc.)
+  const { data: comissaoConfig } = comissaoAtiva
+    ? await supabase
+        .from('users')
+        .select('id, recebe_comissao, comissao_percentual')
+        .eq('clinic_id', clinicId)
+    : { data: null }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -76,6 +94,9 @@ export default async function EntradasPage() {
         procedimentos={procedimentos || []}
         profissionais={profissionais || []}
         clinicId={clinicId ?? ''}
+        comissaoAtiva={comissaoAtiva}
+        comissaoConfig={comissaoConfig || []}
+        nfseAtivo={nfseAtivo}
       />
     </div>
   )

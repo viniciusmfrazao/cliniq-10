@@ -17,6 +17,7 @@ export type ModuleId =
   | 'auditoria'
   | 'ia_prontuario'
   | 'automacoes'
+  | 'nfse'
 
 export type Module = {
   id: ModuleId
@@ -171,6 +172,14 @@ export const AVAILABLE_MODULES: Module[] = [
     category: 'admin',
     defaultEnabled: false
   },
+  {
+    id: 'nfse',
+    name: 'Nota Fiscal (NFS-e)',
+    description: 'Emissão de nota fiscal de serviço para os procedimentos, direto das Entradas',
+    icon: '🧾',
+    category: 'admin',
+    defaultEnabled: false
+  },
 ]
 
 export const MODULE_CATEGORIES = {
@@ -217,6 +226,7 @@ export const MODULE_ROUTES: Record<ModuleId, string[]> = {
   odontograma: [],  // tab dentro da ficha do paciente, sem rota própria
   ia_prontuario: [], // feature dentro do atendimento, sem rota própria
   automacoes: ['/dashboard/config/automacoes'],
+  nfse: ['/dashboard/config/fiscal'],
 }
 
 // Verifica se uma rota está habilitada para os módulos ativos

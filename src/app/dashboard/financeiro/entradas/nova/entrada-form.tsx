@@ -122,6 +122,7 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
   const [bandeira, setBandeira] = useState('')
   const [valorBruto, setValorBruto] = useState('')
   const [observacoes, setObservacoes] = useState('')
+  const [tipoReceita, setTipoReceita] = useState<'servico' | 'produto'>('servico')
 
   const taxaPct = getTaxaPct(taxasPagamento, forma, bandeira)
   const valorNum = parseFloat(valorBruto) || 0
@@ -199,6 +200,7 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
       n_parcelas: nParcelas,
       observacoes: observacoes || null,
       created_by: userId,
+      tipo_receita: tipoReceita,
     })
 
     if (error) {
@@ -248,6 +250,34 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
             />
           </div>
         )}
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de receita</label>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setTipoReceita('servico')}
+              className={`flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium transition ${
+                tipoReceita === 'servico'
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}>
+              Serviço (procedimento)
+            </button>
+            <button type="button" onClick={() => setTipoReceita('produto')}
+              className={`flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium transition ${
+                tipoReceita === 'produto'
+                  ? 'bg-amber-50 border-amber-300 text-amber-700'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}>
+              Produto (venda avulsa)
+            </button>
+          </div>
+          {tipoReceita === 'produto' && (
+            <p className="text-xs text-amber-600 mt-1.5">
+              Venda de produto que a paciente leva embora (não aplicado por um profissional).
+              Fica de fora da emissão de NFS-e — a nota desse tipo de venda é NF-e/NFC-e, ainda não integrada.
+            </p>
+          )}
+        </div>
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>

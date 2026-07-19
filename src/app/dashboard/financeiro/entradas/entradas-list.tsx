@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
 import { todayBR } from '@/lib/datetime'
@@ -11,6 +11,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 type Entrada = {
   id: string
   data_venda: string
+  paciente_id?: string | null
   paciente_nome: string
   procedimento_nome: string
   profissional_nome: string
@@ -20,6 +21,11 @@ type Entrada = {
   valor_bruto: number
   valor_liquido: number
   taxa_percentual: number
+  tipo_receita?: string
+  nota_fiscal_status?: string | null
+  nota_fiscal_numero?: string | null
+  nota_fiscal_url_pdf?: string | null
+  nota_fiscal_erro?: string | null
 }
 
 type ComissaoConfig = {
@@ -36,6 +42,7 @@ type Props = {
   clinicId: string
   comissaoAtiva?: boolean
   comissaoConfig?: ComissaoConfig[]
+  nfseAtivo?: boolean
 }
 
 function fmt(v: number) {
@@ -76,6 +83,9 @@ function EditEntradaModal({
   const [bandeira, setBandeira] = useState(entrada.bandeira || '')
   const [bruto, setBruto] = useState(String(entrada.valor_bruto || ''))
   const [liquido, setLiquido] = useState(String(entrada.valor_liquido || ''))
+  const [tipoReceita, setTipoReceita] = useState<'servico' | 'produto'>(
+    entrada.tipo_receita === 'produto' ? 'produto' : 'servico'
+  )
 
   // Ao mudar bruto, recalcula liquido mantendo mesma taxa
   function handleBrutoChange(val: string) {
@@ -105,6 +115,7 @@ function EditEntradaModal({
       valor_bruto: vb,
       valor_liquido: vl,
       valor_taxa: Math.round((vb - vl) * 100) / 100,
+      tipo_receita: tipoReceita,
     }).eq('id', entrada.id)
     setSaving(false)
 
@@ -114,7 +125,7 @@ function EditEntradaModal({
     }
 
     toast.success('Entrada atualizada')
-    onSave({ ...entrada, data_venda: data, paciente_nome: paciente, procedimento_nome: procedimento, profissional_nome: profissional, forma_pagamento: forma, bandeira: bandeira || null, valor_bruto: vb, valor_liquido: vl })
+    onSave({ ...entrada, data_venda: data, paciente_nome: paciente, procedimento_nome: procedimento, profissional_nome: profissional, forma_pagamento: forma, bandeira: bandeira || null, valor_bruto: vb, valor_liquido: vl, tipo_receita: tipoReceita })
     onClose()
   }
 
@@ -161,6 +172,28 @@ function EditEntradaModal({
           </div>
 
           <div>
+            <label className="text-xs text-slate-500 mb-1 block">Tipo de receita</label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setTipoReceita('servico')}
+                className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition ${
+                  tipoReceita === 'servico'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                Serviço
+              </button>
+              <button type="button" onClick={() => setTipoReceita('produto')}
+                className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition ${
+                  tipoReceita === 'produto'
+                    ? 'bg-amber-50 border-amber-300 text-amber-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                Produto
+              </button>
+            </div>
+          </div>
+
+          <div>
             <label className="text-xs text-slate-500 mb-1 block">Procedimento</label>
             <input type="text" value={procedimento} onChange={e => setProcedimento(e.target.value)} className="input w-full text-sm" />
           </div>
@@ -204,7 +237,7 @@ function EditEntradaModal({
   return createPortal(modal, document.body)
 }
 
-export default function EntradasList({ entradas, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoConfig = [] }: Props) {
+export default function EntradasList({ entradas, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoConfig = [], nfseAtivo = false }: Props) {
   const [list, setList] = useState(entradas)
   const comissaoMap = new Map(comissaoConfig.map(c => [c.id, c]))
 
@@ -308,6 +341,346 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     setList(prev => prev.map(e => e.id === updated.id ? updated : e))
   }
 
+  const [emitindo, setEmitindo] = useState<string | null>(null)
+  const [enderecoModalEntrada, setEnderecoModalEntrada] = useState<Entrada | null>(null)
+  const [cancelEntrada, setCancelEntrada] = useState<Entrada | null>(null)
+  const [justificativaCancelamento, setJustificativaCancelamento] = useState('')
+  const [cancelando, setCancelando] = useState(false)
+
+  async function handleCancelarNota() {
+    if (!cancelEntrada) return
+    const texto = justificativaCancelamento.trim()
+    if (texto.length < 15 || texto.length > 255) {
+      toast.error('Justificativa deve ter entre 15 e 255 caracteres')
+      return
+    }
+    setCancelando(true)
+    try {
+      const endpoint = cancelEntrada.tipo_receita === 'produto'
+        ? '/api/financeiro/nota-fiscal/cancelar-nfe'
+        : '/api/financeiro/nota-fiscal/cancelar'
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entrada_id: cancelEntrada.id, justificativa: texto }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao cancelar nota')
+      setList(prev => prev.map(e => e.id === cancelEntrada.id ? { ...e, nota_fiscal_status: 'cancelada' } : e))
+      toast.success('Nota fiscal cancelada')
+      setCancelEntrada(null)
+      setJustificativaCancelamento('')
+    } catch (err) {
+      toast.error('Erro ao cancelar', { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setCancelando(false)
+    }
+  }
+
+  function EnderecoDestinatarioModal({ entrada, onClose }: { entrada: Entrada; onClose: () => void }) {
+    const [cpf, setCpf] = useState('')
+    const [logradouro, setLogradouro] = useState('')
+    const [numero, setNumero] = useState('')
+    const [bairro, setBairro] = useState('')
+    const [municipio, setMunicipio] = useState('')
+    const [uf, setUf] = useState('')
+    const [cep, setCep] = useState('')
+    const [carregandoPaciente, setCarregandoPaciente] = useState(!!entrada.paciente_id)
+
+    useEffect(() => {
+      if (!entrada.paciente_id) { setCarregandoPaciente(false); return }
+      let cancelado = false
+      async function carregar() {
+        const { data } = await supabase.from('patients').select('cpf, address, address_number, neighborhood, city, state, zip_code')
+          .eq('id', entrada.paciente_id).maybeSingle()
+        if (cancelado) return
+        if (data) {
+          if (data.cpf) setCpf(data.cpf)
+          if (data.city) setMunicipio(data.city)
+          if (data.state) setUf(data.state.toUpperCase().slice(0, 2))
+          if (data.zip_code) setCep(data.zip_code)
+          if (data.address) setLogradouro(data.address)
+          if (data.address_number) setNumero(data.address_number)
+          if (data.neighborhood) setBairro(data.neighborhood)
+          // Compatibilidade com cadastros antigos (antes de Número/Bairro existirem como
+          // campos próprios): se não tiver os campos novos, tenta separar por vírgula.
+          if (!data.address_number && !data.neighborhood && data.address?.includes(',')) {
+            const partes = data.address.split(',').map((p: string) => p.trim()).filter(Boolean)
+            if (partes[0]) setLogradouro(partes[0])
+            if (partes[1]) setNumero(partes[1])
+            if (partes[2]) setBairro(partes[2])
+          }
+        }
+        setCarregandoPaciente(false)
+      }
+      carregar()
+      return () => { cancelado = true }
+    }, [entrada.paciente_id])
+
+    const cpfLimpo = cpf.replace(/\D/g, '')
+    const podeEnviar = cpfLimpo.length === 11 && logradouro && numero && bairro && municipio && uf
+
+    function confirmar() {
+      onClose()
+      emitirNota(entrada.id, 'nfe', {
+        destinatario_cpf: cpfLimpo,
+        destinatario_logradouro: logradouro,
+        destinatario_numero: numero,
+        destinatario_bairro: bairro,
+        destinatario_municipio: municipio,
+        destinatario_uf: uf,
+        destinatario_cep: cep,
+      })
+    }
+
+    return createPortal(
+      <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+            <div>
+              <h2 className="font-bold text-slate-900">Dados do comprador</h2>
+              <p className="text-sm text-slate-500 mt-0.5">{entrada.paciente_nome} — CPF e endereço são obrigatórios na NFe</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+              <Icon name="x" className="w-4 h-4 text-slate-400" />
+            </button>
+          </div>
+          <div className="p-5 overflow-y-auto space-y-3">
+            {carregandoPaciente && (
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <LoadingSpinner size="sm" /> Buscando dados do cadastro do paciente...
+              </div>
+            )}
+            {!carregandoPaciente && entrada.paciente_id && (
+              <p className="text-xs text-slate-400">
+                Pré-preenchido com o cadastro do paciente (número/bairro só vêm certos se o
+                cadastro já tiver esses campos preenchidos) — confira antes de emitir.
+              </p>
+            )}
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">CPF *</label>
+              <input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" className="input w-full text-sm" />
+              {cpf && cpfLimpo.length !== 11 && (
+                <p className="text-xs text-rose-600 mt-1">CPF precisa ter 11 dígitos</p>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs text-slate-500 mb-1 block">Logradouro *</label>
+                <input value={logradouro} onChange={e => setLogradouro(e.target.value)} className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Número *</label>
+                <input value={numero} onChange={e => setNumero(e.target.value)} className="input w-full text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Bairro *</label>
+                <input value={bairro} onChange={e => setBairro(e.target.value)} className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">CEP</label>
+                <input value={cep} onChange={e => setCep(e.target.value)} className="input w-full text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs text-slate-500 mb-1 block">Município *</label>
+                <input value={municipio} onChange={e => setMunicipio(e.target.value)} className="input w-full text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">UF *</label>
+                <input value={uf} onChange={e => setUf(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} className="input w-full text-sm" />
+              </div>
+            </div>
+          </div>
+          <div className="p-5 border-t border-slate-100 flex gap-3 flex-shrink-0">
+            <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button onClick={confirmar} disabled={!podeEnviar || carregandoPaciente}
+              className="flex-1 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
+              Emitir NFe
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
+  async function emitirNota(entradaId: string, tipo: 'nfse' | 'nfe' = 'nfse', extra?: Record<string, string>) {
+    setEmitindo(entradaId)
+    const endpointEmitir = tipo === 'nfe' ? '/api/financeiro/nota-fiscal/emitir-nfe' : '/api/financeiro/nota-fiscal/emitir'
+    try {
+      const res = await fetch(endpointEmitir, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entrada_id: entradaId, ...extra }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error('Erro ao emitir nota', { description: data.error })
+        setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'erro', nota_fiscal_erro: data.error } : e))
+        return
+      }
+      setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'processando' } : e))
+      toast.success('Nota fiscal enviada, aguardando autorização')
+      // Consulta automática após alguns segundos (a autorização é assíncrona)
+      setTimeout(() => consultarNota(entradaId, tipo, true), 6000)
+    } catch (err) {
+      toast.error('Erro ao emitir nota', { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setEmitindo(null)
+    }
+  }
+
+  async function consultarNota(entradaId: string, tipo: 'nfse' | 'nfe' = 'nfse', silencioso = false) {
+    if (!silencioso) setEmitindo(entradaId)
+    const endpointConsultar = tipo === 'nfe' ? '/api/financeiro/nota-fiscal/consultar-nfe' : '/api/financeiro/nota-fiscal/consultar'
+    try {
+      const res = await fetch(`${endpointConsultar}?entrada_id=${entradaId}`)
+      const data = await res.json()
+      if (!res.ok) {
+        if (!silencioso) toast.error('Erro ao consultar nota', { description: data.error })
+        return
+      }
+      if (data.status === 'autorizada') {
+        setList(prev => prev.map(e => e.id === entradaId
+          ? { ...e, nota_fiscal_status: 'autorizada', nota_fiscal_numero: data.numero, nota_fiscal_url_pdf: data.url_pdf }
+          : e))
+        if (!silencioso) toast.success('Nota fiscal autorizada')
+      } else if (data.status === 'erro') {
+        setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'erro', nota_fiscal_erro: data.erro } : e))
+        if (!silencioso) toast.error('Nota fiscal com erro', { description: data.erro })
+      } else if (!silencioso) {
+        toast.info('Ainda processando, tente novamente em alguns segundos')
+      }
+    } finally {
+      if (!silencioso) setEmitindo(null)
+    }
+  }
+
+  function BotaoNfse({ entrada }: { entrada: Entrada }) {
+    const status = entrada.nota_fiscal_status || 'nao_emitida'
+    const carregando = emitindo === entrada.id
+
+    if (status === 'cancelada') {
+      return (
+        <span title="NFS-e cancelada" className="p-2 text-slate-400 inline-flex">
+          <Icon name="receipt" className="w-4 h-4 opacity-40" />
+        </span>
+      )
+    }
+
+    if (status === 'autorizada') {
+      return (
+        <>
+          <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
+            title={`NFS-e nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
+            onClick={e => e.stopPropagation()}
+            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
+            <Icon name="receipt" className="w-4 h-4" />
+          </a>
+          <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
+            title="Cancelar NFS-e"
+            className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
+            <Icon name="x" className="w-4 h-4" />
+          </button>
+        </>
+      )
+    }
+
+    if (status === 'processando') {
+      return (
+        <button onClick={e => { e.stopPropagation(); consultarNota(entrada.id) }} disabled={carregando}
+          title="NFS-e processando — clique para atualizar status"
+          className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-4 h-4" />}
+        </button>
+      )
+    }
+
+    if (status === 'erro') {
+      return (
+        <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
+          title={entrada.nota_fiscal_erro || 'Erro ao emitir NFS-e — clique para tentar de novo'}
+          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
+        </button>
+      )
+    }
+
+    return (
+      <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
+        title="Emitir NFS-e (nota de serviço)"
+        className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
+        {carregando ? <LoadingSpinner size="sm" /> : <Icon name="receipt" className="w-4 h-4" />}
+      </button>
+    )
+  }
+
+  function BotaoNfe({ entrada }: { entrada: Entrada }) {
+    const status = entrada.nota_fiscal_status || 'nao_emitida'
+    const carregando = emitindo === entrada.id
+
+    if (status === 'cancelada') {
+      return (
+        <span title="NFe cancelada" className="p-2 text-slate-400 inline-flex">
+          <Icon name="box" className="w-4 h-4 opacity-40" />
+        </span>
+      )
+    }
+
+    if (status === 'autorizada') {
+      return (
+        <>
+          <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
+            title={`NFe nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
+            onClick={e => e.stopPropagation()}
+            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
+            <Icon name="box" className="w-4 h-4" />
+          </a>
+          <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
+            title="Cancelar NFe"
+            className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
+            <Icon name="x" className="w-4 h-4" />
+          </button>
+        </>
+      )
+    }
+
+    if (status === 'processando') {
+      return (
+        <button onClick={e => { e.stopPropagation(); consultarNota(entrada.id, 'nfe') }} disabled={carregando}
+          title="NFe processando — clique para atualizar status"
+          className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-4 h-4" />}
+        </button>
+      )
+    }
+
+    if (status === 'erro') {
+      return (
+        <button onClick={e => { e.stopPropagation(); setEnderecoModalEntrada(entrada) }} disabled={carregando}
+          title={entrada.nota_fiscal_erro || 'Erro ao emitir NFe — clique para tentar de novo'}
+          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
+          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
+        </button>
+      )
+    }
+
+    return (
+      <button onClick={e => { e.stopPropagation(); setEnderecoModalEntrada(entrada) }} disabled={carregando}
+        title="Emitir NFe (nota de produto)"
+        className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
+        {carregando ? <LoadingSpinner size="sm" /> : <Icon name="box" className="w-4 h-4" />}
+      </button>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {editEntry && (
@@ -315,6 +688,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
           entrada={editEntry}
           onSave={handleSaveEdit}
           onClose={() => setEditEntry(null)}
+        />
+      )}
+
+      {enderecoModalEntrada && (
+        <EnderecoDestinatarioModal
+          entrada={enderecoModalEntrada}
+          onClose={() => setEnderecoModalEntrada(null)}
         />
       )}
 
@@ -464,13 +844,15 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     )
                   })()}
                   <div className="flex items-center justify-end gap-1 mt-1">
+                    {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
+                    {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
                     <button onClick={() => setEditEntry(e)}
-                      className="p-1.5 text-violet-400 hover:bg-violet-50 rounded-lg transition">
-                      <Icon name="edit" className="w-3.5 h-3.5" />
+                      className="p-2 text-violet-400 hover:bg-violet-50 rounded-lg transition">
+                      <Icon name="edit" className="w-4 h-4" />
                     </button>
                     <button onClick={() => handleDelete(e.id)} disabled={deleting === e.id}
-                      className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition">
-                      <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-3.5 h-3.5" />
+                      className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition">
+                      <Icon name={deleting === e.id ? 'loader' : 'trash'} className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -546,6 +928,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     })()}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
+                        {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
+                        {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
                         <button onClick={() => setEditEntry(e)}
                           className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
                           title="Editar">
@@ -565,6 +949,36 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
           </table>
         </div>
       </div>
+
+      {cancelEntrada && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card max-w-md w-full p-6 space-y-4">
+            <h3 className="text-base font-semibold text-slate-900">Cancelar nota fiscal?</h3>
+            <p className="text-sm text-slate-600">
+              Nota nº {cancelEntrada.nota_fiscal_numero || '-'}, {fmt(cancelEntrada.valor_bruto)} — {cancelEntrada.paciente_nome}.
+              O cancelamento é <strong>definitivo</strong> e não pode ser desfeito.
+            </p>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Justificativa (15 a 255 caracteres)</label>
+              <textarea value={justificativaCancelamento} onChange={e => setJustificativaCancelamento(e.target.value)}
+                rows={3} maxLength={255} placeholder="Ex: nota emitida com valor incorreto, refazendo com o valor certo"
+                className="input w-full text-sm" />
+              <p className="text-xs text-slate-400 mt-1">{justificativaCancelamento.trim().length}/255</p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => { setCancelEntrada(null); setJustificativaCancelamento('') }}
+                className="border border-slate-200 text-slate-700 px-4 py-2 rounded-xl font-semibold hover:bg-slate-50 transition text-sm">
+                Voltar
+              </button>
+              <button onClick={handleCancelarNota} disabled={cancelando || justificativaCancelamento.trim().length < 15}
+                className="flex items-center gap-2 bg-rose-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-rose-700 transition disabled:opacity-50 text-sm">
+                {cancelando && <LoadingSpinner size="sm" />}
+                Confirmar cancelamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
