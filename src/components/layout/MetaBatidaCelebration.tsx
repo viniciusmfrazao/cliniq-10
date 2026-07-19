@@ -26,7 +26,11 @@ export default function MetaBatidaCelebration() {
 
     async function check() {
       const { data, error } = await supabase.rpc('fn_metas_batidas_pendentes')
-      if (error || cancelled || !data || data.length === 0) return
+      if (error) {
+        console.error('fn_metas_batidas_pendentes falhou:', error)
+        return
+      }
+      if (cancelled || !data || data.length === 0) return
 
       const primeira = data[0]
       setPendente(primeira)
