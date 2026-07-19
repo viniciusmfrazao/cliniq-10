@@ -343,6 +343,39 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
   const [emitindo, setEmitindo] = useState<string | null>(null)
   const [enderecoModalEntrada, setEnderecoModalEntrada] = useState<Entrada | null>(null)
+  const [cancelEntrada, setCancelEntrada] = useState<Entrada | null>(null)
+  const [justificativaCancelamento, setJustificativaCancelamento] = useState('')
+  const [cancelando, setCancelando] = useState(false)
+
+  async function handleCancelarNota() {
+    if (!cancelEntrada) return
+    const texto = justificativaCancelamento.trim()
+    if (texto.length < 15 || texto.length > 255) {
+      toast.error('Justificativa deve ter entre 15 e 255 caracteres')
+      return
+    }
+    setCancelando(true)
+    try {
+      const endpoint = cancelEntrada.tipo_receita === 'produto'
+        ? '/api/financeiro/nota-fiscal/cancelar-nfe'
+        : '/api/financeiro/nota-fiscal/cancelar'
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entrada_id: cancelEntrada.id, justificativa: texto }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao cancelar nota')
+      setList(prev => prev.map(e => e.id === cancelEntrada.id ? { ...e, nota_fiscal_status: 'cancelada' } : e))
+      toast.success('Nota fiscal cancelada')
+      setCancelEntrada(null)
+      setJustificativaCancelamento('')
+    } catch (err) {
+      toast.error('Erro ao cancelar', { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setCancelando(false)
+    }
+  }
 
   function EnderecoDestinatarioModal({ entrada, onClose }: { entrada: Entrada; onClose: () => void }) {
     const [cpf, setCpf] = useState('')
@@ -534,14 +567,29 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     const status = entrada.nota_fiscal_status || 'nao_emitida'
     const carregando = emitindo === entrada.id
 
+    if (status === 'cancelada') {
+      return (
+        <span title="NFS-e cancelada" className="p-2 text-slate-400 inline-flex">
+          <Icon name="receipt" className="w-4 h-4 opacity-40" />
+        </span>
+      )
+    }
+
     if (status === 'autorizada') {
       return (
-        <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
-          title={`NFS-e nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
-          onClick={e => e.stopPropagation()}
-          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
-          <Icon name="receipt" className="w-4 h-4" />
-        </a>
+        <>
+          <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
+            title={`NFS-e nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
+            onClick={e => e.stopPropagation()}
+            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
+            <Icon name="receipt" className="w-4 h-4" />
+          </a>
+          <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
+            title="Cancelar NFS-e"
+            className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
+            <Icon name="x" className="w-4 h-4" />
+          </button>
+        </>
       )
     }
 
@@ -578,14 +626,29 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     const status = entrada.nota_fiscal_status || 'nao_emitida'
     const carregando = emitindo === entrada.id
 
+    if (status === 'cancelada') {
+      return (
+        <span title="NFe cancelada" className="p-2 text-slate-400 inline-flex">
+          <Icon name="box" className="w-4 h-4 opacity-40" />
+        </span>
+      )
+    }
+
     if (status === 'autorizada') {
       return (
-        <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
-          title={`NFe nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
-          onClick={e => e.stopPropagation()}
-          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
-          <Icon name="box" className="w-4 h-4" />
-        </a>
+        <>
+          <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
+            title={`NFe nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
+            onClick={e => e.stopPropagation()}
+            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
+            <Icon name="box" className="w-4 h-4" />
+          </a>
+          <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
+            title="Cancelar NFe"
+            className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
+            <Icon name="x" className="w-4 h-4" />
+          </button>
+        </>
       )
     }
 
@@ -781,8 +844,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     )
                   })()}
                   <div className="flex items-center justify-end gap-1 mt-1">
-                    {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
-                    {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
+                    {nfseAtivo && <BotaoNfse entrada={e} />}
+                    {nfseAtivo && <BotaoNfe entrada={e} />}
                     <button onClick={() => setEditEntry(e)}
                       className="p-2 text-violet-400 hover:bg-violet-50 rounded-lg transition">
                       <Icon name="edit" className="w-4 h-4" />
@@ -865,8 +928,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     })()}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
-                        {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
+                        {nfseAtivo && <BotaoNfse entrada={e} />}
+                        {nfseAtivo && <BotaoNfe entrada={e} />}
                         <button onClick={() => setEditEntry(e)}
                           className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
                           title="Editar">
@@ -886,6 +949,36 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
           </table>
         </div>
       </div>
+
+      {cancelEntrada && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card max-w-md w-full p-6 space-y-4">
+            <h3 className="text-base font-semibold text-slate-900">Cancelar nota fiscal?</h3>
+            <p className="text-sm text-slate-600">
+              Nota nº {cancelEntrada.nota_fiscal_numero || '-'}, {fmt(cancelEntrada.valor_bruto)} — {cancelEntrada.paciente_nome}.
+              O cancelamento é <strong>definitivo</strong> e não pode ser desfeito.
+            </p>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Justificativa (15 a 255 caracteres)</label>
+              <textarea value={justificativaCancelamento} onChange={e => setJustificativaCancelamento(e.target.value)}
+                rows={3} maxLength={255} placeholder="Ex: nota emitida com valor incorreto, refazendo com o valor certo"
+                className="input w-full text-sm" />
+              <p className="text-xs text-slate-400 mt-1">{justificativaCancelamento.trim().length}/255</p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => { setCancelEntrada(null); setJustificativaCancelamento('') }}
+                className="border border-slate-200 text-slate-700 px-4 py-2 rounded-xl font-semibold hover:bg-slate-50 transition text-sm">
+                Voltar
+              </button>
+              <button onClick={handleCancelarNota} disabled={cancelando || justificativaCancelamento.trim().length < 15}
+                className="flex items-center gap-2 bg-rose-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-rose-700 transition disabled:opacity-50 text-sm">
+                {cancelando && <LoadingSpinner size="sm" />}
+                Confirmar cancelamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
