@@ -46,12 +46,12 @@ export default function MetaBatidaCelebration() {
 
       if (typeof window !== 'undefined') {
         const confetti = (await import('canvas-confetti')).default
-        confetti({ particleCount: 120, spread: 90, origin: { y: 0.3 } })
+        confetti({ particleCount: 120, spread: 90, origin: { y: 0.5 } })
       }
 
       setTimeout(() => {
         if (!cancelled) setPendente(null)
-      }, 4000)
+      }, 8000)
     }
 
     check()
@@ -61,11 +61,13 @@ export default function MetaBatidaCelebration() {
   if (!pendente) return null
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-gradient-to-r from-violet-600 to-purple-600 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
-      <Icon name="check" className="w-5 h-5" />
-      <p className="font-semibold">
-        Meta de {TIPO_LABEL[pendente.tipo] || pendente.tipo} batida! 🎉
-      </p>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+      <div className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-8 py-5 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in zoom-in-95">
+        <Icon name="check" className="w-6 h-6" />
+        <p className="text-lg font-semibold">
+          Meta de {TIPO_LABEL[pendente.tipo] || pendente.tipo} batida! 🎉
+        </p>
+      </div>
     </div>
   )
 }
