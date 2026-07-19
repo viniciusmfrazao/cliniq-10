@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { consultarNfeProduto, resolverUrlArquivo } from '@/lib/focus-nfe'
+import { consultarNfeProduto, resolverUrlArquivo, baixarXmlAutorizado, tokenNfe } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,10 +48,28 @@ export async function GET(req: NextRequest) {
 
   if (data?.status === 'autorizado') {
     const urlPdf = resolverUrlArquivo(data.caminho_danfe || data.url, config.ambiente)
+
+    // Arquiva o XML no nosso storage — mesma lógica da NFS-e (ver consultar/route.ts).
+    let xmlPath: string | null = null
+    try {
+      const token = tokenNfe(config)
+      if (token) {
+        const xml = await baixarXmlAutorizado(data.caminho_xml_nota_fiscal, config.ambiente, token)
+        const path = `${clinicId}/${entrada.id}.xml`
+        const { error: uploadError } = await supabase.storage
+          .from('notas-fiscais')
+          .upload(path, xml, { contentType: 'application/xml', upsert: true })
+        if (!uploadError) xmlPath = path
+      }
+    } catch {
+      // silencioso — nota já autorizada, arquivamento do XML fica pendente
+    }
+
     await supabase.from('entradas').update({
       nota_fiscal_status: 'autorizada',
       nota_fiscal_numero: data.numero || null,
       nota_fiscal_url_pdf: urlPdf,
+      nota_fiscal_xml_path: xmlPath,
       nota_fiscal_erro: null,
       nota_fiscal_emitida_em: data.data_emissao || new Date().toISOString(),
     }).eq('id', entrada.id)
