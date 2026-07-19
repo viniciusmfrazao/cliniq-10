@@ -131,7 +131,18 @@ export default function FiscalForm({ initialConfig }: Props) {
     }
   }
 
-  async function handleSave() {
+  const [showProducaoConfirm, setShowProducaoConfirm] = useState(false)
+
+  function handleSave() {
+    const indoParaProducao = ambiente === 'producao' && initialConfig?.ambiente !== 'producao'
+    if (indoParaProducao) {
+      setShowProducaoConfirm(true)
+      return
+    }
+    doSave()
+  }
+
+  async function doSave() {
     setSaving(true)
     try {
       const res = await fetch('/api/config/fiscal', {
@@ -531,6 +542,34 @@ export default function FiscalForm({ initialConfig }: Props) {
           Salvar configuração
         </button>
       </div>
+
+      {showProducaoConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card max-w-md w-full p-6 space-y-4">
+            <h3 className="text-base font-semibold text-slate-900">Ativar ambiente de Produção?</h3>
+            <p className="text-sm text-slate-600">
+              A partir de agora, toda nota fiscal emitida por esta clínica será <strong>real</strong> — enviada
+              à Prefeitura/SEFAZ com validade fiscal, usando o Token de Produção cadastrado. Não é mais um teste.
+            </p>
+            <p className="text-sm text-slate-600">
+              Se ainda está validando o fluxo, cancele e mantenha o ambiente em Homologação.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setShowProducaoConfirm(false)}
+                className="border border-slate-200 text-slate-700 px-4 py-2 rounded-xl font-semibold hover:bg-slate-50 transition text-sm">
+                Cancelar
+              </button>
+              <button
+                onClick={() => { setShowProducaoConfirm(false); doSave() }}
+                disabled={saving}
+                className="flex items-center gap-2 bg-rose-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-rose-700 transition disabled:opacity-60 text-sm">
+                {saving && <LoadingSpinner size="sm" />}
+                Sim, ativar Produção
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
