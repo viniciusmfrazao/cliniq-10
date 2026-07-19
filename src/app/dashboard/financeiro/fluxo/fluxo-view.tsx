@@ -3,6 +3,16 @@
 import { useState, useEffect } from 'react'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
+import {
+  ComposedChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
 
 type Entrada = {
   data_venda: string
@@ -28,6 +38,34 @@ const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'O
 
 function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
+}
+
+function fmtCompact(v: number) {
+  if (Math.abs(v) >= 1000) {
+    return new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(v)
+  }
+  return String(v)
+}
+
+function FluxoTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const receita = payload.find((p: any) => p.dataKey === 'receitaBruta')?.value ?? 0
+  const despesas = payload.find((p: any) => p.dataKey === 'despesas')?.value ?? 0
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-lg px-4 py-3 text-sm">
+      <p className="font-bold text-slate-900 mb-2">{label}</p>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+        <span className="text-slate-600">Receita:</span>
+        <span className="font-semibold text-slate-900">{fmt(receita)}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-rose-400" />
+        <span className="text-slate-600">Despesas:</span>
+        <span className="font-semibold text-slate-900">{fmt(despesas)}</span>
+      </div>
+    </div>
+  )
 }
 
 export default function FluxoView({ entradas: initialEntradas, saidas: initialSaidas, clinicId, year: initialYear, scope = 'all' }: Props) {
@@ -84,8 +122,6 @@ export default function FluxoView({ entradas: initialEntradas, saidas: initialSa
   const totalResultado = mesesData.reduce((s, m) => s + m.resultado, 0)
   const totalAtendimentos = mesesData.reduce((s, m) => s + m.atendimentos, 0)
 
-  const maxValue = Math.max(...mesesData.map(m => Math.max(m.receitaBruta, m.despesas))) || 1
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -140,26 +176,51 @@ export default function FluxoView({ entradas: initialEntradas, saidas: initialSa
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <h3 className="font-bold text-slate-900 mb-4">Gráfico de Fluxo</h3>
-        <div className="flex items-end gap-2 h-48">
-          {mesesData.map((m, idx) => (
-            <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex flex-col gap-0.5" style={{ height: '180px' }}>
-                <div 
-                  className="w-full bg-emerald-400 rounded-t transition-all"
-                  style={{ height: `${(m.receitaBruta / maxValue) * 100}%` }}
-                  title={`Receita: ${fmt(m.receitaBruta)}`}
-                />
-                <div 
-                  className="w-full bg-rose-400 rounded-b transition-all"
-                  style={{ height: `${(m.despesas / maxValue) * 100}%` }}
-                  title={`Despesas: ${fmt(m.despesas)}`}
-                />
-              </div>
-              <span className="text-xs text-slate-500">{m.label}</span>
-            </div>
-          ))}
+        <div style={{ width: '100%', height: 280 }}>
+          <ResponsiveContainer>
+            <ComposedChart data={mesesData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="receitaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#34d399" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#34d399" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="#f1f5f9" />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#64748b', fontSize: 12 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                tickFormatter={fmtCompact}
+                width={44}
+              />
+              <Tooltip content={<FluxoTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 1 }} />
+              <Area
+                type="monotone"
+                dataKey="receitaBruta"
+                stroke="#10b981"
+                strokeWidth={2.5}
+                fill="url(#receitaGradient)"
+                dot={false}
+                activeDot={{ r: 4, fill: '#10b981', strokeWidth: 0 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="despesas"
+                stroke="#fb7185"
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 4, fill: '#fb7185', strokeWidth: 0 }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
-        <div className="flex gap-4 mt-4 text-sm justify-center">
+        <div className="flex gap-4 mt-2 text-sm justify-center">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-emerald-400 rounded" />
             <span className="text-slate-600">Receita</span>
