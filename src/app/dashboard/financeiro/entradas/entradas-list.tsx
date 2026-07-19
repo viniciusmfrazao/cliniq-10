@@ -781,8 +781,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     )
                   })()}
                   <div className="flex items-center justify-end gap-1 mt-1">
-                    {nfseAtivo && <BotaoNfse entrada={e} />}
-                    {nfseAtivo && <BotaoNfe entrada={e} />}
+                    {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
+                    {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
                     <button onClick={() => setEditEntry(e)}
                       className="p-2 text-violet-400 hover:bg-violet-50 rounded-lg transition">
                       <Icon name="edit" className="w-4 h-4" />
@@ -865,8 +865,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     })()}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {nfseAtivo && <BotaoNfse entrada={e} />}
-                        {nfseAtivo && <BotaoNfe entrada={e} />}
+                        {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
+                        {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
                         <button onClick={() => setEditEntry(e)}
                           className="p-2 text-violet-500 hover:bg-violet-50 rounded-lg transition"
                           title="Editar">
