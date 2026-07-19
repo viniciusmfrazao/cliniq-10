@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer, LabelList } from 'recharts'
 
 type ProcRanking = {
   procedimento: string
@@ -35,6 +36,22 @@ function getRange(periodo: string): { from: string; to: string } {
     return { from: `${now.getFullYear()}-01-01`, to }
   }
   return { from: to, to }
+}
+
+const BAR_SHADES = ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe', '#f3f0ff', '#f5f3ff']
+
+function RankingTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const row = payload[0]?.payload
+  if (!row) return null
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-lg px-3 py-2 text-xs">
+      <p className="font-bold text-slate-900 mb-1">{row.procedimento}</p>
+      <p className="text-slate-600">Faturamento: <span className="font-semibold text-slate-900">{fmt(row.faturamento)}</span></p>
+      <p className="text-slate-600">Qtd: <span className="font-semibold text-slate-900">{row.quantidade}</span></p>
+    </div>
+  )
 }
 
 export default function RankingProcedimentosView({ clinicId }: { clinicId: string }) {
@@ -172,6 +189,44 @@ export default function RankingProcedimentosView({ clinicId }: { clinicId: strin
           <p className="text-xs text-slate-500 mt-0.5">Procedimentos distintos</p>
         </div>
       </div>
+
+      {/* Top procedimentos por faturamento */}
+      {!loading && data.length > 0 && (
+        <div className="card p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Top procedimentos por faturamento</p>
+          <div style={{ width: '100%', height: Math.min(8, data.length) * 34 + 10 }}>
+            <ResponsiveContainer>
+              <BarChart
+                data={data.slice(0, 8)}
+                layout="vertical"
+                margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
+              >
+                <XAxis type="number" hide />
+                <YAxis
+                  type="category"
+                  dataKey="procedimento"
+                  width={140}
+                  tick={{ fill: '#475569', fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip content={<RankingTooltip />} cursor={{ fill: '#f8fafc' }} />
+                <Bar dataKey="faturamento" radius={[0, 6, 6, 0]} barSize={18}>
+                  {data.slice(0, 8).map((_, i) => (
+                    <Cell key={i} fill={BAR_SHADES[i % BAR_SHADES.length]} />
+                  ))}
+                  <LabelList
+                    dataKey="faturamento"
+                    position="right"
+                    formatter={(v: unknown) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                    style={{ fill: '#334155', fontSize: 11, fontWeight: 600 }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Tabela */}
       {loading ? (
