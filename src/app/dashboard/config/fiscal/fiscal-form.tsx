@@ -203,8 +203,50 @@ export default function FiscalForm({ initialConfig }: Props) {
     }
   }
 
+  const [mesExportar, setMesExportar] = useState(() => new Date().toISOString().slice(0, 7))
+  const [exportando, setExportando] = useState(false)
+
+  async function handleExportarXmls() {
+    setExportando(true)
+    try {
+      const res = await fetch(`/api/financeiro/nota-fiscal/exportar-xmls?mes=${mesExportar}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Erro ao exportar')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `notas-fiscais-${mesExportar}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast.error('Erro ao exportar XMLs', { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setExportando(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
+      <div className="card p-6 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900">Exportar pro contador</h2>
+        <p className="text-xs text-slate-500">
+          Baixa um zip com os XMLs de todas as notas autorizadas no mês — o documento com validade fiscal (o PDF é só a
+          representação visual). Só inclui notas emitidas depois que essa exportação foi implementada.
+        </p>
+        <div className="flex items-center gap-3">
+          <input type="month" value={mesExportar} onChange={e => setMesExportar(e.target.value)}
+            className="input text-sm" />
+          <button onClick={handleExportarXmls} disabled={exportando}
+            className="flex items-center gap-2 border border-slate-200 text-slate-700 px-4 py-2 rounded-xl font-semibold hover:bg-slate-50 transition disabled:opacity-60 text-sm">
+            {exportando && <LoadingSpinner size="sm" />}
+            Baixar XMLs do mês
+          </button>
+        </div>
+      </div>
+
       <div className="card p-6 space-y-4">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Dados fiscais da clínica</h2>
