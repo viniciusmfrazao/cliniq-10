@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Icon from '@/components/ui/Icon'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts'
 
 type Entrada = {
   paciente_id: string | null
@@ -14,6 +15,19 @@ type Entrada = {
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const RANK_SHADES = ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe', '#f3f0ff', '#f5f3ff']
+
+function RankTooltip({ active, payload, labelKey }: any) {
+  if (!active || !payload?.length) return null
+  const row = payload[0]?.payload
+  if (!row) return null
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-lg px-3 py-2 text-xs">
+      <p className="font-bold text-slate-900 mb-1">{row[labelKey]}</p>
+      <p className="text-slate-600">{fmt(row.valor)}</p>
+    </div>
+  )
+}
 
 // ─── Ranking de Pacientes ─────────────────────────────────────────────────────
 function RankingPacientes({ entradas }: { entradas: Entrada[] }) {
@@ -127,7 +141,25 @@ function RankingProcedimentos({ entradas }: { entradas: Entrada[] }) {
   const totalQtd = data.reduce((s, r) => s + r.qtd, 0)
 
   return (
-    <div className="card overflow-x-auto">
+    <div className="space-y-4">
+      {data.length > 0 && (
+        <div className="card p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Top procedimentos por faturamento</p>
+          <div style={{ width: '100%', height: Math.min(8, data.length) * 34 + 10 }}>
+            <ResponsiveContainer>
+              <BarChart data={data.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="nome" width={130} tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip content={<RankTooltip labelKey="nome" />} cursor={{ fill: '#f8fafc' }} />
+                <Bar dataKey="fat" radius={[0, 6, 6, 0]} barSize={16}>
+                  {data.slice(0, 8).map((_, i) => <Cell key={i} fill={RANK_SHADES[i % RANK_SHADES.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+      <div className="card overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-100">
@@ -170,6 +202,7 @@ function RankingProcedimentos({ entradas }: { entradas: Entrada[] }) {
         </tfoot>
       </table>
       {data.length === 0 && <p className="text-center py-8 text-slate-400">Nenhum dado encontrado</p>}
+      </div>
     </div>
   )
 }
