@@ -269,6 +269,26 @@ export async function consultarNfseMunicipal(config: FiscalConfig, ref: string) 
   return { httpStatus: res.status, data }
 }
 
+// Cancelamento é definitivo — a prefeitura não permite desfazer. Justificativa exigida
+// pela SEFAZ/prefeitura entre 15 e 255 caracteres (validamos isso na rota antes de
+// chamar aqui, mas a Focus também valida do lado dela).
+export async function cancelarNfseMunicipal(config: FiscalConfig, ref: string, justificativa: string) {
+  const token = focusToken(config)
+  if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
+
+  const url = `${focusBaseUrl(config.ambiente)}/nfse/${encodeURIComponent(ref)}`
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': authHeader(token),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ justificativa }),
+  })
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
 // Consultas de referência (município + código tributário) usadas pra validar os dados
 // cadastrados antes de tentar emitir de fato — evita descobrir um erro de digitação só
 // na hora da nota real.
@@ -454,3 +474,24 @@ export async function consultarNfeProduto(config: FiscalConfig, ref: string) {
   const data = await res.json().catch(() => ({}))
   return { httpStatus: res.status, data }
 }
+
+// NFe só pode ser cancelada em até 24h da emissão (alguns estados permitem mais —
+// a SEFAZ que decide, a gente só repassa o erro dela se for o caso). Cancelamento
+// é definitivo.
+export async function cancelarNfeProduto(config: FiscalConfig, ref: string, justificativa: string) {
+  const token = tokenNfe(config)
+  if (!token) throw new Error('Token de NFe não configurado para este ambiente')
+
+  const url = `${focusBaseUrl(config.ambiente)}/nfe/${encodeURIComponent(ref)}`
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': authHeader(token),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ justificativa }),
+  })
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
