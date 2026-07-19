@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { consultarNfseMunicipal, resolverUrlArquivo } from '@/lib/focus-nfe'
+import { consultarNfseMunicipal, resolverUrlArquivo, baixarXmlAutorizado, focusToken } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,10 +48,31 @@ export async function GET(req: NextRequest) {
 
   if (data?.status === 'autorizado') {
     const urlPdf = resolverUrlArquivo(data.url_danfse, config.ambiente)
+
+    // Arquiva o XML no nosso storage — é o documento com validade fiscal (guarda
+    // obrigatória de 5 anos), o PDF é só a representação visual. Se o download/upload
+    // falhar não bloqueia a confirmação da nota (ela já está autorizada de qualquer
+    // forma) — só fica sem o XML arquivado por enquanto, dá pra tentar de novo depois.
+    let xmlPath: string | null = null
+    try {
+      const token = focusToken(config)
+      if (token) {
+        const xml = await baixarXmlAutorizado(data.caminho_xml_nota_fiscal, config.ambiente, token)
+        const path = `${clinicId}/${entrada.id}.xml`
+        const { error: uploadError } = await supabase.storage
+          .from('notas-fiscais')
+          .upload(path, xml, { contentType: 'application/xml', upsert: true })
+        if (!uploadError) xmlPath = path
+      }
+    } catch {
+      // silencioso — nota já autorizada, arquivamento do XML fica pendente
+    }
+
     await supabase.from('entradas').update({
       nota_fiscal_status: 'autorizada',
       nota_fiscal_numero: data.numero || null,
       nota_fiscal_url_pdf: urlPdf,
+      nota_fiscal_xml_path: xmlPath,
       nota_fiscal_erro: null,
       nota_fiscal_emitida_em: data.data_emissao || new Date().toISOString(),
     }).eq('id', entrada.id)
