@@ -26,7 +26,7 @@ export async function getFinancialAccess(
 ): Promise<FinancialAccess> {
   const { data: me } = await supabase
     .from('users')
-    .select('clinic_id, role, permissions')
+    .select('clinic_id, role, permissions, recebe_comissao')
     .eq('id', userId)
     .maybeSingle()
 
@@ -55,6 +55,13 @@ export async function getFinancialAccess(
   }
 
   effective = effective ?? []
+
+  // "Ver financeiro" pra papel clínico não é um default fixo — só faz sentido pra quem
+  // realmente recebe comissão. Injeta com base no dado real do profissional (ver mesma
+  // lógica em dashboard/layout.tsx e na função fn_financial_scope() do banco).
+  if (me?.recebe_comissao && !effective.includes('financial_view_own')) {
+    effective = [...effective, 'financial_view_own']
+  }
 
   if (
     effective.includes('all') ||

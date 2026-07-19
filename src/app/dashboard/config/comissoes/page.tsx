@@ -50,6 +50,7 @@ export default async function ComissoesPage() {
       <ComissoesForm
         clinicId={userData!.clinic_id}
         initialAtiva={!!clinic?.settings?.comissao_ativa}
+        initialBase={clinic?.settings?.comissao_base === 'liquido' ? 'liquido' : 'bruto'}
         profissionais={profissionais || []}
       />
     </div>

@@ -231,8 +231,10 @@ export const MODULE_ROUTES: Record<ModuleId, string[]> = {
 
 // Verifica se uma rota está habilitada para os módulos ativos
 export function isRouteEnabled(route: string, activeModules: ModuleId[]): boolean {
-  // Rotas sempre disponíveis (home, config, ajuda)
-  const alwaysAvailable = ['/dashboard', '/dashboard/config', '/dashboard/como-funciona']
+  // Rotas sempre disponíveis (home, config, ajuda, minhas comissões — comissão usa seu
+  // próprio flag comissao_ativa em clinics.settings, não o sistema de módulos, então não
+  // pode ficar escondida atrás de um módulo)
+  const alwaysAvailable = ['/dashboard', '/dashboard/config', '/dashboard/como-funciona', '/dashboard/comissoes/minhas']
   if (alwaysAvailable.includes(route)) return true
   
   // Verifica se a rota pertence a algum módulo ativo

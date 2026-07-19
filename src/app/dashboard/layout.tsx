@@ -18,7 +18,7 @@ export default async function DashboardLayout({ children, searchParams }: { chil
   // userData e super_admins só dependem de user.id — rodam em paralelo
   // (antes eram sequenciais, sem necessidade: economiza 1 round-trip)
   const [{ data: userData }, { data: sa }] = await Promise.all([
-    supabase.from('users').select('name, role, clinic_id, permissions').eq('id', user.id).maybeSingle(),
+    supabase.from('users').select('name, role, clinic_id, permissions, recebe_comissao').eq('id', user.id).maybeSingle(),
     // Super admin sempre vai para /admin, mesmo que tenha clinic_id
     // Usa o client do próprio usuário (RLS: só vê o próprio registro)
     supabase.from('super_admins').select('id').eq('id', user.id).maybeSingle(),
@@ -51,6 +51,12 @@ export default async function DashboardLayout({ children, searchParams }: { chil
     userPermissions = Array.isArray(roleDefault?.permissions)
       ? roleDefault!.permissions as string[]
       : FACTORY_DEFAULTS[userData.role] ?? []
+  }
+  // Ver "Financeiro" (e a tela "Minhas Comissões" dentro dele) não é um default fixo do
+  // papel clínico — só faz sentido pra quem realmente recebe comissão. Injeta a permissão
+  // dinamicamente com base no dado real do profissional, não num default estático.
+  if (userData?.recebe_comissao && !userPermissions.includes('financial_view_own')) {
+    userPermissions = [...userPermissions, 'financial_view_own']
   }
 
   const trialDaysLeft = clinic?.trial_ends_at
