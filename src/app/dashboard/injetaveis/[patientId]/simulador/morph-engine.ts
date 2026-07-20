@@ -100,8 +100,10 @@ function applyOp(src: ImageData, op: WarpOp): ImageData {
   return out
 }
 
-// Alisamento elíptico de REGIÃO (rugas): blur forte com preservação de bordas
-// fortes (sobrancelha/olho/cabelo não derretem).
+// Alisamento de rugas SEM borrar: em vez de blur na região inteira, apenas os
+// pixels de RUGA (linhas mais escuras que a pele ao redor) são clareados em
+// direção ao tom da pele. Sobrancelha/olho/cabelo (muito mais escuros) e pele
+// normal (não mais escura que a média) ficam 100% intactos — zero névoa.
 function applySmoothEllipse(
   src: ImageData,
   cx: number, cy: number, rx: number, ry: number,
@@ -110,11 +112,11 @@ function applySmoothEllipse(
   const w = src.width
   const h = src.height
   const out = new ImageData(new Uint8ClampedArray(src.data), w, h)
-  const x0 = clamp(Math.floor(cx - rx), 2, w - 3)
-  const x1 = clamp(Math.ceil(cx + rx), 2, w - 3)
-  const y0 = clamp(Math.floor(cy - ry), 2, h - 3)
-  const y1 = clamp(Math.ceil(cy + ry), 2, h - 3)
-  const k = 5
+  const x0 = clamp(Math.floor(cx - rx), 3, w - 4)
+  const x1 = clamp(Math.ceil(cx + rx), 3, w - 4)
+  const y0 = clamp(Math.floor(cy - ry), 3, h - 4)
+  const y1 = clamp(Math.ceil(cy + ry), 3, h - 4)
+  const k = 6 // janela pra estimar o tom da pele local
   const d = src.data
 
   for (let y = y0; y <= y1; y++) {
@@ -124,33 +126,38 @@ function applySmoothEllipse(
       const e = nx * nx + ny * ny
       if (e >= 1) continue
       const t = 1 - e
-      let mix = clamp(amount * (0.3 + 0.7 * t), 0, 0.97)
-      if (mix <= 0.02) continue
 
       const idx = (y * w + x) * 4
-      let sum0 = 0, sum1 = 0, sum2 = 0, n = 0
-      for (let yy = -k; yy <= k; yy++) {
+      const lumPix = (d[idx] + d[idx + 1] + d[idx + 2]) / 3
+
+      // tom da pele local: média dos pixels CLAROS da vizinhança (ignora as
+      // próprias rugas e pelos escuros pra não contaminar a referência)
+      let sum0 = 0, sum1 = 0, sum2 = 0, sumL = 0, n = 0
+      for (let yy = -k; yy <= k; yy += 2) {
         const py = clamp(y + yy, 0, h - 1)
-        for (let xx = -k; xx <= k; xx++) {
+        for (let xx = -k; xx <= k; xx += 2) {
           const px = clamp(x + xx, 0, w - 1)
           const pi = (py * w + px) * 4
-          sum0 += d[pi]; sum1 += d[pi + 1]; sum2 += d[pi + 2]
-          n++
+          const l = (d[pi] + d[pi + 1] + d[pi + 2]) / 3
+          if (l >= lumPix) { // só vizinhos iguais/mais claros contam como "pele"
+            sum0 += d[pi]; sum1 += d[pi + 1]; sum2 += d[pi + 2]; sumL += l; n++
+          }
         }
       }
-      const avg0 = sum0 / n, avg1 = sum1 / n, avg2 = sum2 / n
-      const lumPix = (d[idx] + d[idx + 1] + d[idx + 2]) / 3
-      const lumAvg = (avg0 + avg1 + avg2) / 3
-      const diff = Math.abs(lumPix - lumAvg)
-      // borda muito forte (sobrancelha, olho, cabelo): preserva
-      if (diff > 55) mix *= 0.15
-      else if (diff > 35) mix *= 0.55
-      // rugas são pixels um pouco mais ESCUROS que a média — nesses, alisar mais
-      else if (lumPix < lumAvg - 6) mix = clamp(mix * 1.25, 0, 0.97)
+      if (n < 4) continue
+      const skinL = sumL / n
+      const darkness = skinL - lumPix
 
-      out.data[idx] = d[idx] * (1 - mix) + avg0 * mix
-      out.data[idx + 1] = d[idx + 1] * (1 - mix) + avg1 * mix
-      out.data[idx + 2] = d[idx + 2] * (1 - mix) + avg2 * mix
+      // não é ruga se: pele normal (diferença ínfima), sombra forte demais
+      // (ruga real é sutil), ou pixel escuro demais em absoluto vs a pele
+      // local (sobrancelha/olho/cabelo/pelo) — esses ficam intactos
+      if (darkness < 5 || darkness > 45 || lumPix < skinL * 0.62) continue
+
+      // é sombra de ruga: clarear em direção ao tom da pele
+      const mix = clamp(amount * (0.35 + 0.65 * t) * clamp(darkness / 25, 0.4, 1), 0, 0.92)
+      out.data[idx] = d[idx] * (1 - mix) + (sum0 / n) * mix
+      out.data[idx + 1] = d[idx + 1] * (1 - mix) + (sum1 / n) * mix
+      out.data[idx + 2] = d[idx + 2] * (1 - mix) + (sum2 / n) * mix
     }
   }
   return out

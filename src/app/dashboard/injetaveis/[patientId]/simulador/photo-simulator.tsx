@@ -31,6 +31,7 @@ export default function PhotoSimulator({
   const [points, setPoints] = useState<(MorphPoint & { id: string })[]>([])
   const [dragId, setDragId] = useState<string | null>(null)
   const [dims, setDims] = useState({ w: 0, h: 0 })
+  const [showPoints, setShowPoints] = useState(true)
 
   const beforeCanvasRef = useRef<HTMLCanvasElement>(null)
   const afterCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -203,6 +204,13 @@ export default function PhotoSimulator({
                 className="w-full accent-pink-600"
               />
             </div>
+            <button
+              onClick={() => setShowPoints(v => !v)}
+              className="btn-secondary w-auto px-4 py-2 text-sm flex items-center gap-2"
+            >
+              <Icon name={showPoints ? 'eyeOff' : 'eye'} className="w-4 h-4" />
+              {showPoints ? 'Ocultar pontos' : 'Mostrar pontos'}
+            </button>
             <button onClick={downloadResult} className="btn-secondary w-auto px-4 py-2 text-sm flex items-center gap-2">
               <Icon name="download" className="w-4 h-4" />
               Baixar comparativo
@@ -248,16 +256,23 @@ export default function PhotoSimulator({
             <span className="absolute top-3 right-3 text-xs font-semibold bg-purple-600/80 text-white px-2 py-1 rounded-lg">Simulação</span>
 
             {/* Pontos arrastáveis */}
-            {points.map(p => (
+            {showPoints && points.map(p => (
               <button
                 key={p.id}
                 onPointerDown={(e) => { e.preventDefault(); setDragId(p.id) }}
-                className={`absolute w-5 h-5 -ml-2.5 -mt-2.5 rounded-full border-2 border-white shadow-lg cursor-move transition-transform ${
-                  dragId === p.id ? 'scale-125 bg-pink-500' : 'bg-purple-600'
+                className={`absolute rounded-full border-2 border-white shadow-md cursor-move ${
+                  dragId === p.id ? 'bg-pink-500' : 'bg-purple-600/80'
                 }`}
                 style={{
                   left: `${(p.x / dims.w) * 100}%`,
                   top: `${(p.y / dims.h) * 100}%`,
+                  width: dragId === p.id ? 18 : 14,
+                  height: dragId === p.id ? 18 : 14,
+                  padding: 0,
+                  minWidth: 0,
+                  minHeight: 0,
+                  lineHeight: 0,
+                  transform: 'translate(-50%, -50%)',
                 }}
                 title={p.zone}
               />
