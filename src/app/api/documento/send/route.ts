@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { sendWhatsappMessage, sendWhatsappImage } from '@/lib/whatsapp'
 
 /**
  * POST /api/documento/send
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   // Buscar documento com template e paciente
   const { data: doc, error: errDoc } = await svc
     .from('documents_sent')
-    .select('*, document_templates(name), patients(id, name, phone)')
+    .select('*, document_templates(name, image_url, requires_signature), patients(id, name, phone)')
     .eq('id', documentoId)
     .eq('clinic_id', clinicId)
     .maybeSingle()
@@ -62,6 +62,37 @@ export async function POST(req: NextRequest) {
       `${link}\n\n` +
       `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
 
+  // Se o template tem PDF/imagem anexado, envia PRIMEIRO — o paciente vê o
+  // documento antes do texto com o link. (Antes desta correção esse anexo
+  // nunca era enviado por essa rota, só o link de assinatura.)
+  const fileUrl = (template?.image_url || '') as string
+  const hasAttachment = !!fileUrl
+  const isPdf = hasAttachment && fileUrl.toLowerCase().endsWith('.pdf')
+  let attachmentFailed = false
+  let attachmentError: string | undefined
+  if (hasAttachment) {
+    try {
+      const attResult = await sendWhatsappImage({
+        clinicId,
+        phone,
+        media: fileUrl,
+        mimetype: isPdf ? 'application/pdf' : 'image/jpeg',
+        caption: '',
+        fileName: isPdf ? `${templateName}.pdf` : undefined,
+        purpose: 'automation',
+      })
+      if (!attResult.ok) {
+        attachmentFailed = true
+        attachmentError = attResult.error
+        console.error('Erro ao enviar anexo do documento:', attResult.error)
+      }
+    } catch (e) {
+      attachmentFailed = true
+      attachmentError = e instanceof Error ? e.message : String(e)
+      console.error('Erro ao enviar anexo do documento:', e)
+    }
+  }
+
   const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
 
   // Registrar envio no documento
@@ -73,6 +104,10 @@ export async function POST(req: NextRequest) {
 
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error, link })
+  }
+
+  if (attachmentFailed) {
+    return NextResponse.json({ ok: true, sent: 'whatsapp', link, attachment_failed: true, attachment_error: attachmentError })
   }
 
   return NextResponse.json({ ok: true, sent: 'whatsapp', link })

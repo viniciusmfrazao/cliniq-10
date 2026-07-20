@@ -278,7 +278,9 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
         body: JSON.stringify({ documentoId: generatedDocId }),
       })
       const data = await res.json()
-      if (data.ok) {
+      if (data.ok && data.attachment_failed) {
+        alert('Documento enviado, mas o PDF/imagem anexado falhou ao enviar. O paciente recebeu só o link.')
+      } else if (data.ok) {
         alert('Documento enviado pelo WhatsApp da clínica! ✅')
       } else {
         // Fallback: WhatsApp Web
