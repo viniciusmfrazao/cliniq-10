@@ -100,10 +100,10 @@ function applyOp(src: ImageData, op: WarpOp): ImageData {
   return out
 }
 
-// Alisamento de rugas SEM borrar: em vez de blur na região inteira, apenas os
-// pixels de RUGA (linhas mais escuras que a pele ao redor) são clareados em
-// direção ao tom da pele. Sobrancelha/olho/cabelo (muito mais escuros) e pele
-// normal (não mais escura que a média) ficam 100% intactos — zero névoa.
+// Alisamento por SEPARAÇÃO DE FREQUÊNCIAS (técnica padrão de retoque de pele):
+// rugas são contraste de alta frequência — subtraímos o detalhe fino mantendo
+// a estrutura (baixa frequência). Sobrancelha/olho/cabelo são protegidos por
+// máscara de pixels escuros DILATADA (o blur não vaza escuridão pra pele).
 function applySmoothEllipse(
   src: ImageData,
   cx: number, cy: number, rx: number, ry: number,
@@ -112,52 +112,132 @@ function applySmoothEllipse(
   const w = src.width
   const h = src.height
   const out = new ImageData(new Uint8ClampedArray(src.data), w, h)
-  const x0 = clamp(Math.floor(cx - rx), 3, w - 4)
-  const x1 = clamp(Math.ceil(cx + rx), 3, w - 4)
-  const y0 = clamp(Math.floor(cy - ry), 3, h - 4)
-  const y1 = clamp(Math.ceil(cy + ry), 3, h - 4)
-  const k = 6 // janela pra estimar o tom da pele local
+  const bx0 = clamp(Math.floor(cx - rx), 0, w - 1)
+  const bx1 = clamp(Math.ceil(cx + rx), 0, w - 1)
+  const by0 = clamp(Math.floor(cy - ry), 0, h - 1)
+  const by1 = clamp(Math.ceil(cy + ry), 0, h - 1)
+  const bw = bx1 - bx0 + 1
+  const bh = by1 - by0 + 1
+  if (bw < 8 || bh < 8) return out
   const d = src.data
 
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const nx = (x - cx) / rx
-      const ny = (y - cy) / ry
-      const e = nx * nx + ny * ny
-      if (e >= 1) continue
-      const t = 1 - e
+  // 1) tom de pele da região: média do quartil mais claro
+  const lums: number[] = []
+  for (let y = by0; y <= by1; y += 3) {
+    for (let x = bx0; x <= bx1; x += 3) {
+      const nx = (x - cx) / rx, ny = (y - cy) / ry
+      if (nx * nx + ny * ny >= 1) continue
+      const pi = (y * w + x) * 4
+      lums.push((d[pi] + d[pi + 1] + d[pi + 2]) / 3)
+    }
+  }
+  if (lums.length < 10) return out
+  lums.sort((a, b) => b - a)
+  const q = Math.max(1, Math.floor(lums.length / 4))
+  const skinTone = lums.slice(0, q).reduce((a, b) => a + b, 0) / q
+  const darkThresh = skinTone * 0.45
 
-      const idx = (y * w + x) * 4
-      const lumPix = (d[idx] + d[idx + 1] + d[idx + 2]) / 3
+  // raio do blur: precisa ser maior que a largura da ruga
+  const r = Math.round(clamp(Math.min(rx, ry) * 0.16, 5, 16))
 
-      // tom da pele local: média dos pixels CLAROS da vizinhança (ignora as
-      // próprias rugas e pelos escuros pra não contaminar a referência)
-      let sum0 = 0, sum1 = 0, sum2 = 0, sumL = 0, n = 0
-      for (let yy = -k; yy <= k; yy += 2) {
-        const py = clamp(y + yy, 0, h - 1)
-        for (let xx = -k; xx <= k; xx += 2) {
-          const px = clamp(x + xx, 0, w - 1)
-          const pi = (py * w + px) * 4
-          const l = (d[pi] + d[pi + 1] + d[pi + 2]) / 3
-          if (l >= lumPix) { // só vizinhos iguais/mais claros contam como "pele"
-            sum0 += d[pi]; sum1 += d[pi + 1]; sum2 += d[pi + 2]; sumL += l; n++
+  // 2) máscara de escuros (sobrancelha/olho/cabelo) DILATADA pelo raio do blur
+  const mask = new Uint8Array(bw * bh)
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      const pi = ((y + by0) * w + (x + bx0)) * 4
+      const l = (d[pi] + d[pi + 1] + d[pi + 2]) / 3
+      if (l < darkThresh) mask[y * bw + x] = 1
+    }
+  }
+  const dil = new Uint8Array(bw * bh)
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      let m = 0
+      for (let k = -r; k <= r && !m; k++) {
+        const xx = clamp(x + k, 0, bw - 1)
+        if (mask[y * bw + xx]) m = 1
+      }
+      dil[y * bw + x] = m
+    }
+  }
+  const protectedMask = new Uint8Array(bw * bh)
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      let m = 0
+      for (let k = -r; k <= r && !m; k++) {
+        const yy = clamp(y + k, 0, bh - 1)
+        if (dil[yy * bw + x]) m = 1
+      }
+      protectedMask[y * bw + x] = m
+    }
+  }
+
+  // 3) passa-baixa: box blur separável 2x (≈ gaussiano), ignorando pixels
+  // protegidos na média (não contamina a pele com a cor da sobrancelha)
+  const ch = [new Float32Array(bw * bh), new Float32Array(bw * bh), new Float32Array(bw * bh)]
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      const pi = ((y + by0) * w + (x + bx0)) * 4
+      const i = y * bw + x
+      ch[0][i] = d[pi]; ch[1][i] = d[pi + 1]; ch[2][i] = d[pi + 2]
+    }
+  }
+  const blurPass = (input: Float32Array[]) => {
+    const tmp = input.map(a => new Float32Array(a))
+    for (let c = 0; c < 3; c++) {
+      for (let y = 0; y < bh; y++) {
+        for (let x = 0; x < bw; x++) {
+          let sum = 0, n = 0
+          for (let k = -r; k <= r; k++) {
+            const xx = clamp(x + k, 0, bw - 1)
+            const i = y * bw + xx
+            if (protectedMask[i]) continue
+            sum += input[c][i]; n++
           }
+          if (n > 0) tmp[c][y * bw + x] = sum / n
         }
       }
-      if (n < 4) continue
-      const skinL = sumL / n
-      const darkness = skinL - lumPix
+    }
+    const outA = tmp.map(a => new Float32Array(a))
+    for (let c = 0; c < 3; c++) {
+      for (let y = 0; y < bh; y++) {
+        for (let x = 0; x < bw; x++) {
+          let sum = 0, n = 0
+          for (let k = -r; k <= r; k++) {
+            const yy = clamp(y + k, 0, bh - 1)
+            const i = yy * bw + x
+            if (protectedMask[i]) continue
+            sum += tmp[c][i]; n++
+          }
+          if (n > 0) outA[c][y * bw + x] = sum / n
+        }
+      }
+    }
+    return outA
+  }
+  const low = blurPass(blurPass(ch))
 
-      // não é ruga se: pele normal (diferença ínfima), sombra forte demais
-      // (ruga real é sutil), ou pixel escuro demais em absoluto vs a pele
-      // local (sobrancelha/olho/cabelo/pelo) — esses ficam intactos
-      if (darkness < 5 || darkness > 45 || lumPix < skinL * 0.62) continue
-
-      // é sombra de ruga: clarear em direção ao tom da pele
-      const mix = clamp(amount * (0.35 + 0.65 * t) * clamp(darkness / 25, 0.4, 1), 0, 0.92)
-      out.data[idx] = d[idx] * (1 - mix) + (sum0 / n) * mix
-      out.data[idx + 1] = d[idx + 1] * (1 - mix) + (sum1 / n) * mix
-      out.data[idx + 2] = d[idx + 2] * (1 - mix) + (sum2 / n) * mix
+  // 4) recompor: low + detalhe*(1-s). Rugas (detalhe escuro) atenuam mais que
+  // poros (detalhe claro) pra não apagar totalmente a textura da pele.
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      const gx = x + bx0, gy = y + by0
+      const nx = (gx - cx) / rx, ny = (gy - cy) / ry
+      const e = nx * nx + ny * ny
+      if (e >= 1) continue
+      const i = y * bw + x
+      if (protectedMask[i]) continue // sobrancelha/olho/cabelo intactos
+      const fall = 1 - e * e // falloff suave até a borda da elipse
+      const idx = (gy * w + gx) * 4
+      for (let c = 0; c < 3; c++) {
+        const orig = d[idx + c]
+        const lowV = low[c][i]
+        const detail = orig - lowV
+        const keep = detail < 0
+          ? (1 - clamp(amount * fall, 0, 0.95))
+          : (1 - clamp(amount * fall * 0.5, 0, 0.6))
+        out.data[idx + c] = clamp(lowV + detail * keep, 0, 255)
+      }
     }
   }
   return out
