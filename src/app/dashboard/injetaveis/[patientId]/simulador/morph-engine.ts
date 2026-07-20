@@ -414,9 +414,9 @@ export function renderMorph(
         dy: -amt * faceScale * 0.028,
       })
     } else if (!isToxin && p.zone === 'malar') {
-      // malar: volume + preenchimento de olheira (clareia a sombra acima)
-      img = applyOp(img, { cx: p.x, cy: p.y, radius: baseRadius * 1.15, bulge: amt * 0.3 })
-      img = applyDarkCircleFill(img, { cx: p.x, cy: p.y - baseRadius * 0.55, radius: baseRadius * 0.95 }, amt * 0.9)
+      // malar: clareia a olheira exatamente onde o ponto está + volume logo abaixo
+      img = applyDarkCircleFill(img, { cx: p.x, cy: p.y, radius: baseRadius * 1.0 }, amt * 0.95)
+      img = applyOp(img, { cx: p.x, cy: p.y + baseRadius * 0.45, radius: baseRadius * 1.1, bulge: amt * 0.22 })
     } else if (!isToxin && p.zone === 'chin') {
       // mento: projeção pra baixo/frente + volume
       img = applyOp(img, {

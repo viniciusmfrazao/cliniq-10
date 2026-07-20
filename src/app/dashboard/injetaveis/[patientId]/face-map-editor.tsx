@@ -75,6 +75,47 @@ export default function FaceMapEditor({
   const gradientFrom = isToxin ? '#8B5CF6' : '#EC4899'
   const gradientTo = isToxin ? '#6366F1' : '#F43F5E'
 
+  // Detecta a zona anatômica pela posição do clique (vista frontal 320x420).
+  // O usuário ainda pode corrigir manualmente no modal do ponto.
+  function detectZone(x: number, y: number): string {
+    const dx = Math.abs(x - 160)
+    if (y < 118) return (x < 85 || x > 235) ? 'temporal' : 'forehead'
+    if (y < 150) {
+      if (dx <= 30) return 'glabella'
+      if (dx <= 75) return 'eyebrow'
+      return 'crow_feet'
+    }
+    if (y < 178) {
+      if (dx > 78) return 'crow_feet'
+      if (dx > 25) return 'malar' // região da olheira / malar alto
+      return 'nose'
+    }
+    if (y < 215) {
+      if (dx <= 22) return 'nose'
+      if (dx <= 70) return 'malar'
+      return 'jawline'
+    }
+    if (y < 240) {
+      if (dx <= 20) return 'perioral_upper'
+      if (dx <= 45) return 'nasolabial'
+      return 'jawline'
+    }
+    if (y < 268) {
+      if (dx <= 35) return 'lip'
+      if (dx <= 60) return 'marionette'
+      return 'jawline'
+    }
+    if (y < 295) {
+      if (dx <= 30) return 'perioral_lower'
+      return 'jawline'
+    }
+    if (y < 335) {
+      if (dx <= 35) return 'chin'
+      return 'jawline'
+    }
+    return dx <= 45 ? 'submandibular' : 'neck'
+  }
+
   function handleSvgClick(e: React.MouseEvent<SVGSVGElement>) {
     if (!svgRef.current) return
     
@@ -85,7 +126,7 @@ export default function FaceMapEditor({
 
     const newPoint: Point = {
       id: Date.now().toString(),
-      zone: 'forehead',
+      zone: view === 'front' ? detectZone(x, y) : 'forehead',
       muscle: '',
       side: x < viewBox.w / 2 ? 'left' : x > viewBox.w / 2 + 10 ? 'right' : 'center',
       x,
