@@ -113,6 +113,34 @@ export function parseDateBR(dateStr: string | null | undefined): string {
 }
 
 /**
+ * Converte uma string digitada no formato `DD/MM/YYYY` (ou `DD/MM/YY`) para
+ * `YYYY-MM-DD`, validando que é uma data real (dia/mês/ano existem e batem
+ * com o calendário — evita aceitar "31/02/2020").
+ *
+ * Retorna `null` se o formato ou a data forem inválidos.
+ */
+export function isoFromBR(brStr: string | null | undefined): string | null {
+  if (!brStr) return null
+  const match = brStr.trim().match(/^(\d{2})\/(\d{2})\/(\d{2}|\d{4})$/)
+  if (!match) return null
+  const [, dStr, mStr, yStrRaw] = match
+  const day = parseInt(dStr, 10)
+  const month = parseInt(mStr, 10)
+  const yStr = yStrRaw.length === 2 ? `20${yStrRaw}` : yStrRaw
+  const year = parseInt(yStr, 10)
+
+  if (month < 1 || month > 12) return null
+  const daysInMonth = new Date(year, month, 0).getDate()
+  if (day < 1 || day > daysInMonth) return null
+  if (year < 1900 || year > new Date().getFullYear()) return null
+
+  const iso = `${yStr}-${mStr.padStart(2, '0')}-${dStr.padStart(2, '0')}`
+  // Não pode ser data futura
+  if (iso > new Date().toISOString().slice(0, 10)) return null
+  return iso
+}
+
+/**
  * Se receber uma string ja em formato YYYY-MM-DD usa direto;
  * se for Date converte pro dia BR; se for undefined usa hoje BR.
  */

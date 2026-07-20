@@ -77,7 +77,7 @@ export async function POST(
     // Find anamnese
     const { data: anamnese, error: findError } = await getAdmin()
       .from('anamneses')
-      .select('id, status, patient_id')
+      .select('id, status, patient_id, clinic_id')
       .eq('token', token)
       .maybeSingle()
 
@@ -93,29 +93,50 @@ export async function POST(
       return NextResponse.json({ error: 'Link expirado' }, { status: 410 })
     }
 
-    // Atualizar cadastro do paciente com dados de identificação (apenas campos vazios)
-    if (identificacao && anamnese.patient_id) {
-      const updates: Record<string, string> = {}
+    // Validar e atualizar cadastro do paciente com dados de identificação
+    if (anamnese.patient_id) {
       const { data: pat } = await getAdmin()
         .from('patients')
         .select('cpf, birth_date, phone, email')
         .eq('id', anamnese.patient_id)
         .single()
 
+      // Campos de identificação obrigatórios conforme config da clínica
+      // (mesma regra do front: exigidos só quando o paciente ainda não tem)
+      const { data: anamneseConfig } = await getAdmin()
+        .from('anamnese_config')
+        .select('campos_identificacao')
+        .eq('clinic_id', anamnese.clinic_id)
+        .maybeSingle()
+      const camposIdAtivos: string[] = anamneseConfig?.campos_identificacao?.length
+        ? anamneseConfig.campos_identificacao
+        : ['data_nascimento', 'cpf']
+
+      const cpfDigits = (identificacao?.cpf || '').replace(/\D/g, '')
+      if (camposIdAtivos.includes('cpf') && !pat?.cpf && cpfDigits.length !== 11) {
+        return NextResponse.json({ error: 'CPF é obrigatório' }, { status: 400 })
+      }
+
+      const isValidIsoDate = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+      if (camposIdAtivos.includes('data_nascimento') && !pat?.birth_date && !isValidIsoDate(identificacao?.birth_date)) {
+        return NextResponse.json({ error: 'Data de nascimento é obrigatória' }, { status: 400 })
+      }
+
+      const updates: Record<string, string> = {}
       // CPF: só salva se o paciente ainda não tem
-      if (!pat?.cpf && identificacao.cpf?.trim()) {
+      if (!pat?.cpf && identificacao?.cpf?.trim()) {
         updates.cpf = identificacao.cpf.trim()
       }
       // Data de nascimento: sempre atualiza se o paciente enviou um valor
-      if (identificacao.birth_date) {
+      if (identificacao?.birth_date) {
         updates.birth_date = identificacao.birth_date
       }
       // Telefone: só salva se o paciente ainda não tem
-      if (!pat?.phone && identificacao.phone?.trim()) {
+      if (!pat?.phone && identificacao?.phone?.trim()) {
         updates.phone = identificacao.phone.trim()
       }
       // Email: só salva se o paciente ainda não tem
-      if (!pat?.email && identificacao.email?.trim()) {
+      if (!pat?.email && identificacao?.email?.trim()) {
         updates.email = identificacao.email.trim()
       }
 
