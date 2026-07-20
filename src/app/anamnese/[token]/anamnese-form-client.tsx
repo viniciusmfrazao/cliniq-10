@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { parseDateBR } from '@/lib/datetime'
+import { parseDateBR, isoFromBR } from '@/lib/datetime'
 
 type AnamneseConfig = {
   titulo?: string
@@ -179,6 +179,32 @@ export default function AnamneseFormClient({ token }: { token: string }) {
       return
     }
 
+    // Data de nascimento e CPF são obrigatórios quando ativos na config da
+    // clínica e o paciente ainda não os tem cadastrados.
+    let birthDateIso: string | null = null
+    if (camposIdAtivos.includes('data_nascimento') && !anamnese?.patients.birth_date) {
+      birthDateIso = isoFromBR(birthDateInput)
+      if (!birthDateIso) {
+        alert('Informe uma data de nascimento válida (DD/MM/AAAA)')
+        return
+      }
+    } else if (birthDateInput) {
+      // Caso de "confirme ou corrija": só converte se o paciente alterou o campo
+      birthDateIso = isoFromBR(birthDateInput)
+      if (!birthDateIso) {
+        alert('Data de nascimento inválida (DD/MM/AAAA)')
+        return
+      }
+    }
+
+    if (camposIdAtivos.includes('cpf') && !anamnese?.patients.cpf) {
+      const cpfDigits = cpfInput.replace(/\D/g, '')
+      if (cpfDigits.length !== 11) {
+        alert('Informe um CPF válido')
+        return
+      }
+    }
+
     setSubmitting(true)
 
     try {
@@ -192,7 +218,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           signature,
           identificacao: {
             cpf: cpfInput.trim() || null,
-            birth_date: birthDateInput || null,
+            birth_date: birthDateIso,
             phone: phoneInput.trim() || null,
             email: emailInput.trim() || null,
           },
@@ -496,12 +522,20 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                         Data de nascimento <span style={{ fontSize: '11px', color: '#b89a6a' }}>(confirme ou corrija)</span>
                       </label>
                       <input
-                        type="date"
+                        type="text"
+                        inputMode="numeric"
                         className="anamnese-input"
-                        defaultValue={anamnese.patients.birth_date.slice(0, 10)}
-                        onChange={e => setBirthDateInput(e.target.value)}
-                        max={new Date().toISOString().split('T')[0]}
-                        style={{ maxWidth: '240px', width: '100%' }}
+                        placeholder="00/00/0000"
+                        defaultValue={parseDateBR(anamnese.patients.birth_date)}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 8)
+                          const fmt = v
+                            .replace(/(\d{2})(\d)/, '$1/$2')
+                            .replace(/(\d{2})(\d)/, '$1/$2')
+                          setBirthDateInput(fmt)
+                        }}
+                        maxLength={10}
+                        style={{ maxWidth: '160px' }}
                       />
                     </div>
                   ) : (
@@ -510,12 +544,20 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                         Data de nascimento <span style={{ color: '#b89a6a' }}>*</span>
                       </label>
                       <input
-                        type="date"
+                        type="text"
+                        inputMode="numeric"
                         className="anamnese-input"
+                        placeholder="00/00/0000"
                         value={birthDateInput}
-                        onChange={e => setBirthDateInput(e.target.value)}
-                        max={new Date().toISOString().split('T')[0]}
-                        style={{ maxWidth: '240px', width: '100%' }}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 8)
+                          const fmt = v
+                            .replace(/(\d{2})(\d)/, '$1/$2')
+                            .replace(/(\d{2})(\d)/, '$1/$2')
+                          setBirthDateInput(fmt)
+                        }}
+                        maxLength={10}
+                        style={{ maxWidth: '160px' }}
                       />
                     </div>
                   )
