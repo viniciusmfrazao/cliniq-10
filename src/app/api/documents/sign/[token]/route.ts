@@ -16,7 +16,7 @@ export async function GET(
     const { token } = params
     const { data: doc, error } = await getAdmin()
       .from('documents_sent')
-      .select('*, patients(name), clinics(name, cnpj, clinic_phone), document_templates(questions), users!documents_sent_sent_by_fkey(name)')
+      .select('*, patients(name), clinics(name, cnpj, clinic_phone), document_templates(questions, image_url), users!documents_sent_sent_by_fkey(name)')
       .eq('sign_token', token)
       .maybeSingle()
 
@@ -38,7 +38,7 @@ export async function GET(
       ? doc.questions
       : (doc as any).document_templates?.questions || []
 
-    return NextResponse.json({ ...doc, questions })
+    return NextResponse.json({ ...doc, questions, image_url: (doc as any).document_templates?.image_url || null })
   } catch (error) {
     console.error('Error fetching document:', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })

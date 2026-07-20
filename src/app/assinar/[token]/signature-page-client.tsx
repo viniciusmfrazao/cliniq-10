@@ -16,6 +16,7 @@ type DocumentData = {
   signature_country?: string
   signature_data?: string
   questions?: { id: string; text: string }[]
+  image_url?: string | null
   patients: { name: string }
   clinics: { name: string; cnpj?: string; clinic_phone?: string }
   users?: { name: string }
@@ -227,6 +228,32 @@ export default function SignaturePageClient({ token }: { token: string }) {
             Olá, <strong>{doc.patients?.name}</strong>
           </p>
         </div>
+
+        {doc.image_url && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+            {doc.image_url.toLowerCase().endsWith('.pdf') ? (
+              <>
+                <iframe
+                  src={doc.image_url}
+                  title="Documento"
+                  className="w-full h-[70vh] border-0"
+                />
+                <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 text-center">
+                  <a
+                    href={doc.image_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-violet-600 hover:text-violet-800"
+                  >
+                    Abrir PDF em nova aba
+                  </a>
+                </div>
+              </>
+            ) : (
+              <img src={doc.image_url} alt={doc.name} className="w-full h-auto" />
+            )}
+          </div>
+        )}
 
         <SignatureForm doc={doc} token={token} />
       </div>
