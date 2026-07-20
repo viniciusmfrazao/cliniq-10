@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 import AudioModeField, { EnvioMode } from '@/components/ui/AudioModeField'
+import { useToast } from '@/components/ui/Toast'
 
 const DEFAULT_TEMPLATE = `Oi {{primeiro_nome}}! 💜
 
@@ -48,6 +49,7 @@ interface Props {
 
 export default function PosVendaForm({ clinicId, clinicName, initial }: Props) {
   const supabase = createClient()
+  const toast = useToast()
   const [enabled, setEnabled] = useState(initial.enabled)
   const [hora, setHora] = useState(initial.hora)
   const [template, setTemplate] = useState(initial.template || DEFAULT_TEMPLATE)
@@ -144,7 +146,7 @@ export default function PosVendaForm({ clinicId, clinicName, initial }: Props) {
 
   async function handleSave() {
     setSaving(true)
-    await supabase.from('clinic_automations').upsert({
+    const { error } = await supabase.from('clinic_automations').upsert({
       clinic_id: clinicId,
       pos_venda_ativo: enabled,
       pos_venda_hora: hora,
@@ -154,6 +156,10 @@ export default function PosVendaForm({ clinicId, clinicName, initial }: Props) {
       pos_venda_seq: seq,
     }, { onConflict: 'clinic_id' })
     setSaving(false)
+    if (error) {
+      toast.error('Erro ao salvar pós-venda', { description: error.message })
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
