@@ -172,14 +172,14 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setPeriodoTipo('mensal')}
+                onClick={() => { setPeriodoTipo('mensal'); if (periodoInicio.length !== 7) setPeriodoInicio(currentMonth) }}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold border transition ${periodoTipo === 'mensal' ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600'}`}
               >
                 Mensal
               </button>
               <button
                 type="button"
-                onClick={() => setPeriodoTipo('semanal')}
+                onClick={() => { setPeriodoTipo('semanal'); if (periodoInicio.length === 7) setPeriodoInicio(currentWeekStart) }}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold border transition ${periodoTipo === 'semanal' ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600'}`}
               >
                 Semanal
