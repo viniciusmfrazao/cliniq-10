@@ -92,7 +92,10 @@ const DocumentosAtendimento = memo(function DocumentosAtendimento({
         body: JSON.stringify({ patientId, appointmentId, templateId }),
       })
       const data = await res.json()
-      if (data.ok) {
+      if (data.ok && data.attachment_failed) {
+        toast.error('Texto enviado, mas o anexo (PDF/imagem) falhou', { description: data.attachment_error })
+        loadDocs()
+      } else if (data.ok) {
         toast.success(`Documento enviado para ${patientName.split(' ')[0]}!`)
         loadDocs()
       } else if (data.link) {

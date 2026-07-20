@@ -471,16 +471,21 @@ export async function sendWhatsappImage(args: {
     }
   }
 
+  // Evolution/Baileys exige mediatype 'document' para PDFs e outros arquivos
+  // que não sejam imagem de fato — mandar mediatype 'image' com um PDF faz o
+  // anexo não aparecer para o paciente no WhatsApp.
+  const mediatype = mimetype.toLowerCase().startsWith('image/') ? 'image' : 'document'
+
   return postEvolution(
     `${r.data.baseUrl}/message/sendMedia/${r.data.instanceName}`,
     r.data.apiKey,
     {
       number: normalizePhone(phone),
-      mediatype: 'image',
+      mediatype,
       mimetype,
       media,
       caption: caption ?? '',
-      fileName: fileName ?? `image-${Date.now()}.jpg`,
+      fileName: fileName ?? (mediatype === 'document' ? `documento-${Date.now()}.pdf` : `image-${Date.now()}.jpg`),
     },
   )
 }

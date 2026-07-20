@@ -166,12 +166,14 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Se houver anexo, envia PRIMEIRO (o paciente vê o documento antes da mensagem)
+  let attachmentFailed = false
+  let attachmentError: string | undefined
   if (hasAttachment) {
     try {
       const fileName = isPdf
         ? (template.name ? `${template.name}.pdf` : 'documento.pdf')
         : undefined
-      await sendWhatsappImage({
+      const attResult = await sendWhatsappImage({
         clinicId,
         phone,
         media: fileUrl,
@@ -180,7 +182,14 @@ export async function POST(req: NextRequest) {
         fileName,
         purpose: 'automation',
       })
+      if (!attResult.ok) {
+        attachmentFailed = true
+        attachmentError = attResult.error
+        console.error('Erro ao enviar anexo do template:', attResult.error)
+      }
     } catch (e) {
+      attachmentFailed = true
+      attachmentError = e instanceof Error ? e.message : String(e)
       console.error('Erro ao enviar anexo do template:', e)
     }
   }
@@ -199,6 +208,17 @@ export async function POST(req: NextRequest) {
 
   if (!result.ok) {
     return NextResponse.json({ ok: false, link, document_id: doc.id, error: result.error })
+  }
+
+  if (attachmentFailed) {
+    return NextResponse.json({
+      ok: true,
+      sent: 'whatsapp',
+      link: requiresSignature ? link : null,
+      document_id: doc.id,
+      attachment_failed: true,
+      attachment_error: attachmentError,
+    })
   }
 
   return NextResponse.json({ ok: true, sent: 'whatsapp', link: requiresSignature ? link : null, document_id: doc.id })
