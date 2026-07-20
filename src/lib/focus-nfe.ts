@@ -141,6 +141,24 @@ function authHeader(token: string) {
   return 'Basic ' + Buffer.from(`${token}:`).toString('base64')
 }
 
+// A SEFAZ rejeita se data_emissao vier depois do horário real de recebimento. Se a venda
+// é de hoje, usar meio-dia fixo pode cair "no futuro" (ex: emitindo às 9h, meio-dia ainda
+// não chegou). Pra hoje, usa o horário real agora; pra datas passadas, meio-dia é seguro
+// (já está no passado de qualquer forma).
+function dataEmissaoFocus(dataVenda: string): string {
+  const hojeBR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) // YYYY-MM-DD
+  if (dataVenda === hojeBR) {
+    const agora = new Date()
+    const partes = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo', hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(agora).reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {} as Record<string, string>)
+    return `${partes.year}-${partes.month}-${partes.day}T${partes.hour}:${partes.minute}:${partes.second}-03:00`
+  }
+  return `${dataVenda}T12:00:00-03:00`
+}
+
 // A Focus às vezes devolve só um resumo em "mensagem" (ex: "Erro na validação do
 // Schema XML, verifique o detalhamento dos erros") e o detalhe de verdade — qual campo,
 // qual regra — vem em "erros" (array) ou "mensagem_sefaz"/"detalhes". Sem isso é
@@ -218,7 +236,7 @@ export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomad
   const cpfLimpo = (tomadorCpf || '').replace(/\D/g, '')
 
   const payload: Record<string, unknown> = {
-    data_emissao: `${dataVenda}T12:00:00-03:00`,
+    data_emissao: dataEmissaoFocus(dataVenda),
     natureza_operacao: '1',
     optante_simples_nacional: config.regime_tributario === 'simples_nacional',
     prestador: {
@@ -391,7 +409,7 @@ export async function emitirNfeProduto({
 
   const payload: Record<string, unknown> = {
     natureza_operacao: 'Venda de mercadoria',
-    data_emissao: `${dataVenda}T12:00:00-03:00`,
+    data_emissao: dataEmissaoFocus(dataVenda),
     tipo_documento: 1, // 1 = saída (venda)
     finalidade_emissao: 1, // normal
     local_destino: 1, // operação interna (mesmo estado) — assume padrão
