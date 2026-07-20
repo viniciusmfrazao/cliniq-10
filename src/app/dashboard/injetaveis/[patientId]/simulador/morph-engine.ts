@@ -128,18 +128,19 @@ function applyOp(src: ImageData, op: WarpOp): ImageData {
   return out
 }
 
-// Suavização local (para "smooth": rugas / sulcos) — box blur mascarado radial
+// Suavização local (para "smooth": rugas / sulcos) — blur mascarado radial.
+// Kernel maior + preservação parcial de bordas fortes pra não "derreter" sobrancelha/cabelo.
 function applySmooth(src: ImageData, op: WarpOp, amount: number): ImageData {
   const w = src.width
   const h = src.height
   const out = new ImageData(new Uint8ClampedArray(src.data), w, h)
   const r = op.radius
   const r2 = r * r
-  const x0 = clamp(Math.floor(op.cx - r), 1, w - 2)
-  const x1 = clamp(Math.ceil(op.cx + r), 1, w - 2)
-  const y0 = clamp(Math.floor(op.cy - r), 1, h - 2)
-  const y1 = clamp(Math.ceil(op.cy + r), 1, h - 2)
-  const k = 2 // meia-janela do blur
+  const x0 = clamp(Math.floor(op.cx - r), 2, w - 3)
+  const x1 = clamp(Math.ceil(op.cx + r), 2, w - 3)
+  const y0 = clamp(Math.floor(op.cy - r), 2, h - 3)
+  const y1 = clamp(Math.ceil(op.cy + r), 2, h - 3)
+  const k = 4 // meia-janela do blur (maior = rugas mais apagadas)
   const d = src.data
 
   for (let y = y0; y <= y1; y++) {
@@ -149,22 +150,65 @@ function applySmooth(src: ImageData, op: WarpOp, amount: number): ImageData {
       const d2 = vx * vx + vy * vy
       if (d2 >= r2) continue
       const t = 1 - d2 / r2
-      const mix = clamp(amount * t * t, 0, 0.85)
+      let mix = clamp(amount * (t * t * 0.6 + t * 0.4), 0, 0.95)
       if (mix <= 0.01) continue
-      for (let c = 0; c < 3; c++) {
-        let sum = 0
-        let n = 0
-        for (let yy = -k; yy <= k; yy++) {
-          for (let xx = -k; xx <= k; xx++) {
-            const px = clamp(x + xx, 0, w - 1)
-            const py = clamp(y + yy, 0, h - 1)
-            sum += d[(py * w + px) * 4 + c]
-            n++
-          }
+
+      const idx = (y * w + x) * 4
+      // Preservação de borda: se o pixel é muito mais escuro que a média local
+      // (sobrancelha, cílios, cabelo), reduz o blur pra não borrar traços fortes
+      let sum0 = 0, sum1 = 0, sum2 = 0, n = 0
+      for (let yy = -k; yy <= k; yy++) {
+        const py = clamp(y + yy, 0, h - 1)
+        for (let xx = -k; xx <= k; xx++) {
+          const px = clamp(x + xx, 0, w - 1)
+          const pi = (py * w + px) * 4
+          sum0 += d[pi]; sum1 += d[pi + 1]; sum2 += d[pi + 2]
+          n++
         }
-        const orig = d[(y * w + x) * 4 + c]
-        out.data[(y * w + x) * 4 + c] = orig * (1 - mix) + (sum / n) * mix
       }
+      const avg0 = sum0 / n, avg1 = sum1 / n, avg2 = sum2 / n
+      const lumPix = (d[idx] + d[idx + 1] + d[idx + 2]) / 3
+      const lumAvg = (avg0 + avg1 + avg2) / 3
+      const diff = Math.abs(lumPix - lumAvg)
+      if (diff > 45) mix *= 0.25 // borda forte (sobrancelha/olho): preserva
+
+      out.data[idx] = d[idx] * (1 - mix) + avg0 * mix
+      out.data[idx + 1] = d[idx + 1] * (1 - mix) + avg1 * mix
+      out.data[idx + 2] = d[idx + 2] * (1 - mix) + avg2 * mix
+    }
+  }
+  return out
+}
+
+// Realce labial: leve aumento de saturação/vermelho apenas em pixels já
+// labiais (R dominante), pra dar o aspecto "preenchido" além do volume.
+function applyLipEnhance(src: ImageData, op: WarpOp, amount: number): ImageData {
+  const w = src.width
+  const h = src.height
+  const out = new ImageData(new Uint8ClampedArray(src.data), w, h)
+  const r = op.radius
+  const r2 = r * r
+  const x0 = clamp(Math.floor(op.cx - r), 0, w - 1)
+  const x1 = clamp(Math.ceil(op.cx + r), 0, w - 1)
+  const y0 = clamp(Math.floor(op.cy - r), 0, h - 1)
+  const y1 = clamp(Math.ceil(op.cy + r), 0, h - 1)
+  const d = src.data
+
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const vx = x - op.cx
+      const vy = y - op.cy
+      const d2 = vx * vx + vy * vy
+      if (d2 >= r2) continue
+      const idx = (y * w + x) * 4
+      const R = d[idx], G = d[idx + 1], B = d[idx + 2]
+      // heurística de pixel labial: vermelho dominante e não muito claro (dente)
+      if (!(R > G + 12 && R > B + 8 && R < 235)) continue
+      const t = 1 - d2 / r2
+      const f = clamp(amount * t * t, 0, 0.5)
+      out.data[idx] = clamp(R + (255 - R) * f * 0.35, 0, 255)
+      out.data[idx + 1] = clamp(G - G * f * 0.25, 0, 255)
+      out.data[idx + 2] = clamp(B - B * f * 0.1, 0, 255)
     }
   }
   return out
@@ -195,15 +239,20 @@ export function renderMorph(
     const eff = zoneEffect(p.zone, type)
     const units = Math.max(p.units || (type === 'toxin' ? 4 : 0.5), 0.1)
     // toxina em U (2–30), filler em ml (0.3–2) — normalizar magnitude
-    const unitFactor = type === 'toxin' ? units / 10 : units
+    const unitFactor = type === 'toxin' ? units / 8 : units
     const mag = eff.base * unitFactor * intensity
 
     if (eff.kind === 'bulge') {
+      const isLip = p.zone === 'lip'
       img = applyOp(img, {
         cx: p.x, cy: p.y,
-        radius: baseRadius * (p.zone === 'lip' ? 0.75 : 1),
-        bulge: clamp(mag * 0.06, 0, 0.35),
+        radius: baseRadius * (isLip ? 0.8 : 1),
+        bulge: clamp(mag * 0.07, 0, 0.4),
       })
+      if (isLip) {
+        // aspecto "preenchido": leve realce de cor além do volume
+        img = applyLipEnhance(img, { cx: p.x, cy: p.y, radius: baseRadius * 0.9 }, clamp(mag * 0.35, 0, 1))
+      }
     } else if (eff.kind === 'slim') {
       // puxa em direção ao centro do rosto (afinamento de masseter)
       const dir = p.x < faceCenterX ? 1 : -1
@@ -219,8 +268,11 @@ export function renderMorph(
         dy: -mag * faceScale * 0.012,
       })
     } else {
-      // smooth: suaviza rugas/sulcos + micro-lift
-      img = applySmooth(img, { cx: p.x, cy: p.y, radius: baseRadius }, clamp(mag * 0.5, 0, 1))
+      // smooth: suaviza rugas/sulcos — passe duplo pra rugas marcadas
+      const smoothOp = { cx: p.x, cy: p.y, radius: baseRadius * 1.15 }
+      const amt = clamp(mag * 0.7, 0, 1)
+      img = applySmooth(img, smoothOp, amt)
+      if (amt > 0.45) img = applySmooth(img, smoothOp, amt * 0.6)
     }
   }
   return img
