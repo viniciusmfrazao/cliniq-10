@@ -60,6 +60,12 @@ export default async function PatientInjetaveisPage({ params }: { params: { pati
           >
             Ver prontuario
           </Link>
+          <Link
+            href={`/dashboard/injetaveis/${patientId}/simulador`}
+            className="w-auto px-4 py-2.5 rounded-xl font-medium text-sm border-2 border-purple-200 text-purple-700 hover:bg-purple-50 transition-all flex items-center"
+          >
+            ✨ Simular plano
+          </Link>
           {/* Suspense é obrigatório no Next 15 pq o componente usa useSearchParams */}
           <Suspense fallback={null}>
             <NewApplicationButton
