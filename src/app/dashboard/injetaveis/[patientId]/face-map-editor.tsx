@@ -56,12 +56,14 @@ export default function FaceMapEditor({
   points, 
   setPoints, 
   type,
-  gender = 'female'
+  gender = 'female',
+  overlay
 }: { 
   points: Point[]
   setPoints: (points: Point[]) => void
   type: string
   gender?: 'female' | 'male'
+  overlay?: React.ReactNode
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [editingPoint, setEditingPoint] = useState<Point | null>(null)
@@ -186,6 +188,8 @@ export default function FaceMapEditor({
               showRegions={true}
               showMuscles={showMuscles}
             >
+              {/* Overlay opcional (ex: zonas de risco no simulador) */}
+              {view === 'front' && overlay}
               {/* Renderizar pontos */}
               {points.map((point) => {
                 const isEditing = editingPoint?.id === point.id

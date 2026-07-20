@@ -318,14 +318,39 @@ export default function SimulatorClient({
               </div>
             )}
 
-            {/* Editor de mapa (reutilizado) */}
+            {/* Editor de mapa (reutilizado) com overlay de zonas de risco */}
             <div className="card p-4">
               <FaceMapEditor
                 points={points}
                 setPoints={setPoints as any}
                 type={type}
                 gender={patientGender}
+                overlay={
+                  <g pointerEvents="none">
+                    {RISK_ZONES.map(rz => (
+                      <g key={rz.id}>
+                        <circle
+                          cx={rz.cx} cy={rz.cy} r={rz.r}
+                          fill={type === 'filler' ? 'rgba(239,68,68,0.14)' : 'rgba(239,68,68,0.06)'}
+                          stroke={type === 'filler' ? 'rgba(239,68,68,0.55)' : 'rgba(239,68,68,0.25)'}
+                          strokeWidth="1"
+                          strokeDasharray="4 3"
+                        />
+                        <text
+                          x={rz.cx} y={rz.cy - rz.r - 3}
+                          textAnchor="middle"
+                          fontSize="7"
+                          fill={type === 'filler' ? '#dc2626' : '#f0aaaa'}
+                        >⚠</text>
+                      </g>
+                    ))}
+                  </g>
+                }
               />
+              <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-full border border-red-400 border-dashed bg-red-50" />
+                Círculos tracejados = zonas de atenção vascular (risco relevante para preenchedor). Pontos de filler dentro delas geram alerta.
+              </p>
             </div>
           </div>
 
