@@ -163,12 +163,47 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
   }
 
+  // Precisa estar definido ANTES do handleSubmit e de qualquer return
+  // antecipado (ex: tela de assinatura) — senão, na tela de assinatura,
+  // esse trecho nunca executa nesse render e handleSubmit quebra ao
+  // tentar acessar camposIdAtivos (TDZ), sem avisar nada ao usuário.
+  const cfg = anamnese?.anamnese_config
+  // Campos de identificação habilitados pela clínica (default: data_nascimento e cpf)
+  const camposIdAtivos: string[] = cfg?.campos_identificacao?.length
+    ? cfg.campos_identificacao
+    : ['data_nascimento', 'cpf']
+
   const handleSubmit = async () => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    // Data de nascimento e CPF são obrigatórios quando ativos na config da
+    // clínica e o paciente ainda não os tem cadastrados. Junta tudo que
+    // estiver faltando/inválido pra avisar de uma vez só.
+    const faltando: string[] = []
+    let birthDateIso: string | null = null
+
+    if (camposIdAtivos.includes('data_nascimento') && !anamnese?.patients.birth_date) {
+      birthDateIso = isoFromBR(birthDateInput)
+      if (!birthDateIso) faltando.push('Data de nascimento')
+    } else if (birthDateInput) {
+      // Caso de "confirme ou corrija": só converte se o paciente alterou o campo
+      birthDateIso = isoFromBR(birthDateInput)
+      if (!birthDateIso) faltando.push('Data de nascimento (formato inválido)')
+    }
+
+    if (camposIdAtivos.includes('cpf') && !anamnese?.patients.cpf) {
+      const cpfDigits = cpfInput.replace(/\D/g, '')
+      if (cpfDigits.length !== 11) faltando.push('CPF')
+    }
+
+    if (faltando.length > 0) {
+      alert(`Antes de assinar, preencha:\n\n${faltando.map(f => `• ${f}`).join('\n')}`)
+      return
+    }
 
     // Check if signature is empty
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
@@ -177,32 +212,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     if (isEmpty) {
       alert('Por favor, assine antes de enviar')
       return
-    }
-
-    // Data de nascimento e CPF são obrigatórios quando ativos na config da
-    // clínica e o paciente ainda não os tem cadastrados.
-    let birthDateIso: string | null = null
-    if (camposIdAtivos.includes('data_nascimento') && !anamnese?.patients.birth_date) {
-      birthDateIso = isoFromBR(birthDateInput)
-      if (!birthDateIso) {
-        alert('Informe uma data de nascimento válida (DD/MM/AAAA)')
-        return
-      }
-    } else if (birthDateInput) {
-      // Caso de "confirme ou corrija": só converte se o paciente alterou o campo
-      birthDateIso = isoFromBR(birthDateInput)
-      if (!birthDateIso) {
-        alert('Data de nascimento inválida (DD/MM/AAAA)')
-        return
-      }
-    }
-
-    if (camposIdAtivos.includes('cpf') && !anamnese?.patients.cpf) {
-      const cpfDigits = cpfInput.replace(/\D/g, '')
-      if (cpfDigits.length !== 11) {
-        alert('Informe um CPF válido')
-        return
-      }
     }
 
     setSubmitting(true)
@@ -354,16 +363,11 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     )
   }
 
-  const cfg = anamnese?.anamnese_config
   const cor = cfg?.cor_primaria || '#b89a6a'
   const titulo = cfg?.titulo || 'Ficha de Anamnese Facial'
   const subtitulo = cfg?.subtitulo || ''
   const secoesAtivas = cfg?.secoes_ativas || ['procedimentos','habitos','alergias','medicamentos','saude','outras','mulheres','queixa']
   const perguntasExtras = cfg?.perguntas_extras || []
-  // Campos de identificação habilitados pela clínica (default: data_nascimento e cpf)
-  const camposIdAtivos: string[] = cfg?.campos_identificacao?.length
-    ? cfg.campos_identificacao
-    : ['data_nascimento', 'cpf']
 
   // Helper: retorna perguntas extras vinculadas a uma seção específica
   const extrasDaSecao = (secaoId: string) =>
