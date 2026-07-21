@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import SignatureForm from './signature-form'
+import ResponsivePdfViewer from '@/components/ResponsivePdfViewer'
 
 type DocumentData = {
   id: string
@@ -233,11 +234,7 @@ export default function SignaturePageClient({ token }: { token: string }) {
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
             {doc.image_url.toLowerCase().endsWith('.pdf') ? (
               <>
-                <iframe
-                  src={doc.image_url}
-                  title="Documento"
-                  className="w-full h-[70vh] border-0"
-                />
+                <ResponsivePdfViewer url={doc.image_url} />
                 <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 text-center">
                   <a
                     href={doc.image_url}
