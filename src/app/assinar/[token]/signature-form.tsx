@@ -155,7 +155,7 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
         <div className="bg-slate-50 px-6 py-4 border-b border-slate-100">
           <h2 className="font-semibold text-slate-900">Conteudo do documento</h2>
         </div>
-        <div className="p-6 max-h-96 overflow-y-auto whitespace-pre-wrap text-slate-700 font-mono text-sm leading-relaxed">
+        <div className="p-6 max-h-96 overflow-y-auto whitespace-pre-wrap break-words text-slate-700 font-mono text-sm leading-relaxed">
           {doc.content}
         </div>
       </div>

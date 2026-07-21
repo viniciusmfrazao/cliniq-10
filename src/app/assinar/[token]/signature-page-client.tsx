@@ -128,7 +128,7 @@ export default function SignaturePageClient({ token }: { token: string }) {
                 </p>
               )}
             </div>
-            <div className="p-6 whitespace-pre-wrap text-slate-700 font-mono text-sm leading-relaxed max-h-[70vh] overflow-y-auto print:max-h-none print:overflow-visible">
+            <div className="p-6 whitespace-pre-wrap break-words text-slate-700 font-mono text-sm leading-relaxed max-h-[70vh] overflow-y-auto print:max-h-none print:overflow-visible">
               {doc.content}
             </div>
             {signedByProfessional && (
