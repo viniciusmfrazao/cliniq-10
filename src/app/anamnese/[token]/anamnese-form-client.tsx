@@ -163,6 +163,16 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
   }
 
+  // Precisa estar definido ANTES do handleSubmit e de qualquer return
+  // antecipado (ex: tela de assinatura) — senão, na tela de assinatura,
+  // esse trecho nunca executa nesse render e handleSubmit quebra ao
+  // tentar acessar camposIdAtivos (TDZ), sem avisar nada ao usuário.
+  const cfg = anamnese?.anamnese_config
+  // Campos de identificação habilitados pela clínica (default: data_nascimento e cpf)
+  const camposIdAtivos: string[] = cfg?.campos_identificacao?.length
+    ? cfg.campos_identificacao
+    : ['data_nascimento', 'cpf']
+
   const handleSubmit = async () => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -353,16 +363,11 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     )
   }
 
-  const cfg = anamnese?.anamnese_config
   const cor = cfg?.cor_primaria || '#b89a6a'
   const titulo = cfg?.titulo || 'Ficha de Anamnese Facial'
   const subtitulo = cfg?.subtitulo || ''
   const secoesAtivas = cfg?.secoes_ativas || ['procedimentos','habitos','alergias','medicamentos','saude','outras','mulheres','queixa']
   const perguntasExtras = cfg?.perguntas_extras || []
-  // Campos de identificação habilitados pela clínica (default: data_nascimento e cpf)
-  const camposIdAtivos: string[] = cfg?.campos_identificacao?.length
-    ? cfg.campos_identificacao
-    : ['data_nascimento', 'cpf']
 
   // Helper: retorna perguntas extras vinculadas a uma seção específica
   const extrasDaSecao = (secaoId: string) =>
