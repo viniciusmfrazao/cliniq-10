@@ -170,6 +170,31 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Data de nascimento e CPF são obrigatórios quando ativos na config da
+    // clínica e o paciente ainda não os tem cadastrados. Junta tudo que
+    // estiver faltando/inválido pra avisar de uma vez só.
+    const faltando: string[] = []
+    let birthDateIso: string | null = null
+
+    if (camposIdAtivos.includes('data_nascimento') && !anamnese?.patients.birth_date) {
+      birthDateIso = isoFromBR(birthDateInput)
+      if (!birthDateIso) faltando.push('Data de nascimento')
+    } else if (birthDateInput) {
+      // Caso de "confirme ou corrija": só converte se o paciente alterou o campo
+      birthDateIso = isoFromBR(birthDateInput)
+      if (!birthDateIso) faltando.push('Data de nascimento (formato inválido)')
+    }
+
+    if (camposIdAtivos.includes('cpf') && !anamnese?.patients.cpf) {
+      const cpfDigits = cpfInput.replace(/\D/g, '')
+      if (cpfDigits.length !== 11) faltando.push('CPF')
+    }
+
+    if (faltando.length > 0) {
+      alert(`Antes de assinar, preencha:\n\n${faltando.map(f => `• ${f}`).join('\n')}`)
+      return
+    }
+
     // Check if signature is empty
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const isEmpty = !imageData.data.some((channel, i) => i % 4 !== 3 ? channel !== 0 : channel !== 0)
@@ -177,32 +202,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     if (isEmpty) {
       alert('Por favor, assine antes de enviar')
       return
-    }
-
-    // Data de nascimento e CPF são obrigatórios quando ativos na config da
-    // clínica e o paciente ainda não os tem cadastrados.
-    let birthDateIso: string | null = null
-    if (camposIdAtivos.includes('data_nascimento') && !anamnese?.patients.birth_date) {
-      birthDateIso = isoFromBR(birthDateInput)
-      if (!birthDateIso) {
-        alert('Informe uma data de nascimento válida (DD/MM/AAAA)')
-        return
-      }
-    } else if (birthDateInput) {
-      // Caso de "confirme ou corrija": só converte se o paciente alterou o campo
-      birthDateIso = isoFromBR(birthDateInput)
-      if (!birthDateIso) {
-        alert('Data de nascimento inválida (DD/MM/AAAA)')
-        return
-      }
-    }
-
-    if (camposIdAtivos.includes('cpf') && !anamnese?.patients.cpf) {
-      const cpfDigits = cpfInput.replace(/\D/g, '')
-      if (cpfDigits.length !== 11) {
-        alert('Informe um CPF válido')
-        return
-      }
     }
 
     setSubmitting(true)
