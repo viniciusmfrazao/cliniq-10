@@ -131,6 +131,27 @@ export default function SignaturePageClient({ token }: { token: string }) {
             <div className="p-6 whitespace-pre-wrap break-words text-slate-700 font-mono text-sm leading-relaxed max-h-[70vh] overflow-y-auto print:max-h-none print:overflow-visible">
               {doc.content}
             </div>
+            {doc.image_url && (
+              <div className="border-t border-slate-100 print:break-before-page">
+                {doc.image_url.toLowerCase().endsWith('.pdf') ? (
+                  <>
+                    <ResponsivePdfViewer url={doc.image_url} />
+                    <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 text-center print:hidden">
+                      <a
+                        href={doc.image_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-violet-600 hover:text-violet-800"
+                      >
+                        Abrir PDF em nova aba
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <img src={doc.image_url} alt={doc.name} className="w-full h-auto" />
+                )}
+              </div>
+            )}
             {signedByProfessional && (
               <div className="px-6 pb-4">
                 {doc.signature_data && (
