@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -138,8 +138,23 @@ export default function TemplateForm({ clinicId, template }: Props) {
     }
   }
 
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null)
+
   const insertVariable = (variable: string) => {
-    setForm({ ...form, content: form.content + variable })
+    const textarea = contentTextareaRef.current
+    if (!textarea) {
+      setForm({ ...form, content: form.content + variable })
+      return
+    }
+    const start = textarea.selectionStart ?? form.content.length
+    const end = textarea.selectionEnd ?? form.content.length
+    const newContent = form.content.slice(0, start) + variable + form.content.slice(end)
+    setForm({ ...form, content: newContent })
+    const cursorPos = start + variable.length
+    requestAnimationFrame(() => {
+      textarea.focus()
+      textarea.setSelectionRange(cursorPos, cursorPos)
+    })
   }
 
   return (
@@ -250,6 +265,7 @@ export default function TemplateForm({ clinicId, template }: Props) {
               </div>
             </div>
             <textarea
+              ref={contentTextareaRef}
               value={form.content}
               onChange={e => setForm({ ...form, content: e.target.value })}
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 outline-none transition-[border-color,box-shadow] resize-none font-mono text-sm"

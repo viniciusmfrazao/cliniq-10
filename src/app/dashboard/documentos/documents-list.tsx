@@ -15,6 +15,7 @@ type Document = {
 }
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string; icon: string }> = {
+  sent: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Documento enviado', icon: 'share' },
   pending: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Aguardando', icon: 'clock' },
   viewed: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Visualizado', icon: 'eye' },
   signed: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Assinado', icon: 'check' },
