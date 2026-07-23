@@ -3,6 +3,14 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import CopyAnamneseLink from './copy-link-button'
+import ExportAnamnesePdfButton from './export-pdf-button'
+
+function escapeHtml(value: any): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
 
 export default async function AnamneseDetailPage({ params, searchParams }: { params: { id: string }, searchParams: { return?: string } }) {
   const { id } = params
@@ -54,6 +62,117 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     )
   }
 
+  // Config data-driven das seções, reaproveitada para montar o HTML de
+  // exportação em PDF (evita duplicar a lista de campos em dois lugares).
+  const sections: Array<{ title: string; fields: Array<[string, any]> }> = [
+    {
+      title: 'Procedimentos Anteriores',
+      fields: [
+        ['Botox', responses.botox],
+        ['Quando fez Botox', responses.botox_quando],
+        ['Preenchimento', responses.preench],
+        ['Quando fez preenchimento', responses.preench_quando],
+        ['Qual preenchedor', responses.preench_qual],
+        ['Bioestimulador', responses.bioestim],
+        ['Quando fez bioestimulador', responses.bioestim_quando],
+        ['Experiências anteriores', responses.experiencia],
+        ['Descrição da experiência', responses.experiencia_desc],
+      ],
+    },
+    {
+      title: 'Hábitos de Vida',
+      fields: [
+        ['Atividade física', responses.atividade],
+        ['Nível de estresse', responses.estresse],
+        ['Tabagismo', responses.tabaco],
+        ['Cigarros por dia', responses.tabaco_qtd],
+      ],
+    },
+    {
+      title: 'Alergias',
+      fields: [
+        ['Alergia a Insetos', responses['alergia_Insetos']],
+        ['Detalhes insetos', responses['alergia_Insetos_desc']],
+        ['Alergia a Picada de Abelha', responses['alergia_Picada de Abelha']],
+        ['Alergia a Frutos do Mar', responses['alergia_Frutos do Mar']],
+        ['Alergia a Cosméticos', responses['alergia_Cosméticos']],
+        ['Alergia a Anestésicos', responses['alergia_Anestésicos']],
+        ['Outras Alergias', responses['alergia_Outras Alergias']],
+        ['Detalhes outras alergias', responses['alergia_Outras Alergias_desc']],
+        ['Herpes', responses.herpes],
+      ],
+    },
+    {
+      title: 'Medicamentos',
+      fields: [
+        ['Anti-inflamatório', responses.antiinfl],
+        ['Qual anti-inflamatório', responses.antiinfl_qual],
+        ['Antibiótico', responses.antibio],
+        ['Qual antibiótico', responses.antibio_qual],
+        ['Corticóide', responses.cortic],
+        ['Qual corticóide', responses.cortic_qual],
+        ['Outro medicamento', responses.outroMed],
+        ['Qual outro', responses.outroMed_qual],
+      ],
+    },
+    {
+      title: 'Saúde Geral',
+      fields: [
+        ['Doença auto-imune', responses.autoim],
+        ['Qual doença auto-imune', responses.autoim_qual],
+        ['Outra patologia', responses.outrapat],
+        ['Qual outra patologia', responses.outrapat_qual],
+        ['Informação adicional', responses.inforelevante],
+        ['Descrição adicional', responses.inforelevante_desc],
+      ],
+    },
+    {
+      title: 'Outras Informações',
+      fields: [
+        ['Autoriza uso de imagem', responses.imagem],
+        ['Aceita filmagem', responses.filmado],
+        ['Como conheceu a clínica', responses.conheceu],
+        ['Outro canal', responses.conheceu_outro],
+        ['Grávida ou possibilidade', responses.gravida],
+        ['Lactante', responses.lactante],
+      ],
+    },
+    {
+      title: 'Principal Queixa',
+      fields: [
+        ['Áreas de interesse', responses.queixa],
+        ['Observação', responses.queixa_obs],
+      ],
+    },
+  ]
+
+  if (perguntasExtras.length > 0) {
+    sections.push({
+      title: 'Informações Adicionais',
+      fields: perguntasExtras.map((p, idx) => [p.pergunta, responses[`extra_${idx}`]]),
+    })
+  }
+
+  const htmlFieldValue = (value: any): string =>
+    Array.isArray(value) ? value.map(escapeHtml).join(', ') : escapeHtml(value)
+
+  const bodyHtml = anamnese.status === 'completed'
+    ? sections
+        .filter(s => s.fields.some(([, v]) => !!v))
+        .map(s => `
+          <div class="section">
+            <h2>${escapeHtml(s.title)}</h2>
+            ${s.fields.filter(([, v]) => !!v).map(([label, value]) => `
+              <div class="row"><span class="label">${escapeHtml(label)}</span><span class="value">${htmlFieldValue(value)}</span></div>
+            `).join('')}
+          </div>
+        `).join('')
+    : '<p>Ficha ainda não preenchida pelo paciente.</p>'
+
+  const completedAtLabel = anamnese.completed_at
+    ? new Date(anamnese.completed_at).toLocaleString('pt-BR')
+    : '-'
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -69,6 +188,16 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
             Preenchido
           </span>
         )}
+        <ExportAnamnesePdfButton
+          patientName={anamnese.patients?.name || 'Paciente'}
+          clinicName={anamnese.clinics?.name || 'Clínica'}
+          completedAtLabel={completedAtLabel}
+          signatureIp={anamnese.signature_ip || null}
+          signatureUserAgent={anamnese.signature_user_agent || null}
+          signatureCountry={anamnese.signature_country || null}
+          signatureDataUrl={anamnese.signature_data || null}
+          bodyHtml={bodyHtml}
+        />
       </div>
 
       {/* Patient info */}
@@ -255,8 +384,39 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
             />
           </div>
           <p className="text-xs text-slate-500 mt-2">
-            Assinado em {anamnese.completed_at && new Date(anamnese.completed_at).toLocaleString('pt-BR')}
+            Assinado em {completedAtLabel}
           </p>
+
+          {/* Metadados evidenciários da assinatura eletrônica (Lei 14.063/2020) */}
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="flex items-center gap-2">
+              <Icon name="globe" className="w-4 h-4 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-500">Endereço IP</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{anamnese.signature_ip || '-'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Icon name="clock" className="w-4 h-4 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-500">Data e hora</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{completedAtLabel}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Icon name="mapPin" className="w-4 h-4 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-500">País</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{anamnese.signature_country || '-'}</p>
+              </div>
+            </div>
+            {anamnese.signature_user_agent && (
+              <div className="sm:col-span-3">
+                <p className="text-xs text-slate-500 mb-1">Dispositivo</p>
+                <p className="text-xs text-slate-400 break-all">{anamnese.signature_user_agent}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
