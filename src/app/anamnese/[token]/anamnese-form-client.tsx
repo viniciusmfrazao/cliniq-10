@@ -17,6 +17,7 @@ type AnamneseData = {
   clinic_id: string
   patient_id: string
   status: string
+  consent_term_text?: string | null
   patients: {
     name: string
     email: string | null
@@ -30,6 +31,12 @@ type AnamneseData = {
   anamnese_config: AnamneseConfig | null
 }
 
+function fillConsentVariables(content: string, vars: Record<string, string>): string {
+  return content
+    .replace(/\{\{([\w_]+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
+    .replace(/\{([\w_]+)\}/g, (_, key) => vars[key] ?? `{${key}}`)
+}
+
 export default function AnamneseFormClient({ token }: { token: string }) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -37,6 +44,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [showSignature, setShowSignature] = useState(false)
+  const [showConsent, setShowConsent] = useState(false)
+  const [consentScrolledToEnd, setConsentScrolledToEnd] = useState(false)
 
   // Form state — autosave no localStorage
   const DRAFT_KEY = `anamnese_draft_${token}`
@@ -301,6 +310,70 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     )
   }
 
+  if (showConsent) {
+    const today = new Date()
+    const vars: Record<string, string> = {
+      PACIENTE_NOME: anamnese?.patients.name || '',
+      DATA: today.toLocaleDateString('pt-BR'),
+      HORA: today.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+      CLINICA_NOME: anamnese?.clinics.name || '',
+    }
+    const consentText = fillConsentVariables(anamnese?.consent_term_text || '', vars)
+
+    return (
+      <div className="min-h-screen p-4" style={{ background: '#f9f5f0' }}>
+        <div className="max-w-lg mx-auto">
+          <div className="text-center mb-6 pt-8">
+            <h2 className="text-2xl mb-2" style={{ color: '#1a1410', fontFamily: 'Cormorant Garamond, serif' }}>
+              Termo de Consentimento
+            </h2>
+            <p style={{ color: '#8a7a6a', fontSize: '14px' }}>
+              Leia atentamente até o final antes de continuar
+            </p>
+          </div>
+
+          <div
+            className="rounded-lg p-5 mb-4 whitespace-pre-wrap text-sm leading-relaxed"
+            style={{ background: '#fffdf9', border: '1px solid #e0d5c5', maxHeight: '50vh', overflowY: 'auto', color: '#4a3f35' }}
+            onScroll={e => {
+              const el = e.currentTarget
+              if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setConsentScrolledToEnd(true)
+            }}
+          >
+            {consentText}
+          </div>
+
+          {!consentScrolledToEnd && (
+            <p className="text-center text-xs mb-3" style={{ color: '#b89a6a' }}>
+              Role o texto até o final para habilitar o botão de continuar
+            </p>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowConsent(false)}
+              className="flex-1 py-3 rounded text-sm font-medium"
+              style={{ background: '#f5ede0', color: '#4a3f35' }}
+            >
+              Voltar
+            </button>
+            <button
+              onClick={() => { setShowConsent(false); setShowSignature(true) }}
+              disabled={!consentScrolledToEnd}
+              className="flex-1 py-3 rounded text-sm font-medium transition-all"
+              style={{
+                background: consentScrolledToEnd ? '#1a1410' : '#c9bdae',
+                color: '#f9f5f0',
+              }}
+            >
+              Li e concordo
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (showSignature) {
     return (
       <div className="min-h-screen p-4" style={{ background: '#f9f5f0' }}>
@@ -340,7 +413,10 @@ export default function AnamneseFormClient({ token }: { token: string }) {
 
           <div className="flex gap-3">
             <button
-              onClick={() => setShowSignature(false)}
+              onClick={() => {
+                setShowSignature(false)
+                if (anamnese?.consent_term_text) setShowConsent(true)
+              }}
               className="flex-1 py-3 rounded text-sm font-medium"
               style={{ background: '#f5ede0', color: '#4a3f35' }}
             >
@@ -944,7 +1020,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           {/* Submit */}
           <div className="text-center mt-10">
             <button
-              onClick={() => setShowSignature(true)}
+              onClick={() => anamnese?.consent_term_text ? setShowConsent(true) : setShowSignature(true)}
               className="px-14 py-4 rounded text-xs tracking-widest uppercase font-medium transition-all hover:shadow-lg"
               style={{ 
                 background: 'var(--dark)', 
