@@ -292,6 +292,36 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     )
   }
 
+  // Ficha já preenchida/assinada anteriormente — evita mostrar o
+  // formulário em branco de novo (o paciente reabrindo o mesmo link
+  // não tem como saber que já respondeu). Só não entra aqui logo após
+  // o próprio envio nesta sessão, que já cai no bloco `success` abaixo.
+  if (!success && anamnese && anamnese.status === 'completed') {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#f9f5f0' }}>
+        <div className="text-center p-8">
+          <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#d1fae5' }}>
+            <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-semibold mb-2" style={{ color: '#1a1410', fontFamily: 'Cormorant Garamond, serif' }}>
+            Ficha já assinada
+          </h1>
+          <p style={{ color: '#8a7a6a' }}>
+            Esta ficha de anamnese já foi preenchida e assinada
+            {anamnese.completed_at
+              ? ` em ${new Date(anamnese.completed_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
+              : ''}.
+          </p>
+          <p style={{ color: '#8a7a6a' }} className="mt-1">
+            Se precisar alterar alguma informação, entre em contato com a clínica.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#f9f5f0' }}>
