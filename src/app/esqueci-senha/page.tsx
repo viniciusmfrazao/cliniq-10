@@ -42,19 +42,12 @@ export default function EsqueciSenhaPage() {
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Email enviado!</h2>
             <p className="text-slate-500 mb-2">
-              Enviamos um <strong>código de 6 dígitos</strong> e um link para <strong>{email}</strong>.
+              Enviamos um <strong>link de redefinição</strong> para <strong>{email}</strong>.
             </p>
             <p className="text-slate-400 text-sm mb-6">
-              Verifique sua caixa de entrada e spam. Use o código se o link não funcionar.
+              Verifique sua caixa de entrada e spam, e clique no link para criar uma nova senha.
             </p>
             <div className="flex flex-col gap-3">
-              <Link
-                href={`/redefinir-senha?email=${encodeURIComponent(email)}&modo=codigo`}
-                className="btn-primary inline-flex items-center justify-center gap-2"
-              >
-                Inserir código de 6 dígitos
-                <Icon name="arrowRight" className="w-5 h-5" />
-              </Link>
               <Link href="/login" className="text-sm text-slate-500 hover:text-slate-700">
                 Voltar ao login
               </Link>

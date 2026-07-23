@@ -1,6 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Nome do cookie de uso unico que prova que a sessao foi estabelecida
+// por um link de recuperacao de senha genuino (nao apenas "existe uma
+// sessao ativa no navegador"). Ver /api/auth/recovery-check.
+const RECOVERY_COOKIE = 'clinike_recovery_verified'
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
@@ -24,7 +29,15 @@ export async function GET(request: NextRequest) {
       })
       
       if (!error) {
-        return NextResponse.redirect(`${origin}/redefinir-senha`)
+        const response = NextResponse.redirect(`${origin}/redefinir-senha`)
+        response.cookies.set(RECOVERY_COOKIE, '1', {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax',
+          maxAge: 300, // 5 minutos, uso unico (consumido em /api/auth/recovery-check)
+          path: '/',
+        })
+        return response
       }
     } catch (e) {
       console.error('Recovery error:', e)
@@ -39,7 +52,15 @@ export async function GET(request: NextRequest) {
     if (!error && data.session) {
       // Verifica se é recovery pelo tipo de sessão
       if (type === 'recovery' || data.session.user?.recovery_sent_at) {
-        return NextResponse.redirect(`${origin}/redefinir-senha`)
+        const response = NextResponse.redirect(`${origin}/redefinir-senha`)
+        response.cookies.set(RECOVERY_COOKIE, '1', {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax',
+          maxAge: 300,
+          path: '/',
+        })
+        return response
       }
       return NextResponse.redirect(`${origin}/dashboard`)
     }
