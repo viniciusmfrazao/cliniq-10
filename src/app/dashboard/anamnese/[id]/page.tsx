@@ -153,16 +153,17 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     })
   }
 
-  const htmlFieldValue = (value: any): string =>
-    Array.isArray(value) ? value.map(escapeHtml).join(', ') : escapeHtml(value)
+  const htmlFieldValue = (value: any): string => {
+    if (Array.isArray(value)) return value.length ? value.map(escapeHtml).join(', ') : '-'
+    return value ? escapeHtml(value) : '-'
+  }
 
   const bodyHtml = anamnese.status === 'completed'
     ? sections
-        .filter(s => s.fields.some(([, v]) => !!v))
         .map(s => `
           <div class="section">
             <h2>${escapeHtml(s.title)}</h2>
-            ${s.fields.filter(([, v]) => !!v).map(([label, value]) => `
+            ${s.fields.map(([label, value]) => `
               <div class="row"><span class="label">${escapeHtml(label)}</span><span class="value">${htmlFieldValue(value)}</span></div>
             `).join('')}
           </div>
