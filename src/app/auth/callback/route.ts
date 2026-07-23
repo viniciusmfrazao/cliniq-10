@@ -13,9 +13,10 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type')
   const error_description = searchParams.get('error_description')
   
-  // Se tiver erro, redireciona para login
+  // Se tiver erro, redireciona para tela que explica o que houve
+  // (login nao mostra nada sobre erro=..., ficava parecendo que "sumiu")
   if (error_description) {
-    return NextResponse.redirect(`${origin}/login?error=auth`)
+    return NextResponse.redirect(`${origin}/redefinir-senha`)
   }
   
   const supabase = await createClient()
@@ -39,10 +40,11 @@ export async function GET(request: NextRequest) {
         })
         return response
       }
+      console.error('Recovery verifyOtp error:', error.message)
     } catch (e) {
       console.error('Recovery error:', e)
     }
-    return NextResponse.redirect(`${origin}/login?error=recovery`)
+    return NextResponse.redirect(`${origin}/redefinir-senha`)
   }
   
   // Recovery com code
@@ -64,7 +66,8 @@ export async function GET(request: NextRequest) {
       }
       return NextResponse.redirect(`${origin}/dashboard`)
     }
+    if (error) console.error('Recovery exchangeCodeForSession error:', error.message)
   }
   
-  return NextResponse.redirect(`${origin}/login?error=auth`)
+  return NextResponse.redirect(`${origin}/redefinir-senha`)
 }
