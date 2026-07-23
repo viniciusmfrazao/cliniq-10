@@ -115,21 +115,47 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
   const [searchQuery, setSearchQuery] = useState('')
   const [procedimentoId, setProcedimentoId] = useState('')
   const [procedimentoNome, setProcedimentoNome] = useState('')
-  const [selectedProcs, setSelectedProcs] = useState<Array<{ id: string; name: string; price: number }>>([])
+  const [selectedProcs, setSelectedProcs] = useState<Array<{ id: string; name: string; price: number; quantidade: number }>>([])
   const [profissionalId, setProfissionalId] = useState('')
   const [profissionalNome, setProfissionalNome] = useState('')
-  const [forma, setForma] = useState('Pix')
-  const [bandeira, setBandeira] = useState('')
   const [valorBruto, setValorBruto] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [tipoReceita, setTipoReceita] = useState<'servico' | 'produto'>('servico')
 
-  const taxaPct = getTaxaPct(taxasPagamento, forma, bandeira)
+  // Pagamento: lista de linhas (permite dividir entre múltiplas formas)
+  const [pagamentos, setPagamentos] = useState<Array<{ forma: string; bandeira: string; valor: string }>>([
+    { forma: 'Pix', bandeira: '', valor: '' }
+  ])
+
   const valorNum = parseFloat(valorBruto) || 0
-  const valorTaxa = valorNum * (taxaPct / 100)
-  const valorLiquido = valorNum - valorTaxa
-  const showBandeira = forma.startsWith('Crédito') || forma === 'Débito'
-  const nParcelas = forma.match(/(\d+)x/) ? parseInt(forma.match(/(\d+)x/)![1]) : 1
+  const totalQuantidade = selectedProcs.reduce((s, p) => s + p.quantidade, 0)
+
+  function linhaCalc(p: { forma: string; bandeira: string; valor: string }) {
+    const v = parseFloat(p.valor) || 0
+    const taxaPct = getTaxaPct(taxasPagamento, p.forma, p.bandeira)
+    const valorTaxa = v * (taxaPct / 100)
+    const valorLiquido = v - valorTaxa
+    const nParcelas = p.forma.match(/(\d+)x/) ? parseInt(p.forma.match(/(\d+)x/)![1]) : 1
+    return { v, taxaPct, valorTaxa, valorLiquido, nParcelas }
+  }
+
+  const pagamentosCalc = pagamentos.map(linhaCalc)
+  const totalAlocado = pagamentosCalc.reduce((s, p) => s + p.v, 0)
+  const restante = Math.round((valorNum - totalAlocado) * 100) / 100
+  const valorTaxaTotal = pagamentosCalc.reduce((s, p) => s + p.valorTaxa, 0)
+  const valorLiquidoTotal = pagamentosCalc.reduce((s, p) => s + p.valorLiquido, 0)
+
+  function addPagamento() {
+    setPagamentos(prev => [...prev, { forma: 'Pix', bandeira: '', valor: restante > 0 ? restante.toFixed(2) : '' }])
+  }
+
+  function removePagamento(idx: number) {
+    setPagamentos(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
+  }
+
+  function updatePagamento(idx: number, patch: Partial<{ forma: string; bandeira: string; valor: string }>) {
+    setPagamentos(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p))
+  }
 
   function handlePacienteChange(id: string) {
     setPacienteId(id)
@@ -137,21 +163,33 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
     setPacienteNome(pac?.name || '')
   }
 
+  function recalcTotais(next: Array<{ id: string; name: string; price: number; quantidade: number }>) {
+    const total = next.reduce((s, p) => s + p.price * p.quantidade, 0)
+    if (next.length > 0) setValorBruto(total > 0 ? total.toString() : '')
+    setProcedimentoId(next[0]?.id || '')
+    setProcedimentoNome(next.map(p => p.quantidade > 1 ? `${p.name} (x${p.quantidade})` : p.name).join(', '))
+  }
+
   function handleProcedimentoChange(id: string) {
     if (!id) return
     const proc = procedimentos.find(p => p.id === id)
     if (!proc) return
-    // Toggle: se já está na lista, remove; se não, adiciona
+    // Toggle: se já está na lista, remove; se não, adiciona com quantidade 1
     setSelectedProcs(prev => {
       const exists = prev.find(p => p.id === id)
-      if (exists) return prev.filter(p => p.id !== id)
-      const next = [...prev, { id: proc.id, name: proc.name, price: proc.price }]
-      // Atualizar valor bruto como soma de todos
-      const total = next.reduce((s, p) => s + p.price, 0)
-      setValorBruto(total.toString())
-      // Manter compatibilidade com campo único (primeiro proc)
-      setProcedimentoId(next[0]?.id || '')
-      setProcedimentoNome(next.map(p => p.name).join(', '))
+      const next = exists
+        ? prev.filter(p => p.id !== id)
+        : [...prev, { id: proc.id, name: proc.name, price: proc.price, quantidade: 1 }]
+      recalcTotais(next)
+      return next
+    })
+  }
+
+  function updateProcQuantidade(id: string, quantidade: number) {
+    if (quantidade < 1) return
+    setSelectedProcs(prev => {
+      const next = prev.map(p => p.id === id ? { ...p, quantidade } : p)
+      recalcTotais(next)
       return next
     })
   }
@@ -159,10 +197,7 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
   function removeProc(id: string) {
     setSelectedProcs(prev => {
       const next = prev.filter(p => p.id !== id)
-      const total = next.reduce((s, p) => s + p.price, 0)
-      if (total > 0) setValorBruto(total.toString())
-      setProcedimentoId(next[0]?.id || '')
-      setProcedimentoNome(next.map(p => p.name).join(', '))
+      recalcTotais(next)
       return next
     })
   }
@@ -179,29 +214,53 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
       alert('Informe o valor')
       return
     }
-    
+    if (pagamentosCalc.some(p => p.v <= 0)) {
+      alert('Cada forma de pagamento precisa de um valor maior que zero')
+      return
+    }
+    if (Math.abs(restante) > 0.01) {
+      const ok = confirm(
+        restante > 0
+          ? `Faltam ${fmt(restante)} para completar o valor total. Salvar mesmo assim?`
+          : `O total das formas de pagamento excede o valor em ${fmt(-restante)}. Salvar mesmo assim?`
+      )
+      if (!ok) return
+    }
+
     setLoading(true)
 
-    const { error } = await supabase.from('entradas').insert({
+    const vendaId = pagamentos.length > 1 ? crypto.randomUUID() : null
+    const baseRow = {
       clinic_id: clinicId,
       data_venda: dataVenda,
       paciente_id: pacienteId || null,
       paciente_nome: pacienteNome || null,
       procedimento_id: procedimentoId || null,
       procedimento_nome: procedimentoNome || null,
+      quantidade: totalQuantidade > 0 ? totalQuantidade : 1,
       profissional_id: profissionalId || null,
       profissional_nome: profissionalNome || null,
-      forma_pagamento: forma,
-      bandeira: showBandeira ? bandeira : null,
-      valor_bruto: valorNum,
-      taxa_percentual: taxaPct,
-      valor_taxa: valorTaxa,
-      valor_liquido: valorLiquido,
-      n_parcelas: nParcelas,
       observacoes: observacoes || null,
       created_by: userId,
       tipo_receita: tipoReceita,
+      venda_id: vendaId,
+    }
+
+    const rows = pagamentos.map((p, i) => {
+      const calc = pagamentosCalc[i]
+      return {
+        ...baseRow,
+        forma_pagamento: p.forma,
+        bandeira: (p.forma.startsWith('Crédito') || p.forma === 'Débito') ? (p.bandeira || null) : null,
+        valor_bruto: calc.v,
+        taxa_percentual: calc.taxaPct,
+        valor_taxa: calc.valorTaxa,
+        valor_liquido: calc.valorLiquido,
+        n_parcelas: calc.nParcelas,
+      }
     })
+
+    const { error } = await supabase.from('entradas').insert(rows)
 
     if (error) {
       alert('Erro ao salvar: ' + error.message)
@@ -298,11 +357,22 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
             {selectedProcs.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedProcs.map(p => (
-                  <div key={p.id} className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
+                  <div key={p.id} className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
                     <span className="text-xs text-emerald-800 font-medium">{p.name}</span>
-                    <span className="text-xs text-emerald-600">{fmt(p.price)}</span>
+                    <div className="flex items-center gap-1 bg-white border border-emerald-200 rounded-md">
+                      <button type="button" onClick={() => updateProcQuantidade(p.id, p.quantidade - 1)}
+                        className="w-5 h-5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-l-md text-xs font-bold">
+                        −
+                      </button>
+                      <span className="text-xs font-semibold text-emerald-900 w-4 text-center">{p.quantidade}</span>
+                      <button type="button" onClick={() => updateProcQuantidade(p.id, p.quantidade + 1)}
+                        className="w-5 h-5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-r-md text-xs font-bold">
+                        +
+                      </button>
+                    </div>
+                    <span className="text-xs text-emerald-600">{fmt(p.price * p.quantidade)}</span>
                     <button type="button" onClick={() => removeProc(p.id)}
-                      className="ml-1 text-emerald-500 hover:text-red-500 text-xs font-bold">
+                      className="ml-0.5 text-emerald-500 hover:text-red-500 text-xs font-bold">
                       ✕
                     </button>
                   </div>
@@ -344,38 +414,6 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
           Pagamento
         </h3>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Forma de pagamento *</label>
-            <select
-              value={forma}
-              onChange={e => setForma(e.target.value)}
-              required
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-            >
-              {FORMAS.map(f => (
-                <option key={f} value={f}>{f}</option>
-              ))}
-            </select>
-          </div>
-
-          {showBandeira && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Bandeira</label>
-              <select
-                value={bandeira}
-                onChange={e => setBandeira(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-              >
-                <option value="">Selecione</option>
-                {BANDEIRAS.map(b => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Valor Bruto (R$) *</label>
           <input
@@ -390,25 +428,99 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
           />
         </div>
 
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-slate-700">Forma(s) de pagamento *</label>
+          {pagamentos.length < 4 && (
+            <button type="button" onClick={addPagamento}
+              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+              <Icon name="plus" className="w-3.5 h-3.5" />
+              Dividir pagamento
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {pagamentos.map((p, idx) => {
+            const showBandeiraLinha = p.forma.startsWith('Crédito') || p.forma === 'Débito'
+            return (
+              <div key={idx} className="border border-slate-200 rounded-xl p-3 space-y-3">
+                <div className={`grid gap-3 ${showBandeiraLinha ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                  <select
+                    value={p.forma}
+                    onChange={e => updatePagamento(idx, { forma: e.target.value, bandeira: '' })}
+                    required
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  >
+                    {FORMAS.map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+
+                  {showBandeiraLinha && (
+                    <select
+                      value={p.bandeira}
+                      onChange={e => updatePagamento(idx, { bandeira: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    >
+                      <option value="">Bandeira</option>
+                      {BANDEIRAS.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={p.valor}
+                      onChange={e => updatePagamento(idx, { valor: e.target.value })}
+                      required
+                      placeholder="0,00"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                    {pagamentos.length > 1 && (
+                      <button type="button" onClick={() => removePagamento(idx)}
+                        className="px-2 text-slate-400 hover:text-red-500">
+                        <Icon name="trash" className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {pagamentosCalc[idx].v > 0 && pagamentosCalc[idx].taxaPct > 0 && (
+                  <p className="text-xs text-slate-500">
+                    Taxa {pagamentosCalc[idx].taxaPct}% (-{fmt(pagamentosCalc[idx].valorTaxa)}) · líquido {fmt(pagamentosCalc[idx].valorLiquido)}
+                    {pagamentosCalc[idx].nParcelas > 1 && ` · ${pagamentosCalc[idx].nParcelas}x`}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {Math.abs(restante) > 0.01 && (
+          <p className={`text-sm font-medium ${restante > 0 ? 'text-amber-600' : 'text-rose-600'}`}>
+            {restante > 0
+              ? `Faltam ${fmt(restante)} para completar o valor total`
+              : `Excede o valor total em ${fmt(-restante)}`}
+          </p>
+        )}
+
         {valorNum > 0 && (
           <div className="bg-slate-50 rounded-xl p-4 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Taxa ({forma})</span>
-              <span className="font-medium text-slate-900">{taxaPct}%</span>
+              <span className="text-slate-600">Total das formas de pagamento</span>
+              <span className="font-medium text-slate-900">{fmt(totalAlocado)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Valor da taxa</span>
-              <span className="font-medium text-rose-600">-{fmt(valorTaxa)}</span>
+              <span className="text-slate-600">Valor da taxa (total)</span>
+              <span className="font-medium text-rose-600">-{fmt(valorTaxaTotal)}</span>
             </div>
             <div className="flex justify-between text-lg border-t border-slate-200 pt-2 mt-2">
-              <span className="font-semibold text-slate-900">Valor líquido</span>
-              <span className="font-bold text-emerald-600">{fmt(valorLiquido)}</span>
+              <span className="font-semibold text-slate-900">Valor líquido (total)</span>
+              <span className="font-bold text-emerald-600">{fmt(valorLiquidoTotal)}</span>
             </div>
-            {nParcelas > 1 && (
-              <p className="text-xs text-slate-500 mt-2">
-                * Pagamento em {nParcelas}x
-              </p>
-            )}
           </div>
         )}
       </div>
