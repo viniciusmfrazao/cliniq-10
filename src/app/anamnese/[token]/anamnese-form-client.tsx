@@ -17,6 +17,7 @@ type AnamneseData = {
   clinic_id: string
   patient_id: string
   status: string
+  completed_at?: string | null
   consent_term_text?: string | null
   patients: {
     name: string
