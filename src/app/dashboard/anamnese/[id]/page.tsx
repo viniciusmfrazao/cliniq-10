@@ -158,6 +158,28 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     return value ? escapeHtml(value) : '-'
   }
 
+  const completedAtLabel = anamnese.completed_at
+    ? new Date(anamnese.completed_at).toLocaleString('pt-BR')
+    : '-'
+
+  // Termo de consentimento — só existe quando cadastrado especificamente
+  // nesse registro (anamnese.consent_term_text), não afeta outras fichas.
+  const fillConsentVars = (content: string): string => {
+    const dt = anamnese.completed_at ? new Date(anamnese.completed_at) : new Date()
+    const vars: Record<string, string> = {
+      PACIENTE_NOME: anamnese.patients?.name || '',
+      DATA: dt.toLocaleDateString('pt-BR'),
+      HORA: dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+      CLINICA_NOME: anamnese.clinics?.name || '',
+    }
+    return content
+      .replace(/\{\{([\w_]+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
+      .replace(/\{([\w_]+)\}/g, (_, key) => vars[key] ?? `{${key}}`)
+  }
+  const consentText: string | null = anamnese.consent_term_text
+    ? fillConsentVars(anamnese.consent_term_text)
+    : null
+
   const bodyHtml = anamnese.status === 'completed'
     ? sections
         .map(s => `
@@ -167,12 +189,13 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
               <div class="row"><span class="label">${escapeHtml(label)}</span><span class="value">${htmlFieldValue(value)}</span></div>
             `).join('')}
           </div>
-        `).join('')
+        `).join('') + (anamnese.consent_term_text ? `
+          <div class="section" style="page-break-before: always;">
+            <h2>Termo de Consentimento</h2>
+            <p style="white-space: pre-wrap; font-size: 12px; line-height: 1.6;">${escapeHtml(fillConsentVars(anamnese.consent_term_text))}</p>
+          </div>
+        ` : '')
     : '<p>Ficha ainda não preenchida pelo paciente.</p>'
-
-  const completedAtLabel = anamnese.completed_at
-    ? new Date(anamnese.completed_at).toLocaleString('pt-BR')
-    : '-'
 
   return (
     <div className="space-y-6">
@@ -370,6 +393,24 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
           <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Aguardando preenchimento</h3>
           <p className="text-slate-500 dark:text-slate-400 mb-4">O paciente ainda não preencheu esta ficha.</p>
           <CopyAnamneseLink token={anamnese.token} />
+        </div>
+      )}
+
+      {/* Termo de Consentimento — exclusivo de fichas com consent_term_text preenchido */}
+      {consentText && (
+        <div className="card p-6">
+          <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+              <Icon name="shield" className="w-4 h-4 text-amber-600" />
+            </div>
+            Termo de Consentimento
+          </h2>
+          <div className="max-h-96 overflow-y-auto whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
+            {consentText}
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            Aceito junto com a assinatura desta ficha, em {completedAtLabel}
+          </p>
         </div>
       )}
 
