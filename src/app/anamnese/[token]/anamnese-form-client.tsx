@@ -314,7 +314,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     const today = new Date()
     const vars: Record<string, string> = {
       PACIENTE_NOME: anamnese?.patients.name || '',
-      DATA: today.toLocaleDateString('pt-BR'),
+      DATA: today.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       HORA: today.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       CLINICA_NOME: anamnese?.clinics.name || '',
     }

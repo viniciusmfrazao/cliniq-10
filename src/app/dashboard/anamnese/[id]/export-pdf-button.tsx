@@ -107,7 +107,7 @@ export default function ExportAnamnesePdfButton({
             <p>Dispositivo: ${signatureUserAgent || '-'}</p>
             <p>País: ${signatureCountry || '-'}</p>
           </div>
-          <div class="footer">Documento gerado por Clinike em ${new Date().toLocaleString('pt-BR')}</div>
+          <div class="footer">Documento gerado por Clinike em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</div>
           <script>
             window.onload = function() {
               window.print();

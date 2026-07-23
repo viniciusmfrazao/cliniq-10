@@ -159,7 +159,7 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
   }
 
   const completedAtLabel = anamnese.completed_at
-    ? new Date(anamnese.completed_at).toLocaleString('pt-BR')
+    ? new Date(anamnese.completed_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
     : '-'
 
   // Termo de consentimento — só existe quando cadastrado especificamente
@@ -168,7 +168,7 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     const dt = anamnese.completed_at ? new Date(anamnese.completed_at) : new Date()
     const vars: Record<string, string> = {
       PACIENTE_NOME: anamnese.patients?.name || '',
-      DATA: dt.toLocaleDateString('pt-BR'),
+      DATA: dt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       HORA: dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       CLINICA_NOME: anamnese.clinics?.name || '',
     }
@@ -244,7 +244,7 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
             <p className="text-sm text-slate-500">Preenchido em</p>
             <p className="font-medium text-slate-900 dark:text-white">
               {anamnese.completed_at 
-                ? new Date(anamnese.completed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+                ? new Date(anamnese.completed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' })
                 : '-'}
             </p>
           </div>
