@@ -8,6 +8,7 @@ import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
+import { useWhatsappUnread } from '@/contexts/WhatsappUnreadContext'
 
 type Props = { 
   clinicName: string
@@ -28,6 +29,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
   const current = NAV_ITEMS.find(i => i.href === '/dashboard' ? pathname === i.href : pathname.startsWith(i.href))
   const supabase = createClient()
   const nav = NAV_ITEMS.filter(i => i.roles.includes(userRole))
+  const { unreadCount: waUnreadCount } = useWhatsappUnread()
   const cmd = useCommandPalette()
 
   async function logout() {
@@ -193,6 +195,11 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                         active ? 'bg-purple-100 text-purple-700' : 'bg-white/20 text-white'
                       }`}>
                         IA
+                      </span>
+                    )}
+                    {item.label === 'WhatsApp' && waUnreadCount > 0 && (
+                      <span className="min-w-[20px] h-5 px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                        {waUnreadCount > 9 ? '9+' : waUnreadCount}
                       </span>
                     )}
                   </Link>
