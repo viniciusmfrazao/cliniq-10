@@ -26,10 +26,11 @@ export default function StockMovementForm({ product }: Props) {
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Sessão expirada. Recarregue a página e faça login novamente.')
       const { data: userData } = await supabase
         .from('users')
         .select('clinic_id')
-        .eq('id', user!.id)
+        .eq('id', user.id)
         .single()
 
       let newStock = product.current_stock
@@ -51,7 +52,7 @@ export default function StockMovementForm({ product }: Props) {
         previous_stock: product.current_stock,
         new_stock: newStock,
         reason: reason || null,
-        user_id: user!.id,
+        user_id: user.id,
       })
 
       if (error) throw error

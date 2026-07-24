@@ -1,5 +1,6 @@
 import BackButton from '@/components/ui/BackButton'
 import { createClient, getCachedUser } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import SaidaForm from './saida-form'
@@ -7,7 +8,8 @@ import SaidaForm from './saida-form'
 export default async function NovaSaidaPage() {
   const supabase = await createClient()
   const user = await getCachedUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  if (!user) redirect('/login')
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).single()
   const clinicId = userData?.clinic_id
 
   return (
@@ -22,7 +24,7 @@ export default async function NovaSaidaPage() {
         </div>
       </div>
 
-      <SaidaForm clinicId={clinicId} userId={user!.id} />
+      <SaidaForm clinicId={clinicId} userId={user.id} />
     </div>
   )
 }

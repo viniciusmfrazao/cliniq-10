@@ -1,5 +1,6 @@
 import BackButton from '@/components/ui/BackButton'
 import { createClient, getCachedUser } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { getAllPatients } from '@/lib/queries'
 import AppointmentForm from '../appointment-form'
 
@@ -12,7 +13,8 @@ export default async function NovoAgendamentoPage({
 }) {
   const supabase = await createClient()
   const user = await getCachedUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  if (!user) redirect('/login')
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).single()
 
   const patients = await getAllPatients<{ id: string; name: string; phone: string | null }>(
     supabase,

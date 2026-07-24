@@ -1,5 +1,6 @@
 import BackButton from '@/components/ui/BackButton'
 import { createClient, getCachedUser } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { getAllPatients } from '@/lib/queries'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
@@ -8,7 +9,8 @@ import EntradaForm from './entrada-form'
 export default async function NovaEntradaPage() {
   const supabase = await createClient()
   const user = await getCachedUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  if (!user) redirect('/login')
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).single()
   const clinicId = userData?.clinic_id
 
   const pacientes = await getAllPatients<{ id: string; name: string }>(
@@ -54,7 +56,7 @@ export default async function NovaEntradaPage() {
         profissionais={profissionais || []}
         taxasPagamento={taxasPagamento || []}
         clinicId={clinicId}
-        userId={user!.id}
+        userId={user.id}
       />
     </div>
   )

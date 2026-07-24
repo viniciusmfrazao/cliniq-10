@@ -1,6 +1,6 @@
 import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { parseDateBR } from '@/lib/datetime'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { Suspense } from 'react'
@@ -39,10 +39,11 @@ export default async function PatientCentralPage({
   const supabase = await createClient()
 
   const user = await getCachedUser()
+  if (!user) redirect('/login')
   const { data: userData } = await supabase
     .from('users')
     .select('clinic_id, id, name')
-    .eq('id', user!.id)
+    .eq('id', user.id)
     .maybeSingle()
 
   // Header + dados base do paciente (incluindo contagens pra os badges

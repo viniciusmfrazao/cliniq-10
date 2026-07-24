@@ -1,6 +1,6 @@
 import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { getAllPatients } from '@/lib/queries'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import AppointmentActions from './actions'
@@ -10,7 +10,8 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
   const { id } = params
   const supabase = await createClient()
   const user = await getCachedUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).maybeSingle()
+  if (!user) redirect('/login')
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).maybeSingle()
 
   const { data: appointment } = await supabase
     .from('appointments')

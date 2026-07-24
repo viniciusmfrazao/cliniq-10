@@ -64,10 +64,11 @@ export default function ProductForm({ product }: { product?: Product }) {
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Sessão expirada. Recarregue a página e faça login novamente.')
       const { data: userData } = await supabase
         .from('users')
         .select('clinic_id')
-        .eq('id', user!.id)
+        .eq('id', user.id)
         .single()
 
       const productData = {
