@@ -52,6 +52,7 @@ export default function CrmReport({ clinicId, stages = [], sources = [] }: { cli
   const [leads, setLeads] = useState<ReportLead[]>([])
   const [loading, setLoading] = useState(true)
   const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [campaignFilter, setCampaignFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date()
     d.setDate(1)
@@ -107,8 +108,14 @@ export default function CrmReport({ clinicId, stages = [], sources = [] }: { cli
 
   useEffect(() => { load(appliedFrom, appliedTo) }, [appliedFrom, appliedTo])
 
-  // Leads filtrados por origem (client-side, os dados do período já vieram do banco)
-  const scopedLeads = sourceFilter === 'all' ? leads : leads.filter(l => l.source === sourceFilter)
+  // Leads filtrados por origem e campanha (client-side, os dados do período já vieram do banco)
+  const scopedLeads = leads
+    .filter(l => sourceFilter === 'all' || l.source === sourceFilter)
+    .filter(l => campaignFilter === 'all' || l.campaign_name === campaignFilter)
+
+  // Campanhas disponíveis no período (sempre sobre todos os leads, não
+  // filtrado por campaignFilter, pra servir de seletor)
+  const campaignOptions = Array.from(new Set(leads.map(l => l.campaign_name).filter((c): c is string => !!c))).sort()
 
   // Breakdown por origem — sempre sobre TODOS os leads do período (não filtrado
   // por sourceFilter), pra servir de seletor visual das origens disponíveis
@@ -224,6 +231,19 @@ export default function CrmReport({ clinicId, stages = [], sources = [] }: { cli
             <option value="all">Todas as origens</option>
             {sourceBreakdown.map(s => (
               <option key={s.id} value={s.id}>{s.icon} {s.label} ({s.count})</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Campanha</label>
+          <select
+            value={campaignFilter}
+            onChange={e => setCampaignFilter(e.target.value)}
+            className="input text-sm"
+          >
+            <option value="all">Todas as campanhas</option>
+            {campaignOptions.map(c => (
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </div>
