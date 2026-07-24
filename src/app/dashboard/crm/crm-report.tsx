@@ -10,6 +10,7 @@ type ReportLead = {
   phone: string
   interest: string | null
   status: string
+  source: string
   campaign_name: string | null
   created_at: string
   last_whatsapp_at: string | null
@@ -37,17 +38,21 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 type Stage = { id: string; label: string; color: string; order: number }
+type Source = { id: string; label: string; icon: string }
 
-export default function CrmReport({ clinicId, stages = [] }: { clinicId: string; stages?: Stage[] }) {
+export default function CrmReport({ clinicId, stages = [], sources = [] }: { clinicId: string; stages?: Stage[]; sources?: Source[] }) {
   // Mapa de id -> label para stages customizados e padrão
   const stageLabel = (status: string) => {
     const custom = stages.find(s => s.id === status)
     if (custom) return custom.label
     return STATUS_LABEL[status] || status
   }
+  const sourceInfo = (id: string) => sources.find(s => s.id === id) || { id, label: id, icon: '📌' }
   const supabase = createClient()
   const [leads, setLeads] = useState<ReportLead[]>([])
   const [loading, setLoading] = useState(true)
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [campaignFilter, setCampaignFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date()
     d.setDate(1)
@@ -62,7 +67,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
     setLoading(true)
     const { data } = await supabase
       .from('leads')
-      .select('id, name, phone, interest, status, campaign_name, created_at, last_whatsapp_at, lost_reason')
+      .select('id, name, phone, interest, status, source, campaign_name, created_at, last_whatsapp_at, lost_reason')
       .eq('clinic_id', clinicId)
       .gte('created_at', from + 'T00:00:00')
       .lte('created_at', to + 'T23:59:59')
@@ -87,6 +92,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
         phone: l.phone,
         interest: l.interest,
         status: l.status,
+        source: l.source || 'whatsapp',
         campaign_name: l.campaign_name || null,
         created_at: l.created_at,
         last_whatsapp_at: l.last_whatsapp_at,
@@ -102,11 +108,34 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
 
   useEffect(() => { load(appliedFrom, appliedTo) }, [appliedFrom, appliedTo])
 
+  // Leads filtrados por origem e campanha (client-side, os dados do período já vieram do banco)
+  const scopedLeads = leads
+    .filter(l => sourceFilter === 'all' || l.source === sourceFilter)
+    .filter(l => campaignFilter === 'all' || l.campaign_name === campaignFilter)
+
+  // Campanhas disponíveis no período (sempre sobre todos os leads, não
+  // filtrado por campaignFilter, pra servir de seletor)
+  const campaignOptions = Array.from(new Set(leads.map(l => l.campaign_name).filter((c): c is string => !!c))).sort()
+
+  // Breakdown por origem — sempre sobre TODOS os leads do período (não filtrado
+  // por sourceFilter), pra servir de seletor visual das origens disponíveis
+  const sourceBreakdown = Array.from(new Set(leads.map(l => l.source)))
+    .map(id => {
+      const info = sourceInfo(id)
+      const forSource = leads.filter(l => l.source === id)
+      return {
+        ...info,
+        count: forSource.length,
+        converted: forSource.filter(l => l.status === 'client' || l.status === 'converted').length,
+      }
+    })
+    .sort((a, b) => b.count - a.count)
+
   // Estatísticas
-  const total = leads.length
-  const agendados = leads.filter(l => l.appointment_date).length
-  const compareceram = leads.filter(l => l.appointment_status === 'completed').length
-  const perdidos = leads.filter(l => l.status === 'lost').length
+  const total = scopedLeads.length
+  const agendados = scopedLeads.filter(l => l.appointment_date).length
+  const compareceram = scopedLeads.filter(l => l.appointment_status === 'completed').length
+  const perdidos = scopedLeads.filter(l => l.status === 'lost').length
   const taxaAgendamento = total > 0 ? Math.round((agendados / total) * 100) : 0
   const taxaComparecimento = agendados > 0 ? Math.round((compareceram / agendados) * 100) : 0
 
@@ -115,10 +144,11 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
     setExporting(true)
     try {
       const XLSX = await import('xlsx')
-      const rows = leads.map(l => ({
+      const rows = scopedLeads.map(l => ({
         'Nome': l.name,
         'Telefone': l.phone,
         'Data de Entrada': new Date(l.created_at).toLocaleDateString('pt-BR'),
+        'Origem': sourceInfo(l.source).label,
         'Campanha': l.campaign_name || '-',
         'Interesse': l.interest || '-',
         'Status': STATUS_LABEL[l.status] || l.status,
@@ -139,7 +169,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
 
       // Largura das colunas
       ws['!cols'] = [
-        { wch: 25 }, { wch: 18 }, { wch: 16 }, { wch: 20 }, { wch: 22 },
+        { wch: 25 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 22 },
         { wch: 14 }, { wch: 18 }, { wch: 22 }, { wch: 12 },
         { wch: 20 }, { wch: 16 },
       ]
@@ -157,6 +187,9 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
         ['Perdidos', perdidos],
         ['Taxa de Agendamento', `${taxaAgendamento}%`],
         ['Taxa de Comparecimento', `${taxaComparecimento}%`],
+        ['', ''],
+        ['Leads por Origem', ''],
+        ...sourceBreakdown.map(s => [s.label, s.count]),
       ]
       const wsResumo = XLSX.utils.aoa_to_sheet(resumo)
       wsResumo['!cols'] = [{ wch: 25 }, { wch: 20 }]
@@ -188,6 +221,32 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
             className="input text-sm" />
         </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Origem</label>
+          <select
+            value={sourceFilter}
+            onChange={e => setSourceFilter(e.target.value)}
+            className="input text-sm"
+          >
+            <option value="all">Todas as origens</option>
+            {sourceBreakdown.map(s => (
+              <option key={s.id} value={s.id}>{s.icon} {s.label} ({s.count})</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Campanha</label>
+          <select
+            value={campaignFilter}
+            onChange={e => setCampaignFilter(e.target.value)}
+            className="input text-sm"
+          >
+            <option value="all">Todas as campanhas</option>
+            {campaignOptions.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
         <button onClick={() => { setAppliedFrom(dateFrom); setAppliedTo(dateTo) }} className="btn-secondary text-sm h-10 px-4">
           Filtrar
         </button>
@@ -214,27 +273,60 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
         ))}
       </div>
 
+      {/* Leads por Origem */}
+      {sourceBreakdown.length > 0 && (
+        <div className="card p-4">
+          <p className="text-xs font-semibold text-slate-500 mb-3">Leads por Origem</p>
+          <div className="space-y-2">
+            {sourceBreakdown.map(s => {
+              const pct = leads.length > 0 ? Math.round((s.count / leads.length) * 100) : 0
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setSourceFilter(sourceFilter === s.id ? 'all' : s.id)}
+                  className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-colors ${
+                    sourceFilter === s.id ? 'bg-violet-50 ring-1 ring-violet-300' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-lg w-6 text-center">{s.icon}</span>
+                  <span className="text-sm font-medium text-slate-700 w-32 truncate">{s.label}</span>
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-violet-500 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-sm text-slate-600 w-10 text-right">{s.count}</span>
+                  <span className="text-xs text-slate-400 w-10 text-right">{pct}%</span>
+                  <span className="text-xs text-emerald-600 w-28 text-right">
+                    {s.converted > 0 ? `${s.converted} convertido${s.converted === 1 ? '' : 's'}` : ''}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Tabela */}
       {loading ? (
         <div className="card p-8 text-center text-slate-400">Carregando...</div>
-      ) : leads.length === 0 ? (
+      ) : scopedLeads.length === 0 ? (
         <div className="card p-8 text-center text-slate-400">Nenhum lead no período selecionado</div>
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100">
-                {['Entrada', 'Nome', 'Telefone', 'Campanha', 'Interesse', 'Status', 'Agendamento', 'Procedimento', 'Compareceu', 'Perdido'].map(h => (
+                {['Entrada', 'Nome', 'Telefone', 'Origem', 'Campanha', 'Interesse', 'Status', 'Agendamento', 'Procedimento', 'Compareceu', 'Perdido'].map(h => (
                   <th key={h} className="text-left py-3 px-3 text-xs font-semibold text-slate-400 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {leads.map(l => (
+              {scopedLeads.map(l => (
                 <tr key={l.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="py-2.5 px-3 whitespace-nowrap text-slate-500">{fmt(l.created_at)}</td>
                   <td className="py-2.5 px-3 font-medium text-slate-900 whitespace-nowrap">{l.name}</td>
                   <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">{l.phone}</td>
+                  <td className="py-2.5 px-3 whitespace-nowrap text-slate-600">{sourceInfo(l.source).icon} {sourceInfo(l.source).label}</td>
                   <td className="py-2.5 px-3 whitespace-nowrap text-slate-600">{l.campaign_name || <span className="text-slate-300">-</span>}</td>
                   <td className="py-2.5 px-3 text-slate-600">{l.interest || <span className="text-slate-300">-</span>}</td>
                   <td className="py-2.5 px-3">

@@ -1457,7 +1457,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
 
       {/* Relatório */}
       {viewMode === 'report' && (
-        <CrmReport clinicId={clinicId} stages={STAGES} />
+        <CrmReport clinicId={clinicId} stages={STAGES} sources={SOURCES} />
       )}
     </div>
   )
