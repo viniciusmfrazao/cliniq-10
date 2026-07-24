@@ -1333,6 +1333,12 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                           {lead.interest && <p className="text-sm text-violet-600 mt-1 truncate">{lead.interest}</p>}
                           <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400">
                             <span>{source?.icon} {source?.label}</span>
+                            {lead.campaign_name && (
+                              <>
+                                <span>·</span>
+                                <span>{lead.campaign_name}</span>
+                              </>
+                            )}
                             <span>·</span>
                             <span>{getTimeAgo(lead.created_at)}</span>
                           </div>
@@ -1352,6 +1358,7 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                   <th className="text-left p-3 text-xs font-semibold text-slate-500 uppercase">Contato</th>
                   <th className="text-left p-3 text-xs font-semibold text-slate-500 uppercase">Interesse</th>
                   <th className="text-left p-3 text-xs font-semibold text-slate-500 uppercase">Fonte</th>
+                  <th className="text-left p-3 text-xs font-semibold text-slate-500 uppercase">Campanha</th>
                   <th className="text-left p-3 text-xs font-semibold text-slate-500 uppercase">Status</th>
                   <th className="text-left p-3 text-xs font-semibold text-slate-500 uppercase">Data</th>
                   <th className="p-3"></th>
@@ -1379,6 +1386,9 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
                       </td>
                       <td className="p-3">
                         <span className="text-sm">{source?.icon} {source?.label}</span>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-sm text-slate-600">{lead.campaign_name || <span className="text-slate-300">-</span>}</span>
                       </td>
                       <td className="p-3">
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${stage?.color}`}>
