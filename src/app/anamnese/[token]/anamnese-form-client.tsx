@@ -9,7 +9,13 @@ type AnamneseConfig = {
   cor_primaria?: string
   secoes_ativas?: string[]
   campos_identificacao?: string[]
-  perguntas_extras?: Array<{ secao: string; pergunta: string; tipo: 'sim_nao'|'texto'|'multipla'; opcoes?: string }>
+  perguntas_extras?: Array<{
+    secao: string
+    pergunta: string
+    tipo: 'sim_nao'|'texto'|'multipla'
+    opcoes?: string
+    sub_pergunta?: { pergunta: string; tipo: 'texto'|'numero'; placeholder?: string; condicao_valor: string }
+  }>
 }
 
 type AnamneseData = {
@@ -521,6 +527,28 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                   ))}
                 </div>
               )}
+              {/* Sub-pergunta condicional: aparece quando a resposta principal bate com condicao_valor.
+                  Em 'multipla' a resposta é uma string separada por vírgula (multi-seleção), então
+                  checamos se o valor está entre os selecionados; nos demais tipos é comparação direta. */}
+              {p.sub_pergunta && (() => {
+                const current = responses[`extra_${idx}`] || ''
+                const isVisible = p.tipo === 'multipla'
+                  ? current.split(',').map((s: string) => s.trim()).includes(p.sub_pergunta!.condicao_valor)
+                  : current === p.sub_pergunta!.condicao_valor
+                if (!isVisible) return null
+                return (
+                  <div className="mt-3">
+                    <p className="text-sm mb-2" style={{ color: 'var(--mid)' }}>{p.sub_pergunta!.pergunta}</p>
+                    <input
+                      className="anamnese-input"
+                      type={p.sub_pergunta!.tipo === 'numero' ? 'number' : 'text'}
+                      placeholder={p.sub_pergunta!.placeholder || ''}
+                      value={responses[`extra_${idx}_sub`] || ''}
+                      onChange={e => setTextValue(`extra_${idx}_sub`, e.target.value)}
+                    />
+                  </div>
+                )
+              })()}
             </div>
           )
         })}

@@ -35,8 +35,12 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     .eq('clinic_id', anamnese.clinic_id)
     .maybeSingle()
 
-  const perguntasExtras: Array<{ id: string; pergunta: string; tipo: string }> =
-    anamneseConfig?.perguntas_extras || []
+  const perguntasExtras: Array<{
+    id: string
+    pergunta: string
+    tipo: string
+    sub_pergunta?: { pergunta: string; tipo: string; placeholder?: string; condicao_valor: string }
+  }> = anamneseConfig?.perguntas_extras || []
 
   const responses = anamnese.responses || {}
 
@@ -149,7 +153,11 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
   if (perguntasExtras.length > 0) {
     sections.push({
       title: 'Informações Adicionais',
-      fields: perguntasExtras.map((p, idx) => [p.pergunta, responses[`extra_${idx}`]]),
+      fields: perguntasExtras.flatMap((p, idx) => {
+        const fields: Array<[string, any]> = [[p.pergunta, responses[`extra_${idx}`]]]
+        if (p.sub_pergunta) fields.push([p.sub_pergunta.pergunta, responses[`extra_${idx}_sub`]])
+        return fields
+      }),
     })
   }
 
@@ -380,7 +388,12 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
               {perguntasExtras.map((p, idx) => {
                 const val = responses[`extra_${idx}`]
                 if (!val) return null
-                return renderResponse(p.pergunta, val)
+                return (
+                  <div key={idx}>
+                    {renderResponse(p.pergunta, val)}
+                    {p.sub_pergunta && renderResponse(p.sub_pergunta.pergunta, responses[`extra_${idx}_sub`])}
+                  </div>
+                )
               })}
             </div>
           )}
