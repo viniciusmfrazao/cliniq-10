@@ -628,6 +628,7 @@ export async function POST(
           source_id: string
           match_type: 'hashtag' | 'contains' | 'exact'
           pattern: string
+          campaign_name: string | null
           priority: number
         }
         let matchedSourceRule: SourceRule | null = null
@@ -636,7 +637,7 @@ export async function POST(
           try {
             const { data: rules } = await svc
               .from('lead_source_rules')
-              .select('id, source_id, match_type, pattern, priority')
+              .select('id, source_id, match_type, pattern, campaign_name, priority')
               .eq('clinic_id', clinicId)
               .eq('active', true)
               .order('priority', { ascending: false })
@@ -1012,6 +1013,7 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
                 phone,
                 source: matchedSourceRule?.source_id ?? 'whatsapp',
                 source_detail: matchedSourceRule ? sourceDetailOriginal : null,
+                campaign_name: matchedSourceRule?.campaign_name ?? null,
                 status: 'new',
                 whatsapp_instance: instance,
                 notes: `Primeira mensagem: ${content.slice(0, 240)}`,
@@ -1069,6 +1071,7 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
               ) {
                 patch.source = matchedSourceRule.source_id
                 patch.source_detail = sourceDetailOriginal
+                patch.campaign_name = matchedSourceRule.campaign_name ?? null
                 void svc.rpc('increment_source_rule_hit', {
                   rule_id: matchedSourceRule.id,
                 })
