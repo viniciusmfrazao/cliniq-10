@@ -248,17 +248,6 @@ export async function POST(
   context: { params: Promise<{ instance: string }> },
 ) {
   const { instance } = await context.params
-
-  // BLOQUEIO EMERGENCIAL TEMPORÁRIO (2026-07-24 21:40 UTC):
-  // instância presa em loop de reconexão, martelando o webhook e derrubando
-  // o gateway da Supabase (522 em cascata, inclusive no Auth). Corta a chamada
-  // antes de qualquer I/O (nem lê body, nem consulta Supabase).
-  // TODO: remover assim que a instância cliniq-6a7d6ac7 for estabilizada/
-  // reconectada no Evolution e a causa raiz do loop for investigada.
-  if (instance === 'cliniq-6a7d6ac7') {
-    return NextResponse.json({ ok: true, blocked: 'emergency_circuit_breaker' })
-  }
-
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
   const svc = createServiceClient()
@@ -311,11 +300,35 @@ export async function POST(
     return NextResponse.json({ error: 'token ausente' }, { status: 401 })
   }
 
-  const { data: row } = await svc
+  const { data: row, error: lookupError } = await svc
     .from('clinic_whatsapp')
     .select('clinic_id, webhook_token, instance_name, auto_reply_enabled, role_inbound, role_outbound_automation, role_outbound_manual')
     .eq('instance_name', instance)
     .maybeSingle()
+
+  // IMPORTANTE: separar "falha ao consultar o banco" (500, transitorio, o
+  // Evolution deve re-tentar normalmente) de "token realmente invalido"
+  // (401, definitivo). Antes os dois casos caiam juntos em 401 -- se o
+  // Supabase desse um soluco (timeout, 522 etc), a query falhava, `row`
+  // vinha null, e a gente respondia 401 como se o token estivesse errado.
+  // Isso aconteceu no incidente de 2026-07-24: um soluco no banco gerou
+  // 401 falso pra uma instancia saudavel, e o Evolution reagiu entrando
+  // num loop agressivo de retry/reconexao, o que alimentou o proprio
+  // incidente. 500 sinaliza "tenta de novo mais tarde", nao "conserta sua
+  // config" -- reduz a chance desse efeito cascata se repetir.
+  if (lookupError) {
+    await logWebhook({
+      svc,
+      instance,
+      event: body.event,
+      statusCode: 500,
+      error: `falha ao consultar clinic_whatsapp: ${lookupError.message}`,
+      body: parseError ? { __raw: rawText.slice(0, 4000), __parseError: parseError } : body,
+      headers: headerSnapshot,
+      query: querySnapshot,
+    })
+    return NextResponse.json({ error: 'erro interno, tente novamente' }, { status: 500 })
+  }
 
   if (!row || row.webhook_token !== token) {
     await logWebhook({
