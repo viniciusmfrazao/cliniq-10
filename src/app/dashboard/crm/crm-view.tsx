@@ -8,7 +8,6 @@ import { createClient } from '@/lib/supabase/client'
 import CrmReport from './crm-report'
 import FollowupAlertBadge from '@/components/crm/FollowupAlertBadge'
 import LeadFollowupPanel from '@/components/crm/LeadFollowupPanel'
-import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import CRMSettingsModal from './crm-settings-modal'
 
 // Remove acentos pra busca mais flexível ("jose" encontra "José")
@@ -356,12 +355,10 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   const [draggingFromStage, setDraggingFromStage] = useState<string | null>(null)
   const [hoverStage, setHoverStage] = useState<string | null>(null)
 
-  // Realtime: novos leads (Donna criando do WhatsApp) e mudancas de status
-  // aparecem na hora em todos os usuarios da clinica.
-  useRealtimeRefresh({
-    table: 'leads',
-    filter: { column: 'clinic_id', value: clinicId },
-  })
+  // Nota: novos leads e mudancas de status ja sao cobertos pelo canal manual
+  // `crm:${clinicId}` acima (que escuta leads + lead_followups). Um segundo
+  // listener em 'leads' aqui seria redundante (dobra a carga de realtime
+  // nesta tela sem ganho nenhum).
 
   // Settings ativas: da linha escolhida, ou o bucket padrão (settings prop,
   // que já vem do server como a linha com whatsapp_instance null).
