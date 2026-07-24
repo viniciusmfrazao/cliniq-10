@@ -28,6 +28,7 @@ type Lead = {
   email: string | null
   source: string
   source_detail?: string | null
+  campaign_name?: string | null
   status: string
   interest: string | null
   procedure_id: string | null
@@ -1730,7 +1731,11 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
                   return tp ? <span className="text-sm" title={lead.ai_priority ? 'Definido manualmente' : 'Automático por atividade'}>{tp === 'hot' ? '🔥' : tp === 'warm' ? '☀️' : '❄️'}</span> : null
                 })()}
               </h2>
-              <p className="text-sm text-slate-500">{source?.icon} {source?.label} • {new Date(lead.created_at).toLocaleDateString('pt-BR')}</p>
+              <p className="text-sm text-slate-500">
+                {source?.icon} {source?.label}
+                {lead.campaign_name && <> • <span className="text-violet-600 font-medium">{lead.campaign_name}</span></>}
+                {' '}• {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+              </p>
               {lead.source_detail && (
                 <p className="text-xs text-slate-400 italic mt-0.5" title="Mensagem que identificou a origem automaticamente">
                   &ldquo;{lead.source_detail.slice(0, 80)}{lead.source_detail.length > 80 ? '…' : ''}&rdquo;

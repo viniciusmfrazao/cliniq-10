@@ -10,6 +10,7 @@ type ReportLead = {
   phone: string
   interest: string | null
   status: string
+  campaign_name: string | null
   created_at: string
   last_whatsapp_at: string | null
   lost_reason: string | null
@@ -61,7 +62,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
     setLoading(true)
     const { data } = await supabase
       .from('leads')
-      .select('id, name, phone, interest, status, created_at, last_whatsapp_at, lost_reason')
+      .select('id, name, phone, interest, status, campaign_name, created_at, last_whatsapp_at, lost_reason')
       .eq('clinic_id', clinicId)
       .gte('created_at', from + 'T00:00:00')
       .lte('created_at', to + 'T23:59:59')
@@ -86,6 +87,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
         phone: l.phone,
         interest: l.interest,
         status: l.status,
+        campaign_name: l.campaign_name || null,
         created_at: l.created_at,
         last_whatsapp_at: l.last_whatsapp_at,
         lost_reason: l.lost_reason,
@@ -117,6 +119,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
         'Nome': l.name,
         'Telefone': l.phone,
         'Data de Entrada': new Date(l.created_at).toLocaleDateString('pt-BR'),
+        'Campanha': l.campaign_name || '-',
         'Interesse': l.interest || '-',
         'Status': STATUS_LABEL[l.status] || l.status,
         'Data Agendamento': l.appointment_date
@@ -136,7 +139,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
 
       // Largura das colunas
       ws['!cols'] = [
-        { wch: 25 }, { wch: 18 }, { wch: 16 }, { wch: 22 },
+        { wch: 25 }, { wch: 18 }, { wch: 16 }, { wch: 20 }, { wch: 22 },
         { wch: 14 }, { wch: 18 }, { wch: 22 }, { wch: 12 },
         { wch: 20 }, { wch: 16 },
       ]
@@ -221,7 +224,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100">
-                {['Entrada', 'Nome', 'Telefone', 'Interesse', 'Status', 'Agendamento', 'Procedimento', 'Compareceu', 'Perdido'].map(h => (
+                {['Entrada', 'Nome', 'Telefone', 'Campanha', 'Interesse', 'Status', 'Agendamento', 'Procedimento', 'Compareceu', 'Perdido'].map(h => (
                   <th key={h} className="text-left py-3 px-3 text-xs font-semibold text-slate-400 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -232,6 +235,7 @@ export default function CrmReport({ clinicId, stages = [] }: { clinicId: string;
                   <td className="py-2.5 px-3 whitespace-nowrap text-slate-500">{fmt(l.created_at)}</td>
                   <td className="py-2.5 px-3 font-medium text-slate-900 whitespace-nowrap">{l.name}</td>
                   <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">{l.phone}</td>
+                  <td className="py-2.5 px-3 whitespace-nowrap text-slate-600">{l.campaign_name || <span className="text-slate-300">-</span>}</td>
                   <td className="py-2.5 px-3 text-slate-600">{l.interest || <span className="text-slate-300">-</span>}</td>
                   <td className="py-2.5 px-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[l.status] || 'bg-slate-100 text-slate-600'}`}>

@@ -22,6 +22,7 @@ type SourceRule = {
   source_id: string
   match_type: 'hashtag' | 'contains' | 'exact'
   pattern: string
+  campaign_name: string | null
   priority: number
   active: boolean
   hits: number
@@ -70,7 +71,7 @@ export default function CRMSettingsModal({ clinicId, whatsappInstance = null, cu
     let cancelled = false
     supabase
       .from('lead_source_rules')
-      .select('id, source_id, match_type, pattern, priority, active, hits')
+      .select('id, source_id, match_type, pattern, campaign_name, priority, active, hits')
       .eq('clinic_id', clinicId)
       .order('priority', { ascending: false })
       .then(({ data }) => {
@@ -89,6 +90,7 @@ export default function CRMSettingsModal({ clinicId, whatsappInstance = null, cu
       source_id: sources[0]?.id || 'whatsapp',
       match_type: 'hashtag',
       pattern: '',
+      campaign_name: '',
       priority: 0,
       active: true,
       hits: 0,
@@ -239,6 +241,7 @@ export default function CRMSettingsModal({ clinicId, whatsappInstance = null, cu
             source_id: r.source_id,
             match_type: r.match_type,
             pattern: r.pattern.trim(),
+            campaign_name: r.campaign_name?.trim() || null,
             priority: r.priority,
             active: r.active,
             updated_at: new Date().toISOString(),
@@ -447,7 +450,7 @@ export default function CRMSettingsModal({ clinicId, whatsappInstance = null, cu
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500">Atribuir fonte:</span>
+                    <span className="text-xs text-slate-500 whitespace-nowrap">Atribuir fonte:</span>
                     <select
                       value={rule.source_id}
                       onChange={e => updateRule(index, 'source_id', e.target.value)}
@@ -457,6 +460,16 @@ export default function CRMSettingsModal({ clinicId, whatsappInstance = null, cu
                         <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 whitespace-nowrap">Campanha:</span>
+                    <input
+                      type="text"
+                      value={rule.campaign_name || ''}
+                      onChange={e => updateRule(index, 'campaign_name', e.target.value)}
+                      placeholder="Ex: Botox Julho (opcional)"
+                      className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-lg"
+                    />
                     <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
                       <input
                         type="checkbox"
