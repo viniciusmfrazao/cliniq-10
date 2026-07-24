@@ -709,7 +709,7 @@ export async function POST(
             .from('eva_conversations')
             .select('id, metadata')
             .eq('clinic_id', clinicId)
-            .filter('metadata->>evolution_message_id', 'eq', messageId)
+            .eq('evolution_message_id', messageId)
             .limit(1)
             .maybeSingle()
           if (existing) {
@@ -748,6 +748,10 @@ export async function POST(
             content,
             customer_name: pushName ?? null,
             metadata: baseMetadata,
+            // Coluna dedicada (indexada) usada no dedup acima — evita depender
+            // de metadata->>'evolution_message_id' com chave parametrizada,
+            // que o PostgREST nao consegue casar com indice de expressao.
+            evolution_message_id: messageId,
           })
           if (insertConv.error) {
             internalErrors.push(

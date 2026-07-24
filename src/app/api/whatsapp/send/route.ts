@@ -285,7 +285,7 @@ async function persistOutboundMessage(args: {
       .from('eva_conversations')
       .select('id, metadata')
       .eq('clinic_id', args.clinicId)
-      .filter('metadata->>evolution_message_id', 'eq', evolutionMessageId)
+      .eq('evolution_message_id', evolutionMessageId)
       .limit(1)
       .maybeSingle()
 
@@ -328,6 +328,10 @@ async function persistOutboundMessage(args: {
         caption: args.caption ?? null,
         outbound: true, // marca que foi via /api/whatsapp/send
       },
+      // Coluna dedicada (indexada) usada no dedup acima — ver nota no
+      // webhook route sobre por que metadata->>'evolution_message_id'
+      // parametrizado nao usa indice de expressao.
+      evolution_message_id: evolutionMessageId,
     })
     .select('id')
     .maybeSingle()
