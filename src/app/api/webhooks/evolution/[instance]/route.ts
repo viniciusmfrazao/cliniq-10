@@ -248,6 +248,17 @@ export async function POST(
   context: { params: Promise<{ instance: string }> },
 ) {
   const { instance } = await context.params
+
+  // BLOQUEIO EMERGENCIAL TEMPORÁRIO (2026-07-24 21:40 UTC):
+  // instância presa em loop de reconexão, martelando o webhook e derrubando
+  // o gateway da Supabase (522 em cascata, inclusive no Auth). Corta a chamada
+  // antes de qualquer I/O (nem lê body, nem consulta Supabase).
+  // TODO: remover assim que a instância cliniq-6a7d6ac7 for estabilizada/
+  // reconectada no Evolution e a causa raiz do loop for investigada.
+  if (instance === 'cliniq-6a7d6ac7') {
+    return NextResponse.json({ ok: true, blocked: 'emergency_circuit_breaker' })
+  }
+
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
   const svc = createServiceClient()
