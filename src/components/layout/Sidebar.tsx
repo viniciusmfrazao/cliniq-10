@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
 import { useWaLine, type WaLine } from '@/contexts/WaLineContext'
+import { useWhatsappUnread } from '@/contexts/WhatsappUnreadContext'
 
 type Props = { 
   clinicName: string
@@ -30,6 +31,7 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
   const supabase = createClient()
   const cmd = useCommandPalette()
   const { lines, selectedLine, setSelectedLine, setLines, hasMultipleLines } = useWaLine()
+  const { unreadCount: waUnreadCount } = useWhatsappUnread()
   const [isMac, setIsMac] = useState(false)
   useEffect(() => {
     setIsMac(typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform))
@@ -246,6 +248,11 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
                   active ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-white/20 text-white'
                 }`}>
                   IA
+                </span>
+              )}
+              {item.label === 'WhatsApp' && waUnreadCount > 0 && (
+                <span className="min-w-[20px] h-5 px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  {waUnreadCount > 9 ? '9+' : waUnreadCount}
                 </span>
               )}
               {active && (
