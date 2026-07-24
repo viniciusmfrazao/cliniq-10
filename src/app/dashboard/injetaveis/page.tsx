@@ -1,4 +1,5 @@
 import { createClient, getCachedUser } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import PatientSearchInjectable from './patient-search'
 import { sanitizeSearchTerm } from '@/lib/search'
@@ -10,7 +11,8 @@ export default async function InjetaveisPage({
 }) {
   const supabase = await createClient()
   const user = await getCachedUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+  if (!user) redirect('/login')
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).single()
 
   // Buscar pacientes se tiver query.
   // sanitizeSearchTerm remove caracteres do parser do PostgREST

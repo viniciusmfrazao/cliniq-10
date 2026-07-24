@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { createClient, getCachedUser } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import ApplicationHistory from './application-history'
 import NewApplicationButton from './new-application-button'
@@ -9,7 +9,8 @@ export default async function PatientInjetaveisPage({ params }: { params: { pati
   const { patientId } = params
   const supabase = await createClient()
   const user = await getCachedUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id, id, name').eq('id', user!.id).maybeSingle()
+  if (!user) redirect('/login')
+  const { data: userData } = await supabase.from('users').select('clinic_id, id, name').eq('id', user.id).maybeSingle()
 
   // Buscar paciente
   const { data: patient } = await supabase

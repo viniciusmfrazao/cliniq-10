@@ -95,7 +95,12 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
 
     // Buscar clinic_id do usuario
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).single()
+    if (!user) {
+      setError('Sessão expirada. Recarregue a página e faça login novamente.')
+      setLoading(false)
+      return
+    }
+    const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).single()
 
     // CPF opcional — só valida se preenchido
     if (form.cpf && form.cpf.length === 11 && !validateCPF(form.cpf)) {

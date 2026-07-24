@@ -1,4 +1,5 @@
 import { createClient, getCachedUser } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PatientSearch from './patient-search'
@@ -16,7 +17,8 @@ export default async function PacientesPage({
   const filter = sp.filter
   const supabase = await createClient()
   const user = await getCachedUser()
-  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user!.id).maybeSingle()
+  if (!user) redirect('/login')
+  const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).maybeSingle()
 
   const currentPage = Math.max(1, parseInt(sp.page || '1'))
   const offset = (currentPage - 1) * PER_PAGE

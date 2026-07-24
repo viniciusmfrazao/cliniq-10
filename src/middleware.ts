@@ -68,7 +68,20 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  let session = null
+  try {
+    // Timeout curto: se o Auth do Supabase travar/der timeout (522), não
+    // deixa o middleware travar a navegação inteira — cai no fallback de
+    // /login (o usuário só precisa recarregar/logar de novo) em vez de dar
+    // erro não tratado e a tela ficar em branco.
+    const result = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('auth_timeout')), 5000)),
+    ])
+    session = result.data.session
+  } catch {
+    session = null
+  }
 
   if (!session) {
     const redirect = NextResponse.redirect(new URL('/login', request.url))

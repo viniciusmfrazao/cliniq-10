@@ -1,4 +1,5 @@
 import { createClient, getCachedUser } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { defaultGuideForRole } from '@/lib/guides'
 import GuideView from './guide-view'
 
@@ -14,10 +15,11 @@ export default async function ComoFuncionaPage({
 }) {
   const supabase = await createClient()
   const user = await getCachedUser()
+  if (!user) redirect('/login')
   const { data: userData } = await supabase
     .from('users')
     .select('role, name')
-    .eq('id', user!.id)
+    .eq('id', user.id)
     .single()
 
   const initial =
