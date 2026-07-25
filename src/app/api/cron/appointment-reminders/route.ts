@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendAutomationContent } from '@/lib/whatsapp'
+import { sendWhatsappMessage, sendWhatsappButtons, sendWhatsappAudio } from '@/lib/whatsapp'
 import { logEva } from '@/lib/eva-logger'
-import { getPublicBaseUrl } from '@/lib/calendar-links'
+import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
 
@@ -70,12 +70,15 @@ function firstName(full: string | null | undefined): string {
 
 // Template padrão — usado quando clínica não configurou template personalizado.
 // Variáveis disponíveis: {{nome}}, {{primeiro_nome}}, {{clinica}}, {{profissional}},
-// {{procedimento}}, {{data}}, {{hora}}, {{dia_semana}}, {{endereco}}, {{link_confirmacao}}.
+// {{procedimento}}, {{data}}, {{hora}}, {{dia_semana}}, {{endereco}}.
+// Nota: {{link_confirmacao}} ainda é aceito mas é ignorado (substituído por botões).
 const DEFAULT_TEMPLATE_CONFIRMA = `Olá {{primeiro_nome}}! Falo do *{{clinica}}* e gostaria de confirmar seu agendamento marcado para *{{dia_semana}}, {{data}}*:
 
 *{{hora}}* — {{procedimento}} — {{profissional}}
 
-Para confirmar sua presença, clique aqui: {{link_confirmacao}}`
+📅 Adicionar na sua agenda: {{link_agenda}}
+
+Podemos confirmar?`
 
 function renderTemplate(
   template: string,
@@ -90,6 +93,7 @@ function renderTemplate(
     dia_semana: string
     link_confirmacao: string
     endereco: string
+    link_agenda: string
   },
 ): string {
   return template
@@ -103,21 +107,25 @@ function renderTemplate(
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
     .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao)
     .replace(/\{\{\s*endereco\s*\}\}/g, vars.endereco)
+    .replace(/\{\{\s*link_agenda\s*\}\}/g, vars.link_agenda)
 }
 
 type AutomationRow = {
   clinic_id: string
   confirma_24h: boolean | null
   confirma_24h_hora?: number | null
+  confirma_24h_dias_antes?: number | null
   template_confirma_24h: string | null
   modo_confirma_24h?: 'texto' | 'audio' | 'ambos' | null
   audio_confirma_24h?: string | null
+  confirma_24h_solicitar_resposta?: boolean | null
 }
 
 type AppointmentRow = {
   id: string
   clinic_id: string
   start_time: string
+  end_time: string | null
   status: string
   confirmation_sent_at: string | null
   confirmation_slug: string | null
@@ -158,16 +166,15 @@ export async function GET(req: NextRequest) {
   const dryRun = url.searchParams.get('dry') === '1'
 
   const svc = createServiceClient()
-  // Janela = dia civil de amanhã (BRT), não uma janela deslizante de 48h.
+  // Janela = dia civil de "hoje + N dias" (BRT), não uma janela deslizante.
+  // N é configurável por clínica (confirma_24h_dias_antes, default 1 = véspera).
   // A tentativa anterior de evitar agendamento órfão trocou "dia certo" por
   // "dentro do prazo", o que quebrou o texto fixo dos templates (que
-  // pressupõe "amanhã" literalmente) — agendamento de hoje ou de depois de
-  // amanhã acabava recebendo mensagem de confirmação com o dia errado.
-  // Aqui voltamos a restringir ao dia civil de amanhã; o catch-up de reenvio
-  // continua garantido porque o cron roda a cada 5min o resto do dia e o
-  // filtro real de dedupe é confirmation_sent_at IS NULL.
-  const { startISO, endISO } = getBRTDayBoundsISO(1)
-  const dateLabel = 'amanha'
+  // pressupõe uma data relativa literal) — agendamento fora do dia-alvo
+  // acabava recebendo mensagem de confirmação com o dia errado.
+  // Aqui restringimos ao dia civil exato de cada offset; o catch-up de
+  // reenvio continua garantido porque o cron roda a cada 5min o resto do
+  // dia e o filtro real de dedupe é confirmation_sent_at IS NULL.
 
   // Hora atual no fuso BRT
   const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: TZ_BR }))
@@ -177,7 +184,7 @@ export async function GET(req: NextRequest) {
   //    E cujo horário configurado bate com a hora atual
   const { data: automations, error: errAuto } = await svc
     .from('clinic_automations')
-    .select('clinic_id, confirma_24h, confirma_24h_hora, template_confirma_24h, modo_confirma_24h, audio_confirma_24h')
+    .select('clinic_id, confirma_24h, confirma_24h_hora, confirma_24h_dias_antes, template_confirma_24h, modo_confirma_24h, audio_confirma_24h, confirma_24h_solicitar_resposta')
     .eq('confirma_24h', true)
 
   if (errAuto) {
@@ -207,7 +214,6 @@ export async function GET(req: NextRequest) {
   if (enabledClinics.length === 0) {
     return NextResponse.json({
       ok: true,
-      tomorrow: dateLabel,
       processed: 0,
       reason: 'no_clinics_with_reminder_enabled',
     })
@@ -243,31 +249,48 @@ export async function GET(req: NextRequest) {
     clinicAddressById.set(c.id, (c.settings as any)?.address ?? '')
   }
 
-  // 3) Carrega appointments de amanhã pra essas clínicas, ainda não confirmados
-  const { data: appsRaw, error: errApps } = await svc
-    .from('appointments')
-    .select(
-      'id, clinic_id, start_time, status, confirmation_sent_at, confirmation_slug, patient_id, professional_id, procedure_id',
-    )
-    .in('clinic_id', clinicIds)
-    .gte('start_time', startISO)
-    .lt('start_time', endISO)
-    .in('status', ['scheduled', 'confirmed', 'pending_confirmation'])
-    .is('confirmation_sent_at', null)
-
-  if (errApps) {
-    return NextResponse.json(
-      { ok: false, stage: 'load_appointments', error: errApps.message },
-      { status: 500 },
-    )
+  // 3) Carrega appointments pra essas clínicas, ainda não confirmados.
+  // Cada clínica pode ter um número diferente de dias de antecedência
+  // (confirma_24h_dias_antes, default 1 = véspera), então agrupamos as
+  // clínicas por esse valor e rodamos uma busca por janela de dia civil.
+  const clinicIdsByOffset = new Map<number, string[]>()
+  for (const c of enabledClinics) {
+    const offset = Math.min(7, Math.max(1, c.confirma_24h_dias_antes ?? 1))
+    const list = clinicIdsByOffset.get(offset) ?? []
+    list.push(c.clinic_id)
+    clinicIdsByOffset.set(offset, list)
   }
 
-  const apps = (appsRaw as AppointmentRow[] | null) ?? []
+  const windowsUsed: number[] = Array.from(clinicIdsByOffset.keys())
+  let appsRaw: AppointmentRow[] = []
+  for (const [offset, ids] of clinicIdsByOffset) {
+    const { startISO, endISO } = getBRTDayBoundsISO(offset)
+    const { data, error: errApps } = await svc
+      .from('appointments')
+      .select(
+        'id, clinic_id, start_time, end_time, status, confirmation_sent_at, confirmation_slug, patient_id, professional_id, procedure_id',
+      )
+      .in('clinic_id', ids)
+      .gte('start_time', startISO)
+      .lt('start_time', endISO)
+      .in('status', ['scheduled', 'confirmed', 'pending_confirmation'])
+      .is('confirmation_sent_at', null)
+
+    if (errApps) {
+      return NextResponse.json(
+        { ok: false, stage: 'load_appointments', offset, error: errApps.message },
+        { status: 500 },
+      )
+    }
+    appsRaw = appsRaw.concat((data as AppointmentRow[] | null) ?? [])
+  }
+
+  const apps = appsRaw
 
   if (apps.length === 0) {
     return NextResponse.json({
       ok: true,
-      tomorrow: dateLabel,
+      windowsUsed,
       clinicsChecked: enabledClinics.length,
       processed: 0,
       reason: 'no_pending_appointments',
@@ -306,7 +329,7 @@ export async function GET(req: NextRequest) {
 
   // 5) Processa cada appointment
   const summary = {
-    tomorrow: dateLabel,
+    windowsUsed,
     dryRun,
     clinicsChecked: enabledClinics.length,
     appointmentsScanned: apps.length,
@@ -321,10 +344,12 @@ export async function GET(req: NextRequest) {
   const templateByClinic = new Map<string, string>()
   const modeByClinic = new Map<string, 'texto' | 'audio' | 'ambos'>()
   const audioByClinic = new Map<string, string>()
+  const solicitarRespostaByClinic = new Map<string, boolean>()
   for (const c of enabledClinics) {
     if (c.template_confirma_24h) templateByClinic.set(c.clinic_id, c.template_confirma_24h)
     modeByClinic.set(c.clinic_id, c.modo_confirma_24h ?? 'texto')
     if (c.audio_confirma_24h) audioByClinic.set(c.clinic_id, c.audio_confirma_24h)
+    solicitarRespostaByClinic.set(c.clinic_id, c.confirma_24h_solicitar_resposta ?? true)
   }
 
   let stoppedEarly = false
@@ -360,10 +385,19 @@ export async function GET(req: NextRequest) {
     const dt = formatBrazilDateTime(app.start_time)
     const endereco = clinicAddressById.get(app.clinic_id) ?? ''
 
-    // Link de confirmação por texto — volta a ser o fluxo padrão (sem botões).
-    const linkConfirmacao = app.confirmation_slug
-      ? `${getPublicBaseUrl()}/confirmar/${app.confirmation_slug}`
-      : ''
+    // Link "adicionar à agenda" — sem OAuth, gerado on-the-fly
+    let linkAgenda = ''
+    if (app.end_time) {
+      const event = buildAppointmentCalendarEvent({
+        appointmentId: app.id,
+        clinicName,
+        professionalName: prof?.name ?? null,
+        procedureName: proc?.name ?? null,
+        startTimeISO: app.start_time,
+        endTimeISO: app.end_time,
+      })
+      linkAgenda = generateCalendarLinks(getPublicBaseUrl(), event).googleRedirectUrl
+    }
 
     const bodyText = template ? renderTemplate(template, {
       nome: patient.name || '',
@@ -374,8 +408,9 @@ export async function GET(req: NextRequest) {
       data: dt.date,
       hora: dt.time,
       dia_semana: dt.weekday,
-      link_confirmacao: linkConfirmacao,
+      link_confirmacao: '', // não usado — substituído por botões interativos
       endereco,
+      link_agenda: linkAgenda,
     }).replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '') : ''
 
     if (dryRun) {
@@ -400,21 +435,67 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Envia sempre como texto simples — sem botões interativos. A confirmação
-    // acontece via link ({{link_confirmacao}}) que aponta pra /confirmar/[slug],
-    // não mais por resposta de botão nem por texto fixo concatenado.
-    const result = await sendAutomationContent({
-      clinicId: app.clinic_id,
-      phone: patient.phone,
-      mode: modo,
-      text: bodyText,
-      audioUrl: audioByClinic.get(app.clinic_id),
-      instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
-    })
+    // Texto/botões primeiro (se modo texto/ambos), áudio depois. Botões
+    // interativos não existem em mensagem de áudio — o envio com botões
+    // só ocorre quando o modo inclui texto.
+    let result: Awaited<ReturnType<typeof sendWhatsappMessage>> | null = null
+    const solicitarResposta = solicitarRespostaByClinic.get(app.clinic_id) ?? true
+
+    if (modo !== 'audio' && solicitarResposta) {
+      // Tenta enviar como mensagem com botões; fallback para texto simples
+      // se a instância não suportar (ex.: WhatsApp Personal sem Business API).
+      result = await sendWhatsappButtons({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        body: bodyText,
+        footer: clinicName,
+        buttons: [
+          { id: 'confirm', text: '✅ Confirmar' },
+          { id: 'cancel', text: '❌ Cancelar' },
+          { id: 'reschedule', text: '🔄 Reagendar' },
+        ],
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+    } else if (modo !== 'audio' && !solicitarResposta) {
+      // Clínica desativou os botões de confirmação: manda só o texto informativo.
+      result = await sendWhatsappMessage({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        message: bodyText,
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+    }
+
+    if ((modo === 'audio' || modo === 'ambos') && (!result || result.ok)) {
+      result = await sendWhatsappAudio({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        audio: audioByClinic.get(app.clinic_id)!,
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+    }
+
+    if (!result) {
+      result = { ok: false, code: 'evolution_error', error: 'Modo de envio inválido' }
+    }
+
+    if (!result.ok) {
+      // Fallback: texto simples (com instrução de resposta só se a clínica pediu botões)
+      result = await sendWhatsappMessage({
+        clinicId: app.clinic_id,
+        phone: patient.phone,
+        message: solicitarResposta ? bodyText + '\n\nResponda *Confirmar* ou *Cancelar*.' : bodyText,
+        purpose: 'automation',
+        instanceName: (waByClinic.get(app.clinic_id) as any)?.instance_name,
+      })
+    }
 
     if (result.ok) {
       summary.sent++
-      void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'ok', details: { appointment_id: app.id, mode: 'link' } })
+      void logEva({ clinic_id: app.clinic_id, phone: patient.phone, source: 'cron-reminders', event: 'reminder_sent', status: 'ok', details: { appointment_id: app.id, mode: 'buttons' } })
     } else {
       // Falha transitória (adiado pelo pacer anti-ban): desfaz a trava pra
       // o próximo ciclo tentar de novo. Sem isso, o agendamento ficava

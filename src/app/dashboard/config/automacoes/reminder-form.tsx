@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { parseSupabaseError } from '@/lib/error-messages'
@@ -9,7 +9,7 @@ import AudioModeField, { EnvioMode } from '@/components/ui/AudioModeField'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-type Vars = { nome: string; primeiro_nome: string; clinica: string; profissional: string; procedimento: string; data: string; hora: string; dia_semana: string; link_confirmacao: string }
+type Vars = { nome: string; primeiro_nome: string; clinica: string; profissional: string; procedimento: string; data: string; hora: string; dia_semana: string; link_confirmacao: string; link_agenda: string }
 
 const TAGS = [
   { tag: '{{primeiro_nome}}',    desc: 'Primeiro nome do paciente' },
@@ -21,6 +21,7 @@ const TAGS = [
   { tag: '{{hora}}',             desc: 'Hora da consulta (hh:mm)' },
   { tag: '{{dia_semana}}',       desc: 'Dia da semana por extenso' },
   { tag: '{{link_confirmacao}}', desc: '🔗 Link de confirmação de presença' },
+  { tag: '{{link_agenda}}',      desc: '📅 Link para adicionar na agenda (Google)' },
 ]
 
 const SUGGESTIONS_24H = [
@@ -88,6 +89,7 @@ function renderPreview(template: string, vars: Vars): string {
     .replace(/\{\{\s*hora\s*\}\}/g, vars.hora)
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
     .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao)
+    .replace(/\{\{\s*link_agenda\s*\}\}/g, vars.link_agenda)
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -95,6 +97,7 @@ function renderPreview(template: string, vars: Vars): string {
 type Initial = {
   enabled: boolean
   hora: number
+  diasAntes: number
   template24h: string
   lembrete2hEnabled: boolean
   template2h: string
@@ -118,6 +121,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
 
   const [enabled, setEnabled]             = useState(initial.enabled)
   const [hora, setHora]                   = useState(String(initial.hora).padStart(2, '0') + ':00')
+  const [diasAntes, setDiasAntes]         = useState(initial.diasAntes)
   const [template24h, setTemplate24h]     = useState(initial.template24h)
   const [lembrete2h, setLembrete2h]       = useState(initial.lembrete2hEnabled)
   const [template2h, setTemplate2h]       = useState(initial.template2h)
@@ -136,6 +140,10 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [testing, setTesting] = useState(false)
 
+  const template24hRef = useRef<HTMLTextAreaElement>(null)
+  const template2hRef = useRef<HTMLTextAreaElement>(null)
+  const templateAgendamentoRef = useRef<HTMLTextAreaElement>(null)
+
   const previewVars: Vars = {
     nome: 'Maria Aparecida da Silva',
     primeiro_nome: 'Maria',
@@ -146,6 +154,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     hora: '14:30',
     dia_semana: 'terça-feira',
     link_confirmacao: 'app.clinike.com.br/confirmar/abc12345',
+    link_agenda: 'app.clinike.com.br/api/calendar/abc12345/google',
   }
 
   const preview24h = useMemo(() => renderPreview(template24h, previewVars), [template24h])
@@ -167,6 +176,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
       if (mode === 'texto' || mode === 'ambos') {
         const text = previewFn(template)
           .replace(/\{\{link_confirmacao\}\}/g, 'https://app.clinike.com.br/confirmar/TESTE-LINK')
+          .replace(/\{\{link_agenda\}\}/g, 'https://app.clinike.com.br/api/calendar/teste/google')
         const r = await fetch('/api/whatsapp/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -209,6 +219,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
         .update({
           confirma_24h: enabled,
           confirma_24h_hora: horaInt,
+          confirma_24h_dias_antes: diasAntes,
           template_confirma_24h: template24h,
           lembrete_2h: lembrete2h,
           template_lembrete_2h: template2h || null,
@@ -230,11 +241,30 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
     }
   }
 
-  const tagBtn = (tag: string, setFn: (v: string) => void, current: string) => (
+  function insertAtCursor(
+    ref: React.RefObject<HTMLTextAreaElement>,
+    setFn: (v: string) => void,
+    current: string,
+    tag: string,
+  ) {
+    const el = ref.current
+    if (!el) { setFn(current + tag); return }
+    const start = el.selectionStart ?? current.length
+    const end = el.selectionEnd ?? current.length
+    const next = current.slice(0, start) + tag + current.slice(end)
+    setFn(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + tag.length
+      el.setSelectionRange(pos, pos)
+    })
+  }
+
+  const tagBtn = (tag: string, setFn: (v: string) => void, current: string, ref: React.RefObject<HTMLTextAreaElement>) => (
     <button
       key={tag}
       type="button"
-      onClick={() => setFn(current + tag)}
+      onClick={() => insertAtCursor(ref, setFn, current, tag)}
       className="px-2 py-1 text-xs bg-slate-100 hover:bg-violet-100 hover:text-violet-700 rounded-lg font-mono transition-colors"
     >
       {tag}
@@ -252,7 +282,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
         </div>
         <div>
           <p className="font-semibold text-slate-900">Ativar lembrete automático</p>
-          <p className="text-sm text-slate-500">Envia mensagem ao confirmar o agendamento, na véspera e/ou 2h antes da consulta.</p>
+          <p className="text-sm text-slate-500">Envia mensagem ao confirmar o agendamento, dias antes (configurável) e/ou 2h antes da consulta.</p>
         </div>
       </label>
 
@@ -270,7 +300,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
             onClick={() => setActiveTab('24h')}
             className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === '24h' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            📅 Véspera (D-1)
+            📅 {diasAntes} dia{diasAntes === 1 ? '' : 's'} antes
           </button>
           <button
             onClick={() => setActiveTab('2h')}
@@ -283,8 +313,28 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
         {/* ABA VÉSPERA */}
         {activeTab === '24h' && (
           <div className="space-y-4">
-            {/* Horário livre */}
+            {/* Dias antes + horário */}
             <div>
+              <label className="block text-sm font-medium text-slate-900 mb-1">
+                Enviar quantos dias antes
+              </label>
+              <div className="flex items-center gap-3 mb-3">
+                <input
+                  type="number"
+                  min={1}
+                  max={7}
+                  value={diasAntes}
+                  onChange={e => {
+                    const v = parseInt(e.target.value, 10)
+                    setDiasAntes(Number.isNaN(v) ? 1 : Math.min(7, Math.max(1, v)))
+                  }}
+                  className="w-20 px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none"
+                />
+                <p className="text-xs text-slate-500">
+                  Dias de antecedência (1 = véspera). O texto da mensagem fica por sua conta — ajuste se mudar esse número.
+                </p>
+              </div>
+
               <label className="block text-sm font-medium text-slate-900 mb-1">
                 Horário do envio <span className="text-xs text-slate-400">(fuso de Brasília)</span>
               </label>
@@ -296,7 +346,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
                   className="px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none"
                 />
                 <p className="text-xs text-slate-500">
-                  A mensagem é enviada na véspera neste horário para todos os pacientes do dia seguinte.
+                  A mensagem é enviada {diasAntes} dia{diasAntes === 1 ? '' : 's'} antes, neste horário, para os pacientes do dia correspondente.
                 </p>
               </div>
             </div>
@@ -318,7 +368,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
             <div>
               <p className="text-xs text-slate-500 mb-2 font-medium">Inserir variável:</p>
               <div className="flex flex-wrap gap-1.5">
-                {TAGS.map(t => tagBtn(t.tag, setTemplate24h, template24h))}
+                {TAGS.map(t => tagBtn(t.tag, setTemplate24h, template24h, template24hRef))}
               </div>
             </div>
 
@@ -335,8 +385,9 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
             {/* Template */}
             {(modo24h === 'texto' || modo24h === 'ambos') && (
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem da véspera</label>
+              <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem ({diasAntes} dia{diasAntes === 1 ? '' : 's'} antes)</label>
               <textarea
+                ref={template24hRef}
                 value={template24h}
                 onChange={e => setTemplate24h(e.target.value)}
                 rows={5}
@@ -349,7 +400,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
             {/* Preview */}
             {template24h && (modo24h === 'texto' || modo24h === 'ambos') && (
               <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
-                <p className="text-xs font-medium text-emerald-700 mb-2">Preview (véspera):</p>
+                <p className="text-xs font-medium text-emerald-700 mb-2">Preview ({diasAntes} dia{diasAntes === 1 ? '' : 's'} antes):</p>
                 <p className="text-sm text-slate-700 whitespace-pre-line">{preview24h}</p>
               </div>
             )}
@@ -389,7 +440,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
               <div className="mb-3">
                 <p className="text-xs text-slate-500 mb-2 font-medium">Inserir variável:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {TAGS.map(t => tagBtn(t.tag, setTemplate2h, template2h))}
+                  {TAGS.map(t => tagBtn(t.tag, setTemplate2h, template2h, template2hRef))}
                 </div>
               </div>
 
@@ -408,6 +459,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
               <div className="mb-3">
                 <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem 2h antes</label>
                 <textarea
+                  ref={template2hRef}
                   value={template2h}
                   onChange={e => setTemplate2h(e.target.value)}
                   rows={5}
@@ -461,7 +513,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
               <div className="mb-3">
                 <p className="text-xs text-slate-500 mb-2 font-medium">Inserir variável:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {TAGS.filter(t => t.tag !== '{{link_confirmacao}}').map(t => tagBtn(t.tag, setTemplateAgendamento, templateAgendamento))}
+                  {TAGS.filter(t => t.tag !== '{{link_confirmacao}}').map(t => tagBtn(t.tag, setTemplateAgendamento, templateAgendamento, templateAgendamentoRef))}
                 </div>
               </div>
 
@@ -480,6 +532,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
               <div className="mb-3">
                 <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem de confirmação</label>
                 <textarea
+                  ref={templateAgendamentoRef}
                   value={templateAgendamento}
                   onChange={e => setTemplateAgendamento(e.target.value)}
                   rows={5}

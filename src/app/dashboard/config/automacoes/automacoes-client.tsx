@@ -31,6 +31,7 @@ type AutomationRow = {
   audio_aniversario?: string | null
   confirma_24h?: boolean | null
   confirma_24h_hora?: number | null
+  confirma_24h_dias_antes?: number | null
   template_confirma_24h?: string | null
   modo_confirma_24h?: 'texto' | 'audio' | 'ambos' | null
   audio_confirma_24h?: string | null
@@ -344,6 +345,7 @@ export default function AutomacoesClient({
           initial={{
             enabled: auto?.confirma_24h ?? true,
             hora: auto?.confirma_24h_hora ?? 20,
+            diasAntes: auto?.confirma_24h_dias_antes ?? 1,
             template24h: auto?.template_confirma_24h || '',
             lembrete2hEnabled: auto?.lembrete_2h ?? false,
             template2h: auto?.template_lembrete_2h || '',
