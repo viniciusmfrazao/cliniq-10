@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { isSuperAdmin } from '@/lib/super-admin'
 import * as XLSX from 'xlsx'
 
 export const maxDuration = 60
@@ -57,9 +58,12 @@ export async function POST(req: NextRequest) {
       .from('users')
       .select('role')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
-    if (!currentUser || !['admin', 'super_admin'].includes(currentUser.role)) {
+    const isClinicAdmin = !!currentUser && ['admin', 'super_admin'].includes(currentUser.role)
+    const isPlatformSuperAdmin = await isSuperAdmin()
+
+    if (!isClinicAdmin && !isPlatformSuperAdmin) {
       return NextResponse.json({ error: 'Apenas admins podem importar' }, { status: 403 })
     }
 
