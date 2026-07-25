@@ -60,6 +60,24 @@ const SUGGESTIONS_2H = [
   },
 ]
 
+const SUGGESTIONS_CUSTOM = [
+  {
+    id: 'simples',
+    label: 'Simples e direto',
+    text: `Oi {{primeiro_nome}}! Passando pra lembrar do seu horário em {{dia_semana}} ({{data}}) às {{hora}} com {{profissional}} aqui na {{clinica}}. Te esperamos! 💕`,
+  },
+  {
+    id: 'detalhado',
+    label: 'Com endereço',
+    text: `Oi {{primeiro_nome}}! Lembrete do seu agendamento em {{data}} às {{hora}} com {{profissional}} na {{clinica}}. Qualquer dúvida, estamos por aqui! ✨`,
+  },
+  {
+    id: 'confirme',
+    label: 'Pede confirmação',
+    text: `Oi {{primeiro_nome}}, tudo bem? Passando pra confirmar seu horário de {{data}} 🗓\n\n{{procedimento}} às {{hora}} com {{profissional}}.\n\nVai conseguir comparecer? Responda SIM ou NOS AVISE se precisar remarcar. 💕`,
+  },
+]
+
 const SUGGESTIONS_AGENDAMENTO = [
   {
     id: 'confirmacao',
@@ -108,6 +126,12 @@ type Initial = {
   audio2h: string | null
   modoAgendamento: EnvioMode
   audioAgendamento: string | null
+  lembreteCustomEnabled: boolean
+  diasAntesCustom: number
+  horaCustom: number
+  templateCustom: string
+  modoCustom: EnvioMode
+  audioCustom: string | null
 }
 
 type Props = { clinicId: string; clinicName: string; initial: Initial }
@@ -131,9 +155,15 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   const [audio2h, setAudio2h]             = useState<string | null>(initial.audio2h)
   const [modoAgendamento, setModoAgendamento] = useState<EnvioMode>(initial.modoAgendamento)
   const [audioAgendamento, setAudioAgendamento] = useState<string | null>(initial.audioAgendamento)
+  const [lembreteCustom, setLembreteCustom] = useState(initial.lembreteCustomEnabled)
+  const [diasAntesCustom, setDiasAntesCustom] = useState(initial.diasAntesCustom)
+  const [horaCustom, setHoraCustom]       = useState(String(initial.horaCustom).padStart(2, '0') + ':00')
+  const [templateCustom, setTemplateCustom] = useState(initial.templateCustom)
+  const [modoCustom, setModoCustom]       = useState<EnvioMode>(initial.modoCustom)
+  const [audioCustom, setAudioCustom]     = useState<string | null>(initial.audioCustom)
   const [saving, setSaving]               = useState(false)
   const [savedAt, setSavedAt]             = useState<Date | null>(null)
-  const [activeTab, setActiveTab]         = useState<'24h' | '2h' | 'agendamento'>('24h')
+  const [activeTab, setActiveTab]         = useState<'24h' | '2h' | 'agendamento' | 'custom'>('24h')
   const [testPhone, setTestPhone] = useState('')
   const [testMsg, setTestMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [testing, setTesting] = useState(false)
@@ -141,6 +171,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   const template24hRef = useRef<HTMLTextAreaElement>(null)
   const template2hRef = useRef<HTMLTextAreaElement>(null)
   const templateAgendamentoRef = useRef<HTMLTextAreaElement>(null)
+  const templateCustomRef = useRef<HTMLTextAreaElement>(null)
 
   const previewVars: Vars = {
     nome: 'Maria Aparecida da Silva',
@@ -158,6 +189,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
   const preview24h = useMemo(() => renderPreview(template24h, previewVars), [template24h])
   const preview2h  = useMemo(() => renderPreview(template2h, previewVars), [template2h])
   const previewAgendamento = useMemo(() => renderPreview(templateAgendamento, previewVars), [templateAgendamento])
+  const previewCustom = useMemo(() => renderPreview(templateCustom, previewVars), [templateCustom])
 
   async function sendTest(template: string, previewFn: (t: string) => string, mode: EnvioMode, audioUrl: string | null) {
     if (!testPhone.trim()) {
@@ -228,6 +260,12 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
           audio_lembrete_2h: audio2h,
           modo_msg_agendamento: modoAgendamento,
           audio_msg_agendamento: audioAgendamento,
+          lembrete_custom: lembreteCustom,
+          lembrete_custom_dias_antes: diasAntesCustom,
+          lembrete_custom_hora: parseInt(horaCustom.split(':')[0], 10),
+          template_lembrete_custom: templateCustom || null,
+          modo_lembrete_custom: modoCustom,
+          audio_lembrete_custom: audioCustom,
         })
         .eq('clinic_id', clinicId)
       if (error) { alert(parseSupabaseError(error)); return }
@@ -279,7 +317,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
         </div>
         <div>
           <p className="font-semibold text-slate-900">Ativar lembrete automático</p>
-          <p className="text-sm text-slate-500">Envia mensagem ao confirmar o agendamento, na véspera e/ou 2h antes da consulta.</p>
+          <p className="text-sm text-slate-500">Envia mensagem ao confirmar o agendamento, na véspera, num dia personalizado e/ou 2h antes da consulta.</p>
         </div>
       </label>
 
@@ -304,6 +342,12 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
             className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === '2h' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             🕐 2h antes
+          </button>
+          <button
+            onClick={() => setActiveTab('custom')}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'custom' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            🗓️ Personalizado
           </button>
         </div>
 
@@ -529,6 +573,115 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
             </div>
           </div>
         )}
+
+        {/* ABA PERSONALIZADO */}
+        {activeTab === 'custom' && (
+          <div className="space-y-4">
+            <label className="flex items-start gap-4 cursor-pointer">
+              <div className="relative inline-flex items-center mt-1">
+                <input type="checkbox" checked={lembreteCustom} onChange={e => setLembreteCustom(e.target.checked)} className="sr-only peer" />
+                <div className="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-emerald-500 transition-colors" />
+                <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">Ativar lembrete personalizado</p>
+                <p className="text-sm text-slate-500">Envia uma mensagem extra com a antecedência que você escolher, além da véspera e do 2h antes.</p>
+              </div>
+            </label>
+
+            <div className={lembreteCustom ? '' : 'opacity-50 pointer-events-none'}>
+              {/* Dias antes + horário */}
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-slate-900 mb-1">
+                  Enviar quantos dias antes
+                </label>
+                <div className="flex items-center gap-3 mb-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={diasAntesCustom}
+                    onChange={e => {
+                      const v = parseInt(e.target.value, 10)
+                      setDiasAntesCustom(Number.isNaN(v) ? 1 : Math.min(60, Math.max(1, v)))
+                    }}
+                    className="w-20 px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none"
+                  />
+                  <p className="text-xs text-slate-500">dias antes da consulta.</p>
+                </div>
+
+                <label className="block text-sm font-medium text-slate-900 mb-1">
+                  Horário do envio <span className="text-xs text-slate-400">(fuso de Brasília)</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="time"
+                    value={horaCustom}
+                    onChange={e => setHoraCustom(e.target.value)}
+                    className="px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none"
+                  />
+                  <p className="text-xs text-slate-500">
+                    A mensagem é enviada {diasAntesCustom} dia{diasAntesCustom === 1 ? '' : 's'} antes, neste horário, pra todos os pacientes do dia correspondente.
+                  </p>
+                </div>
+              </div>
+
+              {/* Sugestões */}
+              <div className="mb-3">
+                <p className="text-xs text-slate-500 mb-2 font-medium">Sugestões de texto:</p>
+                <div className="flex flex-wrap gap-2">
+                  {SUGGESTIONS_CUSTOM.map(s => (
+                    <button key={s.id} type="button" onClick={() => setTemplateCustom(s.text)}
+                      className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-violet-100 hover:text-violet-700 rounded-lg transition-colors">
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="mb-3">
+                <p className="text-xs text-slate-500 mb-2 font-medium">Inserir variável:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {TAGS.filter(t => t.tag !== '{{link_confirmacao}}').map(t => tagBtn(t.tag, setTemplateCustom, templateCustom, templateCustomRef))}
+                </div>
+              </div>
+
+              {/* Modo de envio + áudio */}
+              <AudioModeField
+                clinicId={clinicId}
+                automationKey="lembrete-custom"
+                mode={modoCustom}
+                onModeChange={setModoCustom}
+                audioUrl={audioCustom}
+                onAudioChange={setAudioCustom}
+              />
+
+              {/* Template */}
+              {(modoCustom === 'texto' || modoCustom === 'ambos') && (
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-slate-900 mb-1">Mensagem ({diasAntesCustom} dia{diasAntesCustom === 1 ? '' : 's'} antes)</label>
+                <textarea
+                  ref={templateCustomRef}
+                  value={templateCustom}
+                  onChange={e => setTemplateCustom(e.target.value)}
+                  rows={5}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-200 outline-none resize-none"
+                  placeholder="Digite a mensagem do lembrete personalizado..."
+                />
+              </div>
+              )}
+
+              {/* Preview */}
+              {templateCustom && (modoCustom === 'texto' || modoCustom === 'ambos') && (
+                <div className="bg-violet-50 rounded-xl p-3 border border-violet-100">
+                  <p className="text-xs font-medium text-violet-700 mb-2">Preview ({diasAntesCustom} dia{diasAntesCustom === 1 ? '' : 's'} antes):</p>
+                  <p className="text-sm text-slate-700 whitespace-pre-line">{previewCustom}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Teste */}
@@ -545,7 +698,7 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
           />
           <button
             type="button"
-            onClick={() => sendTest(activeTab === '24h' ? template24h : activeTab === '2h' ? template2h : templateAgendamento, t => t
+            onClick={() => sendTest(activeTab === '24h' ? template24h : activeTab === '2h' ? template2h : activeTab === 'custom' ? templateCustom : templateAgendamento, t => t
               .replace(/\{\{primeiro_nome\}\}/g, 'Ana')
               .replace(/\{\{nome\}\}/g, 'Ana Silva')
               .replace(/\{\{clinica\}\}/g, 'Clínica')
@@ -554,8 +707,8 @@ export default function AppointmentReminderForm({ clinicId, clinicName, initial 
               .replace(/\{\{data\}\}/g, '08/06/2026')
               .replace(/\{\{hora\}\}/g, '10:00')
               .replace(/\{\{dia_semana\}\}/g, 'Segunda-feira')
-            , activeTab === '24h' ? modo24h : activeTab === '2h' ? modo2h : modoAgendamento
-            , activeTab === '24h' ? audio24h : activeTab === '2h' ? audio2h : audioAgendamento)}
+            , activeTab === '24h' ? modo24h : activeTab === '2h' ? modo2h : activeTab === 'custom' ? modoCustom : modoAgendamento
+            , activeTab === '24h' ? audio24h : activeTab === '2h' ? audio2h : activeTab === 'custom' ? audioCustom : audioAgendamento)}
             disabled={testing}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium flex items-center gap-2"
           >

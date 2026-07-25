@@ -42,6 +42,12 @@ type AutomationRow = {
   template_msg_agendamento?: string | null
   modo_msg_agendamento?: 'texto' | 'audio' | 'ambos' | null
   audio_msg_agendamento?: string | null
+  lembrete_custom?: boolean | null
+  lembrete_custom_dias_antes?: number | null
+  lembrete_custom_hora?: number | null
+  template_lembrete_custom?: string | null
+  modo_lembrete_custom?: 'texto' | 'audio' | 'ambos' | null
+  audio_lembrete_custom?: string | null
   recall_inativos?: boolean | null
   recall_dias?: number | null
   template_recall?: string | null
@@ -334,7 +340,7 @@ export default function AutomacoesClient({
         gradient="bg-gradient-to-br from-emerald-500 to-teal-500"
         title="Lembrete de consulta"
         description="Confirmação ao agendar, no dia anterior e/ou 2h antes da consulta"
-        isActive={!!(auto?.confirma_24h || auto?.lembrete_2h || auto?.msg_agendamento)}
+        isActive={!!(auto?.confirma_24h || auto?.lembrete_2h || auto?.msg_agendamento || auto?.lembrete_custom)}
         isOpen={openId === 'lembrete'}
         onToggle={() => toggle('lembrete')}
       >
@@ -355,6 +361,12 @@ export default function AutomacoesClient({
             audio2h: auto?.audio_lembrete_2h ?? null,
             modoAgendamento: auto?.modo_msg_agendamento ?? 'texto',
             audioAgendamento: auto?.audio_msg_agendamento ?? null,
+            lembreteCustomEnabled: auto?.lembrete_custom ?? false,
+            diasAntesCustom: auto?.lembrete_custom_dias_antes ?? 3,
+            horaCustom: auto?.lembrete_custom_hora ?? 20,
+            templateCustom: auto?.template_lembrete_custom || '',
+            modoCustom: auto?.modo_lembrete_custom ?? 'texto',
+            audioCustom: auto?.audio_lembrete_custom ?? null,
           }}
         />
         <ReminderHistory clinicId={clinicId} />
