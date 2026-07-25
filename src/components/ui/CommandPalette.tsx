@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { NAV_ITEMS, type NavItem } from '@/lib/nav'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
+import { normalizeText } from '@/lib/text'
 import Icon from '@/components/ui/Icon'
 
 type Patient = { id: string; name: string; phone: string | null }
@@ -159,7 +160,7 @@ function CommandPaletteDialog({
         .from('patients')
         .select('id, name, phone')
         .eq('clinic_id', clinicId)
-        .ilike('name', `%${q}%`)
+        .ilike('name_unaccent', `%${normalizeText(q)}%`)
         .order('name')
         .limit(8)
       if (!cancelled) {
@@ -295,10 +296,10 @@ function CommandPaletteDialog({
 
   // Filtragem (paginas + acoes filtram por keywords; pacientes ja vem filtrado do banco)
   const filtered = useMemo<CommandItem[]>(() => {
-    const q = query.trim().toLowerCase()
+    const q = normalizeText(query.trim())
     const filterByQuery = (items: CommandItem[]) =>
       q
-        ? items.filter((i) => i.keywords?.includes(q) || i.label.toLowerCase().includes(q))
+        ? items.filter((i) => normalizeText(i.keywords).includes(q) || normalizeText(i.label).includes(q))
         : items
 
     const pages = filterByQuery(pageItems)
