@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PatientSearch from './patient-search'
 import { sanitizeSearchTerm } from '@/lib/search'
+import { normalizeText } from '@/lib/text'
 
 const PER_PAGE = 50
 
@@ -48,7 +49,7 @@ export default async function PacientesPage({
 
   // Aplicar filtro de busca
   if (safeQuery) {
-    query = query.or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,cpf.ilike.%${safeQuery}%`)
+    query = query.or(`name_unaccent.ilike.%${normalizeText(safeQuery)}%,phone.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,cpf.ilike.%${safeQuery}%`)
   }
 
   // Aplicar filtro de pendentes

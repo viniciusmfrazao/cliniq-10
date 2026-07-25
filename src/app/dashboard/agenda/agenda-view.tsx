@@ -13,6 +13,7 @@ import SendTermoButton from './send-termo-button'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import BlockModal from './block-modal'
+import { normalizeText } from '@/lib/text'
 import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 import PaymentModal from '@/components/agenda/payment-modal'
 import ProceduresConfirmModal from '@/components/agenda/procedures-confirm-modal'
@@ -214,7 +215,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
       .from('patients')
       .select('id, name, phone')
       .eq('clinic_id', clinicId)
-      .or(`name.ilike.%${safe}%,phone.ilike.%${safe}%`)
+      .or(`name_unaccent.ilike.%${normalizeText(safe)}%,phone.ilike.%${safe}%`)
       .order('name')
       .limit(8)
     setPatientResults(data || [])

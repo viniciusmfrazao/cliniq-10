@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { sanitizeSearchTerm } from '@/lib/search'
+import { normalizeText } from '@/lib/text'
 
 type Patient = {
   id: string
@@ -47,7 +48,7 @@ export default function PatientSearch({ initialQuery, clinicId }: { initialQuery
         .from('patients')
         .select('id, name, phone, email, cpf')
         .eq('clinic_id', clinicId)
-        .or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,cpf.ilike.%${safeQuery}%`)
+        .or(`name_unaccent.ilike.%${normalizeText(safeQuery)}%,phone.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,cpf.ilike.%${safeQuery}%`)
         .order('name')
         .limit(10)
 

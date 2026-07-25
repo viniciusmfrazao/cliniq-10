@@ -5,6 +5,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { createLogger } from '@/lib/logger'
+import { normalizeText } from '@/lib/text'
 
 const log = createLogger('ProductsUsed')
 
@@ -55,9 +56,9 @@ export default function ProductsUsedSection({ appointmentId, patientId, clinicId
 
   // Filtrar produtos por busca
   const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.category?.toLowerCase().includes(searchTerm.toLowerCase())
+    normalizeText(p.name).includes(normalizeText(searchTerm)) ||
+    normalizeText(p.brand).includes(normalizeText(searchTerm)) ||
+    normalizeText(p.category).includes(normalizeText(searchTerm))
   )
 
   // Agrupar por categoria

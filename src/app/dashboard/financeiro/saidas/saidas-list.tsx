@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { todayBR, parseDateBR } from '@/lib/datetime'
 import { useToast } from '@/components/ui/Toast'
+import { normalizeText } from '@/lib/text'
 
 type Saida = {
   id: string
@@ -226,8 +227,8 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
 
   const filteredLancadas = lancadas.filter(s => {
     const matchSearch = !search ||
-      s.descricao?.toLowerCase().includes(search.toLowerCase()) ||
-      s.fornecedor?.toLowerCase().includes(search.toLowerCase())
+      normalizeText(s.descricao).includes(normalizeText(search)) ||
+      normalizeText(s.fornecedor).includes(normalizeText(search))
     const matchMes = !mes || s.data?.startsWith(mes)
     const matchCat = !categoria || s.categoria_dre === categoria
     return matchSearch && matchMes && matchCat
@@ -235,8 +236,8 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
 
   const filteredAPagar = aPagar.filter(s => {
     const matchSearch = !search ||
-      s.descricao?.toLowerCase().includes(search.toLowerCase()) ||
-      s.fornecedor?.toLowerCase().includes(search.toLowerCase())
+      normalizeText(s.descricao).includes(normalizeText(search)) ||
+      normalizeText(s.fornecedor).includes(normalizeText(search))
     const matchCat = !categoria || s.categoria_dre === categoria
     return matchSearch && matchCat
   })

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import PatientSearchInjectable from './patient-search'
 import { sanitizeSearchTerm } from '@/lib/search'
+import { normalizeText } from '@/lib/text'
 
 export default async function InjetaveisPage({ 
   searchParams 
@@ -25,7 +26,7 @@ export default async function InjetaveisPage({
       .from('patients')
       .select('*')
       .eq('clinic_id', userData?.clinic_id)
-      .or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%`)
+      .or(`name_unaccent.ilike.%${normalizeText(safeQuery)}%,phone.ilike.%${safeQuery}%`)
       .order('name')
       .limit(20)
     patients = data || []
