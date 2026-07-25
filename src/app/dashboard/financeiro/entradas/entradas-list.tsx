@@ -21,6 +21,7 @@ type Entrada = {
   valor_bruto: number
   valor_liquido: number
   taxa_percentual: number
+  n_parcelas?: number | null
   tipo_receita?: string
   nota_fiscal_status?: string | null
   nota_fiscal_numero?: string | null
@@ -856,7 +857,9 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     <span className="text-xs text-slate-400">
                       {new Date(e.data_venda + 'T12:00:00').toLocaleDateString('pt-BR')}
                     </span>
-                    <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">{e.forma_pagamento}</span>
+                    <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">
+                      {e.forma_pagamento}{(e.n_parcelas || 0) > 1 && ` ${e.n_parcelas}x`}
+                    </span>
                     {e.profissional_nome && (
                       <span className="text-xs text-slate-400">{e.profissional_nome}</span>
                     )}
@@ -952,13 +955,14 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                       <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs">
                         {e.forma_pagamento}
                         {e.bandeira && ` (${e.bandeira})`}
+                        {(e.n_parcelas || 0) > 1 && ` ${e.n_parcelas}x`}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">{fmt(e.valor_bruto)}</td>
                     <td className="px-4 py-3 text-sm text-right">
                       <span className="text-emerald-600 font-medium">{fmt(e.valor_liquido)}</span>
                       {e.taxa_percentual > 0 && (
-                        <span className="text-xs text-slate-400 ml-1">(-{(e.taxa_percentual * 100).toFixed(1)}%)</span>
+                        <span className="text-xs text-slate-400 ml-1">(-{Number(e.taxa_percentual).toFixed(2)}%)</span>
                       )}
                     </td>
                     {comissaoAtiva && (() => {
