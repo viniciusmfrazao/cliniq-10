@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+import { normalizeText } from '@/lib/text'
 
 type Product = {
   id: string
@@ -43,8 +44,8 @@ export default function ProductList({ products, categories, clinicId, canEdit = 
   })
 
   const filtered = products.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.brand?.toLowerCase().includes(search.toLowerCase())
+    const matchSearch = normalizeText(p.name).includes(normalizeText(search)) ||
+      normalizeText(p.brand).includes(normalizeText(search))
     const matchCategory = category === 'all' || p.category === category
     return matchSearch && matchCategory
   })

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Icon from '@/components/ui/Icon'
+import { normalizeText } from '@/lib/text'
 
 type Entrada = {
   paciente_id: string | null
@@ -70,7 +71,7 @@ export default function HistoricoPacienteView({ entradas }: Props) {
   const filteredRanking = useMemo(() => {
     let list = ranking.filter(p => 
       p.nome.toLowerCase() !== 'sem nome' &&
-      (!search || p.nome.toLowerCase().includes(search.toLowerCase()))
+      (!search || normalizeText(p.nome).includes(normalizeText(search)))
     )
 
     if (ordenar === 'gasto') {

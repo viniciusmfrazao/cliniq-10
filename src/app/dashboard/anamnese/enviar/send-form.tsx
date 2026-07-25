@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+import { normalizeText } from '@/lib/text'
 
 type Patient = {
   id: string
@@ -118,8 +119,8 @@ export default function SendAnamneseForm({ clinicId, clinicName, patients, userI
   }
 
   const filteredPatients = patients.filter(p =>
-    p.name.toLowerCase().includes(searchPatient.toLowerCase()) ||
-    p.email?.toLowerCase().includes(searchPatient.toLowerCase()) ||
+    normalizeText(p.name).includes(normalizeText(searchPatient)) ||
+    normalizeText(p.email).includes(normalizeText(searchPatient)) ||
     p.phone?.includes(searchPatient)
   )
 

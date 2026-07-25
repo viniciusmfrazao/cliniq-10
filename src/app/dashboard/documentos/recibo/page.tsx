@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { normalizeText } from '@/lib/text'
 
 type Patient = {
   id: string
@@ -87,7 +88,7 @@ export default function ReciboPage() {
   }
 
   const filteredPatients = patients.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    normalizeText(p.name).includes(normalizeText(searchQuery)) ||
     p.cpf?.includes(searchQuery) ||
     p.phone?.includes(searchQuery)
   ).slice(0, 10)

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { normalizeText } from '@/lib/text'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from('patients')
     .select('id, name, phone')
-    .ilike('name', `%${q}%`)
+    .ilike('name_unaccent', `%${normalizeText(q)}%`)
     .order('name')
     .limit(10)
 

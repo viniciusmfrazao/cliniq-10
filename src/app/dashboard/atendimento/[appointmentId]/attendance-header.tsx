@@ -6,6 +6,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { normalizeText } from '@/lib/text'
 
 type Proc = { id: string; name: string; price: number }
 
@@ -108,7 +109,7 @@ export default function AttendanceHeader({ appointment, patient, procedure, clin
   }, [descontoTipo, descontoValorStr])
 
   const filteredProcs = clinicProcs.filter(p =>
-    !procSearch || p.name.toLowerCase().includes(procSearch.toLowerCase())
+    !procSearch || normalizeText(p.name).includes(normalizeText(procSearch))
   )
 
   const handleReschedule = async () => {

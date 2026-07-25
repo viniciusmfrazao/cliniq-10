@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Icon from '@/components/ui/Icon'
+import { normalizeText } from '@/lib/text'
 
 type AuditLog = {
   id: string
@@ -67,9 +68,9 @@ export default function AuditList({ logs, users }: Props) {
     if (filters.dateFrom && new Date(log.created_at) < new Date(filters.dateFrom)) return false
     if (filters.dateTo && new Date(log.created_at) > new Date(filters.dateTo + 'T23:59:59')) return false
     if (filters.search) {
-      const search = filters.search.toLowerCase()
-      const matchName = log.entity_name?.toLowerCase().includes(search)
-      const matchUser = log.user?.name?.toLowerCase().includes(search)
+      const search = normalizeText(filters.search)
+      const matchName = normalizeText(log.entity_name).includes(search)
+      const matchUser = normalizeText(log.user?.name).includes(search)
       if (!matchName && !matchUser) return false
     }
     return true

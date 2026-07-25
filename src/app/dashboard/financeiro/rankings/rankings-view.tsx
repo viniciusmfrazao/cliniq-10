@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import Icon from '@/components/ui/Icon'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts'
+import { normalizeText } from '@/lib/text'
 
 type Entrada = {
   paciente_id: string | null
@@ -48,7 +49,7 @@ function RankingPacientes({ entradas }: { entradas: Entrada[] }) {
   }, [entradas])
 
   const lista = useMemo(() => {
-    let l = ranking.filter(p => p.nome !== '—' && (!search || p.nome.toLowerCase().includes(search.toLowerCase())))
+    let l = ranking.filter(p => p.nome !== '—' && (!search || normalizeText(p.nome).includes(normalizeText(search))))
     if (ordenar === 'gasto') l.sort((a, b) => b.total - a.total)
     else if (ordenar === 'visitas') l.sort((a, b) => b.visitas - a.visitas)
     else l.sort((a, b) => b.ticket - a.ticket)

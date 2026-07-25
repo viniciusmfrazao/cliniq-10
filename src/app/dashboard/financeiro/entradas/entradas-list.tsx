@@ -7,6 +7,7 @@ import { todayBR } from '@/lib/datetime'
 import { useToast } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { normalizeText } from '@/lib/text'
 
 type Entrada = {
   id: string
@@ -290,13 +291,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
   const filteredList = list.filter(e =>
     (!search ||
-      e.paciente_nome?.toLowerCase().includes(search.toLowerCase()) ||
-      e.procedimento_nome?.toLowerCase().includes(search.toLowerCase()) ||
-      e.profissional_nome?.toLowerCase().includes(search.toLowerCase())) &&
+      normalizeText(e.paciente_nome).includes(normalizeText(search)) ||
+      normalizeText(e.procedimento_nome).includes(normalizeText(search)) ||
+      normalizeText(e.profissional_nome).includes(normalizeText(search))) &&
     (!filtroProfissional || e.profissional_id === filtroProfissional) &&
     // procedimento_nome pode vir combinado ("Botox + Preenchimento") quando o pagamento
     // cobriu mais de um procedimento — por isso o match é por substring do nome, não igualdade.
-    (!filtroProcedimento || e.procedimento_nome?.toLowerCase().includes(filtroProcedimento.toLowerCase())) &&
+    (!filtroProcedimento || normalizeText(e.procedimento_nome).includes(normalizeText(filtroProcedimento))) &&
     (!filtroForma || e.forma_pagamento === filtroForma)
   )
 

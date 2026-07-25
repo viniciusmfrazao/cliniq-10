@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Icon from '@/components/ui/Icon'
+import { normalizeText } from '@/lib/text'
 
 type Props = {
   clinicId: string
@@ -53,7 +54,7 @@ export default function ScheduleModal({ clinicId, patient, onClose, onScheduled 
         .from('patients')
         .select('id, name, phone')
         .eq('clinic_id', clinicId)
-        .or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+        .or(`name_unaccent.ilike.%${normalizeText(search)}%,phone.ilike.%${search}%`)
         .limit(5)
       setPatientOptions(data || [])
     }

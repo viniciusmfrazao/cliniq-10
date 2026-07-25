@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { normalizeText } from '@/lib/text'
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending:   { label: 'Aguardando link', color: 'bg-slate-100 text-slate-600' },
@@ -19,7 +20,7 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
   const [result, setResult] = useState<{ url?: string; error?: string } | null>(null)
   const [search, setSearch] = useState('')
 
-  const filtered = clinics.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+  const filtered = clinics.filter(c => normalizeText(c.name).includes(normalizeText(search)))
 
   async function sendLink() {
     if (!modal) return

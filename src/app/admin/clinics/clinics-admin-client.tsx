@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { normalizeText } from '@/lib/text'
 
 type Clinic = {
   id: string
@@ -105,8 +106,8 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
   const [chargeResult, setChargeResult] = useState<Record<string, string>>({})
 
   const filtered = clinics.filter(c => {
-    const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.admin?.email?.toLowerCase().includes(search.toLowerCase())
+    const matchSearch = !search || normalizeText(c.name).includes(normalizeText(search)) ||
+      normalizeText(c.admin?.email).includes(normalizeText(search))
     const days = getDaysLeft(c.trial_ends_at)
     const expDays = getDaysLeft(c.plan_expires_at)
     let matchStatus = true

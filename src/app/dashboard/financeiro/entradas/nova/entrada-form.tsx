@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+import { normalizeText } from '@/lib/text'
 
 function PacienteBusca({ pacientes, onSelect }: { pacientes: { id: string; name: string }[], onSelect: (id: string) => void }) {
   const [query, setQuery] = useState('')
@@ -11,7 +12,7 @@ function PacienteBusca({ pacientes, onSelect }: { pacientes: { id: string; name:
   const ref = useRef<HTMLDivElement>(null)
 
   const filtered = query.length > 0
-    ? pacientes.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    ? pacientes.filter(p => normalizeText(p.name).includes(normalizeText(query))).slice(0, 8)
     : []
 
   function pick(p: { id: string; name: string }) {

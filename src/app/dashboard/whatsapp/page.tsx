@@ -8,6 +8,7 @@ import Icon from '@/components/ui/Icon'
 import { useWaLine } from '@/contexts/WaLineContext'
 import ScheduleModal from './schedule-modal'
 import FollowupModal from './followup-modal'
+import { normalizeText } from '@/lib/text'
 
 type MessageKind =
   | 'text'
@@ -1310,8 +1311,8 @@ export default function WhatsAppPage() {
                   if (statusFilter === 'waiting' && c.unread === 0) return false
                   if (statusFilter === 'followup' && !c.followupAt) return false
                   if (searchQuery.trim()) {
-                    const q = searchQuery.toLowerCase()
-                    return c.name.toLowerCase().includes(q) || c.phone.includes(q)
+                    const q = normalizeText(searchQuery)
+                    return normalizeText(c.name).includes(q) || c.phone.includes(q)
                   }
                   return true
                 })
