@@ -114,7 +114,6 @@ type AutomationRow = {
   clinic_id: string
   confirma_24h: boolean | null
   confirma_24h_hora?: number | null
-  confirma_24h_dias_antes?: number | null
   template_confirma_24h: string | null
   modo_confirma_24h?: 'texto' | 'audio' | 'ambos' | null
   audio_confirma_24h?: string | null
@@ -166,15 +165,16 @@ export async function GET(req: NextRequest) {
   const dryRun = url.searchParams.get('dry') === '1'
 
   const svc = createServiceClient()
-  // Janela = dia civil de "hoje + N dias" (BRT), não uma janela deslizante.
-  // N é configurável por clínica (confirma_24h_dias_antes, default 1 = véspera).
+  // Janela = dia civil de amanhã (BRT), não uma janela deslizante de 48h.
   // A tentativa anterior de evitar agendamento órfão trocou "dia certo" por
   // "dentro do prazo", o que quebrou o texto fixo dos templates (que
-  // pressupõe uma data relativa literal) — agendamento fora do dia-alvo
-  // acabava recebendo mensagem de confirmação com o dia errado.
-  // Aqui restringimos ao dia civil exato de cada offset; o catch-up de
-  // reenvio continua garantido porque o cron roda a cada 5min o resto do
-  // dia e o filtro real de dedupe é confirmation_sent_at IS NULL.
+  // pressupõe "amanhã" literalmente) — agendamento de hoje ou de depois de
+  // amanhã acabava recebendo mensagem de confirmação com o dia errado.
+  // Aqui voltamos a restringir ao dia civil de amanhã; o catch-up de reenvio
+  // continua garantido porque o cron roda a cada 5min o resto do dia e o
+  // filtro real de dedupe é confirmation_sent_at IS NULL.
+  const { startISO, endISO } = getBRTDayBoundsISO(1)
+  const dateLabel = 'amanha'
 
   // Hora atual no fuso BRT
   const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: TZ_BR }))
@@ -184,7 +184,7 @@ export async function GET(req: NextRequest) {
   //    E cujo horário configurado bate com a hora atual
   const { data: automations, error: errAuto } = await svc
     .from('clinic_automations')
-    .select('clinic_id, confirma_24h, confirma_24h_hora, confirma_24h_dias_antes, template_confirma_24h, modo_confirma_24h, audio_confirma_24h, confirma_24h_solicitar_resposta')
+    .select('clinic_id, confirma_24h, confirma_24h_hora, template_confirma_24h, modo_confirma_24h, audio_confirma_24h, confirma_24h_solicitar_resposta')
     .eq('confirma_24h', true)
 
   if (errAuto) {
@@ -214,6 +214,7 @@ export async function GET(req: NextRequest) {
   if (enabledClinics.length === 0) {
     return NextResponse.json({
       ok: true,
+      tomorrow: dateLabel,
       processed: 0,
       reason: 'no_clinics_with_reminder_enabled',
     })
@@ -249,48 +250,31 @@ export async function GET(req: NextRequest) {
     clinicAddressById.set(c.id, (c.settings as any)?.address ?? '')
   }
 
-  // 3) Carrega appointments pra essas clínicas, ainda não confirmados.
-  // Cada clínica pode ter um número diferente de dias de antecedência
-  // (confirma_24h_dias_antes, default 1 = véspera), então agrupamos as
-  // clínicas por esse valor e rodamos uma busca por janela de dia civil.
-  const clinicIdsByOffset = new Map<number, string[]>()
-  for (const c of enabledClinics) {
-    const offset = Math.min(7, Math.max(1, c.confirma_24h_dias_antes ?? 1))
-    const list = clinicIdsByOffset.get(offset) ?? []
-    list.push(c.clinic_id)
-    clinicIdsByOffset.set(offset, list)
+  // 3) Carrega appointments de amanhã pra essas clínicas, ainda não confirmados
+  const { data: appsRaw, error: errApps } = await svc
+    .from('appointments')
+    .select(
+      'id, clinic_id, start_time, end_time, status, confirmation_sent_at, confirmation_slug, patient_id, professional_id, procedure_id',
+    )
+    .in('clinic_id', clinicIds)
+    .gte('start_time', startISO)
+    .lt('start_time', endISO)
+    .in('status', ['scheduled', 'confirmed', 'pending_confirmation'])
+    .is('confirmation_sent_at', null)
+
+  if (errApps) {
+    return NextResponse.json(
+      { ok: false, stage: 'load_appointments', error: errApps.message },
+      { status: 500 },
+    )
   }
 
-  const windowsUsed: number[] = Array.from(clinicIdsByOffset.keys())
-  let appsRaw: AppointmentRow[] = []
-  for (const [offset, ids] of clinicIdsByOffset) {
-    const { startISO, endISO } = getBRTDayBoundsISO(offset)
-    const { data, error: errApps } = await svc
-      .from('appointments')
-      .select(
-        'id, clinic_id, start_time, end_time, status, confirmation_sent_at, confirmation_slug, patient_id, professional_id, procedure_id',
-      )
-      .in('clinic_id', ids)
-      .gte('start_time', startISO)
-      .lt('start_time', endISO)
-      .in('status', ['scheduled', 'confirmed', 'pending_confirmation'])
-      .is('confirmation_sent_at', null)
-
-    if (errApps) {
-      return NextResponse.json(
-        { ok: false, stage: 'load_appointments', offset, error: errApps.message },
-        { status: 500 },
-      )
-    }
-    appsRaw = appsRaw.concat((data as AppointmentRow[] | null) ?? [])
-  }
-
-  const apps = appsRaw
+  const apps = (appsRaw as AppointmentRow[] | null) ?? []
 
   if (apps.length === 0) {
     return NextResponse.json({
       ok: true,
-      windowsUsed,
+      tomorrow: dateLabel,
       clinicsChecked: enabledClinics.length,
       processed: 0,
       reason: 'no_pending_appointments',
@@ -329,7 +313,7 @@ export async function GET(req: NextRequest) {
 
   // 5) Processa cada appointment
   const summary = {
-    windowsUsed,
+    tomorrow: dateLabel,
     dryRun,
     clinicsChecked: enabledClinics.length,
     appointmentsScanned: apps.length,
