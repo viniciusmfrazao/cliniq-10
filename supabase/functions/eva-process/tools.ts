@@ -24,26 +24,129 @@ function sbHeaders(env: ToolEnv): SbHeaders {
 }
 
 /**
- * Detecta se a clínica está "fechada" naquele dia, ou seja, nenhum
- * profissional ativo tem schedule pra aquele day_of_week. Útil pra
- * Eva diferenciar "domingo a clínica não abre" de "agenda cheia".
+ * Agendas de recurso (Cursos, Aparelhos) não são profissionais atendentes.
+ * Não podem ser oferecidas pra paciente nem contar como "clínica aberta".
  */
-async function isClinicClosed(clinicId: string, dataIso: string, env: ToolEnv): Promise<boolean> {
+const NON_BOOKABLE = ['curso', 'aparelho', 'equipamento'];
+
+function isBookableName(name: string | null | undefined): boolean {
+  const n = (name || '').toLowerCase();
+  return !NON_BOOKABLE.some((kw) => n.includes(kw));
+}
+
+const DIAS_SEMANA = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+
+/**
+ * DOW (0=dom, 6=sab) de uma data YYYY-MM-DD sem depender do fuso do runtime.
+ * new Date(yyyy, mm-1, dd) é interpretado como local, então ignora o offset.
+ */
+function dowFromIsoDate(dataIso: string): number {
+  const [y, m, d] = dataIso.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
+
+const hhmm = (t: string): string => String(t).slice(0, 5);
+
+/**
+ * Detecta se a clínica está "fechada" naquele dia, ou seja, nenhum
+ * profissional ATENDENTE tem schedule pra aquele day_of_week. Útil pra
+ * Eva diferenciar "domingo a clínica não abre" de "agenda cheia".
+ *
+ * Usa ctx.professional_schedules (já carregado pelo donna_load_context, só
+ * com is_active=true) — sem custo de rede. Agendas de recurso são ignoradas:
+ * antes, uma agenda "Cursos / Aparelhos" com grade no sábado fazia a Eva
+ * achar que sábado era dia útil da clínica.
+ */
+function isClinicClosed(ctx: DonnaContext, dataIso: string): boolean {
   try {
-    // dataIso é YYYY-MM-DD no fuso da clínica; getDay seria do fuso local do
-    // server. Usamos new Date(yyyy, mm-1, dd) que ignora TZ pra calcular DOW.
-    const [y, m, d] = dataIso.split('-').map(Number);
-    const dow = new Date(y, m - 1, d).getDay(); // 0=dom, 6=sab
-    const url = `${env.supabaseUrl}/rest/v1/professional_schedules?clinic_id=eq.${clinicId}&is_active=eq.true&day_of_week=eq.${dow}&select=id&limit=1`;
-    const r = await fetchJson<unknown[]>(url, {
-      method: 'GET',
-      headers: sbHeaders(env),
-    });
-    if (!r.ok) return false; // em caso de erro de leitura, assume aberto
-    return Array.isArray(r.data) ? r.data.length === 0 : true;
+    const dow = dowFromIsoDate(dataIso);
+    return !ctx.professional_schedules.some(
+      (ps) => ps.day_of_week === dow && isBookableName(ps.professional_name),
+    );
   } catch {
-    return false;
+    return false; // em caso de erro, assume aberto
   }
+}
+
+// ─── Guard de slot (usado antes de gravar qualquer agendamento) ─────────────
+
+type SlotCheck =
+  | { ok: true }
+  | { ok: false; codigo: string; detalhe: string };
+
+/**
+ * Valida se um horário pode virar agendamento de verdade. Precisa existir
+ * porque o modelo pode confirmar horário que a paciente pediu mesmo depois de
+ * consultar_agenda ter dito que não há vaga (caso real: sábado, 25/07/2026).
+ *
+ * Checa, nesta ordem:
+ *  1. profissional tem grade nesse dia da semana  (contexto, sem rede)
+ *  2. o intervalo cabe dentro de uma das janelas  (contexto, sem rede)
+ *  3. não colide com professional_blocks           (1 request)
+ *  4. não colide com outro agendamento ativo       (1 request)
+ */
+async function validarSlot(params: {
+  ctx: DonnaContext;
+  clinicId: string;
+  professionalId: string;
+  dataIso: string;
+  horaInicio: string; // "HH:MM"
+  horaFim: string;    // "HH:MM"
+  startIso: string;
+  endIso: string;
+  env: ToolEnv;
+}): Promise<SlotCheck> {
+  const { ctx, clinicId, professionalId, dataIso, horaInicio, horaFim, startIso, endIso, env } = params;
+
+  // 1) Grade do profissional nesse dia da semana
+  const dow = dowFromIsoDate(dataIso);
+  const grade = ctx.professional_schedules.filter((ps) => ps.professional_id === professionalId);
+  const doDia = grade.filter((ps) => ps.day_of_week === dow);
+
+  if (doDia.length === 0) {
+    const dias = [...new Set(grade.map((ps) => ps.day_of_week))]
+      .sort((a, b) => a - b)
+      .map((d) => DIAS_SEMANA[d])
+      .filter(Boolean);
+    return {
+      ok: false,
+      codigo: 'NAO_ATENDE_NESSE_DIA',
+      detalhe: dias.length
+        ? `ela nao atende nesse dia da semana — atende ${dias.join(', ')}`
+        : 'ela nao tem agenda cadastrada no sistema',
+    };
+  }
+
+  // 2) O intervalo inteiro precisa caber numa janela de atendimento
+  const cabe = doDia.some((ps) => horaInicio >= hhmm(ps.start_time) && horaFim <= hhmm(ps.end_time));
+  if (!cabe) {
+    const faixas = doDia
+      .map((ps) => `${hhmm(ps.start_time)} as ${hhmm(ps.end_time)}`)
+      .join(' e ');
+    return {
+      ok: false,
+      codigo: 'FORA_DO_HORARIO',
+      detalhe: `nesse dia ela atende so das ${faixas}`,
+    };
+  }
+
+  const overlapQs = `start_time=lt.${encodeURIComponent(endIso)}&end_time=gt.${encodeURIComponent(startIso)}`;
+
+  // 3) Bloqueio de agenda
+  const blockUrl = `${env.supabaseUrl}/rest/v1/professional_blocks?clinic_id=eq.${clinicId}&professional_id=eq.${professionalId}&${overlapQs}&select=id&limit=1`;
+  const bl = await fetchJson<Array<{ id: string }>>(blockUrl, { method: 'GET', headers: sbHeaders(env) });
+  if (bl.ok && Array.isArray(bl.data) && bl.data.length > 0) {
+    return { ok: false, codigo: 'AGENDA_BLOQUEADA', detalhe: 'a agenda dela esta bloqueada nesse horario' };
+  }
+
+  // 4) Conflito com outro atendimento ativo
+  const busyUrl = `${env.supabaseUrl}/rest/v1/appointments?clinic_id=eq.${clinicId}&professional_id=eq.${professionalId}&status=in.(scheduled,confirmed,pending_confirmation,checked_in,in_progress)&${overlapQs}&select=id&limit=1`;
+  const bs = await fetchJson<Array<{ id: string }>>(busyUrl, { method: 'GET', headers: sbHeaders(env) });
+  if (bs.ok && Array.isArray(bs.data) && bs.data.length > 0) {
+    return { ok: false, codigo: 'HORARIO_OCUPADO', detalhe: 'ja existe outro atendimento marcado nesse horario' };
+  }
+
+  return { ok: true };
 }
 
 // ─── consultar_agenda ──────────────────────────────────────────────────────
@@ -163,7 +266,7 @@ export async function consultarAgenda(args: {
       // Sem nenhuma data futura — escalar
       return `PROCEDIMENTO_SEM_DATA_DISPONIVEL: Nao ha datas cadastradas para esse procedimento no momento. Diga com elegancia que esse procedimento funciona em datas especiais e que voce vai confirmar a proxima disponibilidade. Chame escalar_humano com motivo='duvida_complexa' e detalhes='Paciente tem interesse em ${args.procedimento} — sem datas cadastradas no sistema'.`;
     }
-    const closed = await isClinicClosed(payload.clinicId, dataAlvo, env);
+    const closed = isClinicClosed(ctx, dataAlvo);
     if (closed) {
       return `FECHADO_NESSE_DIA: ${dataLabel}. A clinica nao atende nesse dia da semana. Diga com elegancia e sugira outro dia util.`;
     }
@@ -209,11 +312,7 @@ export async function criarAgendamento(args: {
 }> {
   const { professionals: allProfessionals, procedures, history, patient } = ctx;
   // Excluir agendas de recursos (Cursos, Aparelhos) — não são profissionais atendentes
-  const NON_BOOKABLE = ['curso', 'aparelho', 'equipamento'];
-  const professionals = allProfessionals.filter(p => {
-    const n = p.name.toLowerCase();
-    return !NON_BOOKABLE.some(kw => n.includes(kw));
-  });
+  const professionals = allProfessionals.filter((p) => isBookableName(p.name));
   const validProfIds = new Set<string>(professionals.map((p) => p.id));
 
   // 1) Validar/resolver professional_id
@@ -286,15 +385,21 @@ export async function criarAgendamento(args: {
     };
   }
 
-  // 2) Resolver procedure_id pelo nome
+  // 2) Resolver procedure_id pelo nome (e a duração real dele)
   let procedureId: string | null = null;
+  let duracaoMin = 30; // fallback quando o procedimento não é identificado
   if (args.procedimento) {
     const needle = norm(args.procedimento);
     const proc = procedures.find((p) => {
       const hay = norm(p.name);
       return hay.includes(needle) || needle.includes(hay);
     });
-    if (proc) procedureId = proc.id;
+    if (proc) {
+      procedureId = proc.id;
+      const d = Number(proc.duration_minutes);
+      // clamp defensivo: cadastro errado não pode gerar end_time absurdo
+      if (Number.isFinite(d) && d >= 5 && d <= 480) duracaoMin = Math.round(d);
+    }
   }
 
   // 3) Resolver/criar paciente
@@ -359,13 +464,25 @@ export async function criarAgendamento(args: {
     }
   }
 
-  // 4) Verificar se já existe agendamento igual (idempotência)
+  // 4) Montar o intervalo (usa a duração REAL do procedimento, não 30min fixo)
   const [hh, mm] = String(args.horario).split(':').map(Number);
-  const startIso = `${args.data}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00-03:00`;
-  const endMin = hh * 60 + mm + 30;
+  const dataOk = /^\d{4}-\d{2}-\d{2}$/.test(String(args.data));
+  if (!dataOk || !Number.isFinite(hh) || !Number.isFinite(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+    return {
+      toolResultStr:
+        'DATA_OU_HORA_INVALIDA: nao consegui interpretar a data/horario. NAO confirme nada. Pergunte de novo o dia e o horario e chame consultar_agenda antes de agendar.',
+      appointmentCreated: false,
+      patientId,
+    };
+  }
+
+  const horaInicio = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  const startIso = `${args.data}T${horaInicio}:00-03:00`;
+  const endMin = hh * 60 + mm + duracaoMin;
   const endH = Math.floor(endMin / 60);
   const endM = endMin % 60;
-  const endIso = `${args.data}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00-03:00`;
+  const horaFim = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+  const endIso = `${args.data}T${horaFim}:00-03:00`;
 
   // Checar duplicata: mesmo paciente + mesmo horário + status ativo
   const checkUrl = `${env.supabaseUrl}/rest/v1/appointments?clinic_id=eq.${payload.clinicId}&patient_id=eq.${patientId}&start_time=eq.${encodeURIComponent(startIso)}&status=in.(scheduled,confirmed,pending_confirmation)&select=id&limit=1`;
@@ -380,6 +497,48 @@ export async function criarAgendamento(args: {
       appointmentCreated: true,
       patientId,
     };
+  }
+
+  // 4.1) GUARD: o horário existe de verdade na agenda?
+  //
+  // Sem isto, qualquer horário que o modelo confirmar entra no banco — inclusive
+  // dia em que a profissional não atende. Caso real: paciente pediu "sábado às
+  // 10h", consultar_agenda respondeu que não havia vaga e a Eva agendou mesmo
+  // assim. Prompt não segura isso; tem que ser no código.
+  const profNome = professionals.find((p) => p.id === professionalId)?.name || 'a profissional';
+  const [yy, mo, dd] = args.data.split('-');
+  const dataFmt = `${dd}/${mo}/${yy}`;
+  const diaNome = DIAS_SEMANA[dowFromIsoDate(args.data)] || '';
+
+  const recusar = (codigo: string, detalhe: string) => ({
+    toolResultStr: [
+      `${codigo}: O AGENDAMENTO NAO FOI CRIADO.`,
+      `${dataFmt} (${diaNome}) as ${horaInicio} com ${profNome}: ${detalhe}.`,
+      'NUNCA confirme esse horario pra paciente e nao invente que esta reservado.',
+      'Peca desculpas com elegancia, explique que esse horario nao esta disponivel e chame consultar_agenda pra oferecer 2-3 opcoes reais antes de tentar agendar de novo.',
+    ].join('\n'),
+    appointmentCreated: false,
+    patientId,
+  });
+
+  if (new Date(startIso).getTime() <= Date.now()) {
+    return recusar('DATA_NO_PASSADO', 'esse horario ja passou');
+  }
+
+  const slot = await validarSlot({
+    ctx,
+    clinicId: payload.clinicId,
+    professionalId,
+    dataIso: args.data,
+    horaInicio,
+    horaFim,
+    startIso,
+    endIso,
+    env,
+  });
+
+  if (!slot.ok) {
+    return recusar(slot.codigo, slot.detalhe);
   }
 
   const apptUrl = `${env.supabaseUrl}/rest/v1/appointments`;
