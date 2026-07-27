@@ -1049,6 +1049,139 @@ export async function informarValorAvista(
   ].join('\n');
 }
 
+// ─── consultar_datas_curso ──────────────────────────────────────────────────
+
+/**
+ * Lista as proximas datas de turma cadastradas para um procedimento de curso.
+ * DIFERENTE de consultar_agenda: nao verifica horarios/profissional, nao cria
+ * agendamento. Curso nao e slot de agenda — e turma/matricula. A Eva so
+ * informa as datas; o fechamento e sempre humano (ver escalar_humano).
+ */
+export async function consultarDatasCurso(
+  args: { procedimento?: string },
+  ctx: DonnaContext,
+  payload: IncomingPayload,
+  env: ToolEnv,
+): Promise<string> {
+  const needle = norm(args.procedimento || '');
+  if (!needle) {
+    return 'Nao foi informado qual curso. Pergunte com simpatia de qual curso a pessoa quer saber as datas.';
+  }
+
+  const proc = ctx.procedures.find((p) => {
+    const hay = norm(p.name);
+    return hay.includes(needle) || needle.includes(hay);
+  });
+
+  if (!proc) {
+    return `Nao encontrei o curso "${args.procedimento}" na lista. Confirme o nome do curso com a pessoa.`;
+  }
+
+  const url = `${env.supabaseUrl}/rest/v1/procedure_available_dates?procedure_id=eq.${proc.id}&clinic_id=eq.${payload.clinicId}&available_date=gte.${new Date().toISOString().split('T')[0]}&order=available_date.asc&limit=5&select=available_date,notes`;
+  const res = await fetchJson<Array<{ available_date: string; notes: string | null }>>(url, {
+    method: 'GET',
+    headers: sbHeaders(env),
+  });
+
+  if (!res.ok || !Array.isArray(res.data) || res.data.length === 0) {
+    return `PROCEDIMENTO_SEM_DATA_DISPONIVEL: Nao ha turmas de "${proc.name}" cadastradas no momento. Diga com elegancia que ainda nao ha data confirmada pra proxima turma e que voce vai verificar. Chame escalar_humano com motivo='duvida_complexa' e detalhes='Interesse em turma de ${proc.name} — sem datas cadastradas'.`;
+  }
+
+  const datas = res.data.map((d) => {
+    const dataBR = formatarDataBR(d.available_date);
+    return d.notes ? `${dataBR} (${d.notes})` : dataBR;
+  }).join(', ');
+
+  return [
+    `PROXIMAS TURMAS DE "${proc.name}": ${datas}.`,
+    'Informe essas datas pra pessoa de forma natural. NAO chame consultar_agenda nem criar_agendamento para curso — nao e um horario de atendimento, e uma turma.',
+    'Se a pessoa demonstrar interesse em fechar/matricular: chame registrar_interesse e depois escalar_humano com motivo=\'fechamento_curso\' e detalhes com o curso e a data escolhida. A matricula e sempre concluida por um humano, voce nunca confirma vaga fechada sozinha.',
+  ].join('\n');
+}
+
+// ─── enviar_material_curso ──────────────────────────────────────────────────
+
+async function sendCourseMaterials(
+  procedureId: string,
+  procedureName: string,
+  ctx: DonnaContext,
+  payload: IncomingPayload,
+  env: ToolEnv,
+  materialsSentProcedures: Set<string>,
+): Promise<{ enviados: number }> {
+  if (materialsSentProcedures.has(procedureId)) return { enviados: 0 };
+
+  const ev = ctx.evolution;
+  if (!ev?.url || !ev?.master_key) return { enviados: 0 };
+  const instanceName = (typeof payload.instance === 'string' && payload.instance.trim()) || ev.instance || '';
+  if (!instanceName) return { enviados: 0 };
+
+  const autoUrl = `${env.supabaseUrl}/rest/v1/clinic_automations?clinic_id=eq.${payload.clinicId}&select=eva_send_course_materials`;
+  const autoRes = await fetchJson<{ eva_send_course_materials: boolean }[]>(autoUrl, {
+    method: 'GET',
+    headers: sbHeaders(env),
+  });
+  if (!autoRes.ok || !autoRes.data?.length || !autoRes.data[0].eva_send_course_materials) return { enviados: 0 };
+
+  const docsUrl = `${env.supabaseUrl}/rest/v1/procedure_documents?clinic_id=eq.${payload.clinicId}&procedure_id=eq.${procedureId}&active=eq.true&order=display_order.asc&limit=3&select=file_url,title`;
+  const docsRes = await fetchJson<{ file_url: string; title: string | null }[]>(docsUrl, {
+    method: 'GET',
+    headers: sbHeaders(env),
+  });
+  if (!docsRes.ok || !docsRes.data?.length) return { enviados: 0 };
+
+  let enviados = 0;
+  for (const doc of docsRes.data) {
+    const sendRes = await fetchJson(`${ev.url}/message/sendMedia/${encodeURIComponent(instanceName)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: ev.master_key },
+      body: JSON.stringify({
+        number: payload.phone,
+        mediatype: 'document',
+        mimetype: 'application/pdf',
+        media: doc.file_url,
+        fileName: `${(doc.title || procedureName).replace(/[^a-zA-Z0-9-_ ]/g, '')}.pdf`,
+      }),
+    });
+    if (sendRes.ok) enviados++;
+  }
+
+  if (enviados > 0) materialsSentProcedures.add(procedureId);
+  return { enviados };
+}
+
+export async function enviarMaterialCurso(
+  args: { procedimento?: string },
+  ctx: DonnaContext,
+  payload: IncomingPayload,
+  env: ToolEnv,
+  materialsSentProcedures: Set<string>,
+): Promise<string> {
+  const needle = norm(args.procedimento || '');
+  const interesse = norm(ctx.lead?.interest || '');
+  const textoMatch = `${needle} ${interesse}`.trim();
+  if (!textoMatch) {
+    return 'Nao foi identificado qual curso. Pergunte com simpatia de qual curso a pessoa quer o material antes de prosseguir.';
+  }
+
+  const proc = ctx.procedures.find((p) => {
+    const hay = norm(p.name);
+    return hay.includes(needle) || needle.includes(hay);
+  });
+
+  if (!proc) {
+    return `Nao encontrei o curso "${args.procedimento || ctx.lead?.interest || ''}" na lista. Confirme com a pessoa qual curso ela quer o material.`;
+  }
+
+  const { enviados } = await sendCourseMaterials(proc.id, proc.name, ctx, payload, env, materialsSentProcedures);
+
+  if (enviados === 0) {
+    return `Nao ha material em PDF cadastrado (ou ja enviado) para "${proc.name}". NAO invente que enviou. Explique com naturalidade e ofereca tirar duvidas por texto mesmo, ou escale se necessario.`;
+  }
+
+  return `MATERIAL EM PDF DE "${proc.name}" FOI ENVIADO pelo WhatsApp agora. Sua resposta deve confirmar o envio com calor, sem repetir o conteudo do PDF, e seguir a conversa naturalmente (ex: perguntar se ela quer saber as proximas datas de turma).`;
+}
+
 // ─── Dispatcher ────────────────────────────────────────────────────────────
 
 export interface ToolExecutionResult {
@@ -1118,6 +1251,7 @@ export async function executeToolByName(
   payload: IncomingPayload,
   env: ToolEnv,
   imagesSentProcedures?: Set<string>,
+  materialsSentProcedures?: Set<string>,
 ): Promise<ToolExecutionResult> {
   switch (name) {
     case 'consultar_agenda': {
@@ -1150,6 +1284,14 @@ export async function executeToolByName(
     }
     case 'agendar_retorno_lead': {
       const r = await agendarRetornoLead(input as any, ctx, payload, env);
+      return { resultStr: r };
+    }
+    case 'consultar_datas_curso': {
+      const r = await consultarDatasCurso(input as any, ctx, payload, env);
+      return { resultStr: r };
+    }
+    case 'enviar_material_curso': {
+      const r = await enviarMaterialCurso(input as any, ctx, payload, env, materialsSentProcedures ?? new Set<string>());
       return { resultStr: r };
     }
     default:

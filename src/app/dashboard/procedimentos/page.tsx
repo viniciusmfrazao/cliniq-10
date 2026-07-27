@@ -63,13 +63,15 @@ export default async function ProcedimentosPage() {
             Gerencie os procedimentos da clínica e quem realiza cada um
           </p>
         </div>
-        <a
-          href="/dashboard/procedimentos/disponibilidade"
-          className="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-medium rounded-xl border border-amber-200 transition-colors flex-shrink-0"
-        >
-          <span>📅</span>
-          Dias Lavieen / Hipro
-        </a>
+        {hasEva && (
+          <a
+            href="/dashboard/procedimentos/disponibilidade"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-medium rounded-xl border border-amber-200 transition-colors flex-shrink-0"
+          >
+            <span>📅</span>
+            Dias Lavieen / Hipro / Curso
+          </a>
+        )}
       </div>
 
       {isAdmin && (

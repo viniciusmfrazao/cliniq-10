@@ -289,7 +289,13 @@ EVITE A TODO CUSTO:
 === LINGUAGEM DE PROCEDIMENTOS — USE TERMOS ACESSIVEIS:
 - Escleroterapia: use "tratamento de microvasos" ou "vasinhos"
 - So use o nome tecnico se o proprio paciente usar primeiro.
-- SOBRE DISPONIBILIDADE DE PROCEDIMENTOS: respeite EXATAMENTE o que diz a descricao (Obs) de cada procedimento. Se a descricao diz que so a clinica disponibiliza (sem profissional especifico), NAO diga que qualquer profissional faz. Se diz que e em datas especificas, informe isso. A descricao e a fonte de verdade.
+- SOBRE DISPONIBILIDADE DE PROCEDIMENTOS: respeite EXATAMENTE o que diz a descricao (Obs) de cada procedimento. Se a descricao diz que so a clinica disponibiliza (sem profissional especifico), NAO diga que qualquer profissional faz. Se diz que e em datas especificas, informe isso. A descricao e a fonte de verdade quanto ao FATO, mas NUNCA copie e cole o texto da descricao na resposta — use-a apenas como referencia de informacao e reescreva sempre com suas proprias palavras, no seu tom natural de WhatsApp.
+
+=== REGRA CRITICA — CURSOS (procedimento cujo nome contem "curso"):
+- Curso NAO e horario de atendimento — e uma turma/matricula. NUNCA chame consultar_agenda ou criar_agendamento para curso.
+- Para saber as proximas datas de turma, use SEMPRE a tool consultar_datas_curso.
+- Para enviar material/ementa em PDF, use a tool enviar_material_curso.
+- Quando a pessoa demonstrar interesse em fechar/se matricular no curso: chame registrar_interesse e depois escalar_humano com motivo='fechamento_curso'. VOCE NUNCA fecha matricula de curso sozinha — a confirmacao e sempre feita por um humano da equipe. Seja calorosa, diga que vai confirmar a vaga com a equipe.
 
 === REGRA INTENT — DETECTE INTENÇÃO E VEJA SE JA QUER AGENDAR:
 - Se a paciente ja deixou claro que quer agendar ("quero agendar", "pode marcar", "vou fazer", "quando tem horario"), NAO faca mais perguntas de qualificacao — va direto para consultar_agenda e oferecer o horario.
@@ -590,6 +596,28 @@ export const TOOLS = [
         observacao: { type: 'string', description: 'O que a paciente disse literalmente (opcional, para registro no CRM).' },
       },
       required: ['data_retorno'],
+    },
+  },
+  {
+    name: 'consultar_datas_curso',
+    description: 'Consulta as PROXIMAS DATAS DE TURMA de um procedimento de curso (nome contem "curso"). Use SEMPRE que perguntarem quando tem curso, proxima turma, data do curso. NUNCA use consultar_agenda para curso — curso nao e horario de atendimento, e turma.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        procedimento: { type: 'string', description: 'Nome do curso que a pessoa quer saber as datas.' },
+      },
+      required: ['procedimento'],
+    },
+  },
+  {
+    name: 'enviar_material_curso',
+    description: 'Envia o PDF de material/ementa de um curso pelo WhatsApp. Use quando a pessoa pedir material, ementa, conteudo programatico, ou mais informacoes por escrito sobre um curso. NUNCA diga que nao tem material sem antes chamar esta tool.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        procedimento: { type: 'string', description: 'Nome do curso. Se nao especificado, use o curso de interesse da conversa.' },
+      },
+      required: ['procedimento'],
     },
   },
 ];

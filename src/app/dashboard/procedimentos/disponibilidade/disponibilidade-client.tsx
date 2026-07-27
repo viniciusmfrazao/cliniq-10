@@ -14,7 +14,7 @@ type Props = {
   initialDates: AvailableDate[]
 }
 
-// Grupos de aparelhos — todos os Hipro compartilham o mesmo calendário
+// Grupos de aparelhos/cursos — todos os Hipro compartilham o mesmo calendário
 type ApparatusGroup = {
   key: string
   label: string
@@ -134,9 +134,9 @@ export default function DisponibilidadeClient({ clinicId, procedures, initialDat
         </div>
       )}
 
-      {/* Seletor de aparelho */}
+      {/* Seletor de aparelho/curso */}
       <div className="card p-4">
-        <label className="block text-sm font-medium text-slate-700 mb-2">Aparelho</label>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Aparelho / Curso</label>
         <div className="flex gap-2 flex-wrap">
           {groups.map(g => (
             <button
@@ -231,7 +231,7 @@ export default function DisponibilidadeClient({ clinicId, procedures, initialDat
               </div>
               <p className="text-sm font-medium text-slate-700">Nenhum dia marcado</p>
               <p className="text-xs text-slate-400 mt-1">
-                A Eva <strong>não vai oferecer</strong> esse aparelho enquanto não houver dias disponíveis.
+                A Eva <strong>não vai oferecer</strong> esse aparelho/curso enquanto não houver dias disponíveis.
               </p>
             </div>
           ) : (
