@@ -190,6 +190,10 @@ export default function WhatsAppPage() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [hasMoreOlder, setHasMoreOlder] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null)
+  const skipNextAutoScrollRef = useRef(false)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [config, setConfig] = useState<any>(null)
@@ -353,8 +357,14 @@ export default function WhatsAppPage() {
     }
   }, [waInboundLines, lineFilter, evaControlInstance])
 
-  // Auto-scroll pro final ao receber/abrir mensagens
+  // Auto-scroll pro final ao receber/abrir mensagens — mas não quando o que
+  // mudou foi um prepend de mensagens antigas (loadOlderMessages cuida da
+  // própria posição de scroll nesse caso).
   useEffect(() => {
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false
+      return
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
@@ -744,33 +754,12 @@ export default function WhatsAppPage() {
     setAllLines(Array.from(linesFound))
   }
 
-  async function loadMessages(phone: string, instanceName: string | null) {
-    if (!clinicId) return
+  // Quantas mensagens carregar por vez — conversas antigas podem ter
+  // milhares de linhas (já vimos 1200+ numa clínica), e carregar tudo de
+  // uma vez com mídia estourava a memória do navegador (crash de renderização).
+  const MESSAGES_PAGE_SIZE = 100
 
-    // Reset status da Eva pra essa nova conversa (evita flash do status anterior)
-    setLeadEvaStatus({ paused: false, needsReview: false, reviewReason: null })
-
-    const { data: msgs } = await supabase
-      .from('eva_conversations')
-      .select('*')
-      .eq('clinic_id', clinicId)
-      .eq('phone', phone)
-      .order('created_at', { ascending: true })
-
-    const instNorm = (instanceName ?? '').trim()
-    const rows = ((msgs ?? []) as EvaRow[]).filter((row) => {
-      // Se não há instanceName definido, mostra tudo
-      if (!instNorm) return true
-      const ri = (rowInstanceName(row) ?? '').trim()
-      // Aceita: mesma instância OU sem instância gravada (mensagens antigas)
-      return ri === instNorm || ri === ''
-    })
-
-    const mapped = rows
-      .map(rowToMessage)
-      .filter((m): m is Message => m !== null)
-
-    // Regenera signed URLs frescos pras mídias persistidas.
+  async function resolveSignedUrls(mapped: Message[]) {
     const paths = Array.from(
       new Set(
         mapped
@@ -778,23 +767,61 @@ export default function WhatsAppPage() {
           .filter((p): p is string => !!p),
       ),
     )
-    if (paths.length > 0) {
-      const { data, error } = await supabase.storage
-        .from('whatsapp-media')
-        .createSignedUrls(paths, 60 * 60 * 24) // 24h
-      if (!error && data) {
-        const map = new Map<string, string>()
-        data.forEach((d) => {
-          if (d.path && d.signedUrl) map.set(d.path, d.signedUrl)
-        })
-        for (const m of mapped) {
-          if (m.mediaPath && map.has(m.mediaPath)) {
-            m.mediaUrl = map.get(m.mediaPath)!
-          }
+    if (paths.length === 0) return
+    const { data, error } = await supabase.storage
+      .from('whatsapp-media')
+      .createSignedUrls(paths, 60 * 60 * 24) // 24h
+    if (!error && data) {
+      const map = new Map<string, string>()
+      data.forEach((d) => {
+        if (d.path && d.signedUrl) map.set(d.path, d.signedUrl)
+      })
+      for (const m of mapped) {
+        if (m.mediaPath && map.has(m.mediaPath)) {
+          m.mediaUrl = map.get(m.mediaPath)!
         }
       }
     }
+  }
+
+  function filterByInstance(rows: EvaRow[], instanceName: string | null): EvaRow[] {
+    const instNorm = (instanceName ?? '').trim()
+    return rows.filter((row) => {
+      // Se não há instanceName definido, mostra tudo
+      if (!instNorm) return true
+      const ri = (rowInstanceName(row) ?? '').trim()
+      // Aceita: mesma instância OU sem instância gravada (mensagens antigas)
+      return ri === instNorm || ri === ''
+    })
+  }
+
+  async function loadMessages(phone: string, instanceName: string | null) {
+    if (!clinicId) return
+
+    // Reset status da Eva pra essa nova conversa (evita flash do status anterior)
+    setLeadEvaStatus({ paused: false, needsReview: false, reviewReason: null })
+
+    // Busca só o lote mais recente (mais novo → mais antigo), depois inverte
+    // pra ordem cronológica de exibição.
+    const { data: msgs } = await supabase
+      .from('eva_conversations')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .eq('phone', phone)
+      .order('created_at', { ascending: false })
+      .limit(MESSAGES_PAGE_SIZE)
+
+    const rows = filterByInstance(((msgs ?? []) as EvaRow[]).reverse(), instanceName)
+
+    const mapped = rows
+      .map(rowToMessage)
+      .filter((m): m is Message => m !== null)
+
+    // Regenera signed URLs frescos só pras mídias desse lote (não da conversa inteira).
+    await resolveSignedUrls(mapped)
+
     setMessages(mapped)
+    setHasMoreOlder((msgs ?? []).length === MESSAGES_PAGE_SIZE)
 
     const tid = threadKey(phone, instanceName)
     setConversations((prev) =>
@@ -845,6 +872,51 @@ export default function WhatsAppPage() {
       crmSettingsRows?.find(s => !s.whatsapp_instance) ??
       null
     setCrmStagesConfig(matchedSettings?.custom_stages ?? null)
+  }
+
+  // Carrega o lote anterior (mais antigo) sob demanda, quando o usuário
+  // clica em "Carregar mensagens anteriores". Mantém a posição de scroll
+  // pra não dar aquele salto visual ao prepender mensagens no topo.
+  async function loadOlderMessages() {
+    if (!clinicId || !selectedConversation || loadingOlder) return
+    const oldest = messages[0]
+    if (!oldest) return
+
+    setLoadingOlder(true)
+    const container = messagesContainerRef.current
+    const prevScrollHeight = container?.scrollHeight ?? 0
+
+    try {
+      const { data: msgs } = await supabase
+        .from('eva_conversations')
+        .select('*')
+        .eq('clinic_id', clinicId)
+        .eq('phone', selectedConversation.phone)
+        .lt('created_at', oldest.created_at)
+        .order('created_at', { ascending: false })
+        .limit(MESSAGES_PAGE_SIZE)
+
+      const rows = filterByInstance(
+        ((msgs ?? []) as EvaRow[]).reverse(),
+        selectedConversation.instanceName,
+      )
+      const olderMapped = rows.map(rowToMessage).filter((m): m is Message => m !== null)
+      await resolveSignedUrls(olderMapped)
+
+      skipNextAutoScrollRef.current = true
+      setMessages((prev) => [...olderMapped, ...prev])
+      setHasMoreOlder((msgs ?? []).length === MESSAGES_PAGE_SIZE)
+
+      // Restaura a posição de scroll (senão o navegador mantém o scrollTop
+      // e o usuário "pula" pro meio da conversa por causa da nova altura).
+      requestAnimationFrame(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeight
+        }
+      })
+    } finally {
+      setLoadingOlder(false)
+    }
   }
 
   // ── CRM: atualizar status do lead diretamente do WhatsApp ──
@@ -1542,7 +1614,26 @@ export default function WhatsAppPage() {
               )}
 
               {/* Mensagens */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                {hasMoreOlder && (
+                  <div className="flex justify-center pb-2">
+                    <button
+                      type="button"
+                      onClick={loadOlderMessages}
+                      disabled={loadingOlder}
+                      className="text-xs font-medium text-violet-600 hover:text-violet-700 disabled:opacity-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-50 hover:bg-violet-100 transition-colors"
+                    >
+                      {loadingOlder ? (
+                        <>
+                          <Icon name="loader" className="w-3 h-3 animate-spin" />
+                          Carregando…
+                        </>
+                      ) : (
+                        'Carregar mensagens anteriores'
+                      )}
+                    </button>
+                  </div>
+                )}
                 {messages.map((msg, idx) => {
                   const prev = idx > 0 ? messages[idx - 1] : null
                   const showDateSeparator =
