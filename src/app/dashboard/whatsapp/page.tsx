@@ -210,11 +210,17 @@ export default function WhatsAppPage() {
     id: string
     name: string
     status: string
+    source: string
   } | null>(null)
   /** custom_stages da linha de crm_settings que se aplica ao lead da
    * conversa aberta — null = usa os padrões (DEFAULT_CRM_STAGES) */
   const [crmStagesConfig, setCrmStagesConfig] = useState<
     { id: string; label: string; color: string }[] | null
+  >(null)
+  /** custom_sources da mesma linha de crm_settings — null = usa os
+   * padrões (DEFAULT_CRM_SOURCES), igual ao Kanban do CRM. */
+  const [crmSourcesConfig, setCrmSourcesConfig] = useState<
+    { id: string; label: string; icon: string }[] | null
   >(null)
   const [updatingCrm, setUpdatingCrm] = useState(false)
   const [resumingEva, setResumingEva] = useState(false)
@@ -840,7 +846,7 @@ export default function WhatsAppPage() {
     // Status do lead — Eva pausada / em revisão humana?
     const { data: leadData } = await supabase
       .from('leads')
-      .select('id, name, status, eva_pause_until, needs_human_review, human_review_reason, whatsapp_instance')
+      .select('id, name, status, source, eva_pause_until, needs_human_review, human_review_reason, whatsapp_instance')
       .eq('clinic_id', clinicId)
       .eq('phone', phone)
       .order('created_at', { ascending: false })
@@ -858,20 +864,23 @@ export default function WhatsAppPage() {
       id: leadData.id,
       name: leadData.name || 'Lead',
       status: leadData.status || 'new',
+      source: leadData.source || 'whatsapp',
     } : null)
 
-    // Busca as MESMAS etapas configuradas no CRM (crm-settings), pra esse
-    // dropdown nunca ter nome ou opção diferente do Kanban. Prioriza a linha
-    // de crm_settings da instância do lead; sem match, usa a padrão (null).
+    // Busca as MESMAS etapas e origens configuradas no CRM (crm-settings),
+    // pra esses dropdowns nunca terem nome ou opção diferente do Kanban.
+    // Prioriza a linha de crm_settings da instância do lead; sem match,
+    // usa a padrão (null).
     const { data: crmSettingsRows } = await supabase
       .from('crm_settings')
-      .select('custom_stages, whatsapp_instance')
+      .select('custom_stages, custom_sources, whatsapp_instance')
       .eq('clinic_id', clinicId)
     const matchedSettings =
       crmSettingsRows?.find(s => s.whatsapp_instance === leadData?.whatsapp_instance) ??
       crmSettingsRows?.find(s => !s.whatsapp_instance) ??
       null
     setCrmStagesConfig(matchedSettings?.custom_stages ?? null)
+    setCrmSourcesConfig(matchedSettings?.custom_sources ?? null)
   }
 
   // Carrega o lote anterior (mais antigo) sob demanda, quando o usuário
@@ -946,6 +955,20 @@ export default function WhatsAppPage() {
       : DEFAULT_CRM_STAGES
   ).map(s => ({ ...s, color: STAGE_COLOR_CLASSES[s.color] ?? STAGE_COLOR_CLASSES.slate }))
 
+  // Mesma lista padrão usada no CRM (crm-view.tsx) — mantém os dois
+  // seletores idênticos quando a clínica não tem custom_sources.
+  const DEFAULT_CRM_SOURCES = [
+    { id: 'instagram', label: 'Instagram', icon: '📸' },
+    { id: 'whatsapp', label: 'WhatsApp', icon: '💬' },
+    { id: 'indication', label: 'Indicação', icon: '👥' },
+    { id: 'google', label: 'Google', icon: '🔍' },
+    { id: 'facebook', label: 'Facebook', icon: '📘' },
+    { id: 'website', label: 'Site', icon: '🌐' },
+    { id: 'other', label: 'Outro', icon: '📌' },
+  ]
+  const CRM_SOURCES =
+    crmSourcesConfig && crmSourcesConfig.length > 0 ? crmSourcesConfig : DEFAULT_CRM_SOURCES
+
   async function updateCrmStatus(newStatus: string) {
     if (!crmLead || !clinicId) return
     setUpdatingCrm(true)
@@ -956,6 +979,20 @@ export default function WhatsAppPage() {
       .eq('clinic_id', clinicId)
     if (!error) {
       setCrmLead(prev => prev ? { ...prev, status: newStatus } : null)
+    }
+    setUpdatingCrm(false)
+  }
+
+  async function updateCrmSource(newSource: string) {
+    if (!crmLead || !clinicId) return
+    setUpdatingCrm(true)
+    const { error } = await supabase
+      .from('leads')
+      .update({ source: newSource })
+      .eq('id', crmLead.id)
+      .eq('clinic_id', clinicId)
+    if (!error) {
+      setCrmLead(prev => prev ? { ...prev, source: newSource } : null)
     }
     setUpdatingCrm(false)
   }
@@ -976,7 +1013,7 @@ export default function WhatsAppPage() {
         last_whatsapp_at: new Date().toISOString(),
         last_contact_at: new Date().toISOString(),
       })
-      .select('id, name, status')
+      .select('id, name, status, source')
       .single()
     if (data) setCrmLead(data)
     setUpdatingCrm(false)
@@ -1519,19 +1556,33 @@ export default function WhatsAppPage() {
                 {/* CRM — seletor de status do lead */}
                 {hasCrmModule && (
                   crmLead ? (
-                    <select
-                      value={crmLead.status}
-                      onChange={e => updateCrmStatus(e.target.value)}
-                      disabled={updatingCrm}
-                      className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer disabled:opacity-60 transition-colors ${
-                        CRM_STAGES.find(s => s.value === crmLead.status)?.color || 'bg-slate-100 text-slate-600'
-                      }`}
-                      title="Mover no CRM"
-                    >
-                      {CRM_STAGES.map(s => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        value={crmLead.status}
+                        onChange={e => updateCrmStatus(e.target.value)}
+                        disabled={updatingCrm}
+                        className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer disabled:opacity-60 transition-colors ${
+                          CRM_STAGES.find(s => s.value === crmLead.status)?.color || 'bg-slate-100 text-slate-600'
+                        }`}
+                        title="Mover no CRM"
+                      >
+                        {CRM_STAGES.map(s => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                      {/* CRM — seletor de origem do lead (reflete no Kanban e Relatórios) */}
+                      <select
+                        value={crmLead.source}
+                        onChange={e => updateCrmSource(e.target.value)}
+                        disabled={updatingCrm}
+                        className="text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer disabled:opacity-60 transition-colors bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                        title="Origem do lead"
+                      >
+                        {CRM_SOURCES.map(s => (
+                          <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
+                        ))}
+                      </select>
+                    </>
                   ) : (
                     <button
                       onClick={createLead}
