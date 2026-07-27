@@ -679,6 +679,7 @@ Deno.serve(async (req) => {
   const t0 = Date.now();
   const errors: string[] = [];
   const imagesSentProcedures = new Set<string>(); // evita reenvio de imagens na mesma sessão
+  const materialsSentProcedures = new Set<string>(); // evita reenvio de PDFs de curso na mesma sessão
   let body: unknown = null;
   try {
     body = await req.json();
@@ -1045,7 +1046,7 @@ Deno.serve(async (req) => {
       const r = await executeToolByName(name, input, ctx, payload, {
         supabaseUrl: SUPABASE_URL,
         serviceKey: SERVICE_ROLE_KEY,
-      }, imagesSentProcedures);
+      }, imagesSentProcedures, materialsSentProcedures);
       if (name === 'criar_agendamento' && r.meta?.appointmentCreated === true) {
         appointmentCreated = true;
       }
@@ -1204,7 +1205,7 @@ Deno.serve(async (req) => {
         executeTool: async (name, input) => {
           const r = await executeToolByName(name, input, ctx, payload, {
             supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY,
-          }, imagesSentProcedures);
+          }, imagesSentProcedures, materialsSentProcedures);
           if (name === 'criar_agendamento' && r.meta?.appointmentCreated === true) appointmentCreated = true;
           return r.resultStr;
         },
