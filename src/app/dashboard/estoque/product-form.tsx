@@ -211,17 +211,6 @@ export default function ProductForm({ product }: { product?: Product }) {
             onChange={e => update('cost_price', e.target.value)}
           />
         </div>
-        <div>
-          <label className="label">Preco de venda (R$)</label>
-          <input
-            type="number"
-            step="0.01"
-            className="input"
-            placeholder="0,00"
-            value={form.sale_price}
-            onChange={e => update('sale_price', e.target.value)}
-          />
-        </div>
       </div>
 
       {/* Lote e validade */}

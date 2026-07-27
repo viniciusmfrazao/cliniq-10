@@ -95,12 +95,6 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
                   {product.cost_price ? `R$ ${product.cost_price}` : '-'}
                 </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl">
-                <p className="text-xs text-slate-500 uppercase font-medium">Venda</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">
-                  {product.sale_price ? `R$ ${product.sale_price}` : '-'}
-                </p>
-              </div>
             </div>
 
             {/* Validade e Lote */}

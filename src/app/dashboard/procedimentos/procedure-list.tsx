@@ -156,9 +156,6 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
                       <p className="text-sm font-medium text-slate-900">{proc.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {proc.duration_minutes} min • R$ {Number(proc.price).toFixed(2)}
-                        {proc.includes_return && proc.return_days != null && (
-                          <> • retorno {proc.return_days}d</>
-                        )}
                         {hasCustoRateavel && proc.custo_fixo_rateavel != null && (
                           <> • custo insumo estimado R$ {Number(proc.custo_fixo_rateavel).toFixed(2)}</>
                         )}

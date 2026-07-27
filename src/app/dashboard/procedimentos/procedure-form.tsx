@@ -17,8 +17,6 @@ type Procedure = {
   price: number
   category: string | null
   professional_ids?: string[] | null
-  includes_return?: boolean | null
-  return_days?: number | null
   active?: boolean
   custo_fixo_rateavel?: number | null
 }
@@ -45,8 +43,6 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
     price: procedure?.price != null ? String(procedure.price) : '',
     category: procedure?.category || '',
     professional_ids: (procedure?.professional_ids || []) as string[],
-    includes_return: !!procedure?.includes_return,
-    return_days: procedure?.return_days != null ? String(procedure.return_days) : '15',
     custo_fixo_rateavel: procedure?.custo_fixo_rateavel != null ? String(procedure.custo_fixo_rateavel) : '',
   })
   const [loading, setLoading] = useState(false)
@@ -77,8 +73,6 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
       price: parseFloat(form.price) || 0,
       category: form.category || null,
       professional_ids: form.professional_ids,
-      includes_return: form.includes_return,
-      return_days: form.includes_return ? parseInt(form.return_days) || null : null,
       ...(hasCustoRateavel
         ? { custo_fixo_rateavel: form.custo_fixo_rateavel !== '' ? parseFloat(form.custo_fixo_rateavel) : null }
         : {}),
@@ -102,8 +96,6 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
         price: '',
         category: '',
         professional_ids: [],
-        includes_return: false,
-        return_days: '15',
         custo_fixo_rateavel: '',
       })
     }
@@ -243,30 +235,6 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
           </p>
         </div>
 
-        {/* Retorno */}
-        <div className="md:col-span-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.includes_return}
-              onChange={e => update('includes_return', e.target.checked)}
-              className="w-4 h-4 rounded text-violet-600"
-            />
-            <span className="text-sm font-medium text-slate-700">Inclui retorno</span>
-          </label>
-          {form.includes_return && (
-            <div className="mt-2">
-              <label className="label text-xs">Dias até o retorno</label>
-              <input
-                className="input w-32"
-                type="number"
-                min="1"
-                value={form.return_days}
-                onChange={e => update('return_days', e.target.value)}
-              />
-            </div>
-          )}
-        </div>
       </div>
 
       {error && (
