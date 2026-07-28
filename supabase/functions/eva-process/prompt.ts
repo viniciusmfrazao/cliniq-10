@@ -176,27 +176,53 @@ export function buildSystemPrompt(
 
   const drNomeRef = filteredProfs.length === 1 ? filteredProfs[0].name : (filteredProfs[0]?.name || 'a especialista');
 
-  const procedimentosText = procedures.length > 0
-    ? procedures.slice(0, 40).map((pr) => {
-        const inst = pr.installments && pr.installments > 0 ? pr.installments : 12;
-        const parcela = pr.installment_price ? pr.installment_price : (pr.price ? pr.price / inst : null);
-        // BLINDAGEM DE PRECO: a lista NUNCA mostra o valor a vista/total pro modelo.
-        // So a parcela. Se a paciente pedir o valor a vista, a Eva chama a tool
-        // 'informar_valor_avista' — assim e impossivel vazar o valor cheio antes
-        // de ela pedir explicitamente. (decisao do cliente: pode passar a vista
-        // quando pedir 1x, mas sempre via tool, nunca proativo)
-        const valorPart = pr.price
-          ? `12x R$ ${formatBRL(parcela)} sem juros`
-          : 'consultar valor';
-        const profNames = (pr.professional_ids || []).map((id) => profById.get(id)).filter(Boolean);
-        // Se nao tem profissionais vinculados, NAO dizer 'qualquer profissional'
-        // A descricao do procedimento ja deve explicar quem faz e quando
-        const profPart = profNames.length > 0 ? ` — Aplicado por: ${profNames.join(', ')}` : '';
-        const desc = pr.description?.trim();
-        const obsPart = desc ? `\n  * Obs: ${desc}` : '';
-        return `- ${pr.name} (${valorPart})${profPart}${obsPart}`;
-      }).join('\n')
+  // eva_policy separa o catalogo em tres baldes:
+  //   'ocultar' -> nem entra no prompt
+  //   'escalar' -> a Eva PRECISA reconhecer o nome (senao ela improvisa), mas
+  //                nao pode ofertar nem precificar — vai pra humano
+  //   'ofertar' -> normal
+  const ofertaveis = procedures.filter((pr) => (pr.eva_policy ?? 'ofertar') === 'ofertar');
+  const escalaveis = procedures.filter((pr) => pr.eva_policy === 'escalar');
+
+  const linhaProcedimento = (pr: typeof procedures[number]) => {
+    const inst = pr.installments && pr.installments > 0 ? pr.installments : 12;
+    const parcela = pr.installment_price ? pr.installment_price : (pr.price ? pr.price / inst : null);
+    // BLINDAGEM DE PRECO: a lista NUNCA mostra o valor a vista/total pro modelo.
+    // So a parcela. Se a paciente pedir o valor a vista, a Eva chama a tool
+    // 'informar_valor_avista' — assim e impossivel vazar o valor cheio antes
+    // de ela pedir explicitamente. (decisao do cliente: pode passar a vista
+    // quando pedir 1x, mas sempre via tool, nunca proativo)
+    const valorPart = pr.price
+      ? `12x R$ ${formatBRL(parcela)} sem juros`
+      : 'consultar valor';
+    const profNames = (pr.professional_ids || []).map((id) => profById.get(id)).filter(Boolean);
+    // Se nao tem profissionais vinculados, NAO dizer 'qualquer profissional'
+    // A descricao do procedimento ja deve explicar quem faz e quando
+    const profPart = profNames.length > 0 ? ` — Aplicado por: ${profNames.join(', ')}` : '';
+    const desc = pr.description?.trim();
+    const obsPart = desc ? `\n  * Obs: ${desc}` : '';
+    // Datas restritas (procedure_available_dates) — ex: paciente modelo so em dia de curso
+    const datas = Array.isArray(pr.restricted_dates) ? pr.restricted_dates : null;
+    const datasPart = datas && datas.length > 0
+      ? `\n  * SO NESTAS DATAS: ${datas.slice(0, 6).join(', ')} — nao ofereca nenhum outro dia pra este item.`
+      : '';
+    return `- ${pr.name} (${valorPart})${profPart}${obsPart}${datasPart}`;
+  };
+
+  const procedimentosText = ofertaveis.length > 0
+    ? ofertaveis.map(linhaProcedimento).join('\n')
     : '- (sem procedimentos cadastrados)';
+
+  const naoOfertaveisText = escalaveis.length > 0
+    ? [
+        '',
+        'PROCEDIMENTOS QUE VOCE NAO PODE OFERECER NEM PRECIFICAR:',
+        ...escalaveis.map((pr) => `- ${pr.name}`),
+        'Se a paciente perguntar por qualquer um destes: NAO diga valor, NAO ofereca horario e NAO agende.',
+        'Acolha com naturalidade ("esse a gente avalia caso a caso"), diga que vai chamar alguem da equipe pra falar com ela, e chame escalar_humano com motivo=\'duvida_complexa\'.',
+        'NUNCA sugira um procedimento desta lista por conta propria.',
+      ].join('\n')
+    : '';
 
   const lastAssistantAt = ctx.last_assistant_at ? new Date(ctx.last_assistant_at) : null;
   const minutesSinceLast = lastAssistantAt ? Math.round((Date.now() - lastAssistantAt.getTime()) / 60000) : Infinity;
@@ -412,7 +438,7 @@ ${buildProfessionalSchedulesBlock(ctx) || '- (nao cadastrado — diga que vai co
 - Para horarios disponiveis em um dia especifico, use SEMPRE a tool consultar_agenda.
 
 PROCEDIMENTOS DISPONIVEIS (precos REAIS — use exatamente estes valores):
-${procedimentosText}
+${procedimentosText}${naoOfertaveisText}
 
 * REGRA DOS PROCEDIMENTOS: Todo item com "* Obs:" tem regra dura (area, contraindicacao, requisito). Respeite 100%. NUNCA prometa procedimento fora do que a Obs permite.
 

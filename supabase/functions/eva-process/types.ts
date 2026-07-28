@@ -46,6 +46,15 @@ export interface ProcedureRow {
   professional_ids?: string[] | null;
   duration_minutes?: number | null;
   category?: string | null;
+  /**
+   * Politica da Eva pro procedimento (coluna procedures.eva_policy):
+   *   'ofertar' (default) — comportamento normal
+   *   'escalar'           — Eva nao oferece, nao precifica, nao agenda; encaminha pra humano
+   *   'ocultar'           — nem entra no prompt
+   */
+  eva_policy?: 'ofertar' | 'escalar' | 'ocultar' | null;
+  /** Datas futuras cadastradas em procedure_available_dates (null = sem restricao) */
+  restricted_dates?: string[] | null;
 }
 
 export interface EvaConfigSettings {

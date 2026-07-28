@@ -40,6 +40,26 @@ const EVA_MIN_LEAD_MIN = 60;
 const SLOT_STEP_MIN = 15;
 
 // Quantos dias a frente varrer quando o dia pedido nao tem vaga
+/**
+ * Politica da Eva pro procedimento (procedures.eva_policy). 'escalar' significa
+ * que a Eva reconhece o nome mas nao pode ofertar/precificar/agendar — o caso
+ * vai pra humano. Ex (Sarah Pina): a Eva so pode oferecer 'Botox Terco Superior'
+ * e 'Clube do Botox'; qualquer outro botox e escalado.
+ */
+function politicaProcedimento(p: { eva_policy?: string | null } | null | undefined): 'ofertar' | 'escalar' | 'ocultar' {
+  const v = p?.eva_policy;
+  return v === 'escalar' || v === 'ocultar' ? v : 'ofertar';
+}
+
+function respostaEscalar(nome: string): string {
+  return [
+    `PROCEDIMENTO_RESTRITO: "${nome}" nao pode ser ofertado, precificado nem agendado por voce.`,
+    'NAO diga valor, NAO ofereca horario e NAO chame criar_agendamento.',
+    'Acolha com naturalidade (algo como "esse a gente avalia caso a caso, pra ver o que faz mais sentido pra voce"),',
+    `diga que vai chamar alguem da equipe, e chame escalar_humano com motivo='duvida_complexa' e detalhes='Paciente perguntou sobre ${nome} — procedimento restrito, precisa de atendimento humano'.`,
+  ].join('\n');
+}
+
 const PROXIMAS_DATAS_SCAN = 21;
 const PROXIMAS_DATAS_LIMIT = 3;
 
@@ -227,6 +247,10 @@ export async function consultarAgenda(args: {
     // parecido e puxava duracao e filtro de profissional errados.
     const found = matchProcedimento(args.procedimento, ctx.procedures);
     if (found) {
+      // Procedimento restrito: nem chega a consultar a agenda
+      if (politicaProcedimento(found.item) !== 'ofertar') {
+        return respostaEscalar(found.item.name);
+      }
       procedureId = found.item.id;
       durationMin = found.item.duration_minutes ?? null;
     }
@@ -466,18 +490,26 @@ export async function criarAgendamento(args: {
   // 2) Resolver procedure_id pelo nome (e a duração real dele)
   let procedureId: string | null = null;
   let duracaoMin = 30; // fallback quando o procedimento não é identificado
+  let procedimentoResolvido: (typeof procedures)[number] | null = null;
   if (args.procedimento) {
-    const needle = norm(args.procedimento);
-    const proc = procedures.find((p) => {
-      const hay = norm(p.name);
-      return hay.includes(needle) || needle.includes(hay);
-    });
+    const proc = matchProcedimento(args.procedimento, procedures)?.item ?? null;
     if (proc) {
+      procedimentoResolvido = proc;
       procedureId = proc.id;
       const d = Number(proc.duration_minutes);
       // clamp defensivo: cadastro errado não pode gerar end_time absurdo
       if (Number.isFinite(d) && d >= 5 && d <= 480) duracaoMin = Math.round(d);
     }
+  }
+
+  // Procedimento restrito (eva_policy): a Eva nao agenda, encaminha pra humano.
+  // Checagem aqui e nao so na consultar_agenda porque a paciente pode escolher
+  // um horario oferecido antes e a Eva emendar direto no criar_agendamento.
+  if (procedimentoResolvido && politicaProcedimento(procedimentoResolvido) !== 'ofertar') {
+    return {
+      toolResultStr: respostaEscalar(procedimentoResolvido.name),
+      appointmentCreated: false,
+    };
   }
 
   // 3) Resolver/criar paciente
@@ -601,6 +633,21 @@ export async function criarAgendamento(args: {
 
   if (new Date(startIso).getTime() <= Date.now()) {
     return recusar('DATA_NO_PASSADO', 'esse horario ja passou');
+  }
+
+  // Datas restritas (procedure_available_dates, ja vem no contexto). Antes so a
+  // consultar_agenda respeitava isso — a criar_agendamento nao checava, entao a
+  // Eva conseguia marcar "Paciente Modelo" (que so existe em dia de curso) em
+  // qualquer dia em que o profissional tivesse grade livre.
+  const datasPermitidas = Array.isArray(procedimentoResolvido?.restricted_dates)
+    ? procedimentoResolvido!.restricted_dates!
+    : null;
+  if (datasPermitidas && datasPermitidas.length > 0 && !datasPermitidas.includes(args.data)) {
+    const proximas = datasPermitidas.slice(0, 3).map((d) => formatarDataBR(d)).join(', ');
+    return recusar(
+      'DATA_NAO_PERMITIDA_PARA_ESSE_PROCEDIMENTO',
+      `esse procedimento so acontece em datas especificas — as proximas sao ${proximas}. Ofereca uma dessas datas e refaca o agendamento; nunca invente outra data.`,
+    );
   }
 
   const slot = await validarSlot({
@@ -1084,14 +1131,16 @@ export async function informarValorAvista(
     return 'Procedimento nao informado. Pergunte com elegancia qual procedimento ela quer saber o valor.';
   }
 
-  // Match pelo nome — mesma logica de fuzzy match usada nas outras tools
-  const proc = ctx.procedures.find((p) => {
-    const hay = norm(p.name);
-    return hay.includes(needle) || needle.includes(hay);
-  });
+  // Match pelo nome — mesma pontuacao usada nas outras tools (utils.ts)
+  const proc = matchProcedimento(args.procedimento, ctx.procedures)?.item ?? null;
 
   if (!proc) {
     return `Nao encontrei "${args.procedimento}" na lista de procedimentos. Confirme com a paciente qual procedimento ela quer ou ofereca os disponiveis.`;
+  }
+
+  // Procedimento restrito: nao vazar preco nem a vista nem parcelado
+  if (politicaProcedimento(proc) !== 'ofertar') {
+    return respostaEscalar(proc.name);
   }
 
   if (!proc.price || proc.price <= 0) {
