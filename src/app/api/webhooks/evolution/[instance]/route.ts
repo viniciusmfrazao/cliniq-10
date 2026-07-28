@@ -1061,8 +1061,15 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
             } else {
               // Touch no lead existente: atualiza last_contact_at, e se o nome
               // estava generico ou vazio e agora temos pushName real, melhora.
+              // whatsapp_instance tambem e atualizado aqui — antes so era
+              // gravado na criacao do lead e nunca mais tocado. Se a clinica
+              // tem mais de um numero (ex: um caiu e a secretaria passou a
+              // usar outro), o lead ficava com a instancia velha travada e o
+              // follow-up automatico (process_eva_followups) tentava mandar
+              // pelo numero errado antes de cair no fallback generico.
               const patch: Record<string, unknown> = {
                 last_contact_at: new Date().toISOString(),
+                whatsapp_instance: instance,
               }
               const looksGeneric =
                 !leadRes.data.name ||
