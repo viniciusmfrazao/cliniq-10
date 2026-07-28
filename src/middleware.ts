@@ -27,6 +27,20 @@ export async function middleware(request: NextRequest) {
   const isPublic = PUBLIC_ROUTES.includes(path) || PUBLIC_PREFIXES.some(p => path.startsWith(p))
   if (isPublic) return NextResponse.next()
 
+  // Prefetches (Next.js dispara sozinho ao renderizar links no viewport) não devem
+  // acionar refresh de sessão. Múltiplos prefetches em paralelo tentando renovar o
+  // mesmo refresh token ao mesmo tempo fazem o Supabase revogar a sessão inteira
+  // (proteção contra roubo de token) — isso derruba o usuário do app sem motivo.
+  // Prefetch só precisa de uma checagem barata (cookie existe?), sem chamar a rede.
+  const isPrefetch = request.headers.get('next-router-prefetch') === '1' || request.headers.get('purpose') === 'prefetch'
+  if (isPrefetch) {
+    const hasAnyAuthCookie = getAuthCookieNames().some(name => request.cookies.get(name))
+    if (!hasAnyAuthCookie) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    return NextResponse.next()
+  }
+
   const AUTH_COOKIE_NAMES = getAuthCookieNames()
   const standardCookieName = `sb-${getProjectRef()}-auth-token`
 
