@@ -664,7 +664,11 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">Gerencie seus leads e oportunidades</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* flex-wrap: sem isso, com todos os botões (sino, Como usar, engrenagem,
+            Novo Lead) numa linha so sem quebra, a fileira estourava a largura da
+            tela em viewport estreito — os botões saiam visualmente do container
+            em vez de quebrar linha. */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* Seletor de CRM por número — só aparece com 2+ linhas de crm_settings
               configuradas (settingsList.length > 1). Sem opção "Todos": é sempre
               um CRM específico por vez, nunca leads de linhas diferentes misturados. */}
