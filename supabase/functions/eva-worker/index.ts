@@ -135,7 +135,14 @@ Deno.serve(async (req) => {
 
       const convData = convResp.ok ? await convResp.json() : []
       const lastUserMsg = convData?.[0]?.content ?? ''
-      const lastMsgMeta = convData?.[0]?.metadata as { evolution_message_id?: string } | null | undefined
+      const lastMsgMeta = convData?.[0]?.metadata as { evolution_message_id?: string; kind?: string } | null | undefined
+      // O metadata.kind (image/audio/video/document/text) era gravado no
+      // webhook mas nunca chegava ao eva-process — o worker so extraia o
+      // evolution_message_id. Sem isso, o payload.kind chegava sempre 'text'
+      // (default do eva-process), e a instrucao especifica pra imagem
+      // (prompt.ts / mediaPart — "peca com elegancia pra descrever ou
+      // agendar avaliacao", sem fingir que "viu" a foto) nunca era aplicada.
+      const lastMsgKind = lastMsgMeta?.kind ?? 'text'
 
       if (!lastUserMsg) {
         // Sem mensagem pra processar — remove da fila (nao ha o que fazer)
@@ -160,6 +167,7 @@ Deno.serve(async (req) => {
           instance: item.instance,
           customerName: item.customer_name ?? null,
           userText: lastUserMsg,
+          kind: lastMsgKind,
           skipSend: false,
           messageId: null,
           readMessageId: lastMsgMeta?.evolution_message_id ?? null,

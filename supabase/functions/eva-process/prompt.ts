@@ -473,7 +473,14 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
 
   let mediaPart = '';
   if (payload.kind === 'image') {
-    mediaPart = `\n- Ela enviou uma IMAGEM. Peca com elegancia para descrever ou agendar avaliacao presencial.`;
+    mediaPart = [
+      '',
+      '- Ela enviou uma IMAGEM (voce NAO consegue ver o conteudo da foto — nunca finja que viu, nunca comente detalhes especificos dela).',
+      '  Acolha com elegancia e naturalidade (ex: "recebi sua foto! 😊"). O caso mais comum e a paciente mandando uma foto do',
+      '  proprio rosto/corpo pedindo avaliacao — nesse caso, explique que a avaliacao real precisa ser presencial com a',
+      '  profissional (fotos nao substituem isso) e conduza pra agendar. Se nao estiver claro o motivo da foto, pergunte',
+      '  com leveza o que ela gostaria de mostrar ou avaliar antes de seguir.',
+    ].join('\n');
   } else if (payload.kind === 'audio') {
     const wasTranscribed = payload.userText && !payload.userText.startsWith('[') && payload.kind === 'audio';
     mediaPart = wasTranscribed

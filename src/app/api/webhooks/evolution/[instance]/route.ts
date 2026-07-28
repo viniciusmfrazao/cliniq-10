@@ -1138,14 +1138,23 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
             return new Response(JSON.stringify({ ok: true, skipped: 'sticker_ignored' }), { status: 200 })
           }
 
+          // IMAGEM nao escala mais pra humano por padrao — a Eva ja tem uma
+          // instrucao propria pra isso (prompt.ts / mediaPart): acolhe com
+          // elegancia, pede pra descrever o que a paciente quer avaliar ou
+          // oferece avaliacao presencial, sem fingir que "viu" a foto. Antes,
+          // TODA imagem sem legenda (mesmo um "oi" com foto do rosto pra
+          // avaliacao, o caso mais comum) escalava pra humano e a Eva nunca
+          // era chamada — o texto de prompt.ts existia mas nunca rodava.
+          // Continua escalando: audio sem transcricao (Eva nao tem o texto
+          // pra responder) e video/document (Eva nao tem instrucao pra eles
+          // alem do generico, e sao bem mais raros).
           const isMediaToEscalate =
             (parsed.kind === 'audio' ||
-              parsed.kind === 'image' ||
               parsed.kind === 'video' ||
               parsed.kind === 'document') &&
             // audio com transcrição bem-sucedida: Eva responde normalmente, não escala
             !(parsed.kind === 'audio' && transcription) &&
-            // pra image/video/document: so escala se NAO tem caption util
+            // pra video/document: so escala se NAO tem caption util
             (parsed.kind === 'audio' ||
               !(parsed.text && parsed.text.trim().length >= 3))
 
