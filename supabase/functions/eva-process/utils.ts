@@ -23,82 +23,160 @@ export function formatBRL(v: number | null | undefined): string | null {
   return Number(v).toFixed(2).replace('.', ',');
 }
 
+/**
+ * Avanca a data (ancorada em UTC) para o proximo dia util, se cair no fim de semana.
+ */
 export function pulaFimDeSemana(d: Date): Date {
-  const day = d.getDay();
-  if (day === 0) d.setDate(d.getDate() + 1);
-  if (day === 6) d.setDate(d.getDate() + 2);
+  const day = d.getUTCDay();
+  if (day === 0) d.setUTCDate(d.getUTCDate() + 1);
+  if (day === 6) d.setUTCDate(d.getUTCDate() + 2);
   return d;
+}
+
+/**
+ * Pontuacao de match entre um texto livre e uma lista de procedimentos.
+ * Mesma logica validada da CAMADA FOTO — extraida pra ser usada tanto pela
+ * consultar_agenda quanto pela enviar_fotos_resultado (antes a agenda usava
+ * um find() com includes bidirecional, que pegava o primeiro parecido e
+ * puxava duracao/profissional errados em catalogos com nomes semelhantes).
+ *
+ * boostIds: ids que ganham um bonus de desempate (ex: quem tem foto cadastrada).
+ */
+export function matchProcedimento<T extends { id: string; name: string }>(
+  texto: string,
+  procedimentos: T[],
+  opts?: { boostIds?: Set<string>; boost?: number },
+): { item: T; score: number } | null {
+  const alvo = norm(texto);
+  if (!alvo) return null;
+
+  const boostIds = opts?.boostIds;
+  const boost = opts?.boost ?? 5;
+
+  let melhor: T | null = null;
+  let melhorScore = 0;
+
+  for (const p of procedimentos) {
+    const procNorm = norm(p.name);
+    if (!procNorm) continue;
+    const palavras = procNorm.split(/\s+/).filter((w) => w.length >= 4);
+    if (palavras.length === 0) continue;
+
+    let score = 0;
+    if (alvo.includes(procNorm)) score += 100;
+    const palavrasMatch = palavras.filter((w) => alvo.includes(w));
+    score += palavrasMatch.length * 10;
+    score += Math.round((palavrasMatch.length / palavras.length) * 20);
+    if (score === 0) continue;
+    if (boostIds?.has(p.id)) score += boost;
+
+    if (score > melhorScore) {
+      melhorScore = score;
+      melhor = p;
+    }
+  }
+
+  return melhor ? { item: melhor, score: melhorScore } : null;
 }
 
 /**
  * Parser livre de "periodo" — entrada do usuário em pt-BR.
  * Retorna { dataAlvo: 'YYYY-MM-DD', periodoAlvo: 'manha' | 'tarde' | null }
+ *
+ * IMPORTANTE (fuso): o runtime da Edge Function roda em UTC. Toda a aritmetica
+ * de data e feita sobre uma ancora em UTC construida a partir da data-calendario
+ * de Sao Paulo. Antes, o ramo dd/mm fazia `new Date(yy, mm-1, dd)` (meia-noite
+ * UTC) e formatava em America/Sao_Paulo (UTC-3), o que devolvia SEMPRE o dia
+ * anterior — "dia 05/08" virava 2026-08-04.
  */
 export function parseData(texto: string): { dataAlvo: string; periodoAlvo: 'manha' | 'tarde' | null } {
   const tx = norm(texto);
   const tz = 'America/Sao_Paulo';
-  const fmt = (d: Date) => {
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
-      .formatToParts(d);
-    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-    return `${get('year')}-${get('month')}-${get('day')}`;
-  };
 
-  const now = new Date();
-  let alvo = new Date(now);
+  // Data-calendario de HOJE em Sao Paulo (independente do fuso do runtime)
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  const hojeY = Number(get('year'));
+  const hojeM = Number(get('month'));
+  const hojeD = Number(get('day'));
+  const hojeIso = `${get('year')}-${get('month')}-${get('day')}`;
+
+  // Ancora em UTC: meia-noite UTC do dia-calendario de SP. Toda aritmetica
+  // (setUTCDate/getUTCDay) e o toISOString ficam consistentes entre si.
+  const alvo = new Date(Date.UTC(hojeY, hojeM - 1, hojeD));
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
 
   let periodoAlvo: 'manha' | 'tarde' | null = null;
   if (/\bmanh[aã]\b/.test(tx)) periodoAlvo = 'manha';
   else if (/\btarde\b/.test(tx)) periodoAlvo = 'tarde';
 
-  // dd/mm ou dd/mm/aaaa
+  // dd/mm ou dd/mm/aaaa — montado como string, sem passar por Date local
   const dataMatch = tx.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
   if (dataMatch) {
     const dd = parseInt(dataMatch[1], 10);
     const mm = parseInt(dataMatch[2], 10);
-    const yy = dataMatch[3] ? parseInt(dataMatch[3], 10) : now.getFullYear();
-    alvo = new Date(yy < 100 ? 2000 + yy : yy, mm - 1, dd);
-    return { dataAlvo: fmt(alvo), periodoAlvo };
+    if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+      let yy: number;
+      if (dataMatch[3]) {
+        const raw = parseInt(dataMatch[3], 10);
+        yy = raw < 100 ? 2000 + raw : raw;
+      } else {
+        yy = hojeY;
+      }
+      let candidato = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+      // Sem ano explicito e data ja passou (ex: "dia 05/01" dito em dezembro) → ano que vem
+      if (!dataMatch[3] && candidato < hojeIso) {
+        candidato = `${yy + 1}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+      }
+      return { dataAlvo: candidato, periodoAlvo };
+    }
   }
 
-  if (tx.includes('hoje')) return { dataAlvo: fmt(now), periodoAlvo };
+  if (tx.includes('hoje')) return { dataAlvo: hojeIso, periodoAlvo };
+
+  // "depois de amanha" ANTES de "amanha" — senao o includes('amanha') captura primeiro
+  if (tx.includes('depois de amanha') || tx.includes('depois de amanhã')) {
+    alvo.setUTCDate(alvo.getUTCDate() + 2);
+    return { dataAlvo: iso(alvo), periodoAlvo };
+  }
 
   if (tx.includes('amanha') || tx.includes('amanhã')) {
-    alvo.setDate(alvo.getDate() + 1);
-    return { dataAlvo: fmt(alvo), periodoAlvo };
+    alvo.setUTCDate(alvo.getUTCDate() + 1);
+    return { dataAlvo: iso(alvo), periodoAlvo };
   }
 
   // Semana que vem → próxima segunda
   if (tx.includes('semana que vem') || tx.includes('proxima semana') || tx.includes('próxima semana')) {
-    const day = alvo.getDay();
+    const day = alvo.getUTCDay();
     const daysUntilMonday = ((1 - day + 7) % 7) || 7;
-    alvo.setDate(alvo.getDate() + daysUntilMonday);
-    return { dataAlvo: fmt(alvo), periodoAlvo };
+    alvo.setUTCDate(alvo.getUTCDate() + daysUntilMonday);
+    return { dataAlvo: iso(alvo), periodoAlvo };
   }
 
   // Essa semana → próximo dia útil
   if (tx.includes('essa semana') || tx.includes('esta semana')) {
-    alvo.setDate(alvo.getDate() + 1);
-    alvo = pulaFimDeSemana(alvo);
-    return { dataAlvo: fmt(alvo), periodoAlvo };
+    alvo.setUTCDate(alvo.getUTCDate() + 1);
+    pulaFimDeSemana(alvo);
+    return { dataAlvo: iso(alvo), periodoAlvo };
   }
 
   // Dia da semana
   const diasNames = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
   for (let i = 0; i < diasNames.length; i++) {
     if (tx.includes(diasNames[i])) {
-      const today = alvo.getDay();
+      const today = alvo.getUTCDay();
       let diff = (i - today + 7) % 7;
       if (diff === 0) diff = 7;
-      alvo.setDate(alvo.getDate() + diff);
-      return { dataAlvo: fmt(alvo), periodoAlvo };
+      alvo.setUTCDate(alvo.getUTCDate() + diff);
+      return { dataAlvo: iso(alvo), periodoAlvo };
     }
   }
 
   // Default: próximo dia útil
-  alvo.setDate(alvo.getDate() + 1);
-  alvo = pulaFimDeSemana(alvo);
-  return { dataAlvo: fmt(alvo), periodoAlvo };
+  alvo.setUTCDate(alvo.getUTCDate() + 1);
+  pulaFimDeSemana(alvo);
+  return { dataAlvo: iso(alvo), periodoAlvo };
 }
 
 export function formatarDataBR(iso: string | null | undefined): string {
