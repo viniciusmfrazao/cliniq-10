@@ -16,12 +16,13 @@ export default async function DisponibilidadePage() {
 
   const clinicId = userData.clinic_id
 
-  // Procedimentos que têm restrição de datas (Lavieen, Hipro, Cursos, etc.)
+  // Procedimentos que têm restrição de datas (Lavieen, Hipro, Cursos, Pacientes
+  // Modelo, etc.) — qualquer procedimento que só existe em dias específicos.
   const { data: procedures } = await supabase
     .from('procedures')
     .select('id, name')
     .eq('clinic_id', clinicId)
-    .or('name.ilike.%lavieen%,name.ilike.%hipro%,name.ilike.%hi pro%,name.ilike.%curso%')
+    .or('name.ilike.%lavieen%,name.ilike.%hipro%,name.ilike.%hi pro%,name.ilike.%curso%,name.ilike.%modelo%')
     .order('name')
 
   // Datas já cadastradas
@@ -36,10 +37,11 @@ export default async function DisponibilidadePage() {
     <div className="max-w-3xl mx-auto">
       <BackButton href="/dashboard/procedimentos" label="Procedimentos" />
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">Dias disponíveis — Aparelhos e Cursos</h1>
+        <h1 className="text-xl font-bold text-slate-900">Dias disponíveis — Aparelhos, Cursos e Pacientes Modelo</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Defina os dias que o Lavieen e Hipro estarão disponíveis na clínica, e as datas das próximas turmas de curso.
-          A Eva só vai oferecer esses dias para agendamento (aparelhos) ou informar como datas de turma (cursos) — ela não fecha matrícula de curso sozinha.
+          Defina os dias que o Lavieen e Hipro estarão disponíveis, as datas das próximas turmas de curso, e os dias de
+          cada paciente modelo (ex: turma de Botox, Preenchimento, Bioestimulador do Face Art).
+          A Eva só oferece esses procedimentos nos dias cadastrados aqui — fora deles, ela nem propõe.
         </p>
       </div>
       <DisponibilidadeClient
