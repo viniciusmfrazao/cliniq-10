@@ -94,6 +94,8 @@ export default function LoginPage() {
                   <input
                     className="input pl-12"
                     type="email"
+                    name="email"
+                    autoComplete="username"
                     placeholder="voce@clinica.com"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
@@ -110,6 +112,8 @@ export default function LoginPage() {
                   <input
                     className="input pl-12 pr-12"
                     type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="current-password"
                     placeholder="••••••••"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
