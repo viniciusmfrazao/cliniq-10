@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { DonnaContext, IncomingPayload, ProcedureRow, ProfessionalRow } from './types.ts';
-import { fetchJson, formatarDataBR, norm, parseData, formatBRL } from './utils.ts';
+import { fetchJson, formatarDataBR, norm, parseData, formatBRL, matchProcedimento } from './utils.ts';
 
 interface ToolEnv {
   supabaseUrl: string;
@@ -28,6 +28,64 @@ function sbHeaders(env: ToolEnv): SbHeaders {
  * Não podem ser oferecidas pra paciente nem contar como "clínica aberta".
  */
 const NON_BOOKABLE = ['curso', 'aparelho', 'equipamento'];
+
+// Antecedencia minima que a Eva respeita ao OFERECER horario (min). A agenda
+// interna (recepcao) continua com 0 — a secretaria pode encaixar alguem que
+// acabou de chegar. So a Eva nao oferece horario pra daqui a 5 minutos.
+const EVA_MIN_LEAD_MIN = 60;
+
+// Passo da grade de horarios. Antes o passo era a propria duracao do
+// procedimento, o que escondia disponibilidade real (ex: 90min numa janela
+// 13:30-18:00 so gerava 13:30/15:00/16:30 — 14:00 cabia e nunca aparecia).
+const SLOT_STEP_MIN = 15;
+
+// Quantos dias a frente varrer quando o dia pedido nao tem vaga
+const PROXIMAS_DATAS_SCAN = 21;
+const PROXIMAS_DATAS_LIMIT = 3;
+
+/**
+ * Busca os proximos dias com vaga real (RPC get_next_available_days) e devolve
+ * uma frase pronta pra Eva. Antes, quando o dia pedido estava lotado, a Eva
+ * so recebia "sem vagas, ofereca outro dia" — sem saber QUAIS dias tinham
+ * vaga. Isso virava ping-pong (terca? nao. quarta? nao.) ate a paciente sumir.
+ */
+async function proximasDatasComVaga(params: {
+  clinicId: string;
+  procedureId: string | null;
+  fromIso: string;
+  durationMin: number | null;
+  periodo: 'manha' | 'tarde' | null;
+  env: ToolEnv;
+}): Promise<string | null> {
+  const { clinicId, procedureId, fromIso, durationMin, periodo, env } = params;
+  try {
+    const r = await fetchJson<Array<{ available_date: string; slots_count: number; first_slot: string; professionals: string[] }>>(
+      `${env.supabaseUrl}/rest/v1/rpc/get_next_available_days`,
+      {
+        method: 'POST',
+        headers: sbHeaders(env),
+        body: JSON.stringify({
+          p_clinic_id: clinicId,
+          p_procedure_id: procedureId,
+          p_from: fromIso,
+          p_days_to_scan: PROXIMAS_DATAS_SCAN,
+          p_limit: PROXIMAS_DATAS_LIMIT,
+          p_duration_min: durationMin,
+          p_period: periodo,
+          p_min_lead_min: EVA_MIN_LEAD_MIN,
+        }),
+      },
+    );
+    if (!r.ok || !Array.isArray(r.data) || r.data.length === 0) return null;
+    const linhas = r.data.map((d) => {
+      const hora = String(d.first_slot ?? '').slice(0, 5);
+      return `${formatarDataBR(d.available_date)}${hora ? ` (a partir das ${hora})` : ''}`;
+    });
+    return linhas.join('; ');
+  } catch (_e) {
+    return null;
+  }
+}
 
 function isBookableName(name: string | null | undefined): boolean {
   const n = (name || '').toLowerCase();
@@ -163,14 +221,14 @@ export async function consultarAgenda(args: {
   let procedureId: string | null = null;
   let durationMin: number | null = null;
   if (args.procedimento) {
-    const needle = norm(args.procedimento);
-    const found = ctx.procedures.find((p) => {
-      const hay = norm(p.name);
-      return hay.includes(needle) || needle.includes(hay);
-    });
+    // Pontuacao (utils.matchProcedimento) em vez do find() com includes
+    // bidirecional. Com 47 procedimentos e nomes parecidos ("Botox 1 regiao",
+    // "Botox Terco Superior", "Botox completo"), o find() pegava o primeiro
+    // parecido e puxava duracao e filtro de profissional errados.
+    const found = matchProcedimento(args.procedimento, ctx.procedures);
     if (found) {
-      procedureId = found.id;
-      durationMin = found.duration_minutes ?? null;
+      procedureId = found.item.id;
+      durationMin = found.item.duration_minutes ?? null;
     }
   }
 
@@ -185,6 +243,8 @@ export async function consultarAgenda(args: {
       p_duration_min: durationMin ?? 30,
       p_period: periodoAlvo, // 'manha' | 'tarde' | null
       p_procedure_id: useProcedureId ? procedureId : null,
+      p_min_lead_min: EVA_MIN_LEAD_MIN,
+      p_step_min: SLOT_STEP_MIN,
     };
     return await fetchJson<Array<{ professional_id: string; professional_name: string; slot_time: string }>>(rpcUrl, {
       method: 'POST',
@@ -266,11 +326,29 @@ export async function consultarAgenda(args: {
       // Sem nenhuma data futura — escalar
       return `PROCEDIMENTO_SEM_DATA_DISPONIVEL: Nao ha datas cadastradas para esse procedimento no momento. Diga com elegancia que esse procedimento funciona em datas especiais e que voce vai confirmar a proxima disponibilidade. Chame escalar_humano com motivo='duvida_complexa' e detalhes='Paciente tem interesse em ${args.procedimento} — sem datas cadastradas no sistema'.`;
     }
+    // Antes de devolver "sem vaga", descobre QUAIS sao os proximos dias com
+    // vaga real. Sem isso a Eva ficava chutando dias e a paciente desistia.
+    const proximas = await proximasDatasComVaga({
+      clinicId: payload.clinicId,
+      procedureId,
+      fromIso: dataAlvo,
+      durationMin,
+      periodo: periodoAlvo,
+      env,
+    });
+
     const closed = isClinicClosed(ctx, dataAlvo);
     if (closed) {
-      return `FECHADO_NESSE_DIA: ${dataLabel}. A clinica nao atende nesse dia da semana. Diga com elegancia e sugira outro dia util.`;
+      return proximas
+        ? `FECHADO_NESSE_DIA: ${dataLabel}. A clinica nao atende nesse dia da semana. PROXIMAS DATAS COM VAGA REAL: ${proximas}. Diga com elegancia que nesse dia nao ha atendimento e ofereca 2 dessas datas — nunca invente outras.`
+        : `FECHADO_NESSE_DIA: ${dataLabel}. A clinica nao atende nesse dia da semana. Diga com elegancia e sugira outro dia util.`;
     }
-    return `SEM_VAGAS_NO_PERIODO: ${dataLabel}${periodoLabel}. Diga que esse periodo esta concorrido e ofereca outro periodo/dia.`;
+
+    if (proximas) {
+      return `SEM_VAGAS_NO_PERIODO: ${dataLabel}${periodoLabel} esta sem horario. PROXIMAS DATAS COM VAGA REAL: ${proximas}. Diga que esse dia esta concorrido e ja ofereca 2 dessas datas de forma natural — nunca invente data que nao esteja nessa lista. Depois que ela escolher, chame consultar_agenda com essa data pra pegar os horarios.`;
+    }
+
+    return `SEM_VAGAS_NO_PERIODO: ${dataLabel}${periodoLabel}. Nao encontrei vaga nos proximos ${PROXIMAS_DATAS_SCAN} dias. Diga com elegancia que a agenda esta cheia e chame escalar_humano com motivo='duvida_complexa' e detalhes='Agenda sem vaga nos proximos ${PROXIMAS_DATAS_SCAN} dias — paciente quer ${args.procedimento ?? 'atendimento'}'.`;
   }
 
   const slots = resp.data;
@@ -949,27 +1027,12 @@ export async function enviarFotosResultado(
     }
   } catch (_e) { /* segue sem o desempate */ }
 
-  // Pontuação de match (mesma lógica validada da CAMADA FOTO)
-  let melhor: { id: string; name: string; temImagem: boolean } | null = null;
-  let melhorScore = 0;
-  for (const p of ctx.procedures) {
-    const procNorm = norm(p.name);
-    const palavras = procNorm.split(/\s+/).filter((w) => w.length >= 4);
-    if (palavras.length === 0) continue;
-
-    let score = 0;
-    if (textoMatch.includes(procNorm)) score += 100;
-    const palavrasMatch = palavras.filter((w) => textoMatch.includes(w));
-    score += palavrasMatch.length * 10;
-    score += Math.round((palavrasMatch.length / palavras.length) * 20);
-    if (score === 0) continue;
-    if (procIdsComImagem.has(p.id)) score += 5;
-
-    if (score > melhorScore) {
-      melhorScore = score;
-      melhor = { id: p.id, name: p.name, temImagem: procIdsComImagem.has(p.id) };
-    }
-  }
+  // Pontuacao de match — agora compartilhada com consultar_agenda (utils.ts),
+  // com bonus de desempate pra quem tem imagem cadastrada.
+  const escolhido = matchProcedimento(textoMatch, ctx.procedures, { boostIds: procIdsComImagem, boost: 5 });
+  const melhor = escolhido
+    ? { id: escolhido.item.id, name: escolhido.item.name, temImagem: procIdsComImagem.has(escolhido.item.id) }
+    : null;
 
   if (!melhor) {
     return `Nao identifiquei o procedimento "${args.procedimento || ctx.lead?.interest || ''}" na lista. Confirme com a paciente qual procedimento ela quer ver, de forma natural.`;
