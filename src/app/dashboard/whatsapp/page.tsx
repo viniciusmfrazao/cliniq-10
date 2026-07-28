@@ -231,6 +231,13 @@ export default function WhatsAppPage() {
   /** Apelidos das linhas (instance_name → label amigável) vindos da API */
   const [lineLabels, setLineLabels] = useState<Record<string, string>>({})
   /** Linhas conectadas onde a Eva pode atender (role_inbound) — para o seletor do toggle */
+  // Instancias que sao PURAMENTE automacao (nunca usadas pra inbound nem
+  // manual) — usado como deny-list na lista de conversas (ver loadConversations).
+  // Construida a partir da lista COMPLETA de instancias da clinica (qualquer
+  // status), nao so as conectadas — assim uma linha desconectada ou apagada
+  // do banco nao apaga conversas reais da lista, so deixa de aparecer no
+  // seletor de linha ativa.
+  const [automationOnlyInstances, setAutomationOnlyInstances] = useState<Set<string>>(new Set())
   const [waInboundLines, setWaInboundLines] = useState<
     Array<{
       instance_name: string
@@ -536,6 +543,15 @@ export default function WhatsAppPage() {
       }
       setLineLabels(labelMap)
 
+      // Deny-list de automacao pura: so entra aqui quem NUNCA e usado pra
+      // inbound nem manual, considerando TODAS as instancias (qualquer status).
+      const automationOnly = new Set(
+        list
+          .filter((i) => i.role_inbound === false && i.role_outbound_manual === false)
+          .map((i) => i.instance_name),
+      )
+      setAutomationOnlyInstances(automationOnly)
+
       if (anyConnected || (instance.configured && instance.status === 'connected')) {
         setConfig({
           instance_name: mainForEva?.instance_name ?? instance.instance_name ?? null,
@@ -574,7 +590,7 @@ export default function WhatsAppPage() {
         const ctrlRow = inboundConnected.find((i) => i.instance_name === nextCtrl) ?? mainForEva
         setEvaEnabled(ctrlRow?.auto_reply_enabled !== false)
 
-        loadConversations(userData.clinic_id, inboundLines)
+        loadConversations(userData.clinic_id, inboundLines, automationOnly)
       } else {
         setConfigured(false)
       }
@@ -626,9 +642,14 @@ export default function WhatsAppPage() {
 
   type InboundLine = { instance_name: string; auto_reply_enabled: boolean; role_inbound?: boolean; label: string | null; phone_number: string | null }
 
-  async function loadConversations(clinicId: string, inboundLinesParam?: InboundLine[]) {
+  async function loadConversations(
+    clinicId: string,
+    inboundLinesParam?: InboundLine[],
+    automationOnlyParam?: Set<string>,
+  ) {
     // Usa as inbound lines passadas como parâmetro ou as do estado
     const effectiveInboundLines = inboundLinesParam ?? waInboundLines
+    const effectiveAutomationOnly = automationOnlyParam ?? automationOnlyInstances
 
     // RPC que já devolve 1 linha por telefone (a mais recente + não lidas),
     // agregado no servidor — evita o corte de ~1000 linhas que o select cru
@@ -656,12 +677,19 @@ export default function WhatsAppPage() {
     const convs: Conversation[] = []
     const linesFound = new Set<string>()
 
-    // Instâncias de atendimento (Eva ou manual) — usadas pra decidir quais
-    // mensagens entram na lista de conversas
-    const inboundInstances = new Set(
-      effectiveInboundLines.map((l) => l.instance_name)
-    )
-
+    // Deny-list (ver automationOnlyInstances): so oculta conversa cuja ULTIMA
+    // mensagem veio de uma instancia que sabemos, com certeza, ser 100%
+    // automacao (nunca inbound, nunca manual). Qualquer outro caso — inclusive
+    // instancia desconhecida, desconectada ou apagada do banco (reconexao,
+    // reset, numero antigo trocado) — a conversa CONTINUA aparecendo.
+    //
+    // Antes era o oposto (allow-list de linhas conectadas): uma conversa so
+    // aparecia se a ultima mensagem batesse com uma instancia ATUALMENTE
+    // conectada. Bug real (prod, Sarah Pina): a instancia antiga
+    // 'cliniq-182d37af-mqqwer9i' foi apagada de clinic_whatsapp (reset/nova
+    // conexao) e isso sumiu 273 de 1348 conversas da lista — nao so as dessa
+    // instancia, qualquer numero antigo que a clinica ja trocou ao longo dos
+    // meses ficava invisivel do mesmo jeito, silenciosamente.
     for (const t of data as ThreadRow[]) {
       if (!t.content) continue
       const phone = t.phone ?? ''
@@ -679,8 +707,7 @@ export default function WhatsAppPage() {
       }
       const inst = rowInstanceName(row)
 
-      // Filtrar mensagens de instâncias que não são inbound (ex: automações)
-      if (inboundInstances.size > 0 && inst && !inboundInstances.has(inst)) continue
+      if (inst && effectiveAutomationOnly.has(inst)) continue
 
       if (inst) linesFound.add(inst)
 
