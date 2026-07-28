@@ -145,8 +145,21 @@ export function buildSystemPrompt(
   const customerName = payload.customerName || patient?.name || lead?.name || 'cliente';
   const firstName = String(customerName).split(/\s+/)[0] || '';
   const knowsRealName = hasRealName(customerName);
-  // Verificar sinal de preco na msg atual E nas ultimas msgs do historico
-  const recentUserTexts = [payload.userText, ...ctx.history.slice(-6).filter(m => m.role === 'user').map(m => m.content)].join(' ');
+  // Verificar sinal de preco na msg atual + so as 2 ultimas mensagens REAIS
+  // da paciente (nao as ultimas 6 da conversa misturando os dois lados).
+  // Bug real (prod, Sarah Pina/Gabriela): a paciente mandou um PDF chamado
+  // "orcamento 36.pdf" um dia antes; no dia seguinte perguntou so "Queria
+  // saber sobre o botox" (sem falar de preco) e a Eva ja respondeu com o
+  // valor de cara. Motivo: o nome do arquivo "orcamento" bateu no regex de
+  // sinal de preco, e a janela antiga (ultimas 6 msgs de QUALQUER role)
+  // alcancava mensagens de dias atras quando o volume de troca era baixo.
+  // Olhar so as ultimas 2 falas da propria paciente resolve: cobre o caso
+  // legitimo de pedir o preco em duas mensagens seguidas, sem puxar
+  // conteudo de sessoes anteriores.
+  const recentUserTexts = [
+    payload.userText,
+    ...ctx.history.filter(m => m.role === 'user').slice(-2).map(m => m.content),
+  ].join(' ');
   const userAskedPriceNow = askedPriceExplicitly(recentUserTexts);
 
   const evaCfg = (clinic.settings?.eva ?? null) as {
@@ -265,6 +278,7 @@ EVITE A TODO CUSTO:
 - ESCREVA EM TEXTO CORRIDO. Como WhatsApp natural. SEM quebras de linha. SEM listas. SEM titulos.
 - MAXIMO 3 frases curtas (idealmente 1-2). LIMITE DURO: 350 caracteres por resposta.
 - Tudo na MESMA linha.
+- FORMATACAO: NUNCA use markdown de negrito com asterisco duplo (**texto**) — o WhatsApp nao renderiza isso, aparece literalmente com os asteriscos na tela. Se precisar dar destaque, use asterisco SIMPLES (*texto*), que e o negrito real do WhatsApp. Na duvida, nao use nenhuma formatacao.
 - Foco em UMA ideia por mensagem — uma pergunta, um gancho, ou uma confirmacao.
 - WhatsApp e troca rapida, nao palestra.
 - EXCECOES AUTORIZADAS (3 momentos): mensagem de boas-vindas (regra BV), confirmacao de agendamento (regra 1B) e confirmacao D-1 (regra 6). NESSAS voce PODE quebrar linha e ultrapassar 350 caracteres.
