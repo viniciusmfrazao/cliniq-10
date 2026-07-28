@@ -1458,7 +1458,14 @@ export default function WhatsAppPage() {
                           </span>
                         )}
                       </div>
-                      {conv.instanceName ? (
+                      {/* Numero da paciente — sempre visivel, e a info que mais importa
+                          pra identificar quem e quem na lista. */}
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{conv.phone}</p>
+                      {/* Badge da linha (qual numero da clinica recebeu) — so aparece quando
+                          tem mais de uma linha ativa. Com 1 linha so, o badge repetia o mesmo
+                          numero em toda conversa e escondia o numero da paciente, que e o dado
+                          util aqui. */}
+                      {conv.instanceName && waInboundLines.length > 1 ? (
                         <div className="flex items-center gap-1 mt-0.5">
                           <span
                             className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
