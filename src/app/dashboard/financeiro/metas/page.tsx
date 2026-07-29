@@ -28,13 +28,17 @@ export default async function MetasPage() {
   const currentMonth = startOfMonth.slice(0, 7)
   const currentWeekStart = mondayOf(now)
 
-  const [{ data: metas }, { data: entradas }, { data: procedures }, { data: profissionais }, { data: novosPacientesMes }] = await Promise.all([
+  const [{ data: metas }, { data: metasProcedimentos }, { data: entradas }, { data: procedures }, { data: profissionais }, { data: novosPacientesMes }] = await Promise.all([
     supabase
       .from('metas_config')
       .select('*')
       .eq('clinic_id', clinicId)
       .order('periodo_inicio', { ascending: false })
       .limit(60),
+    supabase
+      .from('metas_config_procedimentos')
+      .select('meta_id, procedimento_id, valor_meta_individual, metas_config!inner(clinic_id)')
+      .eq('metas_config.clinic_id', clinicId),
     supabase
       .from('entradas')
       .select('data_venda, valor_liquido, procedimento_id, profissional_id')
@@ -78,6 +82,7 @@ export default async function MetasPage() {
 
       <MetasView
         metas={metas || []}
+        metasProcedimentos={(metasProcedimentos || []).map(({ meta_id, procedimento_id, valor_meta_individual }) => ({ meta_id, procedimento_id, valor_meta_individual }))}
         entradas={entradas || []}
         novosPacientesCount={novosPacientesMes?.length || 0}
         procedures={procedures || []}

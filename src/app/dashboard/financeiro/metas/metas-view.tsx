@@ -13,8 +13,15 @@ type Meta = {
   tipo: 'faturamento' | 'atendimentos' | 'procedimento' | 'novos_pacientes'
   profissional_id: string | null
   procedimento_id: string | null
+  modo_procedimento: 'especifico' | 'combinado' | null
   valor_meta: number
   atingida_em: string | null
+}
+
+type MetaProcedimento = {
+  meta_id: string
+  procedimento_id: string
+  valor_meta_individual: number | null
 }
 
 type Entrada = {
@@ -29,6 +36,7 @@ type Profissional = { id: string; name: string }
 
 type Props = {
   metas: Meta[]
+  metasProcedimentos: MetaProcedimento[]
   entradas: Entrada[]
   novosPacientesCount: number
   procedures: Procedure[]
@@ -74,7 +82,7 @@ function periodoFim(m: Meta) {
   return end.toISOString().slice(0, 10)
 }
 
-export default function MetasView({ metas, entradas, novosPacientesCount, procedures, profissionais, clinicId, currentMonth, currentWeekStart }: Props) {
+export default function MetasView({ metas, metasProcedimentos, entradas, novosPacientesCount, procedures, profissionais, clinicId, currentMonth, currentWeekStart }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -83,8 +91,31 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
   const [periodoInicio, setPeriodoInicio] = useState(currentMonth)
   const [tipo, setTipo] = useState<Meta['tipo']>('faturamento')
   const [valorMeta, setValorMeta] = useState('')
-  const [procedimentoId, setProcedimentoId] = useState('')
   const [profissionalId, setProfissionalId] = useState('')
+  const [modoProcedimento, setModoProcedimento] = useState<'especifico' | 'combinado'>('especifico')
+  const [selectedProcIds, setSelectedProcIds] = useState<string[]>([])
+  const [procQuantidades, setProcQuantidades] = useState<Record<string, string>>({})
+
+  function toggleProc(id: string) {
+    setSelectedProcIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const procMap = useMemo(() => {
+    const map: Record<string, MetaProcedimento[]> = {}
+    for (const mp of metasProcedimentos) {
+      if (!map[mp.meta_id]) map[mp.meta_id] = []
+      map[mp.meta_id].push(mp)
+    }
+    return map
+  }, [metasProcedimentos])
+
+  function procNomesDe(m: Meta) {
+    const subs = procMap[m.id]
+    if (subs && subs.length > 0) {
+      return subs.map(s => procedures.find(p => p.id === s.procedimento_id)?.name).filter(Boolean).join(', ')
+    }
+    return m.procedimento_id ? procedures.find(p => p.id === m.procedimento_id)?.name || null : null
+  }
 
   // Metas ativas agora: do mês corrente (se mensal) ou da semana corrente (se semanal)
   const metasAtivas = useMemo(() => {
@@ -98,6 +129,29 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
     const fim = periodoFim(m)
     if (m.tipo === 'novos_pacientes') return novosPacientesCount
 
+    if (m.tipo === 'procedimento') {
+      const subs = procMap[m.id]
+      if (subs && subs.length > 0) {
+        const noPeriodo = (procId: string) => entradas.filter(e =>
+          e.data_venda >= m.periodo_inicio && e.data_venda <= fim &&
+          (!m.profissional_id || e.profissional_id === m.profissional_id) &&
+          e.procedimento_id === procId
+        ).length
+
+        if (m.modo_procedimento === 'combinado') {
+          const ids = subs.map(s => s.procedimento_id)
+          return entradas.filter(e =>
+            e.data_venda >= m.periodo_inicio && e.data_venda <= fim &&
+            (!m.profissional_id || e.profissional_id === m.profissional_id) &&
+            ids.includes(e.procedimento_id || '')
+          ).length
+        }
+
+        // específico: soma capada por sub-cota — só chega no total quando todas forem batidas
+        return subs.reduce((s, sub) => s + Math.min(noPeriodo(sub.procedimento_id), sub.valor_meta_individual || 0), 0)
+      }
+    }
+
     const relevantes = entradas.filter(e =>
       e.data_venda >= m.periodo_inicio && e.data_venda <= fim &&
       (!m.profissional_id || e.profissional_id === m.profissional_id) &&
@@ -105,18 +159,31 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
     )
 
     if (m.tipo === 'faturamento') return relevantes.reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
-    return relevantes.length // atendimentos ou procedimento
+    return relevantes.length // atendimentos, procedimento legado ou novos_pacientes
   }
 
   async function handleSalvar() {
-    const valor = parseFloat(valorMeta)
-    if (!valor || valor <= 0) {
-      alert('Informe o valor da meta')
-      return
-    }
-    if (tipo === 'procedimento' && !procedimentoId) {
-      alert('Selecione o procedimento')
-      return
+    if (tipo === 'procedimento') {
+      if (selectedProcIds.length === 0) {
+        alert('Selecione ao menos um procedimento')
+        return
+      }
+      if (modoProcedimento === 'especifico') {
+        const faltando = selectedProcIds.some(id => !procQuantidades[id] || parseFloat(procQuantidades[id]) <= 0)
+        if (faltando) {
+          alert('Informe a quantidade para cada procedimento selecionado')
+          return
+        }
+      } else if (!valorMeta || parseFloat(valorMeta) <= 0) {
+        alert('Informe a meta total')
+        return
+      }
+    } else {
+      const valor = parseFloat(valorMeta)
+      if (!valor || valor <= 0) {
+        alert('Informe o valor da meta')
+        return
+      }
     }
 
     setLoading(true)
@@ -125,36 +192,69 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
       ? (periodoInicio.length === 7 ? periodoInicio + '-01' : periodoInicio)
       : periodoInicio
 
-    const existente = metas.find(m =>
-      m.periodo_tipo === periodoTipo &&
-      (periodoTipo === 'mensal' ? m.periodo_inicio.slice(0, 7) === periodoInicio : m.periodo_inicio === periodoInicio) &&
-      m.tipo === tipo &&
-      (m.profissional_id || '') === (profissionalId || '') &&
-      (m.procedimento_id || '') === (tipo === 'procedimento' ? procedimentoId : '')
-    )
+    const valorMetaFinal = tipo === 'procedimento'
+      ? (modoProcedimento === 'combinado'
+          ? parseFloat(valorMeta)
+          : selectedProcIds.reduce((s, id) => s + (parseFloat(procQuantidades[id]) || 0), 0))
+      : parseFloat(valorMeta)
 
     const payload = {
       periodo_tipo: periodoTipo,
       periodo_inicio: inicioDate,
       tipo,
       profissional_id: profissionalId || null,
-      procedimento_id: tipo === 'procedimento' ? procedimentoId : null,
-      valor_meta: valor,
+      procedimento_id: null,
+      modo_procedimento: tipo === 'procedimento' ? modoProcedimento : null,
+      valor_meta: valorMetaFinal,
     }
 
-    const { error } = existente
-      ? await supabase.from('metas_config').update(payload).eq('id', existente.id)
-      : await supabase.from('metas_config').insert({ clinic_id: clinicId, ...payload })
+    // metas de procedimento sempre criam um novo registro (múltiplos procedimentos por meta);
+    // os outros tipos continuam com upsert por período+tipo+profissional
+    const existente = tipo === 'procedimento' ? undefined : metas.find(m =>
+      m.periodo_tipo === periodoTipo &&
+      (periodoTipo === 'mensal' ? m.periodo_inicio.slice(0, 7) === periodoInicio : m.periodo_inicio === periodoInicio) &&
+      m.tipo === tipo &&
+      (m.profissional_id || '') === (profissionalId || '')
+    )
 
-    if (error) {
-      alert('Erro ao salvar: ' + error.message)
-      setLoading(false)
-      return
+    let metaId: string | null = null
+
+    if (existente) {
+      const { error } = await supabase.from('metas_config').update(payload).eq('id', existente.id)
+      if (error) {
+        alert('Erro ao salvar: ' + error.message)
+        setLoading(false)
+        return
+      }
+      metaId = existente.id
+    } else {
+      const { data, error } = await supabase.from('metas_config').insert({ clinic_id: clinicId, ...payload }).select('id').single()
+      if (error || !data) {
+        alert('Erro ao salvar: ' + (error?.message || 'falha desconhecida'))
+        setLoading(false)
+        return
+      }
+      metaId = data.id
+    }
+
+    if (tipo === 'procedimento' && metaId) {
+      await supabase.from('metas_config_procedimentos').delete().eq('meta_id', metaId)
+      const rows = selectedProcIds.map(id => ({
+        meta_id: metaId,
+        procedimento_id: id,
+        valor_meta_individual: modoProcedimento === 'especifico' ? parseFloat(procQuantidades[id]) : null,
+      }))
+      const { error: procError } = await supabase.from('metas_config_procedimentos').insert(rows)
+      if (procError) {
+        alert('Meta salva, mas houve erro ao salvar os procedimentos: ' + procError.message)
+      }
     }
 
     setValorMeta('')
-    setProcedimentoId('')
     setProfissionalId('')
+    setSelectedProcIds([])
+    setProcQuantidades({})
+    setModoProcedimento('especifico')
     router.refresh()
     setLoading(false)
   }
@@ -224,19 +324,66 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
             </div>
 
             {tipo === 'procedimento' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Procedimento</label>
-                <select
-                  value={procedimentoId}
-                  onChange={e => setProcedimentoId(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-                >
-                  <option value="">Selecione...</option>
-                  {procedures.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Modo</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setModoProcedimento('especifico')}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold border transition ${modoProcedimento === 'especifico' ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600'}`}
+                    >
+                      Específico
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModoProcedimento('combinado')}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold border transition ${modoProcedimento === 'combinado' ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600'}`}
+                    >
+                      Combinado
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {modoProcedimento === 'especifico'
+                      ? 'Cada procedimento tem sua própria cota — a meta só é batida quando todas forem atingidas.'
+                      : 'Os procedimentos selecionados somam juntos para um único total, em qualquer proporção.'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Procedimentos</label>
+                  <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                    {procedures.map(p => {
+                      const checked = selectedProcIds.includes(p.id)
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 px-3 py-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleProc(p.id)}
+                            className="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                          />
+                          <span className="flex-1 text-sm text-slate-700">{p.name}</span>
+                          {checked && modoProcedimento === 'especifico' && (
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              placeholder="Qtd"
+                              value={procQuantidades[p.id] || ''}
+                              onChange={e => setProcQuantidades(prev => ({ ...prev, [p.id]: e.target.value }))}
+                              className="w-20 px-2 py-1 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                    {procedures.length === 0 && (
+                      <p className="px-3 py-4 text-sm text-slate-400">Nenhum procedimento cadastrado</p>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
 
             {tipo !== 'novos_pacientes' && (
@@ -255,20 +402,29 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                {tipo === 'faturamento' ? 'Meta (R$)' : 'Meta (quantidade)'}
-              </label>
-              <input
-                type="number"
-                step={tipo === 'faturamento' ? '1000' : '1'}
-                min="0"
-                value={valorMeta}
-                onChange={e => setValorMeta(e.target.value)}
-                placeholder={tipo === 'faturamento' ? 'Ex: 50000' : 'Ex: 20'}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-              />
-            </div>
+            {!(tipo === 'procedimento' && modoProcedimento === 'especifico') && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {tipo === 'faturamento' ? 'Meta (R$)' : tipo === 'procedimento' ? 'Meta total (quantidade)' : 'Meta (quantidade)'}
+                </label>
+                <input
+                  type="number"
+                  step={tipo === 'faturamento' ? '1000' : '1'}
+                  min="0"
+                  value={valorMeta}
+                  onChange={e => setValorMeta(e.target.value)}
+                  placeholder={tipo === 'faturamento' ? 'Ex: 50000' : 'Ex: 20'}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                />
+              </div>
+            )}
+            {tipo === 'procedimento' && modoProcedimento === 'especifico' && selectedProcIds.length > 0 && (
+              <p className="text-sm text-slate-500">
+                Meta total (soma das cotas): <span className="font-semibold text-slate-700">
+                  {selectedProcIds.reduce((s, id) => s + (parseFloat(procQuantidades[id]) || 0), 0)}
+                </span>
+              </p>
+            )}
 
             <button
               onClick={handleSalvar}
@@ -299,7 +455,7 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
             const falta = Math.max(0, m.valor_meta - realizado)
             const isMoeda = m.tipo === 'faturamento'
             const profNome = m.profissional_id ? profissionais.find(p => p.id === m.profissional_id)?.name : null
-            const procNome = m.procedimento_id ? procedures.find(p => p.id === m.procedimento_id)?.name : null
+            const procNome = procNomesDe(m)
 
             return (
               <div key={m.id} className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-6 text-white">
@@ -377,7 +533,7 @@ export default function MetasView({ metas, entradas, novosPacientesCount, proced
               <tbody className="divide-y divide-slate-50">
                 {metas.map(m => {
                   const profNome = m.profissional_id ? profissionais.find(p => p.id === m.profissional_id)?.name : null
-                  const procNome = m.procedimento_id ? procedures.find(p => p.id === m.procedimento_id)?.name : null
+                  const procNome = procNomesDe(m)
                   const isAtiva = metasAtivas.some(a => a.id === m.id)
                   return (
                     <tr key={m.id} className="hover:bg-slate-50">
