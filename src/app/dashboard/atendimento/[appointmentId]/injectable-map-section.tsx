@@ -7,6 +7,7 @@ import Icon from '@/components/ui/Icon'
 import FaceMap from '@/components/ui/FaceMap'
 import { createLogger } from '@/lib/logger'
 import { todayBR } from '@/lib/datetime'
+import { classifyInjectableType } from '@/lib/injectable-type'
 
 const log = createLogger('InjectableMap')
 
@@ -39,6 +40,9 @@ type Props = {
     id: string
     total_units: number
     product_name?: string
+    product_id: string | null
+    type: string
+    stock_deducted: boolean | null
     products: { name: string } | null
     injectable_points: Array<{ x_position: number; y_position: number; units: number }>
   }>
@@ -70,6 +74,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
   const [activeProduct, setActiveProduct] = useState<string>('')
   const [unitsPerClick, setUnitsPerClick] = useState(1)
   const [isMarkingMode, setIsMarkingMode] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -136,8 +141,7 @@ export default function InjectableMapSection({ patient, appointmentId, products,
       for (const [productId, productPoints] of Object.entries(byProduct)) {
         const product = products.find(p => p.id === productId)
         const totalProductUnits = productPoints.reduce((a, p) => a + p.units, 0)
-        const productType = product?.category?.toLowerCase().includes('preenchimento') ||
-          product?.category?.toLowerCase().includes('filler') ? 'filler' : 'toxin'
+        const productType = classifyInjectableType(product?.name, product?.category)
 
         const { data: application, error: appError } = await supabase
           .from('injectable_applications')
@@ -181,6 +185,50 @@ export default function InjectableMapSection({ patient, appointmentId, products,
       setError(msg)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const deleteApplication = async (app: Props['currentInjections'][number]) => {
+    const name = app.product_name || app.products?.name || 'produto'
+    if (!confirm(`Excluir aplicação de "${name}"? Se o estoque já tiver sido descontado, ele será estornado.`)) return
+    setDeletingId(app.id)
+    try {
+      if (app.product_id && app.stock_deducted && (app.total_units || 0) > 0) {
+        const { data: productData } = await supabase
+          .from('products')
+          .select('current_stock')
+          .eq('id', app.product_id)
+          .single()
+
+        if (productData) {
+          const { data: { user } } = await supabase.auth.getUser()
+          const newStock = productData.current_stock + (app.total_units || 0)
+
+          await supabase.from('stock_movements').insert({
+            clinic_id: clinicId,
+            product_id: app.product_id,
+            type: 'entrada',
+            quantity: app.total_units,
+            previous_stock: productData.current_stock,
+            new_stock: newStock,
+            reason: 'Estorno por exclusão de aplicação (atendimento)',
+            appointment_id: appointmentId,
+            patient_id: patient.id,
+            user_id: user?.id,
+          })
+        }
+      }
+
+      await supabase.from('injectable_points').delete().eq('application_id', app.id)
+      const { error } = await supabase.from('injectable_applications').delete().eq('id', app.id)
+      if (error) throw error
+
+      router.refresh()
+    } catch (err) {
+      log.error('Erro ao excluir aplicação', err)
+      alert('Erro ao excluir aplicação.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -412,12 +460,30 @@ export default function InjectableMapSection({ patient, appointmentId, products,
             <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Aplicações salvas</p>
             {currentInjections.map(inj => (
               <div key={inj.id} className="flex items-center justify-between py-2 px-3 bg-emerald-50 rounded-lg mb-2">
-                <span className="text-sm text-emerald-700">
-                  {inj.product_name || (inj.products as { name: string } | null)?.name || 'Produto'}
-                </span>
-                <span className="text-sm font-semibold text-emerald-700">
-                  {inj.total_units}U ({inj.injectable_points?.length || 0} pts)
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${inj.type === 'toxin' ? 'bg-purple-100 text-purple-700' : 'bg-pink-100 text-pink-700'}`}>
+                    {inj.type === 'toxin' ? 'Toxina' : 'Preenchedor'}
+                  </span>
+                  <span className="text-sm text-emerald-700">
+                    {inj.product_name || (inj.products as { name: string } | null)?.name || 'Produto'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-emerald-700">
+                    {inj.total_units}U ({inj.injectable_points?.length || 0} pts)
+                  </span>
+                  <button
+                    onClick={() => deleteApplication(inj)}
+                    disabled={deletingId === inj.id}
+                    className="p-1 hover:bg-red-100 rounded-md text-red-500 transition-colors disabled:opacity-50"
+                    title="Excluir aplicação"
+                  >
+                    {deletingId === inj.id
+                      ? <div className="w-3.5 h-3.5 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                      : <Icon name="trash" className="w-3.5 h-3.5" />
+                    }
+                  </button>
+                </div>
               </div>
             ))}
           </div>
