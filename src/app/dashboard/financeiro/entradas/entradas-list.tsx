@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
 import { todayBR } from '@/lib/datetime'
@@ -14,6 +14,7 @@ type Entrada = {
   data_venda: string
   paciente_id?: string | null
   paciente_nome: string
+  procedimento_id?: string | null
   procedimento_nome: string
   profissional_nome: string
   profissional_id: string | null
@@ -73,12 +74,72 @@ function ultimoDiaMes() {
 const FORMAS = ['pix', 'dinheiro', 'credito', 'debito']
 const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', credito: 'Crédito', debito: 'Débito' }
 
+function ProcedimentoBusca({
+  procedimentos,
+  value,
+  procedimentoId,
+  onChange,
+}: {
+  procedimentos: { id: string; name: string; price: number }[]
+  value: string
+  procedimentoId: string | null
+  onChange: (nome: string, id: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const filtered = value.length > 0
+    ? procedimentos.filter(p => normalizeText(p.name).includes(normalizeText(value))).slice(0, 8)
+    : []
+
+  function pick(p: { id: string; name: string }) {
+    onChange(p.name, p.id)
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        type="text"
+        value={value}
+        onChange={e => { onChange(e.target.value, null); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Busque um procedimento ou digite livremente..."
+        className="input w-full text-sm"
+      />
+      {procedimentoId && (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-emerald-600" title="Vinculado a um procedimento cadastrado">
+          ✓ vinculado
+        </span>
+      )}
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+          {filtered.map(p => (
+            <button key={p.id} type="button" onMouseDown={() => pick(p)}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-100 last:border-0">
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {value.length > 0 && !procedimentoId && (
+        <p className="text-xs text-slate-400 mt-1">
+          Não vinculado a nenhum procedimento cadastrado — será salvo como texto livre.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function EditEntradaModal({
   entrada,
+  procedimentos,
   onSave,
   onClose,
 }: {
   entrada: Entrada
+  procedimentos: { id: string; name: string; price: number }[]
   onSave: (updated: Entrada) => void
   onClose: () => void
 }) {
@@ -89,6 +150,7 @@ function EditEntradaModal({
   const [data, setData] = useState(entrada.data_venda)
   const [paciente, setPaciente] = useState(entrada.paciente_nome || '')
   const [procedimento, setProcedimento] = useState(entrada.procedimento_nome || '')
+  const [procedimentoId, setProcedimentoId] = useState<string | null>(entrada.procedimento_id || null)
   const [profissional, setProfissional] = useState(entrada.profissional_nome || '')
   const [forma, setForma] = useState(entrada.forma_pagamento || 'pix')
   const [bandeira, setBandeira] = useState(entrada.bandeira || '')
@@ -119,6 +181,7 @@ function EditEntradaModal({
     const { error } = await supabase.from('entradas').update({
       data_venda: data,
       paciente_nome: paciente,
+      procedimento_id: procedimentoId,
       procedimento_nome: procedimento,
       profissional_nome: profissional,
       forma_pagamento: forma,
@@ -136,7 +199,7 @@ function EditEntradaModal({
     }
 
     toast.success('Entrada atualizada')
-    onSave({ ...entrada, data_venda: data, paciente_nome: paciente, procedimento_nome: procedimento, profissional_nome: profissional, forma_pagamento: forma, bandeira: bandeira || null, valor_bruto: vb, valor_liquido: vl, tipo_receita: tipoReceita })
+    onSave({ ...entrada, data_venda: data, paciente_nome: paciente, procedimento_id: procedimentoId, procedimento_nome: procedimento, profissional_nome: profissional, forma_pagamento: forma, bandeira: bandeira || null, valor_bruto: vb, valor_liquido: vl, tipo_receita: tipoReceita })
     onClose()
   }
 
@@ -206,7 +269,12 @@ function EditEntradaModal({
 
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Procedimento</label>
-            <input type="text" value={procedimento} onChange={e => setProcedimento(e.target.value)} className="input w-full text-sm" />
+            <ProcedimentoBusca
+              procedimentos={procedimentos}
+              value={procedimento}
+              procedimentoId={procedimentoId}
+              onChange={(nome, id) => { setProcedimento(nome); setProcedimentoId(id) }}
+            />
           </div>
 
           <div>
@@ -720,6 +788,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
       {editEntry && (
         <EditEntradaModal
           entrada={editEntry}
+          procedimentos={procedimentos}
           onSave={handleSaveEdit}
           onClose={() => setEditEntry(null)}
         />
