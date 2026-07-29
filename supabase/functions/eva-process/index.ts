@@ -1147,7 +1147,7 @@ Deno.serve(async (req) => {
         const [yy, mm, dd] = (conv.steps.find(s => s.toolName === 'consultar_agenda')?.toolInput as any)?.periodo
           ? ['', '', ''] : ['', '', ''];
         finalText = sanitizeWhatsapp(
-          `${firstNamePost ? firstNamePost + ', ' : ''}já deixei seu horário reservado para ${horarioEscolhido}! Qualquer imprevisto, é só me avisar com antecedência. Vai ser um prazer te receber! *`
+          `${firstNamePost ? firstNamePost + ', ' : ''}já deixei seu horário reservado para ${horarioEscolhido}! Qualquer imprevisto, é só me avisar com antecedência. Vai ser um prazer te receber!`
         );
         conv.errors.push(`[camada1.0] horario escolhido detectado (${horarioEscolhido}) → agendamento criado direto`);
       }
@@ -1293,7 +1293,7 @@ Deno.serve(async (req) => {
       // Substitui o texto antes de enviar — paciente não recebe "vou confirmar" falso.
       // A equipe vai ver o lead no painel e dar a resposta real.
       const nomeEscalacao = firstNamePost ? `${firstNamePost}, ` : '';
-      finalText = sanitizeWhatsapp(`${nomeEscalacao}vou verificar essa informação com a equipe e te retorno em instantes com tudo certinho! *`);
+      finalText = sanitizeWhatsapp(`${nomeEscalacao}vou verificar essa informação com a equipe e te retorno em instantes com tudo certinho!`);
       if (ctx.lead?.id) {
         fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
           method: 'PATCH',
