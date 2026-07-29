@@ -59,6 +59,7 @@ type EvaRow = {
   created_at: string
   metadata?: {
     instance_name?: string
+    whatsapp_instance?: string
     push_name?: string
     evolution_message_id?: string
     kind?: MessageKind
@@ -77,8 +78,15 @@ function threadKey(phone: string, instanceName: string | null | undefined): stri
 
 function rowInstanceName(r: EvaRow): string | null {
   const m = r.metadata
-  if (m && typeof m === 'object' && 'instance_name' in m && m.instance_name != null) {
-    return String(m.instance_name)
+  if (m && typeof m === 'object') {
+    // Mensagens do paciente (user) gravam a instancia em 'instance_name'.
+    // Mensagens da Eva (assistant) gravam em 'whatsapp_instance' — chave
+    // diferente. Sem esse fallback, qualquer conversa cuja ULTIMA mensagem
+    // foi da Eva (o caso mais comum) ficava com instanceName=null e sumia
+    // da lista assim que uma linha especifica era selecionada no dropdown
+    // (null !== lineFilter). Bug real: conversa da Iris Valim (Sarah Pina).
+    if ('instance_name' in m && m.instance_name != null) return String(m.instance_name)
+    if ('whatsapp_instance' in m && m.whatsapp_instance != null) return String(m.whatsapp_instance)
   }
   return null
 }

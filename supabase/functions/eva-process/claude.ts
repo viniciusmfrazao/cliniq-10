@@ -318,7 +318,7 @@ export async function runConversation(opts: RunConvOpts): Promise<RunConvResult>
       const toolsCalledSoFar = steps.filter(s => s.toolName).map(s => s.toolName);
       const agendamentoCriado = toolsCalledSoFar.includes('criar_agendamento');
       const confirmouNoTexto =
-        /(j[aá] deixei|horario reservado|horário reservado|agendamento confirmado|horario marcado|horário marcado|deixei seu hor)/i.test(text);
+        /(j[aá] deixei|horario reservado|horário reservado|agendamento confirmado|horario marcado|horário marcado|deixei seu hor|horario separado|horário separado|esta (com o|reservado)|ta (com o|reservado)|reservei (seu|o)|encaixei (voc[eê]|seu)|marquei (seu|o) hor)/i.test(text);
 
       if (!agendamentoCriado && confirmouNoTexto) {
         // RECUPERACAO AUTOMATICA (decisao do cliente): em vez de descartar e
