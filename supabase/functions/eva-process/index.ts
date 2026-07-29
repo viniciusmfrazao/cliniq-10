@@ -1235,29 +1235,82 @@ Deno.serve(async (req) => {
   // Se a Eva prometeu "vou confirmar com a Dra" mas nao chamou escalar_humano,
   // (a) substitui o texto por uma mensagem honesta que não faz promessa vazia,
   // (b) marca o lead pra revisao humana pra equipe dar o retorno prometido.
+  //
+  // Caso real (Sueli): Eva chamou consultar_agenda NESTE turno, recebeu 9
+  // horarios reais, e mesmo assim escreveu "vou verificar com a equipe" —
+  // escalando uma pergunta que ela mesma ja tinha resposta pronta. Antes de
+  // escalar, checamos se ha dados reais de agenda deste turno (conv.steps);
+  // se houver, reconstruimos a resposta com eles em vez de escalar — so
+  // escala de fato quando NAO ha dado nenhum pra entregar.
   let forcedEscalation = false;
   if (!payload.isFollowup && promisedFollowupWithoutEscalating(finalText, toolsUsed)) {
-    forcedEscalation = true;
-    // Substitui o texto antes de enviar — paciente não recebe "vou confirmar" falso.
-    // A equipe vai ver o lead no painel e dar a resposta real.
-    const nomeEscalacao = firstNamePost ? `${firstNamePost}, ` : '';
-    finalText = sanitizeWhatsapp(`${nomeEscalacao}vou verificar essa informação com a equipe e te retorno em instantes com tudo certinho! *`);
-    if (ctx.lead?.id) {
-      fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
-        method: 'PATCH',
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          needs_human_review: true,
-          human_review_reason: 'duvida_complexa',
-          human_review_details: `Eva detectou dúvida que requer equipe. Pergunta da paciente precisa de resposta humana. Resposta original da Eva: ${finalText.slice(0, 200)}`,
-          human_review_at: new Date().toISOString(),
-          ai_priority: 'hot',
-        }),
-      }).catch(() => {});
+    const realAgendaStep = [...conv.steps].reverse().find(
+      s => s.toolName === 'consultar_agenda' && s.toolResult?.includes('Horarios REAIS disponiveis'),
+    );
+
+    let recoveredWithRealData = false;
+    if (realAgendaStep?.toolResult) {
+      try {
+        const retryMessages: ClaudeMessage[] = [
+          ...messagesWithContext,
+          { role: 'assistant', content: finalText },
+          { role: 'user', content: `[SISTEMA: voce disse que vai verificar/confirmar com a equipe, mas voce JA TEM os horarios reais consultados neste mesmo turno:\n${realAgendaStep.toolResult}\n\nResponda a paciente AGORA apresentando 2-3 desses horarios de forma calorosa e natural, em uma unica mensagem de WhatsApp. NAO diga que vai verificar ou confirmar com a equipe — os dados ja estao acima, entregue agora.]` },
+        ];
+
+        const retry = await runConversation({
+          apiKey: ANTHROPIC_API_KEY,
+          systemPrompt: built.staticPrompt,
+          messages: retryMessages,
+          tools: TOOLS,
+          model: MODEL_PREMIUM,
+          useCache: true,
+          executeTool: async (name, input) => {
+            const r = await executeToolByName(name, input, ctx, payload, {
+              supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY,
+            }, imagesSentProcedures, materialsSentProcedures);
+            if (name === 'criar_agendamento' && r.meta?.appointmentCreated === true) appointmentCreated = true;
+            return r.resultStr;
+          },
+        });
+
+        const retryText = sanitizeWhatsapp(retry.finalText);
+        // A resposta refeita nao pode cair na mesma fuga, senão é loop.
+        if (retryText && retryText.trim().length > 0 && !promisedFollowupWithoutEscalating(retryText, toolsUsed)) {
+          finalText = retryText;
+          toolsUsed = [...toolsUsed, ...retry.steps.filter(s => s.toolName).map(s => s.toolName)];
+          agendamentoCriado = toolsUsed.includes('criar_agendamento') || appointmentCreated;
+          bookingRecovered = true;
+          recoveredWithRealData = true;
+          conv.errors.push('[pos2] escalonamento evitado — dados reais de agenda ja disponiveis neste turno, resposta refeita');
+        }
+      } catch (e) {
+        conv.errors.push(`[pos2] falha ao reconstruir com dados reais: ${(e as Error).message}`);
+      }
+    }
+
+    if (!recoveredWithRealData) {
+      forcedEscalation = true;
+      // Substitui o texto antes de enviar — paciente não recebe "vou confirmar" falso.
+      // A equipe vai ver o lead no painel e dar a resposta real.
+      const nomeEscalacao = firstNamePost ? `${firstNamePost}, ` : '';
+      finalText = sanitizeWhatsapp(`${nomeEscalacao}vou verificar essa informação com a equipe e te retorno em instantes com tudo certinho! *`);
+      if (ctx.lead?.id) {
+        fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            needs_human_review: true,
+            human_review_reason: 'duvida_complexa',
+            human_review_details: `Eva detectou dúvida que requer equipe. Pergunta da paciente precisa de resposta humana. Resposta original da Eva: ${finalText.slice(0, 200)}`,
+            human_review_at: new Date().toISOString(),
+            ai_priority: 'hot',
+          }),
+        }).catch(() => {});
+      }
     }
   }
 
