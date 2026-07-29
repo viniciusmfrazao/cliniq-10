@@ -113,18 +113,24 @@ export default async function CRMPage() {
     .eq('clinic_id', userData?.clinic_id)
     .eq('active', true)
 
-  // Linhas WhatsApp conectadas (todos os papéis) — alimenta o seletor de
-  // CRM por número quando a clínica tem 2+ linhas configuradas com CRM
-  // dedicado (allSettings.length > 1).
+  // Linhas WhatsApp da clínica (todos os papéis, qualquer status) — alimenta
+  // o seletor de CRM por número quando a clínica tem 2+ linhas configuradas
+  // com CRM dedicado (allSettings.length > 1).
+  // SEM filtro de status=connected: uma linha desconectada (ex: aguardando
+  // reconexão) ainda tem lead/CRM real associado a ela — filtrar por
+  // conectada so escondia label/phone_number, e o dropdown caia pro nome
+  // cru da instance (ex: "cliniq-182" em vez do numero). waInstance (usado
+  // pro banner de Eva pausada) continua preferindo a linha conectada e
+  // is_default, entao nao muda de comportamento pra esse calculo.
   const { data: waList } = await supabase
     .from('clinic_whatsapp')
-    .select('instance_name, label, phone_number, auto_reply_enabled, is_default, role_inbound, role_outbound_automation')
+    .select('instance_name, label, phone_number, auto_reply_enabled, is_default, role_inbound, role_outbound_automation, status')
     .eq('clinic_id', userData?.clinic_id)
-    .eq('status', 'connected')
-  const waInstance = waList?.length
-    ? (waList.find(w => w.is_default && w.role_inbound !== false) ??
-       waList.find(w => w.role_inbound !== false) ??
-       waList[0])
+  const waConnected = (waList || []).filter(w => w.status === 'connected')
+  const waInstance = waConnected.length
+    ? (waConnected.find(w => w.is_default && w.role_inbound !== false) ??
+       waConnected.find(w => w.role_inbound !== false) ??
+       waConnected[0])
     : null
   // Banner só aparece se clínica tem módulo eva_ia E Eva está em modo manual
   const clinicModules: string[] = (await supabase.from('clinics').select('settings').eq('id', userData?.clinic_id || '').single()).data?.settings?.active_modules || []

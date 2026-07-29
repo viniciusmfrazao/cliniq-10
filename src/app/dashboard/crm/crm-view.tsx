@@ -290,16 +290,30 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
   // Só existe seletor quando a clínica tem 2+ linhas de crm_settings — pra
   // qualquer clínica com 1 linha só, tudo cai no comportamento de sempre.
   const hasMultiCrm = settingsList.length > 1
-  const [crmLine, setCrmLine] = useState<string>('')
+  // Nem toda clínica multi-CRM tem uma linha "padrão" (whatsapp_instance
+  // null) — clínicas com uma linha explícita por número (ex: Sarah Pina,
+  // 766 + 959) têm só linhas com instance preenchido. Nesse caso NÃO existe
+  // bucket '' pra cair — o valor inicial tem que ser uma instance real,
+  // senão a tela abre filtrando por um balde que não bate com lead nenhum
+  // (bug real: "0 Total Leads" com a Eva selecionada, porque o balde ''
+  // so tinha sentido quando existia a linha null explicita).
+  const hasNullBucket = settingsList.some(s => !s.whatsapp_instance)
+  const defaultCrmLine = hasNullBucket
+    ? ''
+    : (waLines.find(w => w.is_default) ?? waLines.find(w => w.role_inbound))?.instance_name
+      ?? settingsList[0]?.whatsapp_instance
+      ?? ''
+  const [crmLine, setCrmLine] = useState<string>(defaultCrmLine)
   // Instâncias explicitamente configuradas com CRM próprio, exceto o padrão.
   const otherCrmInstances = settingsList
     .map(s => s.whatsapp_instance)
     .filter((i): i is string => !!i)
   useEffect(() => {
     if (!hasMultiCrm) return
-    if (crmLine === '') return // bucket padrão é sempre válido
+    if (hasNullBucket && crmLine === '') return // bucket padrão é sempre válido
     const stillValid = settingsList.some(s => s.whatsapp_instance === crmLine)
-    if (!stillValid) setCrmLine('')
+    if (!stillValid) setCrmLine(defaultCrmLine)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMultiCrm, crmLine, settingsList])
 
   // Realtime: atualiza o CRM automaticamente quando leads ou follow-ups mudam.
@@ -682,13 +696,20 @@ export default function CRMView({ leads, procedures, users, clinicId, settings, 
               className="btn-secondary text-sm pr-8"
               title="Escolher qual CRM exibir"
             >
-              <option value="">
-                {(() => {
+              {/* Uma opção por linha de crm_settings, sem duplicar. Antes o
+                  primeiro <option> era sempre fixo ("Eva · linha padrão"),
+                  MESMO quando essa mesma linha ja tinha uma entrada explicita
+                  em otherCrmInstances (ex: 959 aparecia como "Eva · 959" E
+                  "Recepção · 959" ao mesmo tempo). Agora e so um loop direto
+                  em settingsList — cada linha do banco vira exatamente 1
+                  opção, nunca 2. */}
+              {settingsList.map((s) => {
+                const inst = s.whatsapp_instance
+                if (!inst) {
                   const def = waLines.find(w => w.is_default) ?? waLines.find(w => w.role_inbound)
-                  return def ? `Eva · ${def.label || def.phone_number?.replace(/\D/g, '').slice(-8) || def.instance_name.slice(0, 10)}` : 'Eva (padrão)'
-                })()}
-              </option>
-              {otherCrmInstances.map((inst) => {
+                  const label = def ? `Eva · ${def.label || def.phone_number?.replace(/\D/g, '').slice(-8) || def.instance_name.slice(0, 10)}` : 'Eva (padrão)'
+                  return <option key="default" value="">{label}</option>
+                }
                 const w = waLines.find(l => l.instance_name === inst)
                 const label = w?.label || w?.phone_number?.replace(/\D/g, '').slice(-8) || inst.slice(0, 10)
                 return (
