@@ -7,6 +7,13 @@ export function sanitizeWhatsapp(t: string | null | undefined): string {
   return String(t)
     .replace(/\r/g, '')
     .replace(/\n+/g, ' ')
+    // Remove negrito com asterisco (duplo ou simples) — decisao do cliente:
+    // mesmo sendo o negrito real do WhatsApp, o uso constante deixa a
+    // conversa com cara de mensagem automatica/IA. Rede de seguranca alem
+    // da instrucao no prompt (regra critica 2), caso o modelo insista.
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/\*/g, '')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
