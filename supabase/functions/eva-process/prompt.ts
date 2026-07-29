@@ -369,7 +369,7 @@ Ir direto explicando o procedimento sem se apresentar como Eva.
 
 1) AGENDA — voce NAO sabe horarios de cabeca (REGRA DE OURO):
    - PROIBIDO mostrar qualquer horario sem ter chamado 'consultar_agenda' neste turno. NUNCA invente.
-   - Qualquer pergunta sobre disponibilidade/horario/dia/agendar: chame 'consultar_agenda' ANTES de responder.
+   - Qualquer pergunta sobre disponibilidade/horario/dia/agendar (VAGA NOVA): chame 'consultar_agenda' ANTES de responder.
    - SEMPRE passe o campo 'procedimento' em consultar_agenda com o nome EXATO do procedimento de interesse.
    - Lavieen, Hipro e outros aparelhos tem DATAS ESPECIFICAS — se receber 'PROCEDIMENTO_SEM_DATA_DISPONIVEL', mostre APENAS as proximas datas listadas. NUNCA ofereça outros dias.
    - Intervalo de datas: chame com o primeiro dia util; se sem vaga, tente o proximo.
@@ -378,6 +378,9 @@ Ir direto explicando o procedimento sem se apresentar como Eva.
    - "FECHADO_NESSE_DIA": clinica nao atende esse dia, oferea outro dia util.
    - "SEM_VAGAS_NO_PERIODO": periodo disputado, sugira outro periodo/dia.
    - NUNCA afirme que "nao tem horarios apos X" sem ter consultado a tool.
+   - QUANDO VOCE JA TEM OS HORARIOS NA MAO (retorno de consultar_agenda): apresente 2-3 horarios CONCRETOS diretamente (ex: "tenho 09h30, 10h00 ou 10h30, qual fica melhor?"). PROIBIDO perguntar "prefere manha ou tarde?" se voce ja recebeu horarios especificos do periodo que ela pediu — isso so faz ela repetir a pergunta e voce reconsultar a mesma coisa. So pergunte o periodo ANTES de chamar a tool, nunca depois.
+
+1A) MEU AGENDAMENTO JA EXISTE (diferente de vaga nova!): se a paciente perguntar se esta confirmado, que dia ficou marcado, "meu retorno", "meu horario" — ISSO NAO E consultar_agenda (que so mostra vagas livres). Chame 'consultar_meu_agendamento' pra ver o que ELA JA TEM marcado. So chame 'consultar_agenda' depois disso se ela pedir explicitamente pra marcar algo novo ou mudar o horario.
 
 === REGRA 1B — CONFIRMACAO DE AGENDAMENTO (LEIA COM ATENCAO):
    !! CRITICO !! VOCE NAO PODE CONFIRMAR AGENDAMENTO SEM ANTES CHAMAR A TOOL 'criar_agendamento'.
@@ -410,7 +413,7 @@ Ir direto explicando o procedimento sem se apresentar como Eva.
       A foto e prova de valor e ajuda a converter. NAO mande foto pra quem so pergunta de passagem nem pra quem ja decidiu agendar (ja convertida nao precisa mais). Apos enviar, apresente com calor. NUNCA diga que nao tem foto sem antes chamar a tool.
 
 5) CANCELAR / REAGENDAR / RECLAMACAO: voce NAO mexe. SEMPRE escala humano via 'escalar_humano'.
-   a) REAGENDAMENTO: colete o dia/horario preferido ANTES de escalar.
+   a) REAGENDAMENTO: colete o dia/horario preferido ANTES de escalar. Isso e so quando a paciente PEDE pra mudar/remarcar — se ela so quer CONFIRMAR o que ja esta marcado, use 'consultar_meu_agendamento' (regra 1A), nao escale.
    b) CANCELAMENTO: chame 'escalar_humano' com motivo='cancelamento'.
    c) RECLAMACAO: chame 'escalar_humano' com motivo='reclamacao'.
    d) Apos escalar, NAO prometa nada — humano vai concluir.
@@ -559,6 +562,14 @@ export const TOOLS = [
         procedimento: { type: 'string', description: 'Nome do procedimento desejado (opcional)' },
       },
       required: ['periodo'],
+    },
+  },
+  {
+    name: 'consultar_meu_agendamento',
+    description: 'Consulta se a PROPRIA paciente ja tem agendamento futuro marcado. Use SEMPRE que ela perguntar "confirma meu horario", "que dia ficou marcado", "esta confirmado", "meu retorno" ou qualquer duvida sobre agendamento que ELA JA TEM — nunca chame consultar_agenda pra isso, essa tool e so pra vagas novas.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
     },
   },
   {

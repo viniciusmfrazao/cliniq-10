@@ -398,6 +398,56 @@ export async function consultarAgenda(args: {
   ].join('\n');
 }
 
+// ─── consultar_meu_agendamento ──────────────────────────────────────────────
+//
+// Caso real (Patricia): paciente pergunta "confirma meu retorno?" / "que dia
+// que ficou marcado?" e a Eva nao tinha NENHUMA tool pra olhar o agendamento
+// ja existente — so sabia consultar VAGAS livres. Resultado: 3h de idas e
+// vindas oferecendo remarcar algo que ja estava marcado, ate escalar humano.
+// Esta tool resolve na hora: busca os proximos agendamentos da propria
+// paciente (patient_id resolvido no contexto pelo telefone) e devolve pronto
+// pra Eva informar, sem inventar nem sugerir remarcacao.
+export async function consultarMeuAgendamento(
+  _args: Record<string, unknown>,
+  ctx: DonnaContext,
+  payload: IncomingPayload,
+  env: ToolEnv,
+): Promise<string> {
+  const patientId = ctx.patient?.id;
+  if (!patientId) {
+    return 'SEM_PACIENTE_CADASTRADO: Esse telefone nao tem cadastro de paciente vinculado no sistema, entao nao ha como consultar agendamento existente. Diga com elegancia que nao encontrou nada nesse numero e pergunte o nome completo dela pra equipe localizar, ou chame escalar_humano com motivo=\'duvida_complexa\' se ela insistir que tem agendamento.';
+  }
+
+  const nowIso = new Date().toISOString();
+  const url = `${env.supabaseUrl}/rest/v1/appointments?patient_id=eq.${patientId}&clinic_id=eq.${payload.clinicId}&status=in.(scheduled,confirmed,pending_confirmation,checked_in)&start_time=gte.${nowIso}&order=start_time.asc&limit=3&select=start_time,status,professional_id,procedure_id`;
+
+  const resp = await fetchJson<Array<{ start_time: string; status: string; professional_id: string | null; procedure_id: string | null }>>(url, {
+    method: 'GET', headers: sbHeaders(env),
+  });
+
+  if (!resp.ok || !Array.isArray(resp.data) || resp.data.length === 0) {
+    return 'SEM_AGENDAMENTO_FUTURO: Essa paciente nao tem nenhum agendamento futuro cadastrado no sistema. Diga com elegancia que nao encontrou nada marcado no momento e pergunte se ela gostaria de marcar um horario agora (chame consultar_agenda em seguida).';
+  }
+
+  const profById = new Map(ctx.professionals.map((p) => [p.id, p.name]));
+  const procById = new Map(ctx.procedures.map((p) => [p.id, p.name]));
+
+  const linhas = resp.data.map((a) => {
+    const data = formatarDataBR(a.start_time.slice(0, 10));
+    const hora = a.start_time.slice(11, 16);
+    const prof = (a.professional_id && profById.get(a.professional_id)) || 'a confirmar';
+    const proc = (a.procedure_id && procById.get(a.procedure_id)) || null;
+    return `${data} as ${hora} com ${prof}${proc ? ` — ${proc}` : ''} (status: ${a.status})`;
+  });
+
+  return [
+    'AGENDAMENTO(S) REAL(IS) JA MARCADOS PARA ESSA PACIENTE:',
+    ...linhas,
+    '',
+    'Informe esses dados exatamente como estao acima, de forma calorosa. NAO ofereca outros horarios nem sugira remarcar — a menos que a propria paciente peca pra mudar. Se ela pedir pra cancelar ou remarcar, chame escalar_humano.',
+  ].join('\n');
+}
+
 // ─── criar_agendamento ─────────────────────────────────────────────────────
 
 export async function criarAgendamento(args: {
@@ -1368,6 +1418,10 @@ export async function executeToolByName(
   switch (name) {
     case 'consultar_agenda': {
       const r = await consultarAgenda(input as any, ctx, payload, env);
+      return { resultStr: r };
+    }
+    case 'consultar_meu_agendamento': {
+      const r = await consultarMeuAgendamento(input as any, ctx, payload, env);
       return { resultStr: r };
     }
     case 'criar_agendamento': {
