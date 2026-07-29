@@ -95,6 +95,8 @@ export default function MetasView({ metas, metasProcedimentos, entradas, novosPa
   const [modoProcedimento, setModoProcedimento] = useState<'especifico' | 'combinado'>('especifico')
   const [selectedProcIds, setSelectedProcIds] = useState<string[]>([])
   const [procQuantidades, setProcQuantidades] = useState<Record<string, string>>({})
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   function toggleProc(id: string) {
     setSelectedProcIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -115,6 +117,64 @@ export default function MetasView({ metas, metasProcedimentos, entradas, novosPa
       return subs.map(s => procedures.find(p => p.id === s.procedimento_id)?.name).filter(Boolean).join(', ')
     }
     return m.procedimento_id ? procedures.find(p => p.id === m.procedimento_id)?.name || null : null
+  }
+
+  function handleEditar(m: Meta) {
+    setEditingId(m.id)
+    setPeriodoTipo(m.periodo_tipo)
+    setPeriodoInicio(m.periodo_tipo === 'mensal' ? m.periodo_inicio.slice(0, 7) : m.periodo_inicio)
+    setTipo(m.tipo)
+    setProfissionalId(m.profissional_id || '')
+
+    if (m.tipo === 'procedimento') {
+      const subs = procMap[m.id]
+      if (subs && subs.length > 0) {
+        setModoProcedimento(m.modo_procedimento || 'especifico')
+        setSelectedProcIds(subs.map(s => s.procedimento_id))
+        setProcQuantidades(Object.fromEntries(subs.map(s => [s.procedimento_id, String(s.valor_meta_individual ?? '')])))
+        setValorMeta(m.modo_procedimento === 'combinado' ? String(m.valor_meta) : '')
+      } else if (m.procedimento_id) {
+        // meta legada de procedimento único
+        setModoProcedimento('especifico')
+        setSelectedProcIds([m.procedimento_id])
+        setProcQuantidades({ [m.procedimento_id]: String(m.valor_meta) })
+        setValorMeta('')
+      }
+    } else {
+      setValorMeta(String(m.valor_meta))
+      setSelectedProcIds([])
+      setProcQuantidades({})
+    }
+
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function handleCancelarEdicao() {
+    setEditingId(null)
+    setValorMeta('')
+    setProfissionalId('')
+    setSelectedProcIds([])
+    setProcQuantidades({})
+    setModoProcedimento('especifico')
+  }
+
+  async function handleExcluir(m: Meta) {
+    const ok = confirm(
+      `Excluir a meta de ${TIPO_LABEL[m.tipo]}${m.periodo_tipo === 'mensal' ? ` (${getMesLabel(m.periodo_inicio.slice(0, 7))})` : ` (${getWeekLabel(m.periodo_inicio)})`}? Essa ação não pode ser desfeita.`
+    )
+    if (!ok) return
+
+    setDeletingId(m.id)
+    const { error } = await supabase.from('metas_config').delete().eq('id', m.id)
+    setDeletingId(null)
+
+    if (error) {
+      alert('Erro ao excluir: ' + error.message)
+      return
+    }
+
+    if (editingId === m.id) handleCancelarEdicao()
+    router.refresh()
   }
 
   // Metas ativas agora: do mês corrente (se mensal) ou da semana corrente (se semanal)
@@ -208,14 +268,16 @@ export default function MetasView({ metas, metasProcedimentos, entradas, novosPa
       valor_meta: valorMetaFinal,
     }
 
-    // metas de procedimento sempre criam um novo registro (múltiplos procedimentos por meta);
-    // os outros tipos continuam com upsert por período+tipo+profissional
-    const existente = tipo === 'procedimento' ? undefined : metas.find(m =>
-      m.periodo_tipo === periodoTipo &&
-      (periodoTipo === 'mensal' ? m.periodo_inicio.slice(0, 7) === periodoInicio : m.periodo_inicio === periodoInicio) &&
-      m.tipo === tipo &&
-      (m.profissional_id || '') === (profissionalId || '')
-    )
+    // edição explícita tem prioridade; senão, upsert por período+tipo+profissional
+    // (metas de procedimento sempre criam um novo registro, pois podem ter múltiplos procedimentos)
+    const existente = editingId
+      ? metas.find(m => m.id === editingId)
+      : tipo === 'procedimento' ? undefined : metas.find(m =>
+          m.periodo_tipo === periodoTipo &&
+          (periodoTipo === 'mensal' ? m.periodo_inicio.slice(0, 7) === periodoInicio : m.periodo_inicio === periodoInicio) &&
+          m.tipo === tipo &&
+          (m.profissional_id || '') === (profissionalId || '')
+        )
 
     let metaId: string | null = null
 
@@ -255,6 +317,7 @@ export default function MetasView({ metas, metasProcedimentos, entradas, novosPa
     setSelectedProcIds([])
     setProcQuantidades({})
     setModoProcedimento('especifico')
+    setEditingId(null)
     router.refresh()
     setLoading(false)
   }
@@ -263,9 +326,16 @@ export default function MetasView({ metas, metasProcedimentos, entradas, novosPa
     <div className="space-y-6">
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-          <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Icon name="edit" className="w-5 h-5 text-violet-600" />
-            Cadastrar / editar meta
+          <h3 className="font-bold text-slate-900 mb-4 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Icon name="edit" className="w-5 h-5 text-violet-600" />
+              {editingId ? 'Editar meta' : 'Cadastrar meta'}
+            </span>
+            {editingId && (
+              <button type="button" onClick={handleCancelarEdicao} className="text-xs font-semibold text-slate-500 hover:text-slate-700">
+                Cancelar edição
+              </button>
+            )}
           </h3>
 
           <div className="space-y-4">
@@ -436,7 +506,7 @@ export default function MetasView({ metas, metasProcedimentos, entradas, novosPa
               ) : (
                 <Icon name="check" className="w-5 h-5" />
               )}
-              Salvar Meta
+              {editingId ? 'Salvar edição' : 'Salvar Meta'}
             </button>
           </div>
         </div>
@@ -528,6 +598,7 @@ export default function MetasView({ metas, metasProcedimentos, entradas, novosPa
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Detalhe</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Meta</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Status</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -556,6 +627,31 @@ export default function MetasView({ metas, metasProcedimentos, entradas, novosPa
                         ) : (
                           <span className="text-slate-400 text-sm">—</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEditar(m)}
+                            title="Editar meta"
+                            className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition"
+                          >
+                            <Icon name="edit" className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExcluir(m)}
+                            disabled={deletingId === m.id}
+                            title="Excluir meta"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
+                          >
+                            {deletingId === m.id ? (
+                              <Icon name="loader" className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Icon name="trash" className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
