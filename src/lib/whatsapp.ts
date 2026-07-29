@@ -1,6 +1,177 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getSettings } from '@/lib/app-settings'
 
+export type PersistResult = {
+  ok: boolean
+  conversation_id?: string
+  evolution_message_id?: string | null
+  media_path?: string | null
+  warnings: string[]
+}
+
+/**
+ * Grava a mensagem de saída (manual OU automação) em `eva_conversations`
+ * logo após o envio, sem depender do eco do webhook da Evolution.
+ *
+ * Isso é necessário porque mensagens enviadas via API (automações e o
+ * painel manual) muitas vezes NÃO voltam como evento `messages_upsert`
+ * (fromMe=true) — dependendo da instância/versão da Evolution, o eco só
+ * acontece para mensagens mandadas pelo próprio app do WhatsApp. Sem essa
+ * gravação direta, a Eva nunca vê o que a automação mandou (fica sem
+ * contexto pra responder) e a UI do painel fica com buraco na conversa.
+ *
+ * Dedupe: se o webhook chegar depois com o mesmo evolution_message_id,
+ * a checagem por evolution_message_id evita duplicar a linha.
+ */
+export async function persistOutboundMessage(args: {
+  clinicId: string
+  phone: string
+  type: 'text' | 'image' | 'video' | 'audio'
+  message?: string
+  caption?: string
+  media?: string
+  mimetype?: string
+  fileName?: string
+  evolutionResult: unknown
+  purpose: 'manual' | 'automation'
+  userId?: string | null
+  /** Extra pra debug (ex: nome da automação, botões enviados). */
+  extraMetadata?: Record<string, unknown>
+}): Promise<PersistResult> {
+  const warnings: string[] = []
+  const svc = createServiceClient()
+  const normalizedPhone = normalizePhone(args.phone)
+
+  const evolutionMessageId =
+    (args.evolutionResult as { key?: { id?: string } } | null | undefined)?.key?.id ?? null
+
+  let mediaPath: string | null = null
+  let mediaUrl: string | null = null
+  let cleanedMime: string | null = null
+
+  if ((args.type === 'image' || args.type === 'video' || args.type === 'audio') && args.media) {
+    if (/^https?:\/\//i.test(args.media)) {
+      // Media já é uma URL pública (comum em áudio de automação) — não
+      // decodifica/reenvia pro storage, só referencia direto.
+      mediaUrl = args.media
+      cleanedMime = cleanMimeType(args.mimetype) ?? null
+    } else try {
+      const decoded = base64ToBuffer(args.media)
+      const inferredMime =
+        cleanMimeType(args.mimetype) ||
+        cleanMimeType(decoded.detectedMime) ||
+        (args.type === 'image' ? 'image/jpeg' : args.type === 'video' ? 'video/mp4' : 'audio/ogg')
+      cleanedMime = inferredMime
+      const ext = extFromMime(inferredMime)
+      const safeId = (evolutionMessageId ?? `${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-')
+      const path = `${args.clinicId}/${normalizedPhone}/${safeId}.${ext}`
+
+      const up = await svc.storage.from('whatsapp-media').upload(path, decoded.buffer, {
+        contentType: cleanedMime,
+        upsert: true,
+      })
+
+      if (up.error) {
+        warnings.push(`storage upload (mime=${cleanedMime}): ${up.error.message}`)
+      } else {
+        mediaPath = path
+        const signed = await svc.storage
+          .from('whatsapp-media')
+          .createSignedUrl(path, 60 * 60 * 24 * 7)
+        if (signed.error) {
+          warnings.push(`signed url: ${signed.error.message}`)
+        } else if (signed.data?.signedUrl) {
+          mediaUrl = signed.data.signedUrl
+        }
+      }
+    } catch (err) {
+      warnings.push(`decode/upload: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  const previewByKind =
+    args.type === 'image' ? '🖼️ Imagem' : args.type === 'video' ? '🎬 Vídeo' : args.type === 'audio' ? '🎤 Mensagem de voz' : ''
+  const content = args.message || args.caption || previewByKind
+
+  if (evolutionMessageId) {
+    const { data: existing } = await svc
+      .from('eva_conversations')
+      .select('id, metadata')
+      .eq('clinic_id', args.clinicId)
+      .eq('evolution_message_id', evolutionMessageId)
+      .limit(1)
+      .maybeSingle()
+
+    if (existing) {
+      const existingMeta = (existing.metadata as Record<string, unknown> | null) ?? {}
+      const needsMedia =
+        !existingMeta.media_url && mediaUrl
+          ? { media_path: mediaPath, media_url: mediaUrl }
+          : null
+      if (needsMedia) {
+        await svc
+          .from('eva_conversations')
+          .update({ metadata: { ...existingMeta, ...needsMedia } })
+          .eq('id', existing.id)
+      }
+      return {
+        ok: true,
+        conversation_id: existing.id,
+        evolution_message_id: evolutionMessageId,
+        media_path: mediaPath,
+        warnings: [...warnings, 'dedup: row ja existia'],
+      }
+    }
+  }
+
+  const insertRes = await svc
+    .from('eva_conversations')
+    .insert({
+      clinic_id: args.clinicId,
+      phone: normalizedPhone,
+      role: 'assistant',
+      content,
+      metadata: {
+        evolution_message_id: evolutionMessageId,
+        kind: args.type,
+        mimetype: cleanedMime,
+        file_name: args.fileName ?? null,
+        media_path: mediaPath,
+        media_url: mediaUrl,
+        caption: args.caption ?? null,
+        outbound: true,
+        outbound_purpose: args.purpose,
+        ...(args.extraMetadata ?? {}),
+      },
+      evolution_message_id: evolutionMessageId,
+    })
+    .select('id')
+    .maybeSingle()
+
+  if (insertRes.error) {
+    warnings.push(`insert eva_conversations: ${insertRes.error.message}`)
+    return {
+      ok: false,
+      evolution_message_id: evolutionMessageId,
+      media_path: mediaPath,
+      warnings,
+    }
+  }
+
+  await svc
+    .from('clinic_whatsapp')
+    .update({ last_event_at: new Date().toISOString() })
+    .eq('clinic_id', args.clinicId)
+
+  return {
+    ok: true,
+    conversation_id: insertRes.data?.id,
+    evolution_message_id: evolutionMessageId,
+    media_path: mediaPath,
+    warnings,
+  }
+}
+
 export type SendResult =
   | { ok: true; result: unknown }
   | { ok: false; error: string; code: 'not_configured' | 'not_connected' | 'evolution_error' | 'unknown' | 'rate_limited' }
@@ -369,7 +540,7 @@ export async function sendWhatsappMessage(args: {
     }
   }
 
-  return postEvolution(
+  const sendRes = await postEvolution(
     `${r.data.baseUrl}/message/sendText/${r.data.instanceName}`,
     r.data.apiKey,
     {
@@ -379,6 +550,19 @@ export async function sendWhatsappMessage(args: {
       presence: 'composing',
     },
   )
+
+  if (sendRes.ok && purpose === 'automation') {
+    await persistOutboundMessage({
+      clinicId,
+      phone,
+      type: 'text',
+      message,
+      evolutionResult: sendRes.result,
+      purpose: 'automation',
+    })
+  }
+
+  return sendRes
 }
 
 /**
@@ -414,7 +598,7 @@ export async function sendWhatsappButtons(args: {
     }
   }
 
-  return postEvolution(
+  const sendRes = await postEvolution(
     `${r.data.baseUrl}/message/sendButtons/${r.data.instanceName}`,
     r.data.apiKey,
     {
@@ -431,6 +615,24 @@ export async function sendWhatsappButtons(args: {
       presence: 'composing',
     },
   )
+
+  if (sendRes.ok && purpose === 'automation') {
+    await persistOutboundMessage({
+      clinicId,
+      phone,
+      type: 'text',
+      message: body,
+      evolutionResult: sendRes.result,
+      purpose: 'automation',
+      extraMetadata: {
+        kind: 'buttons',
+        buttons: buttons.slice(0, 3).map((b) => ({ id: b.id, text: b.text })),
+        footer: footer ?? null,
+      },
+    })
+  }
+
+  return sendRes
 }
 
 /**
@@ -575,7 +777,7 @@ export async function sendWhatsappAudio(args: {
     }
   }
 
-  return postEvolution(
+  const sendRes = await postEvolution(
     `${r.data.baseUrl}/message/sendWhatsAppAudio/${r.data.instanceName}`,
     r.data.apiKey,
     {
@@ -584,6 +786,19 @@ export async function sendWhatsappAudio(args: {
       encoding: true,
     },
   )
+
+  if (sendRes.ok && purpose === 'automation') {
+    await persistOutboundMessage({
+      clinicId,
+      phone,
+      type: 'audio',
+      media: audio,
+      evolutionResult: sendRes.result,
+      purpose: 'automation',
+    })
+  }
+
+  return sendRes
 }
 
 export type EnvioMode = 'texto' | 'audio' | 'ambos'
