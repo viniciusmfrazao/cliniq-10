@@ -21,6 +21,7 @@ type Contract = {
   viewed_at: string | null
   signed_at: string | null
   signer_name: string | null
+  pdf_path: string | null
   created_at: string
 }
 
@@ -76,12 +77,29 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
       const link = `${getSiteUrl()}/assinar-contrato/${data.token}`
       await navigator.clipboard.writeText(link).catch(() => {})
       setState(prev => prev.map(r => r.clinic.id === clinicId
-        ? { ...r, contract: { id: '', clinic_id: clinicId, status: 'pending', sign_token: data.token, sent_at: new Date().toISOString(), viewed_at: null, signed_at: null, signer_name: null, created_at: new Date().toISOString() } }
+        ? { ...r, contract: { id: '', clinic_id: clinicId, status: 'pending', sign_token: data.token, sent_at: new Date().toISOString(), viewed_at: null, signed_at: null, signer_name: null, pdf_path: null, created_at: new Date().toISOString() } }
         : r
       ))
       alert(`Link gerado e copiado:\n${link}`)
     } catch {
       alert('Erro ao gerar contrato')
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  async function handleDownloadPdf(contractId: string) {
+    setLoadingId(contractId)
+    try {
+      const res = await fetch(`/api/admin/contratos/pdf/${contractId}`)
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        alert(data.error === 'pdf_ainda_nao_gerado' ? 'PDF ainda não foi gerado para este contrato.' : 'Erro ao gerar link do PDF')
+        return
+      }
+      window.open(data.url, '_blank')
+    } catch {
+      alert('Erro ao gerar link do PDF')
     } finally {
       setLoadingId(null)
     }
@@ -180,14 +198,23 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
                 )}
 
                 {contract && contract.status === 'signed' && (
-                  <a
-                    href={`${getSiteUrl()}/assinar-contrato/${contract.sign_token}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
-                  >
-                    Ver assinado
-                  </a>
+                  <>
+                    <a
+                      href={`${getSiteUrl()}/assinar-contrato/${contract.sign_token}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
+                    >
+                      Ver assinado
+                    </a>
+                    <button
+                      onClick={() => handleDownloadPdf(contract.id)}
+                      disabled={loadingId === contract.id}
+                      className="px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-50"
+                    >
+                      {loadingId === contract.id ? 'Gerando...' : 'Baixar PDF'}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
