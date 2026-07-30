@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { parseDateBR, isoFromBR } from '@/lib/datetime'
+import { getGeolocation } from '@/lib/get-geolocation'
 
 type AnamneseConfig = {
   titulo?: string
@@ -228,7 +229,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
 
     try {
       const signature = canvas.toDataURL('image/png')
-      
+      const geo = await getGeolocation()
+
       const res = await fetch(`/api/anamnese/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -241,6 +243,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
             phone: phoneInput.trim() || null,
             email: emailInput.trim() || null,
           },
+          lat: geo?.lat ?? null,
+          lon: geo?.lon ?? null,
         }),
       })
 

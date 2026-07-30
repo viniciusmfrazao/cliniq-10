@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { getGeolocation } from '@/lib/get-geolocation'
 
 type Question = { id: string; text: string }
 
@@ -110,6 +111,7 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
 
     try {
       const signatureData = canvas.toDataURL('image/png')
+      const geo = await getGeolocation()
 
       const response = await fetch(`/api/documents/sign/${token}`, {
         method: 'POST',
@@ -117,6 +119,8 @@ export default function SignatureForm({ doc, token }: { doc: Doc; token: string 
         body: JSON.stringify({
           signature: signatureData,
           question_answers: answers,
+          lat: geo?.lat ?? null,
+          lon: geo?.lon ?? null,
         }),
       })
 

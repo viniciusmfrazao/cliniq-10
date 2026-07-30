@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getClientIp, getUserAgent, getClientCountry } from '@/lib/client-ip'
+import { computeSignatureHash } from '@/lib/signature-hash'
 
 /**
  * POST /api/documento/sign-as-professional
@@ -30,10 +31,12 @@ export async function POST(req: NextRequest) {
     content?: string
     signature?: string
     signerUserId?: string | null
+    lat?: number
+    lon?: number
   }
   try { body = await req.json() } catch { return NextResponse.json({ ok: false, error: 'json_invalido' }, { status: 400 }) }
 
-  const { templateId, patientId, appointmentId, name, content, signature, signerUserId } = body
+  const { templateId, patientId, appointmentId, name, content, signature, signerUserId, lat, lon } = body
   if (!templateId || !patientId || !name || !content || !signature) {
     return NextResponse.json({ ok: false, error: 'dados_incompletos' }, { status: 400 })
   }
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
   const clientIp = getClientIp(req.headers)
   const userAgent = getUserAgent(req.headers)
   const country = getClientCountry(req.headers)
+  const signatureHash = computeSignatureHash([content, signature])
 
   const token = Array.from({ length: 32 }, () => Math.random().toString(36).charAt(2)).join('')
   const expiresAt = new Date()
@@ -80,6 +84,9 @@ export async function POST(req: NextRequest) {
       signature_ip: clientIp,
       signature_user_agent: userAgent,
       signature_country: country,
+      signature_hash: signatureHash,
+      signature_lat: typeof lat === 'number' ? lat : null,
+      signature_lon: typeof lon === 'number' ? lon : null,
       signed_at: now,
       sent_by: userRow.id,
       sign_token: token,
