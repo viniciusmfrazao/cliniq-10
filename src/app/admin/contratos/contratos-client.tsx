@@ -88,6 +88,28 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
     }
   }
 
+  async function handleCancel(contractId: string, clinicId: string) {
+    if (!confirm('Cancelar este contrato? Isso libera a clínica pra gerar um novo (ex: depois de corrigir o CNPJ). O link atual deixa de funcionar.')) return
+    setLoadingId(contractId)
+    try {
+      const res = await fetch('/api/admin/contratos/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contractId }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        alert(data.error || 'Erro ao cancelar contrato')
+        return
+      }
+      setState(prev => prev.map(r => r.clinic.id === clinicId ? { ...r, contract: null } : r))
+    } catch {
+      alert('Erro ao cancelar contrato')
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
   async function handleDownloadPdf(contractId: string) {
     setLoadingId(contractId)
     try {
@@ -168,7 +190,7 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                {!contract && (
+                {(!contract || contract.status === 'cancelled') && (
                   <button
                     onClick={() => handleGenerate(clinic.id)}
                     disabled={loadingId === clinic.id}
@@ -178,7 +200,7 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
                   </button>
                 )}
 
-                {contract && contract.status !== 'signed' && (
+                {contract && (contract.status === 'pending' || contract.status === 'viewed') && (
                   <>
                     <button
                       onClick={() => copyLink(contract.sign_token)}
@@ -194,6 +216,13 @@ export default function ContratosAdminClient({ rows }: { rows: Row[] }) {
                     >
                       Enviar WhatsApp
                     </a>
+                    <button
+                      onClick={() => handleCancel(contract.id, clinic.id)}
+                      disabled={loadingId === contract.id}
+                      className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold transition disabled:opacity-50"
+                    >
+                      {loadingId === contract.id ? 'Cancelando...' : 'Cancelar contrato'}
+                    </button>
                   </>
                 )}
 
