@@ -19,7 +19,7 @@ export default async function ContratosPage() {
 
   const { data: contracts } = await svc
     .from('platform_contracts')
-    .select('id, clinic_id, status, sign_token, sent_at, viewed_at, signed_at, signer_name, created_at')
+    .select('id, clinic_id, status, sign_token, sent_at, viewed_at, signed_at, signer_name, pdf_path, created_at')
     .order('created_at', { ascending: false })
 
   // Pega o contrato mais recente por clínica

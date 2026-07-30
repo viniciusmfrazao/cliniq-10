@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getClientIp, getUserAgent, getClientCountry } from '@/lib/client-ip'
 import { renderPlatformContract } from '@/lib/contract-template'
+import { generateContractPdf } from '@/lib/contract-pdf'
 
 export const dynamic = 'force-dynamic'
 
@@ -109,6 +110,44 @@ export async function POST(
       .eq('id', doc.id)
 
     if (updateError) throw updateError
+
+    // Gera o PDF final e persiste no Storage. Best-effort: se falhar, a
+    // assinatura já foi gravada e não deve ser bloqueada por isso — o PDF
+    // pode ser gerado depois via reprocessamento manual se necessário.
+    try {
+      const signedAtLabel = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+      const pdfBytes = await generateContractPdf({
+        clinicName: snapshot?.name || '',
+        content: finalContent,
+        signerName,
+        signerCpf,
+        signerRole,
+        signedAtLabel,
+        signatureDataUrl: signature,
+        signatureIp: clientIp,
+        signatureUserAgent: userAgent,
+        signatureCountry: country,
+      })
+
+      const clinicId = snapshot?.id
+      const pdfPath = `${clinicId}/${doc.id}.pdf`
+
+      const { error: uploadError } = await getAdmin()
+        .storage
+        .from('contracts')
+        .upload(pdfPath, Buffer.from(pdfBytes), { contentType: 'application/pdf', upsert: true })
+
+      if (!uploadError) {
+        await getAdmin()
+          .from('platform_contracts')
+          .update({ pdf_path: pdfPath })
+          .eq('id', doc.id)
+      } else {
+        console.error('[contratos/sign] erro ao subir PDF:', uploadError.message)
+      }
+    } catch (pdfErr) {
+      console.error('[contratos/sign] erro ao gerar PDF:', pdfErr)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
