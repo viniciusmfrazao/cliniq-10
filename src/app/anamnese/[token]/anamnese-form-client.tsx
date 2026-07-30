@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { parseDateBR, isoFromBR } from '@/lib/datetime'
+import { getGeolocation } from '@/lib/get-geolocation'
 
 type AnamneseConfig = {
   titulo?: string
@@ -9,13 +10,7 @@ type AnamneseConfig = {
   cor_primaria?: string
   secoes_ativas?: string[]
   campos_identificacao?: string[]
-  perguntas_extras?: Array<{
-    secao: string
-    pergunta: string
-    tipo: 'sim_nao'|'texto'|'multipla'
-    opcoes?: string
-    sub_pergunta?: { pergunta: string; tipo: 'texto'|'numero'; placeholder?: string; condicao_valor: string }
-  }>
+  perguntas_extras?: Array<{ secao: string; pergunta: string; tipo: 'sim_nao'|'texto'|'multipla'; opcoes?: string }>
 }
 
 type AnamneseData = {
@@ -234,7 +229,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
 
     try {
       const signature = canvas.toDataURL('image/png')
-      
+      const geo = await getGeolocation()
+
       const res = await fetch(`/api/anamnese/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -247,6 +243,8 @@ export default function AnamneseFormClient({ token }: { token: string }) {
             phone: phoneInput.trim() || null,
             email: emailInput.trim() || null,
           },
+          lat: geo?.lat ?? null,
+          lon: geo?.lon ?? null,
         }),
       })
 
@@ -351,7 +349,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     const today = new Date()
     const vars: Record<string, string> = {
       PACIENTE_NOME: anamnese?.patients.name || '',
-      DATA: today.toLocaleDateString('pt-BR'),
+      DATA: today.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       HORA: today.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       CLINICA_NOME: anamnese?.clinics.name || '',
     }
@@ -527,28 +525,6 @@ export default function AnamneseFormClient({ token }: { token: string }) {
                   ))}
                 </div>
               )}
-              {/* Sub-pergunta condicional: aparece quando a resposta principal bate com condicao_valor.
-                  Em 'multipla' a resposta é uma string separada por vírgula (multi-seleção), então
-                  checamos se o valor está entre os selecionados; nos demais tipos é comparação direta. */}
-              {p.sub_pergunta && (() => {
-                const current = responses[`extra_${idx}`] || ''
-                const isVisible = p.tipo === 'multipla'
-                  ? current.split(',').map((s: string) => s.trim()).includes(p.sub_pergunta!.condicao_valor)
-                  : current === p.sub_pergunta!.condicao_valor
-                if (!isVisible) return null
-                return (
-                  <div className="mt-3">
-                    <p className="text-sm mb-2" style={{ color: 'var(--mid)' }}>{p.sub_pergunta!.pergunta}</p>
-                    <input
-                      className="anamnese-input"
-                      type={p.sub_pergunta!.tipo === 'numero' ? 'number' : 'text'}
-                      placeholder={p.sub_pergunta!.placeholder || ''}
-                      value={responses[`extra_${idx}_sub`] || ''}
-                      onChange={e => setTextValue(`extra_${idx}_sub`, e.target.value)}
-                    />
-                  </div>
-                )
-              })()}
             </div>
           )
         })}

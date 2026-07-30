@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getClientIp, getUserAgent, getClientCountry } from '@/lib/client-ip'
+import { computeSignatureHash } from '@/lib/signature-hash'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,7 +61,7 @@ export async function POST(
   try {
     const { token } = params
     const body = await request.json()
-    const { responses, signature, identificacao } = body
+    const { responses, signature, identificacao, lat, lon } = body
 
     if (!responses || !signature) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
@@ -148,6 +149,10 @@ export async function POST(
       }
     }
 
+    // Hash de integridade: qualquer alteração posterior nas respostas ou na
+    // imagem da assinatura muda o hash — prova complementar ao IP/UA/país.
+    const signatureHash = computeSignatureHash([JSON.stringify(responses), signature])
+
     // Update anamnese with responses
     const { error: updateError } = await getAdmin()
       .from('anamneses')
@@ -158,6 +163,9 @@ export async function POST(
         signature_ip: clientIp,
         signature_user_agent: userAgent,
         signature_country: country,
+        signature_hash: signatureHash,
+        signature_lat: typeof lat === 'number' ? lat : null,
+        signature_lon: typeof lon === 'number' ? lon : null,
         completed_at: new Date().toISOString(),
       })
       .eq('id', anamnese.id)

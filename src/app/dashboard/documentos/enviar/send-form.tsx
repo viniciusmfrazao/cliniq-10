@@ -5,6 +5,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { normalizeText } from '@/lib/text'
+import { getGeolocation } from '@/lib/get-geolocation'
 
 type Template = {
   id: string
@@ -200,6 +201,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
         // servidor (mesmo conjunto probatorio usado na assinatura do paciente)
         // e documento ja sai "signed", sem pendencia pro paciente
         const profSignature = canvasRef.current?.toDataURL('image/png') || ''
+        const geo = await getGeolocation()
         const res = await fetch('/api/documento/sign-as-professional', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -211,6 +213,8 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
             content,
             signature: profSignature,
             signerUserId: signingProfessional?.id || null,
+            lat: geo?.lat ?? null,
+            lon: geo?.lon ?? null,
           }),
         })
         const data = await res.json()
@@ -279,7 +283,9 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
         body: JSON.stringify({ documentoId: generatedDocId }),
       })
       const data = await res.json()
-      if (data.ok) {
+      if (data.ok && data.attachment_failed) {
+        alert('Documento enviado, mas o PDF/imagem anexado falhou ao enviar. O paciente recebeu só o link.')
+      } else if (data.ok) {
         alert('Documento enviado pelo WhatsApp da clínica! ✅')
       } else {
         // Fallback: WhatsApp Web

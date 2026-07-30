@@ -7,6 +7,7 @@ function getAdmin() {
 }
 import { NextResponse } from 'next/server'
 import { getClientIp, getUserAgent, getClientCountry } from '@/lib/client-ip'
+import { computeSignatureHash } from '@/lib/signature-hash'
 
 export async function GET(
   request: Request,
@@ -16,7 +17,7 @@ export async function GET(
     const { token } = params
     const { data: doc, error } = await getAdmin()
       .from('documents_sent')
-      .select('*, patients(name), clinics(name, cnpj, clinic_phone), document_templates(questions), users!documents_sent_sent_by_fkey(name)')
+      .select('*, patients(name), clinics(name, cnpj, clinic_phone), document_templates(questions, image_url), users!documents_sent_sent_by_fkey(name)')
       .eq('sign_token', token)
       .maybeSingle()
 
@@ -38,7 +39,7 @@ export async function GET(
       ? doc.questions
       : (doc as any).document_templates?.questions || []
 
-    return NextResponse.json({ ...doc, questions })
+    return NextResponse.json({ ...doc, questions, image_url: (doc as any).document_templates?.image_url || null })
   } catch (error) {
     console.error('Error fetching document:', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
@@ -52,7 +53,7 @@ export async function POST(
   try {
     const { token } = params
     const body = await request.json()
-    const { signature, question_answers } = body
+    const { signature, question_answers, lat, lon } = body
 
     if (!signature) {
       return NextResponse.json({ error: 'Assinatura obrigatória' }, { status: 400 })
@@ -68,7 +69,7 @@ export async function POST(
     // Find document
     const { data: doc, error: findError } = await getAdmin()
       .from('documents_sent')
-      .select('id, status')
+      .select('id, status, content')
       .eq('sign_token', token)
       .maybeSingle()
 
@@ -84,6 +85,10 @@ export async function POST(
       return NextResponse.json({ error: 'Documento indisponível' }, { status: 400 })
     }
 
+    // Hash de integridade: liga texto do documento + respostas + imagem
+    // da assinatura — qualquer alteração posterior muda o hash.
+    const signatureHash = computeSignatureHash([doc.content, JSON.stringify(question_answers || {}), signature])
+
     // Update document with signature
     const { error: updateError } = await getAdmin()
       .from('documents_sent')
@@ -94,6 +99,9 @@ export async function POST(
         signature_ip: clientIp,
         signature_user_agent: userAgent,
         signature_country: country,
+        signature_hash: signatureHash,
+        signature_lat: typeof lat === 'number' ? lat : null,
+        signature_lon: typeof lon === 'number' ? lon : null,
         question_answers: question_answers || {},
       })
       .eq('id', doc.id)
