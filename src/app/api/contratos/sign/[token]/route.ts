@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getClientIp, getUserAgent, getClientCountry } from '@/lib/client-ip'
 import { renderPlatformContract } from '@/lib/contract-template'
 import { generateContractPdf } from '@/lib/contract-pdf'
+import { computeSignatureHash } from '@/lib/signature-hash'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,6 +92,8 @@ export async function POST(
       { signerName, signerCpf, signerRole }
     )
 
+    const signatureHash = computeSignatureHash([finalContent, signature])
+
     const { error: updateError } = await getAdmin()
       .from('platform_contracts')
       .update({
@@ -104,6 +107,7 @@ export async function POST(
         signature_ip: clientIp,
         signature_user_agent: userAgent,
         signature_country: country,
+        signature_hash: signatureHash,
         signature_lat: typeof lat === 'number' ? lat : null,
         signature_lon: typeof lon === 'number' ? lon : null,
       })
