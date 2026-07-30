@@ -13,7 +13,7 @@
  * nunca afetam contratos já assinados — apenas os que ainda vão ser gerados.
  */
 
-export const CONTRACT_TEMPLATE_VERSION = 'v1'
+export const CONTRACT_TEMPLATE_VERSION = 'v2'
 
 export type ContractClinicData = {
   name: string
@@ -174,35 +174,59 @@ CLÁUSULA 7ª — DA INTELIGÊNCIA ARTIFICIAL (EVA IA) E MENSAGERIA
 
 7.4. Blindagem Absoluta sobre a Linha do WhatsApp: A integração técnica do sistema utiliza APIs independentes. A Clinike não possui qualquer controle, gerência ou blindagem sobre as políticas internas ou algoritmos anti-spam da empresa Meta (WhatsApp). Portanto, amparada pelo Artigo 393 do Código Civil (caso fortuito e fato de terceiro), a Clinike está totalmente isenta de responsabilidades por bloqueios, banimentos, suspensões de números, instabilidades de sinal, falhas de chips ou perda definitiva de conectividade da linha telefônica da clínica contratante.
 
-CLÁUSULA 8ª — DA PROPRIEDADE INTELECTUAL E PROTEÇÃO ANTICÓPIA
+CLÁUSULA 8ª — DA EMISSÃO DE NOTAS FISCAIS ELETRÔNICAS (INTEGRAÇÃO COM TERCEIROS)
 
-8.1. Propriedade Intelectual: O software Clinike, suas marcas, logotipos, telas, identidade visual, códigos-fonte, bancos de dados estruturais e algoritmos são de propriedade exclusiva de Vinicius de Matos Frazão. Essa proteção é assegurada pela Lei do Software (Lei nº 9.609/1998) e pela Lei de Direitos Autorais (Lei nº 9.610/1998). O uso indevido, tentativas de engenharia reversa, cópia ou distribuição não autorizada ensejarão a rescisão imediata e a aplicação de medidas cíveis e penais.
+8.1. Natureza da Integração: A plataforma disponibiliza, como funcionalidade acessória, a integração técnica com a API da empresa Focus NFe (terceira, alheia a este contrato), permitindo que a Contratante emita Notas Fiscais Eletrônicas (NF-e) e/ou de Serviço (NFS-e) diretamente pelo sistema. A Clinike atua exclusivamente como intermediária tecnológica, transmitindo os dados fornecidos pela Contratante à API da Focus NFe, sem qualquer ingerência sobre o conteúdo, a exatidão fiscal ou a legalidade das informações inseridas.
 
-8.2. Proibição de Engenharia Reversa: A Contratante concorda que não irá, nem permitirá que terceiros usem robôs, scrapers, crawlers ou ferramentas de extração de dados para monitorar, copiar ou extrair a tecnologia da Clinike.
+8.2. Responsabilidade Exclusiva da Contratante: É de responsabilidade exclusiva e intransferível da Contratante: (i) possuir a devida inscrição, autorização e regularidade fiscal municipal/estadual necessárias à emissão de notas fiscais; (ii) a veracidade, exatidão e adequação de todos os dados inseridos para emissão (valores, alíquotas, códigos de serviço/CFOP, natureza da operação, dados do tomador); (iii) o recolhimento correto dos tributos incidentes; e (iv) o uso lícito da funcionalidade, nos termos da legislação tributária aplicável.
 
-8.3. Anonimização Estatística: A Contratante autoriza a Clinike a coletar e processar dados gerados na plataforma de forma estritamente agregada, anonimizada e estatística, para fins de inteligência de mercado, correções técnicas e aprimoramento dos algoritmos do produto, em linha com o Artigo 12 da LGPD.
+8.3. Isenção por Uso Indevido: A Clinike não realiza qualquer auditoria, validação fiscal ou controle prévio sobre as notas emitidas pela Contratante. Eventual emissão de notas fiscais fraudulentas, com dados inexatos, sonegação fiscal, ou qualquer outro uso indevido da funcionalidade é de responsabilidade civil, administrativa e criminal exclusiva da Contratante, eximindo-se a Clinike de qualquer responsabilidade solidária ou subsidiária perante o Fisco, os tomadores dos serviços ou terceiros.
 
-8.4. Confidencialidade Mútua: Ambas as partes comprometem-se a guardar sigilo absoluto sobre segredos de negócio, estratégias comerciais, dados de pacientes e detalhes técnicos trocados em virtude desta parceria comercial.
+8.4. Falhas de Terceiro: Amparada pelo Artigo 393 do Código Civil (caso fortuito e fato de terceiro), a Clinike não responde por instabilidades, indisponibilidades, rejeições ou erros técnicos originados na infraestrutura da Focus NFe, tampouco por mudanças na legislação tributária que impactem a emissão.
 
-CLÁUSULA 9ª — DA LIMITAÇÃO TOTAL DE RESPONSABILIDADE DA CLINIKE
+8.5. Regresso: Aplica-se à presente cláusula a mesma sistemática de indenização regressiva (hold harmless) prevista na Cláusula 11.3 deste contrato, obrigando-se a Contratante a ressarcir integralmente a Clinike por quaisquer prejuízos decorrentes do uso indevido da funcionalidade de emissão fiscal.
+
+CLÁUSULA 9ª — DA NATUREZA TÉCNICA DAS ASSINATURAS ELETRÔNICAS COLETADAS
+
+9.1. Papel da Clinike: A plataforma disponibiliza ferramenta técnica para coleta de assinatura eletrônica simples de pacientes e profissionais em documentos gerados pela própria Contratante (fichas de anamnese, termos de consentimento, documentos de procedimentos e afins), nos termos do Artigo 107 do Código Civil e da Lei nº 14.063/2020. Para viabilizar essa coleta, o sistema registra, no momento do aceite, um conjunto de evidências técnicas: imagem da assinatura, endereço IP, geolocalização (quando autorizada pelo dispositivo do signatário), informações do navegador/dispositivo (user-agent), data e hora, e hash criptográfico (SHA-256) vinculando o conteúdo assinado à assinatura, de modo a evidenciar a integridade do documento após o aceite.
+
+9.2. Limite da Verificação de Identidade: A Clinike não realiza validação de identidade do signatário perante bases de dados oficiais (Receita Federal, órgãos de identificação civil ou similares), tampouco emite certificação digital no padrão ICP-Brasil. As evidências técnicas coletadas refletem exclusivamente os dados capturados no dispositivo e na sessão utilizada no momento do aceite, sem qualquer aferição adicional por parte da Clinike sobre a veracidade da identidade informada pelo signatário.
+
+9.3. Responsabilidade Exclusiva da Contratante: É de responsabilidade exclusiva da Contratante, na qualidade de Controladora dos dados de seus pacientes (Cláusula 6ª): (i) definir quais documentos podem ser validamente firmados por assinatura eletrônica simples, considerando a natureza do ato e eventuais exigências legais ou regulatórias aplicáveis à sua atividade (incluindo, quando pertinente, normas de conselhos de classe); (ii) obter o consentimento adequado dos pacientes para a coleta de suas assinaturas e dados correlatos; e (iii) adotar as cautelas que entender necessárias para confirmar a identidade do signatário antes ou durante o ato de assinatura.
+
+9.4. Ausência de Garantia de Resultado Judicial: A Clinike não garante que um documento assinado eletronicamente através da plataforma será aceito como prova válida em qualquer processo judicial, administrativo ou arbitral específico, uma vez que tal apreciação depende de exame fático e da livre convicção da autoridade julgadora competente.
+
+9.5. Regresso: Caso a Clinike venha a ser demandada, judicial ou administrativamente, em razão de disputa envolvendo a autenticidade, validade ou uso de assinatura eletrônica coletada em nome da Contratante — incluindo, mas não se limitando a, alegações de falsificação, uso indevido de identidade de terceiro ou inadequação do documento ao nível de assinatura utilizado —, aplica-se a mesma sistemática de indenização regressiva (hold harmless) prevista na Cláusula 11.3 deste contrato.
+
+CLÁUSULA 10ª — DA PROPRIEDADE INTELECTUAL E PROTEÇÃO ANTICÓPIA
+
+10.1. Propriedade Intelectual: O software Clinike, suas marcas, logotipos, telas, identidade visual, códigos-fonte, bancos de dados estruturais e algoritmos são de propriedade exclusiva de Vinicius de Matos Frazão. Essa proteção é assegurada pela Lei do Software (Lei nº 9.609/1998) e pela Lei de Direitos Autorais (Lei nº 9.610/1998). O uso indevido, tentativas de engenharia reversa, cópia ou distribuição não autorizada ensejarão a rescisão imediata e a aplicação de medidas cíveis e penais.
+
+10.2. Proibição de Engenharia Reversa: A Contratante concorda que não irá, nem permitirá que terceiros usem robôs, scrapers, crawlers ou ferramentas de extração de dados para monitorar, copiar ou extrair a tecnologia da Clinike.
+
+10.3. Anonimização Estatística: A Contratante autoriza a Clinike a coletar e processar dados gerados na plataforma de forma estritamente agregada, anonimizada e estatística, para fins de inteligência de mercado, correções técnicas e aprimoramento dos algoritmos do produto, em linha com o Artigo 12 da LGPD.
+
+10.4. Confidencialidade Mútua: Ambas as partes comprometem-se a guardar sigilo absoluto sobre segredos de negócio, estratégias comerciais, dados de pacientes e detalhes técnicos trocados em virtude desta parceria comercial.
+
+CLÁUSULA 11ª — DA LIMITAÇÃO TOTAL DE RESPONSABILIDADE DA CLINIKE
 (Amparada nos Artigos 393 e 927 do Código Civil Brasileiro)
 
-9.1. Isenção de Prática Médica/Estética: A Clinike é exclusivamente uma fornecedora de tecnologia de gestão. A Clinike e seu proprietário legal não possuem qualquer responsabilidade técnica, civil ou solidária por decisões clínicas, anamneses mal preenchidas, erros em procedimentos estéticos ou danos à integridade física dos pacientes da Contratante.
+11.1. Isenção de Prática Médica/Estética: A Clinike é exclusivamente uma fornecedora de tecnologia de gestão. A Clinike e seu proprietário legal não possuem qualquer responsabilidade técnica, civil ou solidária por decisões clínicas, anamneses mal preenchidas, erros em procedimentos estéticos ou danos à integridade física dos pacientes da Contratante.
 
-9.2. Falhas Críticas de Infraestrutura (SLA): Conforme garantido pelo Artigo 14 do Marco Civil da Internet, o sistema opera sob o regime de "melhores esforços" de conectividade. Não haverá dever de indenizar ou abatimento de valores por indisponibilidades decorrentes de:
+11.2. Falhas Críticas de Infraestrutura (SLA): Conforme garantido pelo Artigo 14 do Marco Civil da Internet, o sistema opera sob o regime de "melhores esforços" de conectividade. Não haverá dever de indenizar ou abatimento de valores por indisponibilidades decorrentes de:
 
 Manutenções programadas de segurança (avisadas previamente).
 Instabilidade na rede mundial de computadores (provedores de internet do cliente).
 Quedas nos servidores globais das empresas parceiras (Supabase/Vercel).
 Apagões de conectividade generalizados da Meta/WhatsApp.
 
-9.3. Cláusula de Indenização Regressiva (Hold Harmless): Caso a Clinike venha a sofrer qualquer condenação judicial, administrativa (ANPD) ou prejuízo financeiro causado por ato culposo ou doloso da Contratante (como vazamento de dados por má gestão de senhas ou falta de autorização de pacientes), a Contratante obriga-se a ressarcir integralmente a Clinike por todos os custos, incluindo honorários advocatícios, nos termos do Artigo 934 do Código Civil.
+11.3. Cláusula de Indenização Regressiva (Hold Harmless): Caso a Clinike venha a sofrer qualquer condenação judicial, administrativa (ANPD) ou prejuízo financeiro causado por ato culposo ou doloso da Contratante (como vazamento de dados por má gestão de senhas, falta de autorização de pacientes, uso indevido da funcionalidade de emissão fiscal ou disputa envolvendo assinaturas eletrônicas coletadas em seu nome), a Contratante obriga-se a ressarcir integralmente a Clinike por todos os custos, incluindo honorários advocatícios, nos termos do Artigo 934 do Código Civil.
 
-9.4. Teto Máximo Indenizatório (Limitation of Liability): Com fulcro no Artigo 404, Parágrafo Único do Código Civil, na remota hipótese de condenação judicial definitiva da Clinike por falhas exclusivas e comprovadas do sistema, o valor limite de qualquer indenização por danos materiais ou lucros cessantes ficará estritamente teto-limitado à soma das mensalidades efetivamente pagas pela Contratante à Clinike nos últimos 3 (três) meses anteriores ao fato gerador.
+11.4. Teto Máximo Indenizatório (Limitation of Liability): Com fulcro no Artigo 404, Parágrafo Único do Código Civil, na remota hipótese de condenação judicial definitiva da Clinike por falhas exclusivas e comprovadas do sistema, o valor limite de qualquer indenização por danos materiais ou lucros cessantes ficará estritamente teto-limitado à soma das mensalidades efetivamente pagas pela Contratante à Clinike nos últimos 3 (três) meses anteriores ao fato gerador.
 
-CLÁUSULA 10ª — DO FORO DE ELEIÇÃO
+CLÁUSULA 12ª — DO FORO DE ELEIÇÃO
 
-10.1. Para dirimir quaisquer dúvidas, controvérsias ou litígios decorrentes da interpretação ou execução deste contrato, as partes elegem expressamente o Foro da Comarca de Uberlândia, Estado de Minas Gerais, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
+12.1. Para dirimir quaisquer dúvidas, controvérsias ou litígios decorrentes da interpretação ou execução deste contrato, as partes elegem expressamente o Foro da Comarca de Uberlândia, Estado de Minas Gerais, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
 
 ACEITE ELETRÔNICO
 
