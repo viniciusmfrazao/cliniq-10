@@ -38,6 +38,13 @@ export default async function NovaEntradaPage() {
     .select('forma, bandeira, taxa_percentual')
     .eq('clinic_id', clinicId)
 
+  const { data: produtos } = await supabase
+    .from('products')
+    .select('id, name, sale_price, current_stock')
+    .eq('clinic_id', clinicId)
+    .eq('is_active', true)
+    .order('name')
+
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3">
@@ -53,6 +60,7 @@ export default async function NovaEntradaPage() {
       <EntradaForm
         pacientes={pacientes || []}
         procedimentos={procedimentos || []}
+        produtos={produtos || []}
         profissionais={profissionais || []}
         taxasPagamento={taxasPagamento || []}
         clinicId={clinicId}

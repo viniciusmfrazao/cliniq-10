@@ -54,6 +54,7 @@ import { parseSupabaseError } from '@/lib/error-messages'
 type Props = {
   pacientes: { id: string; name: string }[]
   procedimentos: { id: string; name: string; price: number }[]
+  produtos: { id: string; name: string; sale_price: number; current_stock: number }[]
   profissionais: { id: string; name: string }[]
   taxasPagamento: TaxaPag[]
   clinicId: string
@@ -105,7 +106,7 @@ function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
 
-export default function EntradaForm({ pacientes, procedimentos, profissionais, taxasPagamento, clinicId, userId }: Props) {
+export default function EntradaForm({ pacientes, procedimentos, produtos, profissionais, taxasPagamento, clinicId, userId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -117,11 +118,45 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
   const [procedimentoId, setProcedimentoId] = useState('')
   const [procedimentoNome, setProcedimentoNome] = useState('')
   const [selectedProcs, setSelectedProcs] = useState<Array<{ id: string; name: string; price: number; quantidade: number }>>([])
+  const [selectedProduto, setSelectedProduto] = useState<{ id: string; name: string; sale_price: number; current_stock: number; quantidade: number } | null>(null)
   const [profissionalId, setProfissionalId] = useState('')
   const [profissionalNome, setProfissionalNome] = useState('')
   const [valorBruto, setValorBruto] = useState('')
   const [observacoes, setObservacoes] = useState('')
-  const [tipoReceita, setTipoReceita] = useState<'servico' | 'produto'>('servico')
+  const [tipoReceita, setTipoReceitaRaw] = useState<'servico' | 'produto'>('servico')
+
+  function setTipoReceita(tipo: 'servico' | 'produto') {
+    setTipoReceitaRaw(tipo)
+    // Limpa seleção do outro modo pra nao misturar procedimento + produto num mesmo lancamento
+    if (tipo === 'servico') {
+      setSelectedProduto(null)
+      setValorBruto(selectedProcs.reduce((s, p) => s + p.price * p.quantidade, 0).toString())
+    } else {
+      setSelectedProcs([])
+      setProcedimentoId('')
+      setProcedimentoNome('')
+      setValorBruto('')
+    }
+  }
+
+  function handleProdutoChange(id: string) {
+    if (!id) { setSelectedProduto(null); setValorBruto(''); return }
+    const prod = produtos.find(p => p.id === id)
+    if (!prod) return
+    const next = { id: prod.id, name: prod.name, sale_price: prod.sale_price, current_stock: prod.current_stock, quantidade: 1 }
+    setSelectedProduto(next)
+    setValorBruto((prod.sale_price * 1).toString())
+  }
+
+  function updateProdutoQuantidade(delta: number) {
+    setSelectedProduto(prev => {
+      if (!prev) return prev
+      const q = Math.max(1, prev.quantidade + delta)
+      const next = { ...prev, quantidade: q }
+      setValorBruto((next.sale_price * q).toString())
+      return next
+    })
+  }
 
   // Pagamento: lista de linhas (permite dividir entre múltiplas formas)
   const [pagamentos, setPagamentos] = useState<Array<{ forma: string; bandeira: string; valor: string }>>([
@@ -226,6 +261,49 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
           : `O total das formas de pagamento excede o valor em ${fmt(-restante)}. Salvar mesmo assim?`
       )
       if (!ok) return
+    }
+
+    if (tipoReceita === 'produto') {
+      if (!selectedProduto) {
+        alert('Selecione um produto')
+        return
+      }
+      setLoading(true)
+
+      const pagamentosPayload = pagamentos.map((p, i) => {
+        const calc = pagamentosCalc[i]
+        return {
+          forma: p.forma,
+          bandeira: (p.forma.startsWith('Crédito') || p.forma === 'Débito') ? (p.bandeira || '') : '',
+          valor: calc.v,
+          taxa_percentual: calc.taxaPct,
+          valor_taxa: calc.valorTaxa,
+          valor_liquido: calc.valorLiquido,
+          n_parcelas: calc.nParcelas,
+        }
+      })
+
+      const { error } = await supabase.rpc('fn_registrar_venda_produto', {
+        p_user_id: userId,
+        p_clinic_id: clinicId,
+        p_product_id: selectedProduto.id,
+        p_quantidade: selectedProduto.quantidade,
+        p_data_venda: dataVenda,
+        p_paciente_id: pacienteId || null,
+        p_paciente_nome: pacienteNome || null,
+        p_observacoes: observacoes || null,
+        p_pagamentos: pagamentosPayload,
+      })
+
+      if (error) {
+        alert('Erro ao registrar venda: ' + parseSupabaseError(error))
+        setLoading(false)
+        return
+      }
+
+      router.push('/dashboard/financeiro/entradas')
+      router.refresh()
+      return
     }
 
     setLoading(true)
@@ -340,53 +418,95 @@ export default function EntradaForm({ pacientes, procedimentos, profissionais, t
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Procedimento(s)</label>
-            <select
-              value=""
-              onChange={e => handleProcedimentoChange(e.target.value)}
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-            >
-              <option value="">+ Adicionar procedimento</option>
-              {procedimentos.map(p => (
-                <option key={p.id} value={p.id}
-                  disabled={selectedProcs.some(s => s.id === p.id)}>
-                  {selectedProcs.some(s => s.id === p.id) ? '✓ ' : ''}{p.name} - {fmt(p.price)}
-                </option>
-              ))}
-            </select>
-            {selectedProcs.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {selectedProcs.map(p => (
-                  <div key={p.id} className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
-                    <span className="text-xs text-emerald-800 font-medium">{p.name}</span>
-                    <div className="flex items-center gap-1 bg-white border border-emerald-200 rounded-md">
-                      <button type="button" onClick={() => updateProcQuantidade(p.id, p.quantidade - 1)}
-                        className="w-5 h-5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-l-md text-xs font-bold">
-                        −
-                      </button>
-                      <span className="text-xs font-semibold text-emerald-900 w-4 text-center">{p.quantidade}</span>
-                      <button type="button" onClick={() => updateProcQuantidade(p.id, p.quantidade + 1)}
-                        className="w-5 h-5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-r-md text-xs font-bold">
-                        +
+          {tipoReceita === 'servico' ? (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Procedimento(s)</label>
+              <select
+                value=""
+                onChange={e => handleProcedimentoChange(e.target.value)}
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              >
+                <option value="">+ Adicionar procedimento</option>
+                {procedimentos.map(p => (
+                  <option key={p.id} value={p.id}
+                    disabled={selectedProcs.some(s => s.id === p.id)}>
+                    {selectedProcs.some(s => s.id === p.id) ? '✓ ' : ''}{p.name} - {fmt(p.price)}
+                  </option>
+                ))}
+              </select>
+              {selectedProcs.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedProcs.map(p => (
+                    <div key={p.id} className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
+                      <span className="text-xs text-emerald-800 font-medium">{p.name}</span>
+                      <div className="flex items-center gap-1 bg-white border border-emerald-200 rounded-md">
+                        <button type="button" onClick={() => updateProcQuantidade(p.id, p.quantidade - 1)}
+                          className="w-5 h-5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-l-md text-xs font-bold">
+                          −
+                        </button>
+                        <span className="text-xs font-semibold text-emerald-900 w-4 text-center">{p.quantidade}</span>
+                        <button type="button" onClick={() => updateProcQuantidade(p.id, p.quantidade + 1)}
+                          className="w-5 h-5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-r-md text-xs font-bold">
+                          +
+                        </button>
+                      </div>
+                      <span className="text-xs text-emerald-600">{fmt(p.price * p.quantidade)}</span>
+                      <button type="button" onClick={() => removeProc(p.id)}
+                        className="ml-0.5 text-emerald-500 hover:text-red-500 text-xs font-bold">
+                        ✕
                       </button>
                     </div>
-                    <span className="text-xs text-emerald-600">{fmt(p.price * p.quantidade)}</span>
-                    <button type="button" onClick={() => removeProc(p.id)}
-                      className="ml-0.5 text-emerald-500 hover:text-red-500 text-xs font-bold">
-                      ✕
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Produto *</label>
+              <select
+                value={selectedProduto?.id || ''}
+                onChange={e => handleProdutoChange(e.target.value)}
+                required
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              >
+                <option value="">Selecione um produto</option>
+                {produtos.map(p => (
+                  <option key={p.id} value={p.id} disabled={p.current_stock <= 0}>
+                    {p.name} — {fmt(p.sale_price)} {p.current_stock <= 0 ? '(sem estoque)' : `(${p.current_stock} em estoque)`}
+                  </option>
+                ))}
+              </select>
+              {selectedProduto && (
+                <div className="mt-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <span className="text-xs text-amber-800 font-medium flex-1">{selectedProduto.name}</span>
+                  <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
+                    <button type="button" onClick={() => updateProdutoQuantidade(-1)}
+                      className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold">
+                      −
+                    </button>
+                    <span className="text-xs font-semibold text-amber-900 w-5 text-center">{selectedProduto.quantidade}</span>
+                    <button type="button" onClick={() => updateProdutoQuantidade(1)}
+                      disabled={selectedProduto.quantidade >= selectedProduto.current_stock}
+                      className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold disabled:opacity-30">
+                      +
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <span className="text-xs text-amber-700">{fmt(selectedProduto.sale_price * selectedProduto.quantidade)}</span>
+                </div>
+              )}
+              {selectedProduto && selectedProduto.quantidade >= selectedProduto.current_stock && (
+                <p className="text-xs text-amber-600 mt-1">Quantidade máxima disponível em estoque.</p>
+              )}
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Profissional *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Profissional{tipoReceita === 'servico' ? ' *' : ''}
+            </label>
             <select
               value={profissionalId}
               onChange={e => handleProfissionalChange(e.target.value)}
-              required
+              required={tipoReceita === 'servico'}
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             >
               <option value="">Selecione</option>
