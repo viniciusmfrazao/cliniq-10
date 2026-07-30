@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { getGeolocation } from '@/lib/get-geolocation'
 
 type Doc = {
   id: string
@@ -93,6 +94,7 @@ export default function ContractSignatureForm({ doc, token }: { doc: Doc; token:
     setLoading(true)
     try {
       const signatureData = canvas.toDataURL('image/png')
+      const geo = await getGeolocation()
       const response = await fetch(`/api/contratos/sign/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -101,6 +103,8 @@ export default function ContractSignatureForm({ doc, token }: { doc: Doc; token:
           signerName: signerName.trim(),
           signerCpf: signerCpf.trim(),
           signerRole: signerRole.trim(),
+          lat: geo?.lat ?? null,
+          lon: geo?.lon ?? null,
         }),
       })
 
