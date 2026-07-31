@@ -13,6 +13,7 @@ import OrcamentosTab from './orcamentos-tab'
 import PackagesTab from './packages-tab'
 import OdontogramTab from './odontogram-tab'
 import DocumentosTab from './documentos-tab'
+import PatientAttachments from '@/components/PatientAttachments'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 import AnamnesePresencialButton from './anamnese-presencial-button'
 import PatientMarginCard from './patient-margin-card'
@@ -59,6 +60,7 @@ export default async function PatientCentralPage({
     activeAppointmentResult,
     packagesCountResult,
     documentsCountResult,
+    attachmentsCountResult,
   ] = await Promise.all([
     supabase.from('patients').select('*').eq('id', id).maybeSingle(),
     supabase.from('medical_records').select('*').eq('patient_id', id).maybeSingle(),
@@ -96,6 +98,10 @@ export default async function PatientCentralPage({
       .from('documents_sent')
       .select('id', { count: 'exact', head: true })
       .eq('patient_id', id),
+    supabase
+      .from('patient_attachments')
+      .select('id', { count: 'exact', head: true })
+      .eq('patient_id', id),
   ])
 
   const activeAppointment = activeAppointmentResult.data
@@ -130,6 +136,7 @@ export default async function PatientCentralPage({
     injetaveis: applicationsCountResult.count || 0,
     pacotes: packagesCountResult.count || 0,
     documentos: documentsCountResult.count || 0,
+    anexos: attachmentsCountResult.count || 0,
   }
 
   const age = patient.birth_date
@@ -299,6 +306,18 @@ export default async function PatientCentralPage({
               patientName={patient.name}
               patientPhone={patient.phone}
               clinicId={userData.clinic_id}
+            />
+          )}
+        </Suspense>
+      )}
+      {currentTab === 'anexos' && (
+        <Suspense fallback={<TabSkeleton />}>
+          {userData?.clinic_id && userData?.id && (
+            <PatientAttachments
+              patientId={id}
+              clinicId={userData.clinic_id}
+              professionalId={userData.id}
+              variant="full"
             />
           )}
         </Suspense>

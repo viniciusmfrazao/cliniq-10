@@ -13,6 +13,7 @@ import Icon from '@/components/ui/Icon'
 import PackageSessionAlert from './package-session-alert'
 import OdontogramMapToggle from './odontogram-map-toggle'
 import DocumentosAtendimento from './documentos-atendimento'
+import PatientAttachments from '@/components/PatientAttachments'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 import SendAnamneseButton from '@/app/dashboard/agenda/send-anamnese-button'
 import AnamneseHistorico from './anamnese-historico'
@@ -159,6 +160,18 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
               professionalId={user.id}
               hasIaModule={enabledModules.includes('ia_prontuario')}
             />
+
+            {/* Anexos do paciente — exames, laudos e outros documentos */}
+            {userData?.clinic_id && (
+              <PatientAttachments
+                patientId={patient.id}
+                clinicId={userData.clinic_id}
+                professionalId={user.id}
+                appointmentId={appointmentId}
+                variant="panel"
+                patientTabUrl={`/dashboard/pacientes/${patient.id}?tab=anexos`}
+              />
+            )}
 
             {/* Pacotes ativos — alerta para usar sessão */}
             {activePackages && activePackages.length > 0 && (
