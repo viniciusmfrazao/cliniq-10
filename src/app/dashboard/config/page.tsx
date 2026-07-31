@@ -219,6 +219,20 @@ export default async function ConfigPage() {
               </Link>
 
               <Link
+                href="/dashboard/config/bancos"
+                className="flex items-center gap-4 p-4 bg-gradient-to-br from-cyan-50 to-blue-50 hover:from-cyan-100 hover:to-blue-100 rounded-xl transition-colors border border-cyan-200"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow">
+                  <Icon name="creditCard" className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-cyan-900">Bancos / Contas</p>
+                  <p className="text-xs text-cyan-700">Cadastre os bancos usados nas saídas financeiras</p>
+                </div>
+                <Icon name="chevronRight" className="w-5 h-5 text-cyan-400" />
+              </Link>
+
+              <Link
                 href="/dashboard/config/comissoes"
                 className="flex items-center gap-4 p-4 bg-gradient-to-br from-teal-50 to-emerald-50 hover:from-teal-100 hover:to-emerald-100 rounded-xl transition-colors border border-teal-200"
               >

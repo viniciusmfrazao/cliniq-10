@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { todayBR } from '@/lib/datetime'
@@ -9,6 +10,7 @@ import { todayBR } from '@/lib/datetime'
 type Props = {
   clinicId: string
   userId: string
+  bancos: string[]
 }
 
 const CATEGORIAS_DRE = [
@@ -35,7 +37,7 @@ function addMonths(dateStr: string, months: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-export default function SaidaForm({ clinicId, userId }: Props) {
+export default function SaidaForm({ clinicId, userId, bancos }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -46,6 +48,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
   const [fornecedor, setFornecedor] = useState('')
   const [valor, setValor] = useState('')
   const [forma, setForma] = useState('Pix')
+  const [banco, setBanco] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [subcategoria, setSubcategoria] = useState('')
   const [temVencimento, setTemVencimento] = useState(false)
@@ -89,6 +92,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
         fornecedor: fornecedor.trim() || null,
         valor: valorNum,
         forma_pagamento: forma,
+        banco: banco || null,
         observacoes: observacoes.trim() || null,
         created_by: userId,
       }))
@@ -117,6 +121,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
           fornecedor: fornecedor.trim() || null,
           valor: valorNum,
           forma_pagamento: forma,
+          banco: banco || null,
           observacoes: observacoes.trim() || null,
           created_by: userId,
           is_recurring: true,
@@ -144,6 +149,7 @@ export default function SaidaForm({ clinicId, userId }: Props) {
         fornecedor: fornecedor.trim() || null,
         valor: valorNum,
         forma_pagamento: forma,
+        banco: banco || null,
         observacoes: observacoes.trim() || null,
         created_by: userId,
       })
@@ -276,6 +282,29 @@ export default function SaidaForm({ clinicId, userId }: Props) {
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-lg font-semibold"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Banco / conta</label>
+          {bancos.length > 0 ? (
+            <select
+              value={banco}
+              onChange={e => setBanco(e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+            >
+              <option value="">Selecione o banco (opcional)</option>
+              {bancos.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-sm text-slate-500 bg-slate-50 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <span>Nenhum banco cadastrado ainda.</span>
+              <Link href="/dashboard/config/bancos" className="text-rose-600 font-semibold hover:underline whitespace-nowrap">
+                Cadastrar banco
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Vencimento futuro */}

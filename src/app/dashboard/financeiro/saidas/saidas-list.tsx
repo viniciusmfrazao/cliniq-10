@@ -18,6 +18,7 @@ type Saida = {
   fornecedor: string | null
   valor: number
   forma_pagamento: string | null
+  banco?: string | null
   is_recurring?: boolean
   recurrence_id?: string | null
 }
@@ -25,6 +26,7 @@ type Saida = {
 type Props = {
   saidas: Saida[]
   clinicId: string
+  bancos: string[]
 }
 
 const CATEGORIAS_DRE = [
@@ -82,10 +84,12 @@ function RecorrenteBadge() {
 
 function EditSaidaModal({
   saida,
+  bancos,
   onSave,
   onClose,
 }: {
   saida: Saida
+  bancos: string[]
   onSave: (updated: Saida) => void
   onClose: () => void
 }) {
@@ -100,6 +104,7 @@ function EditSaidaModal({
   const [fornecedor, setFornecedor] = useState(saida.fornecedor || '')
   const [valor, setValor] = useState(String(saida.valor || ''))
   const [forma, setForma] = useState(saida.forma_pagamento || '')
+  const [banco, setBanco] = useState(saida.banco || '')
 
   async function handleSave() {
     const v = parseFloat(valor) || 0
@@ -115,6 +120,7 @@ function EditSaidaModal({
       fornecedor: fornecedor.trim() || null,
       valor: v,
       forma_pagamento: forma || null,
+      banco: banco || null,
     }).eq('id', saida.id)
     setSaving(false)
 
@@ -124,7 +130,7 @@ function EditSaidaModal({
     }
 
     toast.success('Saída atualizada')
-    onSave({ ...saida, data, descricao, categoria_dre: categoria || null, subcategoria: subcategoria || null, fornecedor: fornecedor || null, valor: v, forma_pagamento: forma || null })
+    onSave({ ...saida, data, descricao, categoria_dre: categoria || null, subcategoria: subcategoria || null, fornecedor: fornecedor || null, valor: v, forma_pagamento: forma || null, banco: banco || null })
     onClose()
   }
 
@@ -188,6 +194,19 @@ function EditSaidaModal({
               <input type="text" value={forma} onChange={e => setForma(e.target.value)} placeholder="Ex: PIX, transferência" className="input w-full text-sm" />
             </div>
           </div>
+
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Banco / conta</label>
+            {bancos.length > 0 ? (
+              <select value={banco} onChange={e => setBanco(e.target.value)} className="input w-full text-sm">
+                <option value="">Sem banco</option>
+                {bancos.map(b => <option key={b} value={b}>{b}</option>)}
+                {banco && !bancos.includes(banco) && <option value={banco}>{banco}</option>}
+              </select>
+            ) : (
+              <input type="text" value={banco} onChange={e => setBanco(e.target.value)} placeholder="Nenhum banco cadastrado" className="input w-full text-sm" />
+            )}
+          </div>
         </div>
 
         <div className="p-5 border-t border-slate-100 flex gap-3 flex-shrink-0">
@@ -205,7 +224,7 @@ function EditSaidaModal({
 }
 
 
-export default function SaidasList({ saidas: initial, clinicId }: Props) {
+export default function SaidasList({ saidas: initial, clinicId, bancos }: Props) {
   const [list, setList] = useState(initial)
   const [search, setSearch] = useState('')
   const [mes, setMes] = useState(todayBR().slice(0, 7))
@@ -330,6 +349,7 @@ export default function SaidasList({ saidas: initial, clinicId }: Props) {
       {editSaida && (
         <EditSaidaModal
           saida={editSaida}
+          bancos={bancos}
           onSave={handleSaveEditSaida}
           onClose={() => setEditSaida(null)}
         />
