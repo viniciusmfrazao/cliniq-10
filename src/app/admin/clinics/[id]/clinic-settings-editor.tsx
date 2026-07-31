@@ -106,6 +106,27 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar alterações')
       setMessage('Dados da clínica atualizados com sucesso.')
+
+      // Ressincroniza o formulário com o que o servidor de fato persistiu,
+      // em vez de depender só do router.refresh() — que em navegação
+      // client-side pode servir uma versão em cache de até 30s e fazer
+      // campos como CEP/Número parecerem "não salvos" mesmo já persistidos.
+      const updated = data.clinic as {
+        settings?: Record<string, unknown> | null
+      } | undefined
+      if (updated) {
+        const updatedSettings = updated.settings && typeof updated.settings === 'object' ? updated.settings : {}
+        setForm(prev => ({
+          ...prev,
+          postal_code: typeof updatedSettings.postal_code === 'string' ? updatedSettings.postal_code : '',
+          address_number: typeof updatedSettings.address_number === 'string' ? updatedSettings.address_number : '',
+          max_whatsapp_numbers_override:
+            typeof updatedSettings.max_whatsapp_numbers_override === 'number' && updatedSettings.max_whatsapp_numbers_override > 0
+              ? String(updatedSettings.max_whatsapp_numbers_override)
+              : '',
+        }))
+      }
+
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro inesperado')
