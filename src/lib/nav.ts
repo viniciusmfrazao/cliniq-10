@@ -48,7 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Dashboard',        href: '/dashboard/financeiro' },
       { label: 'Entradas',         href: '/dashboard/financeiro/entradas' },
       { label: 'Saídas',           href: '/dashboard/financeiro/saidas' },
-      { label: 'Relatórios',       href: '/dashboard/financeiro/dre' },
+      { label: 'Relatórios',       href: '/dashboard/financeiro/relatorios' },
       { label: 'Minhas Comissões', href: '/dashboard/comissoes/minhas' },
     ]
   },

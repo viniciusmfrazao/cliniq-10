@@ -310,31 +310,7 @@ export default async function FinanceiroPage({
       )}
 
       {/* Atalhos */}
-      <div className={`grid grid-cols-2 ${isOwnScope ? 'md:grid-cols-4' : 'md:grid-cols-7'} gap-3`}>
-        {!isOwnScope && (
-        <Link href="/dashboard/financeiro/previsao-recebimento" className="bg-white rounded-xl p-4 border border-blue-200 shadow-sm hover:border-blue-300 hover:shadow-md transition group flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition">
-            <Icon name="dollarSign" className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="font-semibold text-slate-900 text-sm">Recebíveis Futuros</p>
-            <p className="text-xs text-slate-500">Parcelas a cair no caixa</p>
-          </div>
-        </Link>
-        )}
-
-        {!isOwnScope && (
-        <Link href="/dashboard/financeiro/previsao" className="bg-white rounded-xl p-4 border border-emerald-200 shadow-sm hover:border-emerald-300 hover:shadow-md transition group flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 transition">
-            <Icon name="trendingUp" className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <p className="font-semibold text-slate-900 text-sm">Previsão de Faturamento</p>
-            <p className="text-xs text-slate-500">Agendamentos futuros</p>
-          </div>
-        </Link>
-        )}
-
+      <div className={`grid grid-cols-2 ${isOwnScope ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-3`}>
         {!isOwnScope && (
         <Link href="/dashboard/financeiro/devedores" className="bg-white rounded-xl p-4 border border-rose-200 shadow-sm hover:border-rose-300 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-rose-100 rounded-lg flex items-center justify-center group-hover:bg-rose-200 transition">
@@ -347,26 +323,6 @@ export default async function FinanceiroPage({
         </Link>
         )}
 
-        <Link href="/dashboard/financeiro/fluxo" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition group flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition">
-            <Icon name="activity" className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="font-semibold text-slate-900 text-sm">Fluxo de Caixa</p>
-            <p className="text-xs text-slate-500">Visão anual</p>
-          </div>
-        </Link>
-
-        <Link href="/dashboard/financeiro/rankings" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-violet-200 hover:shadow-md transition group flex items-center gap-3">
-          <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center group-hover:bg-violet-200 transition">
-            <Icon name="barChart" className="w-5 h-5 text-violet-600" />
-          </div>
-          <div>
-            <p className="font-semibold text-slate-900 text-sm">Rankings</p>
-            <p className="text-xs text-slate-500">Pacientes e procedimentos</p>
-          </div>
-        </Link>
-
         <Link href="/dashboard/financeiro/metas" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-pink-200 hover:shadow-md transition group flex items-center gap-3">
           <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center group-hover:bg-pink-200 transition">
             <Icon name="target" className="w-5 h-5 text-pink-600" />
@@ -377,13 +333,15 @@ export default async function FinanceiroPage({
           </div>
         </Link>
 
-        <Link href="/dashboard/financeiro/dre" className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-violet-200 hover:shadow-md transition group flex items-center gap-3">
-          <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center group-hover:bg-violet-200 transition">
+        <Link href="/dashboard/financeiro/relatorios" className="col-span-2 md:col-span-1 bg-white rounded-xl p-4 border border-slate-100 shadow-sm hover:border-violet-200 hover:shadow-md transition group flex items-center gap-3">
+          <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center group-hover:bg-violet-200 transition flex-shrink-0">
             <Icon name="pieChart" className="w-5 h-5 text-violet-600" />
           </div>
-          <div>
-            <p className="font-semibold text-slate-900 text-sm">DRE</p>
-            <p className="text-xs text-slate-500">Resultado mensal</p>
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-900 text-sm">Relatórios</p>
+            <p className="text-xs text-slate-500 truncate">
+              {isOwnScope ? 'Rankings e status de agenda' : 'DRE, fluxo, rankings, previsão e mais'}
+            </p>
           </div>
         </Link>
       </div>
