@@ -33,6 +33,14 @@ export default async function SaidasPage() {
 
   const saidas = [...(pendentes || []), ...(lancadas || [])]
 
+  const { data: bancosData } = await supabase
+    .from('contas_bancarias')
+    .select('nome')
+    .eq('clinic_id', clinicId)
+    .eq('ativo', true)
+    .order('nome')
+  const bancos = (bancosData || []).map(b => b.nome)
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -54,7 +62,7 @@ export default async function SaidasPage() {
         </Link>
       </div>
 
-      <SaidasList saidas={saidas} clinicId={clinicId ?? ''} />
+      <SaidasList saidas={saidas} clinicId={clinicId ?? ''} bancos={bancos} />
     </div>
   )
 }

@@ -12,6 +12,13 @@ export default async function NovaSaidaPage() {
   const { data: userData } = await supabase.from('users').select('clinic_id').eq('id', user.id).single()
   const clinicId = userData?.clinic_id
 
+  const { data: bancos } = await supabase
+    .from('contas_bancarias')
+    .select('nome')
+    .eq('clinic_id', clinicId)
+    .eq('ativo', true)
+    .order('nome')
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-3">
@@ -24,7 +31,7 @@ export default async function NovaSaidaPage() {
         </div>
       </div>
 
-      <SaidaForm clinicId={clinicId} userId={user.id} />
+      <SaidaForm clinicId={clinicId} userId={user.id} bancos={(bancos || []).map(b => b.nome)} />
     </div>
   )
 }
