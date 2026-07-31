@@ -107,10 +107,14 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar alterações')
       setMessage('Dados da clínica atualizados com sucesso.')
 
-      // Ressincroniza o formulário com o que o servidor de fato persistiu,
-      // em vez de depender só do router.refresh() — que em navegação
-      // client-side pode servir uma versão em cache de até 30s e fazer
-      // campos como CEP/Número parecerem "não salvos" mesmo já persistidos.
+      // Ressincroniza o formulário com o que o servidor de fato persistiu.
+      // NÃO chamamos router.refresh() aqui: mesmo esse formulário já sendo
+      // a fonte da verdade pros campos que ele mesmo edita, o refresh disparava
+      // um novo fetch de dados que, por algum motivo (cache de rota/CDN),
+      // voltava sem os campos de settings preenchidos e sobrescrevia o que
+      // acabamos de exibir — fazendo CEP/Número "sumirem" logo após salvar
+      // com sucesso. Os cards abaixo (nome/CNPJ/atualizado em) só vão
+      // refletir a mudança em uma navegação normal (F5 ou trocar de tela).
       const updated = data.clinic as {
         settings?: Record<string, unknown> | null
       } | undefined
@@ -126,8 +130,6 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
               : '',
         }))
       }
-
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro inesperado')
     } finally {
