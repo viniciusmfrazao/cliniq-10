@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import CopyAnamneseLink from './copy-link-button'
 import ExportAnamnesePdfButton from './export-pdf-button'
+import CopyHashButton from '@/components/ui/CopyHashButton'
 
 function escapeHtml(value: any): string {
   return String(value ?? '')
@@ -456,6 +457,31 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
               <div className="sm:col-span-3">
                 <p className="text-xs text-slate-500 mb-1">Dispositivo</p>
                 <p className="text-xs text-slate-400 break-all">{anamnese.signature_user_agent}</p>
+              </div>
+            )}
+            {(anamnese.signature_lat && anamnese.signature_lon) && (
+              <div className="flex items-center gap-2">
+                <Icon name="mapPin" className="w-4 h-4 text-slate-400" />
+                <div>
+                  <p className="text-xs text-slate-500">Localização (GPS)</p>
+                  <a
+                    href={`https://www.google.com/maps?q=${anamnese.signature_lat},${anamnese.signature_lon}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-violet-600 hover:underline"
+                  >
+                    {Number(anamnese.signature_lat).toFixed(5)}, {Number(anamnese.signature_lon).toFixed(5)}
+                  </a>
+                </div>
+              </div>
+            )}
+            {anamnese.signature_hash && (
+              <div className="sm:col-span-3">
+                <p className="text-xs text-slate-500 mb-1">Hash de integridade (SHA-256)</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-slate-400 font-mono break-all">{anamnese.signature_hash}</p>
+                  <CopyHashButton hash={anamnese.signature_hash} />
+                </div>
               </div>
             )}
           </div>

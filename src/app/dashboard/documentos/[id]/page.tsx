@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import DocumentActions from './document-actions'
 import DocumentLinkCard from './document-link-card'
+import CopyHashButton from '@/components/ui/CopyHashButton'
 
 export default async function DocumentoDetalhePage({ params }: { params: { id: string } }) {
   const { id } = params
@@ -119,6 +120,12 @@ export default async function DocumentoDetalhePage({ params }: { params: { id: s
                 <p className="font-medium text-slate-900 font-mono text-xs">{doc.signature_ip}</p>
               </div>
             )}
+            {doc.signature_country && (
+              <div>
+                <p className="text-slate-500">País</p>
+                <p className="font-medium text-slate-900">{doc.signature_country}</p>
+              </div>
+            )}
             <div>
               <p className="text-slate-500">Expira em</p>
               <p className="font-medium text-slate-900">
@@ -189,6 +196,42 @@ export default async function DocumentoDetalhePage({ params }: { params: { id: s
                 className="max-w-xs h-auto"
               />
             </div>
+
+            {(doc.signature_user_agent || (doc.signature_lat && doc.signature_lon) || doc.signature_hash) && (
+              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(doc.signature_lat && doc.signature_lon) && (
+                  <div className="flex items-center gap-2">
+                    <Icon name="mapPin" className="w-4 h-4 text-slate-400" />
+                    <div>
+                      <p className="text-xs text-slate-500">Localização (GPS)</p>
+                      <a
+                        href={`https://www.google.com/maps?q=${doc.signature_lat},${doc.signature_lon}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-violet-600 hover:underline"
+                      >
+                        {Number(doc.signature_lat).toFixed(5)}, {Number(doc.signature_lon).toFixed(5)}
+                      </a>
+                    </div>
+                  </div>
+                )}
+                {doc.signature_user_agent && (
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-slate-500 mb-1">Dispositivo</p>
+                    <p className="text-xs text-slate-400 break-all">{doc.signature_user_agent}</p>
+                  </div>
+                )}
+                {doc.signature_hash && (
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-slate-500 mb-1">Hash de integridade (SHA-256)</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-slate-400 font-mono break-all">{doc.signature_hash}</p>
+                      <CopyHashButton hash={doc.signature_hash} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
