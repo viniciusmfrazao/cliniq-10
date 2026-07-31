@@ -46,6 +46,17 @@ const nextConfig = {
         ],
       },
       {
+        source: '/admin/:path*',
+        headers: [
+          // Super Admin tambem contem dados privados/editaveis -- sem isso o
+          // Safari (iOS) pode cachear a resposta HTTP da pagina e mostrar
+          // campos como CEP/Numero "vazios" apos salvar, mesmo ja persistidos
+          // no banco (o force-dynamic do Next so controla o servidor, nao
+          // o cache HTTP do navegador).
+          { key: 'Cache-Control', value: 'private, no-cache, no-store, must-revalidate' },
+        ],
+      },
+      {
         source: '/_next/static/:path*',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
