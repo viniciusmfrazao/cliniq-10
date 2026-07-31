@@ -9,6 +9,7 @@ export type PatientTab =
   | 'injetaveis'
   | 'pacotes'
   | 'documentos'
+  | 'anexos'
   | 'odontograma'
 
 const TABS: Array<{ id: PatientTab; label: string; icon: string; module?: string }> = [
@@ -19,6 +20,7 @@ const TABS: Array<{ id: PatientTab; label: string; icon: string; module?: string
   { id: 'injetaveis', label: 'Injetáveis', icon: 'syringe' },
   { id: 'pacotes', label: 'Pacotes', icon: 'package' },
   { id: 'documentos', label: 'Documentos', icon: 'file' },
+  { id: 'anexos', label: 'Anexos', icon: 'paperclip' },
 ]
 
 export function isValidTab(tab: string | undefined): tab is PatientTab {
