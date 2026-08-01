@@ -12,13 +12,32 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   blocked:   { label: 'Bloqueado', color: 'bg-red-200 text-red-800' },
 }
 
-export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]; plans: any[] }) {
+const CARD_CONFIRM_EVENTS = ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAYMENT_ANTICIPATED', 'PAYMENT_DUNNING_RECEIVED']
+
+const EVENT_LABELS: Record<string, string> = {
+  PAYMENT_CONFIRMED: '✅ Pagamento confirmado',
+  PAYMENT_RECEIVED: '✅ Pagamento recebido',
+  PAYMENT_ANTICIPATED: '✅ Pagamento antecipado',
+  PAYMENT_DUNNING_RECEIVED: '✅ Pagamento recebido (cobrança)',
+  PAYMENT_OVERDUE: '⚠️ Vencido',
+  PAYMENT_DELETED: '❌ Removido',
+  PAYMENT_REFUNDED: '↩️ Estornado',
+  PAYMENT_PARTIALLY_REFUNDED: '↩️ Estorno parcial',
+  PAYMENT_REPROVED_BY_RISK_ANALYSIS: '❌ Reprovado (análise de risco)',
+  PAYMENT_CHARGEBACK_REQUESTED: '🔄 Chargeback solicitado',
+  PAYMENT_AWAITING_CHARGEBACK_REVERSAL: '🔄 Aguardando reversão de chargeback',
+  SUBSCRIPTION_INACTIVATED: '🚫 Assinatura inativada',
+  SUBSCRIPTION_DELETED: '🚫 Assinatura removida',
+}
+
+export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: { clinics: any[]; plans: any[]; eventsByClinic: Record<string, any[]> }) {
   const hasCnpj = (c: any) => !!((c.cnpj || c.settings?.cnpj || '').replace(/\D/g, '').length >= 11)
   const [sending, setSending] = useState<string | null>(null)
   const [modal, setModal] = useState<{ clinicId: string; clinicName: string } | null>(null)
   const [form, setForm] = useState({ planId: '', planName: '', planPrice: '', billingCycle: 'MONTHLY', trialDays: '30', paymentMethod: 'CREDIT_CARD' })
   const [result, setResult] = useState<{ url?: string; error?: string } | null>(null)
   const [search, setSearch] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const filtered = clinics.filter(c => normalizeText(c.name).includes(normalizeText(search)))
 
@@ -77,57 +96,92 @@ export default function SubscriptionsClient({ clinics, plans }: { clinics: any[]
           const sub = clinic.clinic_subscriptions?.[0]
           const status = sub?.status || 'pending'
           const { label, color } = STATUS_LABELS[status] || STATUS_LABELS.pending
+          const events = eventsByClinic[clinic.id] || []
+          const cardConfirmed = events.some(e => CARD_CONFIRM_EVENTS.includes(e.event))
+          const isExpanded = expanded === clinic.id
 
           return (
-            <div key={clinic.id} className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-violet-700 font-bold text-sm">{clinic.name.charAt(0)}</span>
+            <div key={clinic.id} className="bg-white rounded-2xl border border-slate-200 p-5">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-violet-700 font-bold text-sm">{clinic.name.charAt(0)}</span>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-slate-800 truncate">{clinic.name}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>{label}</span>
+                    {sub?.checkout_sent_at && (
+                      cardConfirmed
+                        ? <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">💳 Cartão cadastrado</span>
+                        : <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">⏳ Aguardando cadastro do cartão</span>
+                    )}
+                    {!hasCnpj(clinic) && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700" title="Sem CNPJ/CPF cadastrado — não é possível gerar link de cobrança">
+                        ⚠️ sem CNPJ
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 mt-1 flex-wrap">
+                    {sub?.plan_name && (
+                      <p className="text-xs text-slate-500">
+                        📦 {sub.plan_name} — R$ {sub.plan_price}/mês{sub?.payment_method && ` · ${sub.payment_method === 'PIX' ? 'Pix' : 'Cartão'}`}
+                      </p>
+                    )}
+                    {sub?.last_payment_at && (
+                      <p className="text-xs text-slate-500">💰 Último pagamento: {new Date(sub.last_payment_at).toLocaleDateString('pt-BR')}</p>
+                    )}
+                    {sub?.trial_ends_at && (
+                      <p className="text-xs text-blue-500">⏳ Trial até {new Date(sub.trial_ends_at).toLocaleDateString('pt-BR')}</p>
+                    )}
+                    {sub?.checkout_sent_at && (
+                      <p className="text-xs text-slate-400">📤 Link enviado em {new Date(sub.checkout_sent_at).toLocaleDateString('pt-BR')}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {events.length > 0 && (
+                    <button
+                      onClick={() => setExpanded(isExpanded ? null : clinic.id)}
+                      className="text-xs px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
+                      {isExpanded ? '▲ Ocultar' : `▼ Histórico (${events.length})`}
+                    </button>
+                  )}
+                  {sub?.asaas_checkout_url && (
+                    <a href={sub.asaas_checkout_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs px-3 py-1.5 border border-violet-200 text-violet-700 rounded-lg hover:bg-violet-50">
+                      🔗 Ver link
+                    </a>
+                  )}
+                  <button
+                    onClick={() => { setModal({ clinicId: clinic.id, clinicName: clinic.name }); setResult(null) }}
+                    disabled={!hasCnpj(clinic)}
+                    title={!hasCnpj(clinic) ? 'Cadastre o CNPJ/CPF da clínica no admin antes de enviar o link' : undefined}
+                    className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-lg font-medium"
+                  >
+                    📤 Enviar link
+                  </button>
+                </div>
               </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-slate-800 truncate">{clinic.name}</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>{label}</span>
-                  {!hasCnpj(clinic) && (
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700" title="Sem CNPJ/CPF cadastrado — não é possível gerar link de cobrança">
-                      ⚠️ sem CNPJ
-                    </span>
-                  )}
+              {isExpanded && events.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <p className="text-xs font-semibold text-slate-500 mb-2">Histórico de pagamentos</p>
+                  <div className="space-y-1.5">
+                    {events.map((ev, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+                        <span>{EVENT_LABELS[ev.event] || ev.event}</span>
+                        <div className="flex items-center gap-3">
+                          {ev.value != null && <span className="text-slate-500">R$ {Number(ev.value).toFixed(2)}</span>}
+                          {ev.billing_type && <span className="text-slate-400">{ev.billing_type === 'PIX' ? 'Pix' : 'Cartão'}</span>}
+                          <span className="text-slate-400">{new Date(ev.occurred_at).toLocaleString('pt-BR')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex items-center gap-4 mt-1 flex-wrap">
-                  {sub?.plan_name && (
-                    <p className="text-xs text-slate-500">
-                      📦 {sub.plan_name} — R$ {sub.plan_price}/mês{sub?.payment_method && ` · ${sub.payment_method === 'PIX' ? 'Pix' : 'Cartão'}`}
-                    </p>
-                  )}
-                  {sub?.last_payment_at && (
-                    <p className="text-xs text-slate-500">💰 Último pagamento: {new Date(sub.last_payment_at).toLocaleDateString('pt-BR')}</p>
-                  )}
-                  {sub?.trial_ends_at && (
-                    <p className="text-xs text-blue-500">⏳ Trial até {new Date(sub.trial_ends_at).toLocaleDateString('pt-BR')}</p>
-                  )}
-                  {sub?.checkout_sent_at && !sub?.asaas_checkout_url && (
-                    <p className="text-xs text-slate-400">Link enviado em {new Date(sub.checkout_sent_at).toLocaleDateString('pt-BR')}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {sub?.asaas_checkout_url && (
-                  <a href={sub.asaas_checkout_url} target="_blank" rel="noopener noreferrer"
-                    className="text-xs px-3 py-1.5 border border-violet-200 text-violet-700 rounded-lg hover:bg-violet-50">
-                    🔗 Ver link
-                  </a>
-                )}
-                <button
-                  onClick={() => { setModal({ clinicId: clinic.id, clinicName: clinic.name }); setResult(null) }}
-                  disabled={!hasCnpj(clinic)}
-                  title={!hasCnpj(clinic) ? 'Cadastre o CNPJ/CPF da clínica no admin antes de enviar o link' : undefined}
-                  className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-lg font-medium"
-                >
-                  📤 Enviar link
-                </button>
-              </div>
+              )}
             </div>
           )
         })}
