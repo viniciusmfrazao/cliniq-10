@@ -52,6 +52,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, ignored: true })
     }
 
+    // Log histórico do evento — isolado em try/catch próprio para nunca interferir
+    // no fluxo principal de ativação/cancelamento abaixo, mesmo se falhar.
+    try {
+      await svc.from('clinic_payment_events').insert({
+        clinic_id: clinicId,
+        event,
+        asaas_payment_id: payment.id || null,
+        asaas_subscription_id: subscriptionId || null,
+        billing_type: payment.billingType || null,
+        value: payment.value ?? null,
+        raw: body,
+      })
+    } catch (logErr) {
+      console.error('[asaas-webhook] falha ao gravar histórico (não bloqueante):', logErr)
+    }
+
     switch (event) {
 
       // ✅ Pagamento confirmado/recebido → acesso ativo
