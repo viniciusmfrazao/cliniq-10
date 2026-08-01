@@ -79,6 +79,10 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
           <p className="text-slate-500 text-sm mt-1">Gerencie os planos e cobranças das clínicas</p>
         </div>
         <div className="flex items-center gap-3">
+          <a href="/admin/subscriptions/relatorio"
+            className="text-xs px-3 py-1.5 border border-violet-200 text-violet-700 rounded-lg hover:bg-violet-50 font-medium">
+            📊 Relatório de cobranças
+          </a>
           <div className="text-xs text-slate-500">
             {clinics.filter(c => c.clinic_subscriptions?.[0]?.status === 'active').length} ativas /  {clinics.length} total
           </div>
