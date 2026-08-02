@@ -8,8 +8,11 @@ import Icon from '@/components/ui/Icon'
 import { parseSupabaseError } from '@/lib/error-messages'
 import { todayBR } from '@/lib/datetime'
 import { FORMAS_PAGAMENTO, BANDEIRAS_CARTAO, getTaxaPct, type TaxaPag } from '@/lib/pagamento-helpers'
+import { useToast } from '@/components/ui/Toast'
 
 type Produto = { id: string; name: string; sale_price: number; current_stock: number }
+
+type VendaProdutoInfo = { produtoNome: string; quantidade: number; valor: number }
 
 type Props = {
   clinicId: string
@@ -17,7 +20,7 @@ type Props = {
   patientId: string | null
   patientName: string
   onClose: () => void
-  onSuccess?: () => void
+  onSuccess?: (info: VendaProdutoInfo) => void
 }
 
 function fmt(v: number) {
@@ -27,6 +30,7 @@ function fmt(v: number) {
 export default function SellProductModal({ clinicId, userId, patientId, patientName, onClose, onSuccess }: Props) {
   const supabase = createClient()
   const router = useRouter()
+  const toast = useToast()
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -110,8 +114,8 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
   }
 
   async function handleSubmit() {
-    if (!selected) { alert('Selecione um produto'); return }
-    if (pagamentosCalc.some(p => p.v <= 0)) { alert('Cada forma de pagamento precisa de um valor maior que zero'); return }
+    if (!selected) { toast.error('Selecione um produto'); return }
+    if (pagamentosCalc.some(p => p.v <= 0)) { toast.error('Cada forma de pagamento precisa de um valor maior que zero'); return }
     if (Math.abs(restante) > 0.01) {
       const ok = confirm(
         restante > 0
@@ -149,12 +153,15 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
 
     setSaving(false)
     if (error) {
-      alert('Erro ao registrar venda: ' + parseSupabaseError(error))
+      toast.error('Erro ao registrar venda', { description: parseSupabaseError(error) })
       return
     }
 
+    toast.success('Produto vendido', {
+      description: `${selected.name} × ${selected.quantidade} — ${fmt(valorTotal)}`,
+    })
     router.refresh()
-    onSuccess?.()
+    onSuccess?.({ produtoNome: selected.name, quantidade: selected.quantidade, valor: valorTotal })
     onClose()
   }
 

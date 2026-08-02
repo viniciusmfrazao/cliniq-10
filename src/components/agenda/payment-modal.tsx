@@ -11,6 +11,7 @@ type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number }
 type ProcItem = { id: string; name: string; price: number }
 type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; liquido: number }
 type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean }
+type VendaProdutoInfo = { produtoNome: string; quantidade: number; valor: number }
 
 type Props = {
   appointmentId: string
@@ -62,6 +63,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [procSearch, setProcSearch] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
   const [showSellProduct, setShowSellProduct] = useState(false)
+  const [vendasProduto, setVendasProduto] = useState<VendaProdutoInfo[]>([])
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -381,13 +383,32 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
               )}
 
               {/* Vender produto — lançamento separado (tipo_receita='produto'), não entra
-                  no split de pagamento do procedimento acima. Baixa estoque automaticamente. */}
+                  no split de pagamento do procedimento acima. Baixa estoque automaticamente.
+                  É uma transação independente: confirma na hora, não espera o
+                  "Confirmar Pagamento" do procedimento lá embaixo. */}
               <button
                 onClick={() => setShowSellProduct(true)}
                 className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-amber-600 hover:text-amber-700 border border-dashed border-amber-200 hover:border-amber-400 rounded-xl transition-colors"
               >
                 <span className="text-base leading-none">+</span> Vender produto
               </button>
+              {vendasProduto.length > 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-1">
+                  <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
+                    <Icon name="check" className="w-3.5 h-3.5" />
+                    Produto(s) já vendido(s) nesta tela
+                  </p>
+                  {vendasProduto.map((v, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs text-emerald-800">
+                      <span>{v.produtoNome} × {v.quantidade}</span>
+                      <span className="font-medium">{fmt(v.valor)}</span>
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-emerald-600 pt-1">
+                    Já lançado no financeiro — não precisa confirmar de novo. O pagamento abaixo é só do procedimento.
+                  </p>
+                </div>
+              )}
               {showSellProduct && userId && (
                 <SellProductModal
                   clinicId={clinicId}
@@ -395,6 +416,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   patientId={patientId}
                   patientName={patientName}
                   onClose={() => setShowSellProduct(false)}
+                  onSuccess={(info) => setVendasProduto(prev => [...prev, info])}
                 />
               )}
 
