@@ -918,7 +918,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
       </div>
 
       {/* Por procedimento */}
-      {Object.keys(porProcedimento).length > 1 && (
+      {Object.keys(porProcedimento).length >= 1 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
           <h4 className="font-semibold text-slate-700 mb-3 text-sm flex items-center gap-2">
             <Icon name="clipboard" className="w-4 h-4 text-emerald-600" />
