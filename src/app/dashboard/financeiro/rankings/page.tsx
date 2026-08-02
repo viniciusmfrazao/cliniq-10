@@ -16,7 +16,7 @@ export default async function RankingsPage() {
 
   const { data: entradas } = await supabase
     .from('entradas')
-    .select('paciente_id, paciente_nome, procedimento_nome, valor_bruto, valor_liquido, data_venda, forma_pagamento')
+    .select('paciente_id, paciente_nome, procedimento_nome, valor_bruto, valor_liquido, data_venda, forma_pagamento, tipo_receita, quantidade')
     .eq('clinic_id', clinicId)
     .order('data_venda', { ascending: false })
 

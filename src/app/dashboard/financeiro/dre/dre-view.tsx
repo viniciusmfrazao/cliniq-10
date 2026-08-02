@@ -11,6 +11,7 @@ type Entrada = {
   valor_liquido: number
   valor_taxa: number
   forma_pagamento: string
+  tipo_receita: string | null
 }
 
 type Saida = {
@@ -64,7 +65,7 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
     const [{ data: e }, { data: s }] = await Promise.all([
       supabase
         .from('entradas')
-        .select('data_venda, valor_bruto, valor_liquido, valor_taxa, forma_pagamento')
+        .select('data_venda, valor_bruto, valor_liquido, valor_taxa, forma_pagamento, tipo_receita')
         .eq('clinic_id', clinicId)
         .gte('data_venda', startOfMonth)
         .lte('data_venda', endOfMonth),
@@ -83,6 +84,9 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
   }
 
   const receitaBruta = entradas.reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
+  const receitaProdutos = entradas
+    .filter(e => e.tipo_receita === 'produto')
+    .reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
   const taxas = entradas.reduce((s, e) => s + Number(e.valor_taxa || 0), 0)
   const receitaLiquida = entradas.reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
 
@@ -140,6 +144,13 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
             <span className="font-semibold text-slate-900">RECEITA BRUTA</span>
             <span className="font-bold text-lg text-slate-900">{fmt(receitaBruta)}</span>
           </div>
+
+          {receitaProdutos > 0 && (
+            <div className="flex justify-between items-center p-4 pl-8">
+              <span className="text-xs text-slate-500">↳ inclui venda de produtos</span>
+              <span className="text-xs text-slate-500">{fmt(receitaProdutos)}</span>
+            </div>
+          )}
 
           <div className="flex justify-between items-center p-4 pl-8">
             <span className="text-slate-600">(-) Taxas de cartão/pagamento</span>

@@ -19,7 +19,7 @@ export default async function DrePage() {
 
   const { data: entradas } = await supabase
     .from('entradas')
-    .select('data_venda, valor_bruto, valor_liquido, valor_taxa, forma_pagamento')
+    .select('data_venda, valor_bruto, valor_liquido, valor_taxa, forma_pagamento, tipo_receita')
     .eq('clinic_id', clinicId)
     .gte('data_venda', startOfMonth)
     .lte('data_venda', endOfMonth)
