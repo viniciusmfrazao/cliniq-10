@@ -126,7 +126,7 @@ export default function SendTermoButton({
       {/* Picker de templates */}
       {showPicker && (
         <div
-          className="absolute bottom-full mb-1 left-0 z-50 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-2"
+          className="absolute bottom-full mb-1 right-0 z-50 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-2"
           onClick={e => e.stopPropagation()}
         >
           <p className="text-xs font-semibold text-slate-500 px-2 py-1">
