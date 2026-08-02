@@ -17,6 +17,8 @@ import PatientAttachments from '@/components/PatientAttachments'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 import AnamnesePresencialButton from './anamnese-presencial-button'
 import PatientMarginCard from './patient-margin-card'
+import SellProductButton from './sell-product-button'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 /**
  * Central do Paciente.
@@ -46,6 +48,8 @@ export default async function PatientCentralPage({
     .select('clinic_id, id, name')
     .eq('id', user.id)
     .maybeSingle()
+  const access = await getEffectiveAccess(supabase, user.id)
+  const canSellProduct = can(access, 'financial_edit')
 
   // Header + dados base do paciente (incluindo contagens pra os badges
   // e o próximo atendimento "vivo" do paciente — em andamento ou
@@ -228,6 +232,14 @@ export default async function PatientCentralPage({
             <Icon name="edit" className="w-4 h-4" />
             Editar cadastro
           </Link>
+          {canSellProduct && userData?.clinic_id && (
+            <SellProductButton
+              clinicId={userData.clinic_id}
+              userId={user.id}
+              patientId={id}
+              patientName={patient.name}
+            />
+          )}
           <DeletePatientButton patientId={id} />
         </div>
       </div>
