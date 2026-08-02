@@ -736,7 +736,7 @@ async function ProdutosVendidosSection({ patientId, clinicId }: { patientId: str
   const supabase = await createClient()
   const { data: vendas } = await supabase
     .from('entradas')
-    .select('id, data_venda, procedimento_nome, quantidade, valor_bruto, forma_pagamento, profissional_nome')
+    .select('id, data_venda, procedimento_nome, quantidade, valor_bruto, valor_liquido, forma_pagamento, profissional_nome')
     .eq('clinic_id', clinicId)
     .eq('paciente_id', patientId)
     .eq('tipo_receita', 'produto')
@@ -757,7 +757,12 @@ async function ProdutosVendidosSection({ patientId, clinicId }: { patientId: str
                 {v.profissional_nome ? ` · ${v.profissional_nome}` : ''}
               </p>
             </div>
-            <span className="font-semibold text-emerald-600">{fmtBRL(Number(v.valor_bruto))}</span>
+            <div className="text-right">
+              <span className="font-semibold text-emerald-600">{fmtBRL(Number(v.valor_bruto))}</span>
+              {v.valor_liquido != null && Number(v.valor_liquido) < Number(v.valor_bruto) - 0.01 && (
+                <p className="text-xs text-slate-400">líquido {fmtBRL(Number(v.valor_liquido))}</p>
+              )}
+            </div>
           </div>
         ))}
       </div>
