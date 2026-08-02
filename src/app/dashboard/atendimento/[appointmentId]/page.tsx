@@ -88,6 +88,12 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .select('*, injectable_points(*), products(name)')
     .eq('appointment_id', appointmentId)
 
+  // Aplicacoes de mapa corporal deste atendimento
+  const { data: currentBodyApplications } = await supabase
+    .from('body_applications')
+    .select('*, body_points(*), products(name)')
+    .eq('appointment_id', appointmentId)
+
   // Produtos já usados neste atendimento
   const { data: usedProducts } = await supabase
     .from('appointment_products')
@@ -102,6 +108,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
     .maybeSingle()
   const enabledModules: string[] = clinicData?.settings?.active_modules || []
   const hasOdontogram = enabledModules.includes('odontograma')
+  const hasBodyMap = enabledModules.includes('harmonizacao_corporal')
 
   // Pacotes ativos do paciente (para mostrar alerta de usar sessão)
   const { data: activePackages } = await supabase
@@ -252,18 +259,20 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
 
           {/* Coluna Direita - Mapa de Injetaveis / Odontograma + Produtos */}
           <div className="space-y-6">
-            {hasOdontogram && (
+            {(hasOdontogram || hasBodyMap) && (
               <OdontogramMapToggle
                 hasOdontogram={hasOdontogram}
+                hasBodyMap={hasBodyMap}
                 patientId={patient.id}
                 clinicId={userData?.clinic_id || ''}
                 appointmentId={appointmentId}
                 patient={patient}
                 productsForMap={productsForMap || []}
                 currentInjections={currentInjections || []}
+                currentBodyApplications={currentBodyApplications || []}
               />
             )}
-            {!hasOdontogram && <InjectableMapSection
+            {!hasOdontogram && !hasBodyMap && <InjectableMapSection
               patient={patient}
               appointmentId={appointmentId}
               products={productsForMap || []}
