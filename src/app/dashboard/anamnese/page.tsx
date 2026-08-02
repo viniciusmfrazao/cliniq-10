@@ -62,6 +62,13 @@ export default async function AnamnesesPage() {
             Configurar
           </Link>
           <Link
+            href="/dashboard/anamnese/modelos"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-50 transition"
+          >
+            <Icon name="layers" className="w-4 h-4" />
+            Modelos
+          </Link>
+          <Link
             href="/dashboard/anamnese/enviar"
             className="btn-primary flex items-center gap-2"
           >
