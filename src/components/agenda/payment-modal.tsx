@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
+import SellProductModal from '@/components/vendas/sell-product-modal'
 
 type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number }
 type ProcItem = { id: string; name: string; price: number }
@@ -59,11 +60,16 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [showAddProc, setShowAddProc] = useState(false)
   const [allClinicProcs, setAllClinicProcs] = useState<ProcItem[]>([])
   const [procSearch, setProcSearch] = useState('')
+  const [userId, setUserId] = useState<string | null>(null)
+  const [showSellProduct, setShowSellProduct] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     async function init() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setUserId(user.id)
+
       // Taxas
       const { data: taxasData } = await supabase
         .from('taxas_pagamento').select('forma, bandeira, taxa_percentual').eq('clinic_id', clinicId)
@@ -372,6 +378,24 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                     }
                   </div>
                 </div>
+              )}
+
+              {/* Vender produto — lançamento separado (tipo_receita='produto'), não entra
+                  no split de pagamento do procedimento acima. Baixa estoque automaticamente. */}
+              <button
+                onClick={() => setShowSellProduct(true)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-amber-600 hover:text-amber-700 border border-dashed border-amber-200 hover:border-amber-400 rounded-xl transition-colors"
+              >
+                <span className="text-base leading-none">+</span> Vender produto
+              </button>
+              {showSellProduct && userId && (
+                <SellProductModal
+                  clinicId={clinicId}
+                  userId={userId}
+                  patientId={patientId}
+                  patientName={patientName}
+                  onClose={() => setShowSellProduct(false)}
+                />
               )}
 
               {/* Débitos pendentes */}
