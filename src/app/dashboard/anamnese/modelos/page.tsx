@@ -26,6 +26,12 @@ export default async function AnamneseModelosPage() {
     .order('ordem', { ascending: true })
     .order('created_at', { ascending: true })
 
+  const { data: config } = await supabase
+    .from('anamnese_config')
+    .select('ativo, titulo')
+    .eq('clinic_id', userData?.clinic_id)
+    .maybeSingle()
+
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3">
@@ -33,12 +39,15 @@ export default async function AnamneseModelosPage() {
           <Icon name="arrowLeft" className="w-5 h-5 text-slate-500" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-black text-slate-900">Meus Modelos de Ficha</h1>
-          <p className="text-slate-500">Crie fichas de anamnese totalmente personalizadas</p>
+          <h1 className="text-2xl font-black text-slate-900">Minhas Fichas de Anamnese</h1>
+          <p className="text-slate-500">Escolha quais fichas ficam disponíveis pra enviar aos pacientes</p>
         </div>
       </div>
 
-      <ModelosList initialTemplates={templates || []} />
+      <ModelosList
+        initialTemplates={templates || []}
+        padrao={{ ativo: config?.ativo !== false, titulo: config?.titulo || 'Ficha de Anamnese Facial' }}
+      />
     </div>
   )
 }
