@@ -38,20 +38,38 @@ export async function POST(req: NextRequest) {
     .from('users').select('id, clinic_id').eq('id', user.id).maybeSingle()
   if (!userRow?.clinic_id) return NextResponse.json({ ok: false, error: 'sem_clinica' }, { status: 403 })
 
-  const { patientId } = await req.json()
+  const { patientId, templateId } = await req.json()
   if (!patientId) return NextResponse.json({ ok: false, error: 'patientId_obrigatorio' }, { status: 400 })
 
   const svc = createServiceClient()
 
-  // Reusar anamnese ativa se houver
+  // Se veio um templateId, confere que pertence à clínica e está ativo.
+  let validTemplateId: string | null = null
+  if (templateId) {
+    const { data: tmpl } = await svc
+      .from('anamnese_templates')
+      .select('id')
+      .eq('id', templateId)
+      .eq('clinic_id', userRow.clinic_id)
+      .eq('ativo', true)
+      .maybeSingle()
+    if (!tmpl) return NextResponse.json({ ok: false, error: 'modelo_invalido' }, { status: 400 })
+    validTemplateId = tmpl.id as string
+  }
+
+  // Reusar anamnese ativa se houver (mesmo modelo)
   const nowIso = new Date().toISOString()
-  const { data: existing } = await svc
+  let reuseQuery = svc
     .from('anamneses')
     .select('id, token')
     .eq('clinic_id', userRow.clinic_id)
     .eq('patient_id', patientId)
     .in('status', ['pending', 'viewed'])
     .gt('expires_at', nowIso)
+  reuseQuery = validTemplateId
+    ? reuseQuery.eq('template_id', validTemplateId)
+    : reuseQuery.is('template_id', null)
+  const { data: existing } = await reuseQuery
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -70,6 +88,7 @@ export async function POST(req: NextRequest) {
       sent_by: userRow.id,
       token,
       expires_at: expiresAt,
+      template_id: validTemplateId,
     })
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
   }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 
@@ -12,6 +12,8 @@ const SECOES = [
   { id: 'saude',         label: 'Saúde Geral',              desc: 'Doenças, cirurgias, queloides' },
   { id: 'outras',        label: 'Outras Condições',         desc: 'Implantes, herpes, distúrbios' },
   { id: 'mulheres',      label: 'Exclusivo Mulheres',       desc: 'Gravidez, lactação' },
+  { id: 'imagem',        label: 'Autoriza Uso de Imagem',    desc: 'Pergunta se paciente autoriza fotos/vídeos' },
+  { id: 'filmagem',      label: 'Aceita Filmagem',            desc: 'Pergunta se paciente aceita ser filmado na clínica' },
   { id: 'queixa',        label: 'Principal Queixa',         desc: 'Áreas de interesse e observações' },
 ]
 
@@ -39,6 +41,7 @@ type Config = {
   secoes_ativas: string[]
   perguntas_extras: Pergunta[]
   campos_identificacao: string[]
+  ativo?: boolean
 }
 
 const CAMPOS_ID = [
@@ -254,6 +257,19 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const [ativo, setAtivo] = useState(config.ativo !== false)
+  const [temModeloAtivo, setTemModeloAtivo] = useState(true) // otimista até checar
+
+  useEffect(() => {
+    fetch('/api/anamnese/templates')
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((data) => {
+        const ativos = (data.templates || []).filter((t: any) => t.ativo)
+        setTemModeloAtivo(ativos.length > 0)
+      })
+      .catch(() => {})
+  }, [])
+
   const [titulo, setTitulo] = useState(config.titulo || 'Ficha de Anamnese Facial')
   const [subtitulo, setSubtitulo] = useState(config.subtitulo || '')
   const [cor, setCor] = useState(config.cor_primaria || '#b89a6a')
@@ -351,14 +367,20 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
           secoes_ativas: secoesAtivas,
           perguntas_extras: perguntas,
           campos_identificacao: camposId,
+          ativo,
         }),
       })
-      if (!res.ok) throw new Error('Erro ao salvar')
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Erro ao salvar')
+      }
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-      router.refresh()
-    } catch {
-      alert('Erro ao salvar configurações')
+      setTimeout(() => {
+        setSaved(false)
+        window.location.reload()
+      }, 800)
+    } catch (e: any) {
+      alert(e?.message || 'Erro ao salvar configurações')
     } finally {
       setSaving(false)
     }
@@ -367,8 +389,34 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
   return (
     <div className="space-y-6">
 
+      {/* Ativa/desativa a ficha padrão */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <label className="flex items-start gap-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={ativo}
+            disabled={ativo && !temModeloAtivo}
+            onChange={(e) => setAtivo(e.target.checked)}
+            className="w-5 h-5 mt-0.5 accent-emerald-600 shrink-0"
+          />
+          <div className="flex-1">
+            <p className="font-bold text-slate-800">Ficha padrão ativa</p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {ativo
+                ? 'Aparece como opção na hora de enviar pro paciente, junto com seus modelos ativos.'
+                : 'Desativada: só seus modelos personalizados vão aparecer pra enviar.'}
+            </p>
+            {ativo && !temModeloAtivo && (
+              <p className="text-xs text-amber-600 mt-1.5">
+                Crie e ative pelo menos 1 modelo personalizado em "Meus Modelos" pra poder desativar a padrão.
+              </p>
+            )}
+          </div>
+        </label>
+      </div>
+
       {/* Identidade */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+      <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4 transition-opacity ${!ativo ? 'opacity-50' : ''}`}>
         <h3 className="font-bold text-slate-800">Identidade da Ficha</h3>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Título</label>

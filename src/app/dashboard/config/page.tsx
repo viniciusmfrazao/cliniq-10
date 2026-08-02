@@ -177,7 +177,7 @@ export default async function ConfigPage() {
               )}
 
               <Link
-                href="/dashboard/config/anamnese"
+                href="/dashboard/anamnese"
                 className="flex items-center gap-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 rounded-xl transition-colors border border-emerald-200"
               >
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow">
@@ -185,23 +185,9 @@ export default async function ConfigPage() {
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-emerald-900">Ficha de Anamnese</p>
-                  <p className="text-xs text-emerald-700">Título, cores, seções e perguntas personalizadas</p>
+                  <p className="text-xs text-emerald-700">Configure a ficha padrão, crie modelos personalizados e envie pros pacientes</p>
                 </div>
                 <Icon name="chevronRight" className="w-5 h-5 text-emerald-400" />
-              </Link>
-
-              <Link
-                href="/dashboard/anamnese/modelos"
-                className="flex items-center gap-4 p-4 bg-gradient-to-br from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 rounded-xl transition-colors border border-amber-200"
-              >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow">
-                  <Icon name="layers" className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-amber-900">Modelos de Ficha (novo)</p>
-                  <p className="text-xs text-amber-700">Crie fichas personalizadas do zero, com suas próprias perguntas</p>
-                </div>
-                <Icon name="chevronRight" className="w-5 h-5 text-amber-400" />
               </Link>
 
               <Link
