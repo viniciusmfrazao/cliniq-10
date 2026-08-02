@@ -11,6 +11,7 @@ import { FORMAS_PAGAMENTO, BANDEIRAS_CARTAO, getTaxaPct, type TaxaPag } from '@/
 import { useToast } from '@/components/ui/Toast'
 
 type Produto = { id: string; name: string; sale_price: number; current_stock: number }
+type CartItem = Produto & { quantidade: number }
 
 type VendaProdutoInfo = { produtoNome: string; quantidade: number; valor: number }
 
@@ -20,7 +21,7 @@ type Props = {
   patientId: string | null
   patientName: string
   onClose: () => void
-  onSuccess?: (info: VendaProdutoInfo) => void
+  onSuccess?: (itens: VendaProdutoInfo[]) => void
 }
 
 function fmt(v: number) {
@@ -37,7 +38,7 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
 
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [taxasPagamento, setTaxasPagamento] = useState<TaxaPag[]>([])
-  const [selected, setSelected] = useState<(Produto & { quantidade: number }) | null>(null)
+  const [cart, setCart] = useState<CartItem[]>([])
   const [observacoes, setObservacoes] = useState('')
   const [pagamentos, setPagamentos] = useState<Array<{ forma: string; bandeira: string; valor: string }>>([
     { forma: 'Pix', bandeira: '', valor: '' }
@@ -68,21 +69,40 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
     init()
   }, [clinicId])
 
-  function handleProdutoChange(id: string) {
-    if (!id) { setSelected(null); setPagamentos([{ forma: 'Pix', bandeira: '', valor: '' }]); return }
-    const prod = produtos.find(p => p.id === id)
-    if (!prod) return
-    const next = { ...prod, quantidade: 1 }
-    setSelected(next)
-    setPagamentos([{ forma: 'Pix', bandeira: '', valor: (prod.sale_price * 1).toFixed(2) }])
+  function syncPagamentoUnico(valor: number) {
+    setPagamentos(prev => prev.length === 1 ? [{ ...prev[0], valor: valor > 0 ? valor.toFixed(2) : '' }] : prev)
   }
 
-  function updateQuantidade(delta: number) {
-    setSelected(prev => {
-      if (!prev) return prev
-      const q = Math.max(1, prev.quantidade + delta)
-      const next = { ...prev, quantidade: q }
-      setPagamentos([{ forma: 'Pix', bandeira: '', valor: (next.sale_price * q).toFixed(2) }])
+  function addToCart(id: string) {
+    if (!id) return
+    const prod = produtos.find(p => p.id === id)
+    if (!prod) return
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id)
+      const next = existing
+        ? prev.map(i => i.id === id ? { ...i, quantidade: i.quantidade + 1 } : i)
+        : [...prev, { ...prod, quantidade: 1 }]
+      const total = next.reduce((s, i) => s + i.sale_price * i.quantidade, 0)
+      syncPagamentoUnico(total)
+      return next
+    })
+  }
+
+  function updateCartQuantidade(id: string, delta: number) {
+    setCart(prev => {
+      const next = prev
+        .map(i => i.id === id ? { ...i, quantidade: Math.max(1, i.quantidade + delta) } : i)
+      const total = next.reduce((s, i) => s + i.sale_price * i.quantidade, 0)
+      syncPagamentoUnico(total)
+      return next
+    })
+  }
+
+  function removeFromCart(id: string) {
+    setCart(prev => {
+      const next = prev.filter(i => i.id !== id)
+      const total = next.reduce((s, i) => s + i.sale_price * i.quantidade, 0)
+      syncPagamentoUnico(total)
       return next
     })
   }
@@ -96,12 +116,13 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
     return { v, taxaPct, valorTaxa, valorLiquido, nParcelas }
   }
 
-  const valorTotal = selected ? selected.sale_price * selected.quantidade : 0
+  const valorTotal = cart.reduce((s, i) => s + i.sale_price * i.quantidade, 0)
   const pagamentosCalc = pagamentos.map(linhaCalc)
   const totalAlocado = pagamentosCalc.reduce((s, p) => s + p.v, 0)
   const restante = Math.round((valorTotal - totalAlocado) * 100) / 100
   const valorTaxaTotal = pagamentosCalc.reduce((s, p) => s + p.valorTaxa, 0)
   const valorLiquidoTotal = pagamentosCalc.reduce((s, p) => s + p.valorLiquido, 0)
+  const itensComEstoqueNegativo = cart.filter(i => i.quantidade > i.current_stock)
 
   function addPagamento() {
     setPagamentos(prev => [...prev, { forma: 'Pix', bandeira: '', valor: restante > 0 ? restante.toFixed(2) : '' }])
@@ -114,7 +135,7 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
   }
 
   async function handleSubmit() {
-    if (!selected) { toast.error('Selecione um produto'); return }
+    if (cart.length === 0) { toast.error('Adicione ao menos um produto'); return }
     if (pagamentosCalc.some(p => p.v <= 0)) { toast.error('Cada forma de pagamento precisa de um valor maior que zero'); return }
     if (Math.abs(restante) > 0.01) {
       const ok = confirm(
@@ -126,6 +147,11 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
     }
 
     setSaving(true)
+    const itensPayload = cart.map(i => ({
+      product_id: i.id,
+      quantidade: i.quantidade,
+      valor_unitario: i.sale_price,
+    }))
     const pagamentosPayload = pagamentos.map((p, i) => {
       const calc = pagamentosCalc[i]
       return {
@@ -133,17 +159,14 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
         bandeira: (p.forma.startsWith('Crédito') || p.forma === 'Débito') ? (p.bandeira || '') : '',
         valor: calc.v,
         taxa_percentual: calc.taxaPct,
-        valor_taxa: calc.valorTaxa,
-        valor_liquido: calc.valorLiquido,
         n_parcelas: calc.nParcelas,
       }
     })
 
-    const { error } = await supabase.rpc('fn_registrar_venda_produto', {
+    const { error } = await supabase.rpc('fn_registrar_venda_produtos', {
       p_user_id: userId,
       p_clinic_id: clinicId,
-      p_product_id: selected.id,
-      p_quantidade: selected.quantidade,
+      p_itens: itensPayload,
       p_data_venda: todayBR(),
       p_paciente_id: patientId || null,
       p_paciente_nome: patientName || null,
@@ -157,11 +180,14 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
       return
     }
 
-    toast.success('Produto vendido', {
-      description: `${selected.name} × ${selected.quantidade} — ${fmt(valorTotal)}`,
+    const itensVendidos = cart.map(i => ({ produtoNome: i.name, quantidade: i.quantidade, valor: i.sale_price * i.quantidade }))
+    toast.success(cart.length > 1 ? 'Produtos vendidos' : 'Produto vendido', {
+      description: cart.length > 1
+        ? `${cart.length} itens — ${fmt(valorTotal)}`
+        : `${cart[0].name} × ${cart[0].quantidade} — ${fmt(valorTotal)}`,
     })
     router.refresh()
-    onSuccess?.({ produtoNome: selected.name, quantidade: selected.quantidade, valor: valorTotal })
+    onSuccess?.(itensVendidos)
     onClose()
   }
 
@@ -187,14 +213,14 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
         ) : (
           <div className="p-5 space-y-4">
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Venda de produto que a paciente leva embora (sem vínculo com procedimento/atendimento).
+              Venda de produto que a paciente leva embora (sem vínculo com procedimento/atendimento). Pode adicionar mais de um produto na mesma venda.
             </p>
 
             <div>
-              <label className="label">Produto *</label>
+              <label className="label">Adicionar produto</label>
               <select
-                value={selected?.id || ''}
-                onChange={e => handleProdutoChange(e.target.value)}
+                value=""
+                onChange={e => addToCart(e.target.value)}
                 className="input"
               >
                 <option value="">Selecione um produto</option>
@@ -209,26 +235,33 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
               )}
             </div>
 
-            {selected && (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                <span className="text-xs text-amber-800 font-medium flex-1">{selected.name}</span>
-                <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
-                  <button type="button" onClick={() => updateQuantidade(-1)}
-                    className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold">−</button>
-                  <span className="text-xs font-semibold text-amber-900 w-5 text-center">{selected.quantidade}</span>
-                  <button type="button" onClick={() => updateQuantidade(1)}
-                    className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold">+</button>
-                </div>
-                <span className="text-xs text-amber-700">{fmt(valorTotal)}</span>
+            {cart.length > 0 && (
+              <div className="space-y-2">
+                {cart.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <span className="text-xs text-amber-800 font-medium flex-1">{item.name}</span>
+                    <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
+                      <button type="button" onClick={() => updateCartQuantidade(item.id, -1)}
+                        className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold">−</button>
+                      <span className="text-xs font-semibold text-amber-900 w-5 text-center">{item.quantidade}</span>
+                      <button type="button" onClick={() => updateCartQuantidade(item.id, 1)}
+                        className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold">+</button>
+                    </div>
+                    <span className="text-xs text-amber-700 w-16 text-right">{fmt(item.sale_price * item.quantidade)}</span>
+                    <button type="button" onClick={() => removeFromCart(item.id)} className="text-amber-400 hover:text-red-500">
+                      <Icon name="trash" className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
-            {selected && selected.quantidade > selected.current_stock && (
+            {itensComEstoqueNegativo.length > 0 && (
               <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-                Estoque tem só {selected.current_stock} unidade{selected.current_stock === 1 ? '' : 's'} — a venda vai deixar o estoque negativo. Pode continuar, mas lembra de repor.
+                {itensComEstoqueNegativo.map(i => `${i.name} (estoque: ${i.current_stock})`).join(', ')} — vai ficar com estoque negativo. Pode continuar, mas lembra de repor.
               </p>
             )}
 
-            {selected && (
+            {cart.length > 0 && (
               <>
                 <div className="flex items-center justify-between">
                   <label className="label mb-0">Forma(s) de pagamento *</label>
@@ -285,6 +318,10 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
 
                 <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">
                   <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Total dos produtos</span>
+                    <span className="font-medium text-slate-700">{fmt(valorTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
                     <span className="text-slate-600">Taxa (total)</span>
                     <span className="font-medium text-rose-600">-{fmt(valorTaxaTotal)}</span>
                   </div>
@@ -305,7 +342,7 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
 
         <div className="flex gap-3 p-5 border-t border-slate-100">
           <button onClick={onClose} className="flex-1 btn-secondary">Cancelar</button>
-          <button onClick={handleSubmit} disabled={saving || loading || !selected} className="flex-1 btn-primary flex items-center justify-center gap-2">
+          <button onClick={handleSubmit} disabled={saving || loading || cart.length === 0} className="flex-1 btn-primary flex items-center justify-center gap-2">
             {saving ? <Icon name="loader" className="w-4 h-4 animate-spin" /> : <Icon name="check" className="w-4 h-4" />}
             {saving ? 'Salvando...' : 'Confirmar venda'}
           </button>
