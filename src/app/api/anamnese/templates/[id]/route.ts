@@ -60,6 +60,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (typeof body.ativo === 'boolean') updates.ativo = body.ativo
   if (typeof body.cor_primaria === 'string') updates.cor_primaria = body.cor_primaria
   if (typeof body.ordem === 'number') updates.ordem = body.ordem
+  if (Array.isArray(body.campos_identificacao)) {
+    const validos = ['data_nascimento', 'cpf', 'telefone', 'email']
+    updates.campos_identificacao = body.campos_identificacao.filter((c: unknown) => validos.includes(c as string))
+  }
 
   const { data, error } = await supabase
     .from('anamnese_templates')

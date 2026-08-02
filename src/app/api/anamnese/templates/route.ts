@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-async function getAuthedClinic() {
+async function getAuthedClinic(requireManage = true) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: NextResponse.json({ error: 'Não autenticado' }, { status: 401 }) }
@@ -13,7 +13,7 @@ async function getAuthedClinic() {
     .single()
 
   if (!userData?.clinic_id) return { error: NextResponse.json({ error: 'Clínica não encontrada' }, { status: 400 }) }
-  if (!['admin', 'super_admin', 'manager'].includes(userData?.role || '')) {
+  if (requireManage && !['admin', 'super_admin', 'manager'].includes(userData?.role || '')) {
     return { error: NextResponse.json({ error: 'Sem permissão' }, { status: 403 }) }
   }
 
@@ -21,7 +21,10 @@ async function getAuthedClinic() {
 }
 
 export async function GET() {
-  const auth = await getAuthedClinic()
+  // Leitura liberada pra qualquer usuário da clínica (não só admin/manager):
+  // é usada também pelo seletor de ficha no envio pela agenda, que qualquer
+  // atendente pode fazer.
+  const auth = await getAuthedClinic(false)
   if (auth.error) return auth.error
   const { supabase, clinicId } = auth
 
@@ -37,7 +40,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await getAuthedClinic()
+  const auth = await getAuthedClinic(true)
   if (auth.error) return auth.error
   const { supabase, clinicId } = auth
 
