@@ -1,5 +1,6 @@
 export type ModuleId = 
   | 'odontograma'
+  | 'harmonizacao_corporal'
   | 'recepcao'
   | 'agenda'
   | 'lista_espera'
@@ -93,6 +94,14 @@ export const AVAILABLE_MODULES: Module[] = [
     name: 'Odontograma', 
     description: 'Mapa dental interativo — adulto e leite. Ideal para clínicas odontológicas.',
     icon: '🦷',
+    category: 'clinical',
+    defaultEnabled: false
+  },
+  { 
+    id: 'harmonizacao_corporal', 
+    name: 'Mapa Corporal', 
+    description: 'Mapa de aplicação corporal (frente/costas) — enzimas, criolipólise, bioestimulador e outros procedimentos de harmonização corporal.',
+    icon: '🧍',
     category: 'clinical',
     defaultEnabled: false
   },
@@ -224,6 +233,7 @@ export const MODULE_ROUTES: Record<ModuleId, string[]> = {
   equipe: ['/dashboard/equipe'],
   auditoria: ['/dashboard/auditoria'],
   odontograma: [],  // tab dentro da ficha do paciente, sem rota própria
+  harmonizacao_corporal: [],  // aba dentro do atendimento, sem rota própria
   ia_prontuario: [], // feature dentro do atendimento, sem rota própria
   automacoes: ['/dashboard/config/automacoes'],
   nfse: ['/dashboard/config/fiscal'],
