@@ -136,10 +136,10 @@ export default function TemplateBuilder({ template, initialFields }: { template:
                   onChange={e => updateField(idx, { label: e.target.value })}
                 />
                 <button onClick={() => moveField(idx, -1)} className="p-2 hover:bg-slate-100 rounded-lg">
-                  <Icon name="arrowLeft" className="w-4 h-4 text-slate-400 rotate-90" />
+                  <Icon name="chevronUp" className="w-4 h-4 text-slate-400" />
                 </button>
                 <button onClick={() => moveField(idx, 1)} className="p-2 hover:bg-slate-100 rounded-lg">
-                  <Icon name="arrowLeft" className="w-4 h-4 text-slate-400 -rotate-90" />
+                  <Icon name="chevronDown" className="w-4 h-4 text-slate-400" />
                 </button>
                 <button onClick={() => removeField(idx)} className="p-2 hover:bg-red-50 rounded-lg">
                   <Icon name="trash" className="w-4 h-4 text-red-500" />
