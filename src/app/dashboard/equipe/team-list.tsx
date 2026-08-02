@@ -73,12 +73,50 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
   const [editingSchedules, setEditingSchedules] = useState<Member | null>(null)
   const [editingUnavail, setEditingUnavail] = useState<Member | null>(null)
   const [editingProfRole, setEditingProfRole] = useState<string | null>(null)
+  const [editingRole, setEditingRole] = useState<string | null>(null)
   const [editingRegistration, setEditingRegistration] = useState<string | null>(null)
   const [registrationValue, setRegistrationValue] = useState('')
   const [savingRegistration, setSavingRegistration] = useState(false)
   const [editingName, setEditingName] = useState<string | null>(null)
   const [nameValue, setNameValue] = useState('')
   const [savingName, setSavingName] = useState(false)
+
+  const ROLE_OPTIONS = [
+    { value: 'doctor', label: 'Médico(a)' },
+    { value: 'dentist', label: 'Dentista' },
+    { value: 'biomedic', label: 'Biomédico(a)' },
+    { value: 'nurse', label: 'Enfermeiro(a)' },
+    { value: 'esthetician', label: 'Esteticista' },
+    { value: 'physiotherapist', label: 'Fisioterapeuta' },
+    { value: 'nutritionist', label: 'Nutricionista' },
+    { value: 'psychologist', label: 'Psicólogo(a)' },
+    { value: 'receptionist', label: 'Recepcionista' },
+    { value: 'financial', label: 'Financeiro' },
+    { value: 'manager', label: 'Gerente' },
+    { value: 'comercial', label: 'Comercial' },
+    { value: 'assistant', label: 'Assistente' },
+    { value: 'viewer', label: 'Visualizador' },
+  ]
+
+  async function handleSaveRole(memberId: string, role: string) {
+    setLoading(memberId)
+    try {
+      const res = await fetch(`/api/team/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicId, role })
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || 'Erro ao alterar função')
+      }
+    } catch {
+      alert('Erro ao alterar função')
+    }
+    setLoading(null)
+    setEditingRole(null)
+    router.refresh()
+  }
 
   const PROF_OPTIONS = [
     { value: '', label: 'Não atende pacientes' },
@@ -270,13 +308,31 @@ export default function TeamList({ members, currentUserId, clinicId, showReactiv
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                showReactivate 
-                  ? 'bg-slate-100 text-slate-500' 
-                  : (ROLE_COLORS[member.role] || 'bg-violet-100 text-violet-700')
-              }`}>
-                {ROLE_LABELS[member.role] || member.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-              </span>
+              {editingRole === member.id ? (
+                <select
+                  defaultValue={member.role}
+                  onChange={e => handleSaveRole(member.id, e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                  autoFocus
+                  onBlur={() => setEditingRole(null)}
+                >
+                  {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : (
+                <span
+                  className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    showReactivate 
+                      ? 'bg-slate-100 text-slate-500' 
+                      : (ROLE_COLORS[member.role] || 'bg-violet-100 text-violet-700')
+                  } ${member.role !== 'admin' && member.role !== 'super_admin' && !showReactivate ? 'cursor-pointer hover:ring-2 hover:ring-violet-300' : ''}`}
+                  title={member.role !== 'admin' && member.role !== 'super_admin' && !showReactivate ? 'Clique para alterar a função' : undefined}
+                  onClick={() => {
+                    if (member.role !== 'admin' && member.role !== 'super_admin' && !showReactivate) setEditingRole(member.id)
+                  }}
+                >
+                  {ROLE_LABELS[member.role] || member.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </span>
+              )}
               {(member as any).professional_role && (member as any).professional_role !== member.role && (
                 <span className="text-xs px-2 py-1 rounded-full font-medium bg-teal-100 text-teal-700">
                   {ROLE_LABELS[(member as any).professional_role] || (member as any).professional_role}

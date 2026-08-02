@@ -88,7 +88,7 @@ export async function DELETE(
   }
 }
 
-// PATCH - Atualizar professional_role do membro
+// PATCH - Atualizar role/professional_role/dados do membro
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
@@ -102,9 +102,42 @@ export async function PATCH(
     if (!['admin', 'super_admin', 'manager'].includes(currentUser?.role || ''))
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
-    const { professional_role, professional_registration, permissions, name, recebe_comissao, comissao_percentual } = await request.json()
+    const { role, professional_role, professional_registration, permissions, name, recebe_comissao, comissao_percentual } = await request.json()
 
     const updateData: Record<string, unknown> = {}
+
+    // Alterar a função (role) base do membro. Bloqueado para admin/super_admin
+    // (promoção/rebaixamento de admin exige fluxo próprio, não esse quick-edit)
+    // pra evitar escalonamento de privilégio acidental.
+    if (role !== undefined) {
+      const PROFESSIONAL_ROLES = ['doctor', 'dentist', 'biomedic', 'nurse', 'esthetician', 'physiotherapist', 'nutritionist', 'psychologist']
+      const BLOCKED_ROLES = ['admin', 'super_admin']
+
+      const { data: targetMember } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', params.id)
+        .eq('clinic_id', currentUser!.clinic_id)
+        .single()
+
+      if (!targetMember)
+        return NextResponse.json({ error: 'Membro não encontrado' }, { status: 404 })
+      if (BLOCKED_ROLES.includes(targetMember.role))
+        return NextResponse.json({ error: 'Não é possível alterar a função de administradores por aqui' }, { status: 400 })
+      if (BLOCKED_ROLES.includes(role))
+        return NextResponse.json({ error: 'Não é possível promover a administrador por aqui' }, { status: 400 })
+      if (!role || typeof role !== 'string')
+        return NextResponse.json({ error: 'Função inválida' }, { status: 400 })
+
+      updateData.role = role
+      // Se a nova função já é clínica (atende pacientes), espelha em
+      // professional_role pra manter consistente com o fluxo de convite
+      // e garantir que apareça corretamente na agenda.
+      if (professional_role === undefined && PROFESSIONAL_ROLES.includes(role)) {
+        updateData.professional_role = role
+      }
+    }
+
     if (professional_role !== undefined) updateData.professional_role = professional_role || null
     if (professional_registration !== undefined) updateData.professional_registration = professional_registration?.trim() || null
     if (permissions !== undefined) updateData.permissions = permissions
