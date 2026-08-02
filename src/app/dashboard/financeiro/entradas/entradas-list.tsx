@@ -336,6 +336,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
   const [filtroProfissional, setFiltroProfissional] = useState('')
   const [filtroProcedimento, setFiltroProcedimento] = useState('')
   const [filtroForma, setFiltroForma] = useState('')
+  const [cardSelecionado, setCardSelecionado] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [editEntry, setEditEntry] = useState<Entrada | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -357,7 +358,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     })
   }
 
-  const filteredList = list.filter(e =>
+  const baseFiltered = list.filter(e =>
     (!search ||
       normalizeText(e.paciente_nome).includes(normalizeText(search)) ||
       normalizeText(e.procedimento_nome).includes(normalizeText(search)) ||
@@ -369,17 +370,24 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     (!filtroForma || e.forma_pagamento === filtroForma)
   )
 
-  const totalBruto = filteredList.reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
-  const totalLiquido = filteredList.reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
+  // Lista da tabela: base + clique num card de "Por procedimento"/"Por produto" (match exato de nome).
+  // Cards e totais usam baseFiltered (sem o filtro de card), pra não colapsar quando um card é selecionado.
+  const filteredList = baseFiltered.filter(e => !cardSelecionado || e.procedimento_nome === cardSelecionado)
+
+  const totalBruto = baseFiltered.reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
+  const totalLiquido = baseFiltered.reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
   const totalTaxas = totalBruto - totalLiquido
 
-  const totalComissao = filteredList.reduce((s, e) => {
+  const totalServicos = baseFiltered.filter(e => e.tipo_receita !== 'produto').reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
+  const totalProdutos = baseFiltered.filter(e => e.tipo_receita === 'produto').reduce((s, e) => s + Number(e.valor_bruto || 0), 0)
+
+  const totalComissao = baseFiltered.reduce((s, e) => {
     const pct = comissaoDoProfissional(e.profissional_id)
     if (pct == null) return s
     return s + baseComissao(e) * (pct / 100)
   }, 0)
 
-  const porProcedimento = filteredList
+  const porProcedimento = baseFiltered
     .filter(e => e.tipo_receita !== 'produto')
     .reduce((acc, e) => {
       const proc = e.procedimento_nome || 'Sem procedimento'
@@ -389,7 +397,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
       return acc
     }, {} as Record<string, { valor: number; qtd: number }>)
 
-  const porProduto = filteredList
+  const porProduto = baseFiltered
     .filter(e => e.tipo_receita === 'produto')
     .reduce((acc, e) => {
       const prod = e.procedimento_nome || 'Sem nome'
@@ -859,9 +867,9 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             <option value="">Todas as formas de pagamento</option>
             {FORMAS.map(f => <option key={f} value={f}>{FORMA_LABEL[f]}</option>)}
           </select>
-          {(filtroProfissional || filtroProcedimento || filtroForma || search) && (
+          {(filtroProfissional || filtroProcedimento || filtroForma || search || cardSelecionado) && (
             <button
-              onClick={() => { setFiltroProfissional(''); setFiltroProcedimento(''); setFiltroForma(''); setSearch('') }}
+              onClick={() => { setFiltroProfissional(''); setFiltroProcedimento(''); setFiltroForma(''); setSearch(''); setCardSelecionado(null) }}
               className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition whitespace-nowrap"
             >
               <Icon name="x" className="w-4 h-4" />
@@ -879,6 +887,16 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
         <div className="bg-violet-50 text-violet-700 px-4 py-2 rounded-xl">
           <span className="font-medium">Total Líquido:</span> {fmt(totalLiquido)}
         </div>
+        {totalProdutos > 0 && (
+          <>
+            <div className="bg-teal-50 text-teal-700 px-4 py-2 rounded-xl">
+              <span className="font-medium">Serviços:</span> {fmt(totalServicos)}
+            </div>
+            <div className="bg-fuchsia-50 text-fuchsia-700 px-4 py-2 rounded-xl">
+              <span className="font-medium">Produtos:</span> {fmt(totalProdutos)}
+            </div>
+          </>
+        )}
         {totalTaxas > 0 && (
           <div className="bg-rose-50 text-rose-700 px-4 py-2 rounded-xl">
             <span className="font-medium">Taxas:</span> {fmt(totalTaxas)}
@@ -910,13 +928,20 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             {Object.entries(porProcedimento)
               .sort((a, b) => b[1].valor - a[1].valor)
               .slice(0, 8)
-              .map(([proc, data]) => (
-              <div key={proc} className="bg-emerald-50 rounded-xl p-3">
+              .map(([proc, data]) => {
+              const ativo = cardSelecionado === proc
+              return (
+              <button
+                type="button"
+                key={proc}
+                onClick={() => setCardSelecionado(ativo ? null : proc)}
+                className={`text-left bg-emerald-50 rounded-xl p-3 transition ring-2 ${ativo ? 'ring-emerald-500' : 'ring-transparent hover:ring-emerald-200'}`}
+              >
                 <p className="text-xs text-emerald-600 truncate" title={proc}>{proc}</p>
                 <p className="font-bold text-emerald-700">{fmt(data.valor)}</p>
                 <p className="text-xs text-emerald-500">{data.qtd} {data.qtd === 1 ? 'atendimento' : 'atendimentos'}</p>
-              </div>
-            ))}
+              </button>
+            )})}
           </div>
         </div>
       )}
@@ -932,13 +957,20 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             {Object.entries(porProduto)
               .sort((a, b) => b[1].valor - a[1].valor)
               .slice(0, 8)
-              .map(([prod, data]) => (
-              <div key={prod} className="bg-violet-50 rounded-xl p-3">
+              .map(([prod, data]) => {
+              const ativo = cardSelecionado === prod
+              return (
+              <button
+                type="button"
+                key={prod}
+                onClick={() => setCardSelecionado(ativo ? null : prod)}
+                className={`text-left bg-violet-50 rounded-xl p-3 transition ring-2 ${ativo ? 'ring-violet-500' : 'ring-transparent hover:ring-violet-200'}`}
+              >
                 <p className="text-xs text-violet-600 truncate" title={prod}>{prod}</p>
                 <p className="font-bold text-violet-700">{fmt(data.valor)}</p>
                 <p className="text-xs text-violet-500">{data.qtd} {data.qtd === 1 ? 'venda' : 'vendas'}</p>
-              </div>
-            ))}
+              </button>
+            )})}
           </div>
         </div>
       )}
