@@ -279,6 +279,13 @@ export default async function PatientCentralPage({
           <div className="mt-6">
             <Suspense fallback={<TabSkeleton />}>
               {userData?.clinic_id && (
+                <ProdutosVendidosSection patientId={id} clinicId={userData.clinic_id} />
+              )}
+            </Suspense>
+          </div>
+          <div className="mt-6">
+            <Suspense fallback={<TabSkeleton />}>
+              {userData?.clinic_id && (
                 <PatientMarginCard patientId={id} clinicId={userData.clinic_id} />
               )}
             </Suspense>
@@ -717,6 +724,43 @@ async function InjetaveisTab({ patientId }: { patientId: string }) {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function fmtBRL(v: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
+}
+
+async function ProdutosVendidosSection({ patientId, clinicId }: { patientId: string; clinicId: string }) {
+  const supabase = await createClient()
+  const { data: vendas } = await supabase
+    .from('entradas')
+    .select('id, data_venda, procedimento_nome, quantidade, valor_bruto, forma_pagamento, profissional_nome')
+    .eq('clinic_id', clinicId)
+    .eq('paciente_id', patientId)
+    .eq('tipo_receita', 'produto')
+    .order('data_venda', { ascending: false })
+
+  if (!vendas || vendas.length === 0) return null
+
+  return (
+    <div className="card p-5">
+      <h2 className="text-sm font-semibold text-slate-900 mb-3">Produtos vendidos</h2>
+      <div className="space-y-2">
+        {vendas.map(v => (
+          <div key={v.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+            <div>
+              <p className="font-medium text-slate-800">{v.procedimento_nome} {v.quantidade > 1 ? `× ${v.quantidade}` : ''}</p>
+              <p className="text-xs text-slate-400">
+                {new Date(v.data_venda + 'T00:00:00').toLocaleDateString('pt-BR')} · {v.forma_pagamento}
+                {v.profissional_nome ? ` · ${v.profissional_nome}` : ''}
+              </p>
+            </div>
+            <span className="font-semibold text-emerald-600">{fmtBRL(Number(v.valor_bruto))}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
