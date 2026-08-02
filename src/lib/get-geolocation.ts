@@ -6,7 +6,7 @@
  * mais que o timeout, resolve com null em vez de travar o fluxo de
  * assinatura — a assinatura não pode depender de permissão de GPS.
  */
-export function getGeolocation(timeoutMs = 4000): Promise<{ lat: number; lon: number } | null> {
+export function getGeolocation(timeoutMs = 10000): Promise<{ lat: number; lon: number } | null> {
   return new Promise(resolve => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       resolve(null)
