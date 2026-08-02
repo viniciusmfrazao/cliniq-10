@@ -160,8 +160,8 @@ export default function TemplateBuilder({ template, initialFields }: { template:
         </button>
       </div>
 
-      {secoes.map(secao => (
-        <div key={secao} className="card p-4 space-y-4">
+      {secoes.map((secao, sIdx) => (
+        <div key={sIdx} className="card p-4 space-y-4">
           <h3 className="font-bold text-slate-900">{secao}</h3>
           {fields.map((f, idx) => f.secao !== secao ? null : (
             <div key={idx} className="p-3 border border-slate-100 rounded-xl space-y-2">
