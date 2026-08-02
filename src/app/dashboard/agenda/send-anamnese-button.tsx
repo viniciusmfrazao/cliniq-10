@@ -15,6 +15,8 @@ type SendAnamneseResult = {
   error?: string
 }
 
+type TemplateOption = { id: string; nome: string; ativo: boolean }
+
 type Props = {
   patientId: string
   patientName: string
@@ -27,6 +29,8 @@ type Props = {
 /**
  * Botão 1-clique pra enviar a anamnese pro paciente via WhatsApp da clínica.
  *
+ * - Se a clínica tiver modelos de ficha customizados ativos (além do modelo
+ *   fixo padrão), mostra um seletor antes de enviar.
  * - Se já existe uma anamnese pendente/visualizada e ainda válida, reutiliza
  *   (não cria duplicada).
  * - Se a clínica tiver WhatsApp conectado e o paciente tiver telefone, envia
@@ -43,20 +47,19 @@ export default function SendAnamneseButton({
   const toast = useToast()
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const [templates, setTemplates] = useState<TemplateOption[] | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('') // '' = ficha padrão (fixa)
 
   const hasPhone = !!patientPhone?.trim()
 
-  const handleClick = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (loading) return
+  const doSend = async (templateId: string | null) => {
     setLoading(true)
-
     try {
       const r = await fetch('/api/anamnese/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patientId, appointmentId }),
+        body: JSON.stringify({ patientId, appointmentId, templateId: templateId || undefined }),
       })
       const data = (await r.json()) as SendAnamneseResult
 
@@ -108,6 +111,102 @@ export default function SendAnamneseButton({
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (loading || picking) return
+
+    // Carrega os modelos ativos da clínica (só na primeira vez) pra saber se
+    // precisa perguntar qual ficha enviar.
+    let ativos = templates?.filter((t) => t.ativo) ?? null
+    if (templates === null) {
+      setLoading(true)
+      try {
+        const r = await fetch('/api/anamnese/templates')
+        if (r.ok) {
+          const data = await r.json()
+          const list: TemplateOption[] = (data.templates || []).map((t: any) => ({
+            id: t.id,
+            nome: t.nome,
+            ativo: t.ativo,
+          }))
+          setTemplates(list)
+          ativos = list.filter((t) => t.ativo)
+        } else {
+          setTemplates([])
+          ativos = []
+        }
+      } catch {
+        setTemplates([])
+        ativos = []
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (!ativos || ativos.length === 0) {
+      // Só existe o modelo fixo — envia direto, sem perguntar nada.
+      void doSend(null)
+      return
+    }
+
+    // Existe pelo menos 1 modelo customizado ativo além do fixo: pergunta
+    // qual ficha enviar.
+    setSelectedTemplateId('')
+    setPicking(true)
+  }
+
+  const confirmPick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setPicking(false)
+    void doSend(selectedTemplateId || null)
+  }
+
+  const cancelPick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setPicking(false)
+  }
+
+  const ativos = templates?.filter((t) => t.ativo) ?? []
+
+  if (picking) {
+    return (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={variant === 'block' ? 'space-y-2' : 'flex-1 space-y-1.5'}
+      >
+        <select
+          className="input text-xs py-1.5 w-full"
+          value={selectedTemplateId}
+          onChange={(e) => setSelectedTemplateId(e.target.value)}
+        >
+          <option value="">Ficha padrão</option>
+          {ativos.map((t) => (
+            <option key={t.id} value={t.id}>{t.nome}</option>
+          ))}
+        </select>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={confirmPick}
+            className="flex-1 py-1.5 px-2 text-xs font-medium rounded-lg bg-violet-500 text-white hover:bg-violet-600"
+          >
+            Enviar
+          </button>
+          <button
+            type="button"
+            onClick={cancelPick}
+            className="py-1.5 px-2 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (variant === 'block') {

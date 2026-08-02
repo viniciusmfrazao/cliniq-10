@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { parseDateBR, isoFromBR } from '@/lib/datetime'
 import { getGeolocation } from '@/lib/get-geolocation'
+import AnamneseFormDynamic from './anamnese-form-dynamic'
 
 type AnamneseConfig = {
   titulo?: string
@@ -20,6 +21,26 @@ type AnamneseData = {
   status: string
   completed_at?: string | null
   consent_term_text?: string | null
+  template_id?: string | null
+  template?: {
+    id: string
+    nome: string
+    descricao: string | null
+    cor_primaria: string
+    campos_identificacao: string[]
+  } | null
+  template_fields?: Array<{
+    id: string
+    secao: string
+    ordem: number
+    label: string
+    tipo: 'texto_curto' | 'texto_longo' | 'sim_nao' | 'single_select' | 'multi_select' | 'numero' | 'data'
+    opcoes: string[] | null
+    obrigatorio: boolean
+    ativo: boolean
+    condicao_campo_id: string | null
+    condicao_valor: string | null
+  }>
   patients: {
     name: string
     email: string | null
@@ -294,6 +315,19 @@ export default function AnamneseFormClient({ token }: { token: string }) {
           <p style={{ color: '#8a7a6a' }}>O link pode estar expirado ou inválido.</p>
         </div>
       </div>
+    )
+  }
+
+  // Ficha usando modelo customizado (builder livre) — delega pro renderizador
+  // dinâmico em vez do formulário fixo de 37 campos abaixo.
+  if (anamnese && anamnese.template_id && anamnese.template) {
+    return (
+      <AnamneseFormDynamic
+        token={token}
+        anamnese={anamnese as any}
+        template={anamnese.template}
+        fields={anamnese.template_fields || []}
+      />
     )
   }
 

@@ -18,6 +18,7 @@ import { sendWhatsappMessage } from '@/lib/whatsapp'
 type SendBody = {
   patientId?: string
   appointmentId?: string
+  templateId?: string
 }
 
 const ANAMNESE_TTL_DAYS = 7
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'json_invalido' }, { status: 400 })
   }
 
-  const { patientId, appointmentId } = body
+  const { patientId, appointmentId, templateId } = body
   if (!patientId) {
     return NextResponse.json({ ok: false, error: 'patientId_obrigatorio' }, { status: 400 })
   }
@@ -94,18 +95,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'paciente_outra_clinica' }, { status: 403 })
   }
 
+  // ========== MODELO (TEMPLATE) ==========
+  // Se veio um templateId, confere que pertence à clínica antes de usar —
+  // evita um usuário mandar o id de outra clínica.
+  let validTemplateId: string | null = null
+  if (templateId) {
+    const { data: tmpl } = await svc
+      .from('anamnese_templates')
+      .select('id')
+      .eq('id', templateId)
+      .eq('clinic_id', clinicId)
+      .eq('ativo', true)
+      .maybeSingle()
+    if (!tmpl) {
+      return NextResponse.json({ ok: false, error: 'modelo_invalido' }, { status: 400 })
+    }
+    validTemplateId = tmpl.id as string
+  }
+
   // ========== ANAMNESE: REUSAR OU CRIAR ==========
   // Reusa anamnese ativa (pending/viewed) com expires_at no futuro.
   // Quem já preencheu (status='completed') NÃO conta — quer dizer que
   // o usuário pediu uma nova ficha, então criamos outra mesmo.
   const nowIso = new Date().toISOString()
-  const { data: existingActive } = await svc
+  let reuseQuery = svc
     .from('anamneses')
     .select('id, token, status, expires_at')
     .eq('clinic_id', clinicId)
     .eq('patient_id', patientId)
     .in('status', ['pending', 'viewed'])
     .gt('expires_at', nowIso)
+  reuseQuery = validTemplateId
+    ? reuseQuery.eq('template_id', validTemplateId)
+    : reuseQuery.is('template_id', null)
+  const { data: existingActive } = await reuseQuery
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -130,6 +153,7 @@ export async function POST(req: NextRequest) {
         sent_by: userId,
         token,
         expires_at: expiresAt,
+        template_id: validTemplateId,
       })
       .select('id, token')
       .maybeSingle()

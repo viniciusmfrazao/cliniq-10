@@ -19,6 +19,7 @@ type Template = {
   nome: string
   descricao: string | null
   cor_primaria: string
+  campos_identificacao?: string[]
 }
 
 const TIPOS: { value: Field['tipo']; label: string }[] = [
@@ -31,6 +32,13 @@ const TIPOS: { value: Field['tipo']; label: string }[] = [
   { value: 'data', label: 'Data' },
 ]
 
+const CAMPOS_ID = [
+  { id: 'data_nascimento', label: 'Data de nascimento', desc: 'Paciente preenche se não cadastrado' },
+  { id: 'cpf',             label: 'CPF',                 desc: 'Documento de identificação' },
+  { id: 'telefone',        label: 'Telefone',             desc: 'Número de contato' },
+  { id: 'email',           label: 'E-mail',               desc: 'Endereço de e-mail' },
+]
+
 function novoField(secao: string): Field {
   return { secao, label: '', tipo: 'texto_curto', opcoes: null, obrigatorio: false, ativo: true }
 }
@@ -38,6 +46,9 @@ function novoField(secao: string): Field {
 export default function TemplateBuilder({ template, initialFields }: { template: Template; initialFields: Field[] }) {
   const [nome, setNome] = useState(template.nome)
   const [descricao, setDescricao] = useState(template.descricao || '')
+  const [camposId, setCamposId] = useState<string[]>(
+    template.campos_identificacao?.length ? template.campos_identificacao : ['data_nascimento', 'cpf']
+  )
   const [fields, setFields] = useState<Field[]>(initialFields.length > 0 ? initialFields : [])
   const [savingInfo, setSavingInfo] = useState(false)
   const [savingFields, setSavingFields] = useState(false)
@@ -68,6 +79,10 @@ export default function TemplateBuilder({ template, initialFields }: { template:
     setFields(prev => [...prev, novoField(secao)])
   }
 
+  function toggleCampoId(id: string) {
+    setCamposId(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
+  }
+
   async function salvarInfo() {
     if (!nome.trim()) { toastError('Nome da ficha é obrigatório'); return }
     setSavingInfo(true)
@@ -75,7 +90,7 @@ export default function TemplateBuilder({ template, initialFields }: { template:
       const res = await fetch(`/api/anamnese/templates/${template.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: nome.trim(), descricao }),
+        body: JSON.stringify({ nome: nome.trim(), descricao, campos_identificacao: camposId }),
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Erro ao salvar')
       toastSuccess('Nome atualizado')
@@ -117,6 +132,28 @@ export default function TemplateBuilder({ template, initialFields }: { template:
         <div>
           <label className="label">Descrição (opcional)</label>
           <input className="input" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Ex: usada para procedimentos corporais" />
+        </div>
+        <div>
+          <label className="label">Dados de identificação do paciente</label>
+          <p className="text-xs text-slate-500 mb-2">
+            Aparecem no cabeçalho da ficha. Se o paciente já tem o dado cadastrado, ele só confirma; senão, é obrigado a preencher.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {CAMPOS_ID.map(c => (
+              <label key={c.id} className="flex items-start gap-2 p-2 border border-slate-100 rounded-lg cursor-pointer hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={camposId.includes(c.id)}
+                  onChange={() => toggleCampoId(c.id)}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-slate-800">{c.label}</span>
+                  <span className="block text-xs text-slate-500">{c.desc}</span>
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
         <button className="btn btn-secondary" disabled={savingInfo} onClick={salvarInfo}>
           {savingInfo ? 'Salvando...' : 'Salvar nome'}
