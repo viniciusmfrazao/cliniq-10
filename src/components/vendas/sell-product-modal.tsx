@@ -80,7 +80,7 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
   function updateQuantidade(delta: number) {
     setSelected(prev => {
       if (!prev) return prev
-      const q = Math.min(Math.max(1, prev.quantidade + delta), prev.current_stock)
+      const q = Math.max(1, prev.quantidade + delta)
       const next = { ...prev, quantidade: q }
       setPagamentos([{ forma: 'Pix', bandeira: '', valor: (next.sale_price * q).toFixed(2) }])
       return next
@@ -199,7 +199,7 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
               >
                 <option value="">Selecione um produto</option>
                 {produtos.map(p => (
-                  <option key={p.id} value={p.id} disabled={p.current_stock <= 0}>
+                  <option key={p.id} value={p.id}>
                     {p.name} — {fmt(p.sale_price)} {p.current_stock <= 0 ? '(sem estoque)' : `(${p.current_stock} em estoque)`}
                   </option>
                 ))}
@@ -217,11 +217,15 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
                     className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold">−</button>
                   <span className="text-xs font-semibold text-amber-900 w-5 text-center">{selected.quantidade}</span>
                   <button type="button" onClick={() => updateQuantidade(1)}
-                    disabled={selected.quantidade >= selected.current_stock}
-                    className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold disabled:opacity-30">+</button>
+                    className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold">+</button>
                 </div>
                 <span className="text-xs text-amber-700">{fmt(valorTotal)}</span>
               </div>
+            )}
+            {selected && selected.quantidade > selected.current_stock && (
+              <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                Estoque tem só {selected.current_stock} unidade{selected.current_stock === 1 ? '' : 's'} — a venda vai deixar o estoque negativo. Pode continuar, mas lembra de repor.
+              </p>
             )}
 
             {selected && (

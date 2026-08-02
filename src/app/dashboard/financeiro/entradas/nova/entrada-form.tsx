@@ -130,22 +130,33 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
     // Limpa seleção do outro modo pra nao misturar procedimento + produto num mesmo lancamento
     if (tipo === 'servico') {
       setSelectedProduto(null)
-      setValorBruto(selectedProcs.reduce((s, p) => s + p.price * p.quantidade, 0).toString())
+      const v = selectedProcs.reduce((s, p) => s + p.price * p.quantidade, 0)
+      setValorBruto(v.toString())
+      syncPagamentoUnico(v)
     } else {
       setSelectedProcs([])
       setProcedimentoId('')
       setProcedimentoNome('')
       setValorBruto('')
+      syncPagamentoUnico(0)
     }
   }
 
+  // Mantem o valor da forma de pagamento em dia com o valor bruto quando so
+  // existe uma linha de pagamento (se o usuario ja dividiu em mais de uma
+  // forma manualmente, nao mexe pra nao bagunçar o que ele configurou).
+  function syncPagamentoUnico(valor: number) {
+    setPagamentos(prev => prev.length === 1 ? [{ ...prev[0], valor: valor > 0 ? valor.toString() : '' }] : prev)
+  }
+
   function handleProdutoChange(id: string) {
-    if (!id) { setSelectedProduto(null); setValorBruto(''); return }
+    if (!id) { setSelectedProduto(null); setValorBruto(''); syncPagamentoUnico(0); return }
     const prod = produtos.find(p => p.id === id)
     if (!prod) return
     const next = { id: prod.id, name: prod.name, sale_price: prod.sale_price, current_stock: prod.current_stock, quantidade: 1 }
     setSelectedProduto(next)
     setValorBruto((prod.sale_price * 1).toString())
+    syncPagamentoUnico(prod.sale_price * 1)
   }
 
   function updateProdutoQuantidade(delta: number) {
@@ -154,6 +165,7 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
       const q = Math.max(1, prev.quantidade + delta)
       const next = { ...prev, quantidade: q }
       setValorBruto((next.sale_price * q).toString())
+      syncPagamentoUnico(next.sale_price * q)
       return next
     })
   }
@@ -204,6 +216,7 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
     if (next.length > 0) setValorBruto(total > 0 ? total.toString() : '')
     setProcedimentoId(next[0]?.id || '')
     setProcedimentoNome(next.map(p => p.quantidade > 1 ? `${p.name} (x${p.quantidade})` : p.name).join(', '))
+    syncPagamentoUnico(total)
   }
 
   function handleProcedimentoChange(id: string) {
