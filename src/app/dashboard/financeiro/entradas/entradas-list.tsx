@@ -379,13 +379,25 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     return s + baseComissao(e) * (pct / 100)
   }, 0)
 
-  const porProcedimento = filteredList.reduce((acc, e) => {
-    const proc = e.procedimento_nome || 'Sem procedimento'
-    if (!acc[proc]) acc[proc] = { valor: 0, qtd: 0 }
-    acc[proc].valor += Number(e.valor_bruto || 0)
-    acc[proc].qtd += 1
-    return acc
-  }, {} as Record<string, { valor: number; qtd: number }>)
+  const porProcedimento = filteredList
+    .filter(e => e.tipo_receita !== 'produto')
+    .reduce((acc, e) => {
+      const proc = e.procedimento_nome || 'Sem procedimento'
+      if (!acc[proc]) acc[proc] = { valor: 0, qtd: 0 }
+      acc[proc].valor += Number(e.valor_bruto || 0)
+      acc[proc].qtd += 1
+      return acc
+    }, {} as Record<string, { valor: number; qtd: number }>)
+
+  const porProduto = filteredList
+    .filter(e => e.tipo_receita === 'produto')
+    .reduce((acc, e) => {
+      const prod = e.procedimento_nome || 'Sem nome'
+      if (!acc[prod]) acc[prod] = { valor: 0, qtd: 0 }
+      acc[prod].valor += Number(e.valor_bruto || 0)
+      acc[prod].qtd += 1
+      return acc
+    }, {} as Record<string, { valor: number; qtd: number }>)
 
   async function handleToggleComissaoPaga(entrada: Entrada) {
     const novoValor = !entrada.comissao_paga
@@ -903,6 +915,28 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                 <p className="text-xs text-emerald-600 truncate" title={proc}>{proc}</p>
                 <p className="font-bold text-emerald-700">{fmt(data.valor)}</p>
                 <p className="text-xs text-emerald-500">{data.qtd} {data.qtd === 1 ? 'atendimento' : 'atendimentos'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Por produto */}
+      {Object.keys(porProduto).length >= 1 && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+          <h4 className="font-semibold text-slate-700 mb-3 text-sm flex items-center gap-2">
+            <Icon name="box" className="w-4 h-4 text-violet-600" />
+            Por produto
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Object.entries(porProduto)
+              .sort((a, b) => b[1].valor - a[1].valor)
+              .slice(0, 8)
+              .map(([prod, data]) => (
+              <div key={prod} className="bg-violet-50 rounded-xl p-3">
+                <p className="text-xs text-violet-600 truncate" title={prod}>{prod}</p>
+                <p className="font-bold text-violet-700">{fmt(data.valor)}</p>
+                <p className="text-xs text-violet-500">{data.qtd} {data.qtd === 1 ? 'venda' : 'vendas'}</p>
               </div>
             ))}
           </div>
