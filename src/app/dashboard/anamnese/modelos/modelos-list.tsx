@@ -15,13 +15,33 @@ type Template = {
   anamnese_template_fields: { count: number }[]
 }
 
-export default function ModelosList({ initialTemplates }: { initialTemplates: Template[] }) {
+type Padrao = { ativo: boolean; titulo: string }
+
+export default function ModelosList({ initialTemplates, padrao }: { initialTemplates: Template[]; padrao: Padrao }) {
   const [templates, setTemplates] = useState(initialTemplates)
+  const [padraoAtivo, setPadraoAtivo] = useState(padrao.ativo)
   const [creating, setCreating] = useState(false)
   const [novoNome, setNovoNome] = useState('')
   const [saving, setSaving] = useState(false)
   const router = useRouter()
   const { error: toastError, success: toastSuccess } = useToast()
+
+  async function togglePadrao() {
+    const novoValor = !padraoAtivo
+    setPadraoAtivo(novoValor)
+    try {
+      const res = await fetch('/api/anamnese/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ativo: novoValor }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Erro ao atualizar')
+    } catch (e: any) {
+      setPadraoAtivo(!novoValor)
+      toastError(e.message || 'Erro ao atualizar ficha padrão')
+    }
+  }
 
   async function criarModelo() {
     if (!novoNome.trim()) {
@@ -73,24 +93,51 @@ export default function ModelosList({ initialTemplates }: { initialTemplates: Te
     }
   }
 
-  const modelosAtivos = templates.filter(t => t.ativo).length
+  const totalAtivas = (padraoAtivo ? 1 : 0) + templates.filter(t => t.ativo).length
 
   return (
     <div className="space-y-4">
-      {modelosAtivos > 1 && (
+      {totalAtivas > 1 && (
         <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700 flex items-center gap-2">
           <Icon name="check" className="w-4 h-4 shrink-0" />
-          Com {modelosAtivos} modelos ativos, a equipe vai poder escolher qual ficha enviar na hora de mandar pro paciente.
+          Com {totalAtivas} fichas ativas, a equipe vai poder escolher qual enviar na hora de mandar pro paciente.
         </div>
       )}
 
       <div className="card divide-y divide-slate-100">
+        {/* Ficha padrão — não pode ser excluída, só editada/ativada */}
+        <div className="p-4 flex items-center gap-3 bg-slate-50/60">
+          <div className="w-2 h-10 rounded-full shrink-0 bg-slate-300" />
+          <div className="flex-1 min-w-0">
+            <Link href="/dashboard/anamnese/configurar" className="font-semibold text-slate-900 hover:underline">
+              {padrao.titulo}
+            </Link>
+            <p className="text-sm text-slate-500">
+              Ficha padrão do sistema
+              {!padraoAtivo && <span className="ml-2 badge-neutral">Inativa</span>}
+            </p>
+          </div>
+          <button
+            onClick={togglePadrao}
+            disabled={padraoAtivo && templates.filter(t => t.ativo).length === 0}
+            title={padraoAtivo && templates.filter(t => t.ativo).length === 0 ? 'Crie e ative pelo menos 1 modelo antes de desativar a padrão' : undefined}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+              padraoAtivo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            {padraoAtivo ? 'Ativa' : 'Inativa'}
+          </button>
+          <Link href="/dashboard/anamnese/configurar" className="p-2 hover:bg-slate-100 rounded-lg transition">
+            <Icon name="edit" className="w-4 h-4 text-slate-500" />
+          </Link>
+        </div>
+
         {templates.length === 0 && !creating && (
           <div className="text-center py-12">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
               <Icon name="layers" className="w-8 h-8 text-slate-400" />
             </div>
-            <h3 className="font-semibold text-slate-900 mb-2">Nenhum modelo criado ainda</h3>
+            <h3 className="font-semibold text-slate-900 mb-2">Nenhum modelo personalizado ainda</h3>
             <p className="text-sm text-slate-500 mb-4">Crie fichas personalizadas além do modelo padrão</p>
           </div>
         )}

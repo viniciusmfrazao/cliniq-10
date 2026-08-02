@@ -55,18 +55,11 @@ export default async function AnamnesesPage() {
         </div>
         <div className="flex gap-2">
           <Link
-            href="/dashboard/anamnese/configurar"
-            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-50 transition"
-          >
-            <Icon name="settings" className="w-4 h-4" />
-            Configurar
-          </Link>
-          <Link
             href="/dashboard/anamnese/modelos"
             className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-50 transition"
           >
             <Icon name="layers" className="w-4 h-4" />
-            Modelos
+            Minhas Fichas
           </Link>
           <Link
             href="/dashboard/anamnese/enviar"

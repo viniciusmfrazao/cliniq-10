@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 
@@ -257,19 +257,6 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const [ativo, setAtivo] = useState(config.ativo !== false)
-  const [temModeloAtivo, setTemModeloAtivo] = useState(true) // otimista até checar
-
-  useEffect(() => {
-    fetch('/api/anamnese/templates')
-      .then((r) => (r.ok ? r.json() : { templates: [] }))
-      .then((data) => {
-        const ativos = (data.templates || []).filter((t: any) => t.ativo)
-        setTemModeloAtivo(ativos.length > 0)
-      })
-      .catch(() => {})
-  }, [])
-
   const [titulo, setTitulo] = useState(config.titulo || 'Ficha de Anamnese Facial')
   const [subtitulo, setSubtitulo] = useState(config.subtitulo || '')
   const [cor, setCor] = useState(config.cor_primaria || '#b89a6a')
@@ -367,7 +354,6 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
           secoes_ativas: secoesAtivas,
           perguntas_extras: perguntas,
           campos_identificacao: camposId,
-          ativo,
         }),
       })
       if (!res.ok) {
@@ -389,34 +375,8 @@ export default function AnamneseConfigEditor({ config, clinicId }: { config: Con
   return (
     <div className="space-y-6">
 
-      {/* Ativa/desativa a ficha padrão */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <label className="flex items-start gap-4 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={ativo}
-            disabled={ativo && !temModeloAtivo}
-            onChange={(e) => setAtivo(e.target.checked)}
-            className="w-5 h-5 mt-0.5 accent-emerald-600 shrink-0"
-          />
-          <div className="flex-1">
-            <p className="font-bold text-slate-800">Ficha padrão ativa</p>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {ativo
-                ? 'Aparece como opção na hora de enviar pro paciente, junto com seus modelos ativos.'
-                : 'Desativada: só seus modelos personalizados vão aparecer pra enviar.'}
-            </p>
-            {ativo && !temModeloAtivo && (
-              <p className="text-xs text-amber-600 mt-1.5">
-                Crie e ative pelo menos 1 modelo personalizado em "Meus Modelos" pra poder desativar a padrão.
-              </p>
-            )}
-          </div>
-        </label>
-      </div>
-
       {/* Identidade */}
-      <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4 transition-opacity ${!ativo ? 'opacity-50' : ''}`}>
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
         <h3 className="font-bold text-slate-800">Identidade da Ficha</h3>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Título</label>
