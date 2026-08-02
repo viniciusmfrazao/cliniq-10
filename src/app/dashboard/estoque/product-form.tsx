@@ -211,6 +211,18 @@ export default function ProductForm({ product }: { product?: Product }) {
             onChange={e => update('cost_price', e.target.value)}
           />
         </div>
+        <div>
+          <label className="label">Preco de venda (R$)</label>
+          <input
+            type="number"
+            step="0.01"
+            className="input"
+            placeholder="0,00"
+            value={form.sale_price}
+            onChange={e => update('sale_price', e.target.value)}
+          />
+          <p className="text-xs text-slate-400 mt-1">Usado ao vender o produto direto pra paciente (ficha do paciente / pagamento).</p>
+        </div>
       </div>
 
       {/* Lote e validade */}
