@@ -154,15 +154,27 @@ export default function AnamneseFormClient({ token }: { token: string }) {
   }
 
   // Signature canvas handlers
+  //
+  // O canvas tem resolução interna fixa (350x200) mas é exibido esticado
+  // (className w-full) — sem escalar clientX/Y pela proporção real/exibida,
+  // o desenho fica deslocado do cursor sempre que a largura exibida for
+  // diferente de 350px (praticamente sempre em desktop).
+  const getCanvasPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const clientX = ('touches' in e) ? e.touches[0].clientX : e.clientX
+    const clientY = ('touches' in e) ? e.touches[0].clientY : e.clientY
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY }
+  }
+
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return
     setIsDrawing(true)
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const rect = canvas.getBoundingClientRect()
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top
+    const { x, y } = getCanvasPos(e, canvas)
     ctx.beginPath()
     ctx.moveTo(x, y)
   }
@@ -173,9 +185,7 @@ export default function AnamneseFormClient({ token }: { token: string }) {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const rect = canvas.getBoundingClientRect()
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top
+    const { x, y } = getCanvasPos(e, canvas)
     ctx.lineTo(x, y)
     ctx.strokeStyle = '#1a1410'
     ctx.lineWidth = 2
