@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import CopyAnamneseLink from './copy-link-button'
 import ExportAnamnesePdfButton from './export-pdf-button'
+import CopyHashButton from '@/components/ui/CopyHashButton'
 
 function escapeHtml(value: any): string {
   return String(value ?? '')
@@ -42,6 +43,37 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     sub_pergunta?: { pergunta: string; tipo: string; placeholder?: string; condicao_valor: string }
   }> = anamneseConfig?.perguntas_extras || []
 
+  // Ficha respondida com um modelo customizado (builder livre) — busca o
+  // template e os campos pra montar as seções dinamicamente em vez de usar
+  // as seções fixas hardcoded abaixo.
+  type TemplateFieldRow = {
+    id: string
+    secao: string
+    ordem: number
+    label: string
+    tipo: string
+    opcoes: string[] | null
+  }
+  let templateInfo: { nome: string; descricao: string | null } | null = null
+  let templateFields: TemplateFieldRow[] = []
+  if (anamnese.template_id) {
+    const { data: tmpl } = await supabase
+      .from('anamnese_templates')
+      .select('nome, descricao')
+      .eq('id', anamnese.template_id)
+      .maybeSingle()
+    templateInfo = tmpl || null
+
+    const { data: tFields } = await supabase
+      .from('anamnese_template_fields')
+      .select('id, secao, ordem, label, tipo, opcoes')
+      .eq('template_id', anamnese.template_id)
+      .order('ordem', { ascending: true })
+    templateFields = tFields || []
+  }
+
+  const templateSecoes = Array.from(new Set(templateFields.map((f) => f.secao)))
+
   const responses = anamnese.responses || {}
 
   const renderResponse = (label: string, value: any) => {
@@ -68,7 +100,14 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
 
   // Config data-driven das seções, reaproveitada para montar o HTML de
   // exportação em PDF (evita duplicar a lista de campos em dois lugares).
-  const sections: Array<{ title: string; fields: Array<[string, any]> }> = [
+  const sections: Array<{ title: string; fields: Array<[string, any]> }> = anamnese.template_id
+    ? templateSecoes.map((secao) => ({
+        title: secao,
+        fields: templateFields
+          .filter((f) => f.secao === secao)
+          .map((f): [string, any] => [f.label, responses[f.id]]),
+      }))
+    : [
     {
       title: 'Procedimentos Anteriores',
       fields: [
@@ -150,7 +189,7 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     },
   ]
 
-  if (perguntasExtras.length > 0) {
+  if (!anamnese.template_id && perguntasExtras.length > 0) {
     sections.push({
       title: 'Informações Adicionais',
       fields: perguntasExtras.flatMap((p, idx) => {
@@ -261,6 +300,33 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
 
       {/* Responses */}
       {anamnese.status === 'completed' ? (
+        anamnese.template_id ? (
+          <div className="grid md:grid-cols-2 gap-6">
+            {templateInfo && (
+              <div className="card p-4 md:col-span-2 bg-amber-50 border border-amber-200">
+                <p className="text-sm text-amber-800">
+                  Ficha preenchida com o modelo customizado <strong>{templateInfo.nome}</strong>
+                  {templateInfo.descricao ? ` — ${templateInfo.descricao}` : ''}.
+                </p>
+              </div>
+            )}
+            {templateSecoes.map((secao) => (
+              <div key={secao} className="card p-6">
+                <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                    <Icon name="file" className="w-4 h-4 text-violet-600" />
+                  </div>
+                  {secao}
+                </h2>
+                {templateFields
+                  .filter((f) => f.secao === secao)
+                  .map((f) => (
+                    <div key={f.id}>{renderResponse(f.label, responses[f.id])}</div>
+                  ))}
+              </div>
+            ))}
+          </div>
+        ) : (
         <div className="grid md:grid-cols-2 gap-6">
           {/* Procedimentos Anteriores */}
           <div className="card p-6">
@@ -398,6 +464,7 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
             </div>
           )}
         </div>
+        )
       ) : (
         <div className="card p-12 text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
@@ -469,6 +536,31 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
               <div className="sm:col-span-3">
                 <p className="text-xs text-slate-500 mb-1">Dispositivo</p>
                 <p className="text-xs text-slate-400 break-all">{anamnese.signature_user_agent}</p>
+              </div>
+            )}
+            {(anamnese.signature_lat && anamnese.signature_lon) && (
+              <div className="flex items-center gap-2">
+                <Icon name="mapPin" className="w-4 h-4 text-slate-400" />
+                <div>
+                  <p className="text-xs text-slate-500">Localização (GPS)</p>
+                  <a
+                    href={`https://www.google.com/maps?q=${anamnese.signature_lat},${anamnese.signature_lon}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-violet-600 hover:underline"
+                  >
+                    {Number(anamnese.signature_lat).toFixed(5)}, {Number(anamnese.signature_lon).toFixed(5)}
+                  </a>
+                </div>
+              </div>
+            )}
+            {anamnese.signature_hash && (
+              <div className="sm:col-span-3">
+                <p className="text-xs text-slate-500 mb-1">Hash de integridade (SHA-256)</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-slate-400 font-mono break-all">{anamnese.signature_hash}</p>
+                  <CopyHashButton hash={anamnese.signature_hash} />
+                </div>
               </div>
             )}
           </div>
