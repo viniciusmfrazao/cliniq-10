@@ -5,6 +5,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { normalizeText } from '@/lib/text'
+import { useAnamneseTemplatePicker, type TemplateOption } from '@/lib/useAnamneseTemplatePicker'
 
 type Patient = {
   id: string
@@ -24,12 +25,25 @@ type Props = {
 
 export default function SendAnamneseForm({ clinicId, clinicName, patients, userId, preSelectedPatient }: Props) {
   const router = useRouter()
+  const { loadOptions } = useAnamneseTemplatePicker()
   const [loading, setLoading] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [searchPatient, setSearchPatient] = useState('')
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [generatedLink, setGeneratedLink] = useState('')
   const [copied, setCopied] = useState(false)
+  const [padraoAtiva, setPadraoAtiva] = useState(true)
+  const [opcoesTemplate, setOpcoesTemplate] = useState<TemplateOption[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('') // '' = ficha padrão
+
+  useEffect(() => {
+    loadOptions().then((options) => {
+      setPadraoAtiva(options.padraoAtiva)
+      setOpcoesTemplate(options.templates)
+      setSelectedTemplateId(options.padraoAtiva ? '' : (options.templates[0]?.id || ''))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,6 +81,7 @@ export default function SendAnamneseForm({ clinicId, clinicName, patients, userI
           sent_by: userId,
           token,
           expires_at: expiresAt.toISOString(),
+          template_id: selectedTemplateId || null,
         })
         .select()
         .single()
@@ -234,6 +249,23 @@ export default function SendAnamneseForm({ clinicId, clinicName, patients, userI
                 ))
               )}
             </div>
+          </div>
+        )}
+
+        {/* Seletor de ficha (só aparece se houver mais de 1 opção) */}
+        {(padraoAtiva ? 1 : 0) + opcoesTemplate.length > 1 && (
+          <div className="card p-4">
+            <label className="label mb-2">Qual ficha enviar?</label>
+            <select
+              className="input"
+              value={selectedTemplateId}
+              onChange={(e) => setSelectedTemplateId(e.target.value)}
+            >
+              {padraoAtiva && <option value="">Ficha padrão</option>}
+              {opcoesTemplate.map((t) => (
+                <option key={t.id} value={t.id}>{t.nome}</option>
+              ))}
+            </select>
           </div>
         )}
 

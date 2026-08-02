@@ -18,7 +18,23 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { titulo, subtitulo, cor_primaria, secoes_ativas, perguntas_extras, campos_identificacao } = body
+  const { titulo, subtitulo, cor_primaria, secoes_ativas, perguntas_extras, campos_identificacao, ativo } = body
+
+  // Se está desativando a ficha padrão, precisa sobrar pelo menos 1 modelo
+  // customizado ativo — nunca pode ficar sem nenhuma ficha disponível pra enviar.
+  if (ativo === false) {
+    const { count } = await supabase
+      .from('anamnese_templates')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', userData.clinic_id)
+      .eq('ativo', true)
+    if (!count) {
+      return NextResponse.json(
+        { error: 'Crie e ative pelo menos 1 modelo antes de desativar a ficha padrão.' },
+        { status: 400 },
+      )
+    }
+  }
 
   const { error } = await supabase
     .from('anamnese_config')
@@ -30,6 +46,7 @@ export async function POST(request: Request) {
       secoes_ativas,
       perguntas_extras,
       campos_identificacao: campos_identificacao || [],
+      ativo: ativo !== false,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'clinic_id' })
 

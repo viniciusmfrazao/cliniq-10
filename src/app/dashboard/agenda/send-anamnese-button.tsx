@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Icon from '@/components/ui/Icon'
 import { useToast } from '@/components/ui/Toast'
+import { useAnamneseTemplatePicker, resolveAutoTemplateId, type TemplateOption } from '@/lib/useAnamneseTemplatePicker'
 
 type SendAnamneseResult = {
   ok: boolean
@@ -14,8 +15,6 @@ type SendAnamneseResult = {
   reason?: string
   error?: string
 }
-
-type TemplateOption = { id: string; nome: string; ativo: boolean }
 
 type Props = {
   patientId: string
@@ -45,10 +44,12 @@ export default function SendAnamneseButton({
   variant = 'compact',
 }: Props) {
   const toast = useToast()
+  const { loadOptions } = useAnamneseTemplatePicker()
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [picking, setPicking] = useState(false)
-  const [templates, setTemplates] = useState<TemplateOption[] | null>(null)
+  const [padraoAtiva, setPadraoAtiva] = useState(true)
+  const [opcoes, setOpcoes] = useState<TemplateOption[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('') // '' = ficha padrão (fixa)
 
   const hasPhone = !!patientPhone?.trim()
@@ -118,43 +119,20 @@ export default function SendAnamneseButton({
     e.stopPropagation()
     if (loading || picking) return
 
-    // Carrega os modelos ativos da clínica (só na primeira vez) pra saber se
-    // precisa perguntar qual ficha enviar.
-    let ativos = templates?.filter((t) => t.ativo) ?? null
-    if (templates === null) {
-      setLoading(true)
-      try {
-        const r = await fetch('/api/anamnese/templates')
-        if (r.ok) {
-          const data = await r.json()
-          const list: TemplateOption[] = (data.templates || []).map((t: any) => ({
-            id: t.id,
-            nome: t.nome,
-            ativo: t.ativo,
-          }))
-          setTemplates(list)
-          ativos = list.filter((t) => t.ativo)
-        } else {
-          setTemplates([])
-          ativos = []
-        }
-      } catch {
-        setTemplates([])
-        ativos = []
-      } finally {
-        setLoading(false)
-      }
-    }
+    setLoading(true)
+    const options = await loadOptions()
+    setLoading(false)
+    setPadraoAtiva(options.padraoAtiva)
+    setOpcoes(options.templates)
 
-    if (!ativos || ativos.length === 0) {
-      // Só existe o modelo fixo — envia direto, sem perguntar nada.
-      void doSend(null)
+    const resolved = resolveAutoTemplateId(options)
+    if (resolved.auto) {
+      void doSend(resolved.templateId)
       return
     }
 
-    // Existe pelo menos 1 modelo customizado ativo além do fixo: pergunta
-    // qual ficha enviar.
-    setSelectedTemplateId('')
+    // Mais de 1 ficha disponível: pergunta qual enviar.
+    setSelectedTemplateId(options.padraoAtiva ? '' : options.templates[0].id)
     setPicking(true)
   }
 
@@ -171,8 +149,6 @@ export default function SendAnamneseButton({
     setPicking(false)
   }
 
-  const ativos = templates?.filter((t) => t.ativo) ?? []
-
   if (picking) {
     return (
       <div
@@ -184,8 +160,8 @@ export default function SendAnamneseButton({
           value={selectedTemplateId}
           onChange={(e) => setSelectedTemplateId(e.target.value)}
         >
-          <option value="">Ficha padrão</option>
-          {ativos.map((t) => (
+          {padraoAtiva && <option value="">Ficha padrão</option>}
+          {opcoes.map((t) => (
             <option key={t.id} value={t.id}>{t.nome}</option>
           ))}
         </select>

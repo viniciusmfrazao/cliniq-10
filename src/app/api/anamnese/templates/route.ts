@@ -36,7 +36,16 @@ export async function GET() {
     .order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  return NextResponse.json({ templates: data })
+
+  // Ficha padrão: ativa por padrão se a clínica nunca configurou nada.
+  const { data: config } = await supabase
+    .from('anamnese_config')
+    .select('ativo')
+    .eq('clinic_id', clinicId)
+    .maybeSingle()
+  const padraoAtiva = config?.ativo !== false
+
+  return NextResponse.json({ templates: data, padraoAtiva })
 }
 
 export async function POST(request: Request) {
