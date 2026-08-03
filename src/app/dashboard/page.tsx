@@ -8,6 +8,7 @@ import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import WeeklyChart from '@/components/dashboard/WeeklyChart'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
 import WelcomeCard from '@/components/onboarding/WelcomeCard'
+import WhatsNewCard from '@/components/onboarding/WhatsNewCard'
 import { getFinancialAccess } from '@/lib/financial-access'
 import { gerarParcelas, type TaxaPag } from '@/lib/recebiveis'
 import {
@@ -261,6 +262,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       <div className="space-y-4 md:space-y-6 max-w-7xl mx-auto px-3 sm:px-4 md:px-6">
       {/* Card de boas-vindas com guia por papel (some quando o usuario dispensa) */}
       <WelcomeCard userRole={userData?.role} userName={firstName} />
+
+      {/* Novidades importantes pra clinica (some quando o usuario dispensa) */}
+      <WhatsNewCard />
 
       {/* Welcome Banner */}
       {searchParams.welcome === '1' && (
