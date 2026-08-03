@@ -1,8 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import PhotoLightbox from '@/components/ui/PhotoLightbox'
 import AnamneseSummaryCard from '@/components/anamnese/AnamneseSummaryCard'
+import Icon from '@/components/ui/Icon'
 
 type Evolution = {
   id: string
@@ -12,6 +15,7 @@ type Evolution = {
   procedure_name: string | null
   photos: string[] | null
   created_at: string
+  edited_at?: string | null
   users: { name: string } | null
 }
 
@@ -48,6 +52,13 @@ type Props = {
    * nao tiver URL (sumiu do storage), mostramos placeholder de erro.
    */
   photoUrls?: Record<string, string>
+  /**
+   * Se true, mostra o botão "Editar" nas evoluções expandidas — corrige
+   * erro de digitação depois de finalizada. Qualquer admin/profissional
+   * da clínica pode editar (gate: permissão records_edit), sem prazo.
+   */
+  canEdit?: boolean
+  currentUserId?: string
 }
 
 const FILTERS: Array<{ id: string; label: string }> = [
@@ -79,9 +90,52 @@ export default function EvolutionTimeline({
   patientId,
   anamneses = [],
   photoUrls = {},
+  canEdit = false,
+  currentUserId,
 }: Props) {
+  const router = useRouter()
+  const supabase = createClient()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
+
+  // Edição de evolução já salva — corrige erro de digitação sem prazo.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftContent, setDraftContent] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function startEdit(evo: Evolution, e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingId(evo.id)
+    setDraftTitle(evo.title)
+    setDraftContent(evo.content || '')
+  }
+
+  function cancelEdit(e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingId(null)
+  }
+
+  async function saveEdit(evoId: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    setSaving(true)
+    const { error } = await supabase
+      .from('evolutions')
+      .update({
+        title: draftTitle || 'Evolução',
+        content: draftContent || null,
+        edited_at: new Date().toISOString(),
+        edited_by: currentUserId || null,
+      })
+      .eq('id', evoId)
+    setSaving(false)
+    if (error) {
+      alert(`Erro ao salvar edição: ${error.message}`)
+      return
+    }
+    setEditingId(null)
+    router.refresh()
+  }
 
   // State do lightbox: qual evolução abriu e em qual índice começa.
   const [lightbox, setLightbox] = useState<{ evoId: string; index: number } | null>(null)
@@ -233,32 +287,94 @@ export default function EvolutionTimeline({
                         {evo.title}
                       </h3>
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-xs text-slate-400">
-                        {new Date(evo.created_at).toLocaleDateString('pt-BR')}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {new Date(evo.created_at).toLocaleTimeString('pt-BR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          timeZone: 'America/Sao_Paulo',
-                        })}
-                      </p>
+                    <div className="text-right flex-shrink-0 flex items-start gap-2">
+                      <div>
+                        <p className="text-xs text-slate-400">
+                          {new Date(evo.created_at).toLocaleDateString('pt-BR')}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {new Date(evo.created_at).toLocaleTimeString('pt-BR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'America/Sao_Paulo',
+                          })}
+                        </p>
+                      </div>
+                      {canEdit && isExpanded && editingId !== evo.id && (
+                        <button
+                          type="button"
+                          onClick={(e) => startEdit(evo, e)}
+                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center flex-shrink-0"
+                          title="Editar evolução"
+                        >
+                          <Icon name="edit" className="w-3.5 h-3.5 text-slate-600" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   {evo.users?.name && (
-                    <p className="text-xs text-slate-500 mb-2">por {evo.users.name}</p>
+                    <p className="text-xs text-slate-500 mb-2">
+                      por {evo.users.name}
+                      {evo.edited_at && (
+                        <span className="text-slate-400">
+                          {' · editado em '}
+                          {new Date(evo.edited_at).toLocaleDateString('pt-BR')}
+                          {' às '}
+                          {new Date(evo.edited_at).toLocaleTimeString('pt-BR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'America/Sao_Paulo',
+                          })}
+                        </span>
+                      )}
+                    </p>
                   )}
 
-                  {evo.content && (
-                    <p
-                      className={`text-sm text-slate-600 whitespace-pre-wrap ${
-                        isExpanded ? '' : 'line-clamp-2'
-                      }`}
-                    >
-                      {evo.content}
-                    </p>
+                  {editingId === evo.id ? (
+                    <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={draftTitle}
+                        onChange={(e) => setDraftTitle(e.target.value)}
+                        className="input w-full text-sm"
+                        placeholder="Título"
+                      />
+                      <textarea
+                        value={draftContent}
+                        onChange={(e) => setDraftContent(e.target.value)}
+                        className="input w-full text-sm min-h-[100px]"
+                        placeholder="Conteúdo"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => saveEdit(evo.id, e)}
+                          disabled={saving}
+                          className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60"
+                        >
+                          {saving ? 'Salvando...' : 'Salvar edição'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          disabled={saving}
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    evo.content && (
+                      <p
+                        className={`text-sm text-slate-600 whitespace-pre-wrap ${
+                          isExpanded ? '' : 'line-clamp-2'
+                        }`}
+                      >
+                        {evo.content}
+                      </p>
+                    )
                   )}
 
                   {evo.procedure_name && (

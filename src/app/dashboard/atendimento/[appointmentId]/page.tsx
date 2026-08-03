@@ -190,12 +190,25 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
             )}
 
             {latestAnamnese ? (
-              <AnamneseSummaryCard
-                anamnese={latestAnamnese}
-                variant="full"
-                highlightRecent
-                returnUrl={`/dashboard/atendimento/${params.appointmentId}`}
-              />
+              <div className="space-y-2">
+                <AnamneseSummaryCard
+                  anamnese={latestAnamnese}
+                  variant="full"
+                  highlightRecent
+                  returnUrl={`/dashboard/atendimento/${params.appointmentId}`}
+                />
+                <div className="flex justify-end">
+                  <div className="flex w-40">
+                    <SendAnamneseButton
+                      patientId={patient.id}
+                      patientName={patient.name || ''}
+                      patientPhone={patient.phone || null}
+                      appointmentId={params.appointmentId}
+                      variant="compact"
+                    />
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="card p-5 border-dashed">
                 <div className="flex items-center justify-between gap-3 flex-wrap">

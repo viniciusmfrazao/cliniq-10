@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
+import Icon from '@/components/ui/Icon'
 import ApplicationHistory from './application-history'
 import NewApplicationButton from './new-application-button'
 
@@ -44,6 +45,13 @@ export default async function PatientInjetaveisPage({ params }: { params: { pati
       {/* Header */}
       <div className="flex flex-col gap-4 mb-8 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
+          <Link
+            href={`/dashboard/pacientes/${patientId}`}
+            className="p-2 hover:bg-slate-100 rounded-xl transition-colors flex-shrink-0"
+            title="Voltar para a ficha do paciente"
+          >
+            <Icon name="chevronLeft" className="w-5 h-5 text-slate-600" />
+          </Link>
           <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-pink-100 rounded-2xl flex items-center justify-center">
             <span className="text-purple-700 font-bold text-2xl">
               {patient.name.charAt(0).toUpperCase()}
@@ -132,12 +140,6 @@ export default async function PatientInjetaveisPage({ params }: { params: { pati
 
       {/* History */}
       <ApplicationHistory applications={applications || []} patientId={patientId} clinicId={userData?.clinic_id ?? ''} patientGender={patient.gender === 'M' ? 'male' : 'female'} />
-
-      <div className="mt-8">
-        <Link href="/dashboard/injetaveis" className="text-sm text-slate-500 hover:text-slate-700">
-          ← Voltar para injetaveis
-        </Link>
-      </div>
     </div>
   )
 }

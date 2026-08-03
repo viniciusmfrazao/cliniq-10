@@ -299,6 +299,7 @@ export default async function PatientCentralPage({
             clinicId={userData?.clinic_id || ''}
             professionalId={userData?.id || ''}
             professionalName={userData?.name || ''}
+            canEditRecords={can(access, 'records_edit')}
           />
         </Suspense>
       )}
@@ -457,11 +458,13 @@ async function EvolucoesTab({
   clinicId,
   professionalId,
   professionalName,
+  canEditRecords,
 }: {
   patientId: string
   clinicId: string
   professionalId: string
   professionalName: string
+  canEditRecords: boolean
 }) {
   const supabase = await createClient()
   // Evoluções e anamneses em paralelo — vão pro mesmo timeline e ficam
@@ -513,6 +516,8 @@ async function EvolucoesTab({
         anamneses={anamneses || []}
         photoUrls={photoUrls}
         patientId={patientId}
+        canEdit={canEditRecords}
+        currentUserId={professionalId}
       />
     </div>
   )
