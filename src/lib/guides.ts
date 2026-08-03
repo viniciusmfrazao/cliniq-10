@@ -90,7 +90,7 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Receba o pagamento ao final',
         description:
-          'Depois do atendimento, lance a entrada em Financeiro → Nova Entrada. Selecione paciente, procedimento, forma de pagamento. O sistema calcula taxa e líquido sozinho.',
+          'Depois do atendimento, lance a entrada em Financeiro → Nova Entrada. Selecione paciente, procedimento, forma de pagamento. O sistema calcula taxa e líquido sozinho. Vendeu algum produto avulso (sem procedimento)? Use "Vender Produto" na ficha do paciente.',
         tip: 'Cartão? Informe bandeira e parcelas — a taxa vem automática.',
         icon: 'dollarSign',
         href: '/dashboard/financeiro/entradas/nova',
@@ -320,8 +320,8 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Veja o DRE e o fluxo',
         description:
-          'DRE mensal: receita − despesas = resultado. Fluxo de Caixa anual: como cada mês se comporta. Exporte em PDF pro contador.',
-        tip: 'Compare 3 meses pra entender sazonalidade.',
+          'DRE mensal: receita − despesas = resultado, com venda de produto numa sub-linha separada do procedimento. Fluxo de Caixa anual: como cada mês se comporta. Exporte em PDF pro contador.',
+        tip: 'Compare 3 meses pra entender sazonalidade. Veja o Ranking de Produtos em Rankings pra saber o que mais vende.',
         icon: 'barChart',
         href: '/dashboard/financeiro/dre',
         color: 'from-violet-500 to-purple-500',
