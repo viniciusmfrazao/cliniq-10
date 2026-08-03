@@ -100,16 +100,25 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
   return (
     <div className="max-w-2xl mx-auto">
       <div className="flex items-start justify-between mb-6 flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Detalhes do agendamento</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {new Date(appointment.start_time).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo',
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric'
-            })}
-          </p>
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/dashboard/agenda?date=${appointment.start_time.split('T')[0]}`}
+            className="p-2 hover:bg-slate-100 rounded-xl transition-colors flex-shrink-0"
+            title="Voltar para agenda"
+          >
+            <Icon name="chevronLeft" className="w-5 h-5 text-slate-600" />
+          </Link>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Detalhes do agendamento</h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {new Date(appointment.start_time).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo',
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              })}
+            </p>
+          </div>
         </div>
         <span className={`text-sm px-3 py-1 rounded-full font-medium ${statusColor[appointment.status]}`}>
           {statusLabel[appointment.status]}
@@ -230,12 +239,6 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
         professionals={professionals || []}
         rooms={rooms || []}
       />
-
-      <div className="mt-6">
-        <Link href={`/dashboard/agenda?date=${appointment.start_time.split('T')[0]}`} className="text-sm text-slate-500 hover:text-slate-700">
-          ← Voltar para agenda
-        </Link>
-      </div>
     </div>
   )
 }
