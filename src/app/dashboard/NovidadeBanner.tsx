@@ -4,16 +4,16 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
-const STORAGE_KEY = 'clinike_novidade_v4_jul2026'
+const STORAGE_KEY = 'clinike_novidade_v5_ago2026'
 const EXPIRA_EM_DIAS = 7
 
 const NOVIDADES = [
-  { emoji: '🔮', texto: 'Previsão de Faturamento: veja quanto vai entrar com os agendamentos futuros' },
-  { emoji: '💳', texto: 'Valor cobrado pela profissional pré-preenchido no pagamento' },
-  { emoji: '✏️', texto: 'Edição de entradas e saídas financeiras' },
-  { emoji: '📊', texto: 'Rentabilidade por paciente: custo, receita e margem real' },
-  { emoji: '📦', texto: 'Edição de movimentações de estoque com ajuste automático' },
-  { emoji: '🔁', texto: 'Recall multi-step: sequência de mensagens em múltiplos intervalos' },
+  { emoji: '🛍️', texto: 'Venda de produto avulso: venda sem precisar de agendamento, direto na ficha do paciente' },
+  { emoji: '📋', texto: 'Anamnese personalizada: monte seu próprio formulário, estilo Google Forms' },
+  { emoji: '🧍', texto: 'Mapa Corporal: registre aplicações de harmonização corporal, igual ao mapa facial' },
+  { emoji: '📎', texto: 'Anexos do paciente: envie exames, laudos e arquivos direto na ficha' },
+  { emoji: '⏰', texto: 'Lembrete Personalizado: crie um lembrete extra com texto e horário próprios' },
+  { emoji: '🎙️', texto: 'Áudio nas automações: lembrete, confirmação e pós-venda podem sair por áudio' },
 ]
 
 export default function NovidadeBanner() {
@@ -52,15 +52,15 @@ export default function NovidadeBanner() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-xs font-bold bg-white/25 px-2.5 py-0.5 rounded-full tracking-wide uppercase">
-              Novidade · Jul/2026
+              Novidade · Ago/2026
             </span>
           </div>
 
           <p className="font-bold text-base md:text-lg leading-tight">
-            Chegou o áudio nas automações! 🎙️
+            Chegou a venda de produto avulso! 🛍️
           </p>
           <p className="text-white/80 text-xs md:text-sm mt-1 leading-relaxed">
-            Agora dá pra gravar um áudio e configurar cada automação (lembrete, confirmação, aniversário, pós-atendimento, pós-venda) pra mandar texto, áudio, ou os dois. E ainda vieram mais novidades:
+            Agora dá pra vender um produto sem precisar de agendamento, direto na ficha do paciente. E ainda vieram mais novidades:
           </p>
 
           {/* Lista de novidades */}
@@ -84,11 +84,11 @@ export default function NovidadeBanner() {
 
           <div className="flex items-center gap-3 mt-4 flex-wrap">
             <Link
-              href="/dashboard/config/automacoes"
+              href="/dashboard/pacientes"
               onClick={fechar}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-violet-600 rounded-xl text-sm font-bold hover:bg-violet-50 transition-colors shadow-sm"
             >
-              Configurar áudio nas automações
+              Ver pacientes
               <Icon name="chevronRight" className="w-4 h-4" />
             </Link>
             <button
