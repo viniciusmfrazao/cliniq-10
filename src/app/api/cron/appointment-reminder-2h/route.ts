@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWhatsappMessage, sendWhatsappButtons, sendWhatsappAudio } from '@/lib/whatsapp'
+import { sendWhatsappMessage, sendWhatsappAudio } from '@/lib/whatsapp'
 import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
 
 export const maxDuration = 60
@@ -43,6 +43,7 @@ function renderTemplate(template: string, vars: Record<string, string>): string 
     .replace(/\{\{\s*dia_semana\s*\}\}/g, vars.dia_semana)
     .replace(/\{\{\s*endereco\s*\}\}/g, vars.endereco ?? '')
     .replace(/\{\{\s*link_agenda\s*\}\}/g, vars.link_agenda ?? '')
+    .replace(/\{\{\s*link_confirmacao\s*\}\}/g, vars.link_confirmacao ?? '')
 }
 
 const DEFAULT_TEMPLATE_2H = `Oi {{primeiro_nome}}! Passando pra lembrar que daqui a pouco é o seu horário na *{{clinica}}* 🕐
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
   // 1) Agendamentos na janela 2h
   const { data: apps, error: errApps } = await svc
     .from('appointments')
-    .select('id, clinic_id, start_time, end_time, status, patient_id, professional_id, procedure_id')
+    .select('id, clinic_id, start_time, end_time, status, patient_id, professional_id, procedure_id, confirmation_slug')
     .gte('start_time', windowStart.toISOString())
     .lte('start_time', windowEnd.toISOString())
     .in('status', ['scheduled', 'confirmed', 'pending_confirmation'])
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
   // 2) Carregar dados em paralelo
   const [{ data: automations }, { data: waList }, { data: clinics },
          { data: patients }, { data: profs }, { data: procs }] = await Promise.all([
-    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h, modo_lembrete_2h, audio_lembrete_2h, confirma_24h_solicitar_resposta').in('clinic_id', clinicIds),
+    svc.from('clinic_automations').select('clinic_id, confirma_24h, template_confirma_24h, lembrete_2h, template_lembrete_2h, modo_lembrete_2h, audio_lembrete_2h').in('clinic_id', clinicIds),
     svc.from('clinic_whatsapp').select('clinic_id, instance_name, status, is_default, role_outbound_automation').in('clinic_id', clinicIds),
     svc.from('clinics').select('id, name, settings').in('id', clinicIds),
     patientIds.length ? svc.from('patients').select('id, name, phone').in('id', patientIds) : { data: [] },
@@ -170,6 +171,10 @@ export async function GET(req: NextRequest) {
       linkAgenda2h = generateCalendarLinks(getPublicBaseUrl(), event).googleRedirectUrl
     }
 
+    const linkConfirmacao2h = app.confirmation_slug
+      ? `${getPublicBaseUrl()}/confirmar/${app.confirmation_slug}`
+      : ''
+
     const rawText = renderTemplate(template, {
       nome: patient.name || '',
       primeiro_nome: firstName(patient.name),
@@ -181,6 +186,7 @@ export async function GET(req: NextRequest) {
       dia_semana: dt.weekday,
       endereco: endereco2h,
       link_agenda: linkAgenda2h,
+      link_confirmacao: linkConfirmacao2h,
     })
     const text = renderConditional(rawText, { endereco: endereco2h })
 
@@ -193,34 +199,18 @@ export async function GET(req: NextRequest) {
 
     if (errLock) { summary.errors.push(`lock ${app.id}: ${errLock.message}`); continue }
 
-    // Texto/botões primeiro (se modo texto/ambos), áudio depois. Botões
-    // interativos não existem em mensagem de áudio — a confirmação por
-    // botão só é enviada quando o modo inclui texto.
+    // Manda apenas a mensagem configurada (texto/áudio/ambos). Sem botões e
+    // sem nenhum texto de confirmação injetado pelo sistema — se a clínica
+    // quiser oferecer confirmação, ela mesma inclui {{link_confirmacao}} no
+    // template.
     let result: Awaited<ReturnType<typeof sendWhatsappMessage>> | null = null
-    const solicitarResposta2h: boolean = auto?.confirma_24h_solicitar_resposta ?? true
+    const cleanText = text.replace(/\n{3,}/g, '\n\n').trim()
 
-    if (modo2h !== 'audio' && solicitarResposta2h) {
-      // Envia como botões (CONFIRMAR / CANCELAR / NÃO SOU EU).
-      // Fallback para texto se Evolution não suportar botões na instância.
-      result = await sendWhatsappButtons({
-        clinicId: app.clinic_id,
-        phone: patient.phone,
-        body: text.replace(/\n{3,}/g, '\n\n').trim(),
-        footer: clinicName2h,
-        buttons: [
-          { id: 'confirm', text: '✅ Confirmar' },
-          { id: 'cancel', text: '❌ Cancelar' },
-          { id: 'reschedule', text: '🔄 Reagendar' },
-        ],
-        purpose: 'automation',
-        instanceName: wa.instance_name,
-      })
-    } else if (modo2h !== 'audio' && !solicitarResposta2h) {
-      // Clínica desativou os botões de confirmação: manda só o texto informativo.
+    if (modo2h !== 'audio') {
       result = await sendWhatsappMessage({
         clinicId: app.clinic_id,
         phone: patient.phone,
-        message: text.replace(/\n{3,}/g, '\n\n').trim(),
+        message: cleanText,
         purpose: 'automation',
         instanceName: wa.instance_name,
       })
@@ -237,15 +227,6 @@ export async function GET(req: NextRequest) {
     }
     if (!result) {
       result = { ok: false, code: 'evolution_error', error: 'Modo de envio inválido' }
-    }
-    if (!result.ok) {
-      result = await sendWhatsappMessage({
-        clinicId: app.clinic_id,
-        phone: patient.phone,
-        message: solicitarResposta2h ? text + '\n\nResponda *Confirmar* ou *Cancelar*.' : text,
-        purpose: 'automation',
-        instanceName: wa.instance_name,
-      })
     }
 
     if (result.ok) {
