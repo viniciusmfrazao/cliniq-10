@@ -472,7 +472,7 @@ async function EvolucoesTab({
   const [{ data: evolutions }, { data: anamneses }] = await Promise.all([
     supabase
       .from('evolutions')
-      .select('*, users(name)')
+      .select('*, users:evolutions_professional_id_fkey(name)')
       .eq('patient_id', patientId)
       .order('created_at', { ascending: false }),
     supabase
