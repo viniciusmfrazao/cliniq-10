@@ -27,7 +27,7 @@ function RankTooltip({ active, payload, labelKey }: any) {
   return (
     <div className="bg-white rounded-xl border border-slate-100 shadow-lg px-3 py-2 text-xs">
       <p className="font-bold text-slate-900 mb-1">{row[labelKey]}</p>
-      <p className="text-slate-600">{fmt(row.valor)}</p>
+      <p className="text-slate-600">{fmt(row.fat || 0)}</p>
     </div>
   )
 }
