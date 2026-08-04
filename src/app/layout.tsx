@@ -3,6 +3,7 @@ import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import BrazilCopa from '@/components/BrazilCopa'
 import PWAProvider from '@/components/PWAProvider'
+import AuthLifecycleProvider from '@/components/AuthLifecycleProvider'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
 export const metadata: Metadata = {
@@ -105,6 +106,7 @@ export default function RootLayout({
         <ThemeProvider>{children}</ThemeProvider>
         <BrazilCopa />
         <PWAProvider />
+        <AuthLifecycleProvider />
         <SpeedInsights />
       </body>
     </html>
