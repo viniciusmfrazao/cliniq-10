@@ -12,6 +12,14 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   blocked:   { label: 'Bloqueado', color: 'bg-red-200 text-red-800' },
 }
 
+/** O embed do PostgREST devolve objeto quando existe unique constraint em
+ * clinic_id (relação 1:1), e array quando não existe. Normaliza os dois —
+ * era por isso que sub sempre vinha undefined com `?.[0]` num objeto. */
+function firstSub(raw: any): any {
+  if (!raw) return null
+  return Array.isArray(raw) ? raw[0] ?? null : raw
+}
+
 const EVENT_LABELS: Record<string, string> = {
   PAYMENT_CREATED: '📅 Cobrança gerada',
   PAYMENT_CONFIRMED: '✅ Pagamento confirmado',
@@ -134,7 +142,7 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
             📊 Relatório de cobranças
           </a>
           <div className="text-xs text-slate-500">
-            {clinics.filter(c => c.clinic_subscriptions?.[0]?.status === 'active').length} ativas /  {clinics.length} total
+            {clinics.filter(c => firstSub(c.clinic_subscriptions)?.status === 'active').length} ativas /  {clinics.length} total
           </div>
         </div>
       </div>
@@ -151,7 +159,7 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
       {/* Lista */}
       <div className="space-y-3">
         {filtered.map(clinic => {
-          const sub = clinic.clinic_subscriptions?.[0]
+          const sub = firstSub(clinic.clinic_subscriptions)
           const status = sub?.status || 'pending'
           const { label, color } = STATUS_LABELS[status] || STATUS_LABELS.pending
           const events = eventsByClinic[clinic.id] || []
