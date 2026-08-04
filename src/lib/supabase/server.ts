@@ -68,6 +68,15 @@ export function createServiceClient() {
     console.error('[createServiceClient] FATAL: SUPABASE_SERVICE_ROLE_KEY ou URL ausente!')
   }
   return createSupabaseClient(url!, key!, {
-    auth: { autoRefreshToken: false, persistSession: false }
+    auth: { autoRefreshToken: false, persistSession: false },
+    // O supabase-js usa o fetch global. Dentro de Server Components o Next 14
+    // guarda essas respostas no Data Cache, e o resultado é tela mostrando
+    // dado velho depois de salvar (CEP/Número/telefone "sumindo" no admin de
+    // clínicas). Nenhuma leitura via service client deve ser cacheada — é
+    // sempre dado de administração que precisa refletir a escrita anterior.
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, cache: 'no-store' }),
+    },
   })
 }

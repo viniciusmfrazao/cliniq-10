@@ -108,13 +108,11 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
       setMessage('Dados da clínica atualizados com sucesso.')
 
       // Ressincroniza o formulário com o que o servidor de fato persistiu.
-      // NÃO chamamos router.refresh() aqui: mesmo esse formulário já sendo
-      // a fonte da verdade pros campos que ele mesmo edita, o refresh disparava
-      // um novo fetch de dados que, por algum motivo (cache de rota/CDN),
-      // voltava sem os campos de settings preenchidos e sobrescrevia o que
-      // acabamos de exibir — fazendo CEP/Número "sumirem" logo após salvar
-      // com sucesso. Os cards abaixo (nome/CNPJ/atualizado em) só vão
-      // refletir a mudança em uma navegação normal (F5 ou trocar de tela).
+      // O router.refresh() abaixo pode voltar: a causa do antigo sumiço de
+      // CEP/Número era o Data Cache do Next servindo a leitura anterior do
+      // Supabase. createServiceClient agora força cache: 'no-store' e o PATCH
+      // chama revalidatePath. O setForm continua porque a resposta do PATCH é
+      // a fonte mais imediata, e o refresh não remonta este componente.
       const updated = data.clinic as {
         settings?: Record<string, unknown> | null
       } | undefined
@@ -130,6 +128,7 @@ export default function ClinicSettingsEditor({ clinic, users, plans }: Props) {
               : '',
         }))
       }
+      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro inesperado')
     } finally {

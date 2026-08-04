@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createServiceClient } from '@/lib/supabase/server'
 import { isSuperAdmin } from '@/lib/super-admin'
 
@@ -197,6 +198,12 @@ export async function PATCH(
       .select('*')
       .eq('id', clinicId)
       .maybeSingle()
+
+    // Invalida o Router Cache do cliente pra essa clínica. Sem isso, uma
+    // navegação suave (voltar pra lista e entrar de novo) reaproveita o RSC
+    // antigo e a tela aparece com os campos vazios mesmo com o banco correto.
+    revalidatePath(`/admin/clinics/${clinicId}`)
+    revalidatePath('/admin/clinics')
 
     return NextResponse.json({ ok: true, clinic: updatedClinic })
   } catch (error) {
