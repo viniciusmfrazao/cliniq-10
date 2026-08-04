@@ -32,7 +32,7 @@ async function syncAll() {
 
   const { data: subs, error } = await svc
     .from('clinic_subscriptions')
-    .select('clinic_id, asaas_customer_id, asaas_checkout_id, asaas_subscription_id, payment_method, clinics(name)')
+    .select('clinic_id, asaas_customer_id, asaas_checkout_id, asaas_subscription_id, payment_method, plan_price, clinics(name)')
     .not('asaas_customer_id', 'is', null)
 
   if (error) throw new Error(`Erro ao ler clinic_subscriptions: ${error.message}`)
@@ -59,10 +59,28 @@ async function syncAll() {
       // 2. Assinaturas do customer
       const subsResp = await asaas(`/subscriptions?customer=${row.asaas_customer_id}&limit=20`)
       const all: any[] = subsResp?.data || []
+      const ativas = all.filter((s) => s.status === 'ACTIVE')
+
+      // Um customer pode ter mais de uma assinatura (checkout gerado 2x, teste
+      // antigo etc). Prioridade: a que já está gravada no banco > ativa com o
+      // valor do plano > ativa mais recente > qualquer uma mais recente.
+      const porData = (arr: any[]) =>
+        [...arr].sort((a, b) => (b.dateCreated || '').localeCompare(a.dateCreated || ''))
       const sub =
-        all.find((s) => s.status === 'ACTIVE') ||
-        all.sort((a, b) => (b.dateCreated || '').localeCompare(a.dateCreated || ''))[0] ||
+        all.find((s) => s.id === row.asaas_subscription_id) ||
+        ativas.find((s) => Number(s.value) === Number(row.plan_price)) ||
+        porData(ativas)[0] ||
+        porData(all)[0] ||
         null
+
+      if (ativas.length > 1) {
+        item.problemas.push(
+          `🚨 ${ativas.length} ASSINATURAS ATIVAS no mesmo customer (${ativas
+            .map((s) => `${s.id}=R$${s.value}`)
+            .join(', ')}) — risco de cobrança duplicada`
+        )
+      }
+      item.assinaturas_ativas = ativas.length
 
       // 3. Cobranças do customer
       const payResp = await asaas(`/payments?customer=${row.asaas_customer_id}&limit=100`)
@@ -83,10 +101,17 @@ async function syncAll() {
       )[0]
       const nextOpen = pending[0] || null
 
-      // Cartão salvo: a Asaas só devolve o objeto creditCard quando o cliente
-      // concluiu o checkout e tokenizou o cartão.
+      // Cartão salvo. Duas evidências, porque o checkout continua com status
+      // ACTIVE mesmo depois do cliente cadastrar o cartão (confirmado em prod
+      // ago/2026) — não dá pra depender de CHECKOUT_PAID:
+      //  a) a Asaas devolve o objeto creditCard tokenizado, ou
+      //  b) existe assinatura ACTIVE de CREDIT_CARD, que na prática só nasce
+      //     quando o cliente conclui o checkout hospedado.
       const card = sub?.creditCard || null
-      const cardRegistered = !!card || checkoutStatus === 'PAID'
+      const cardRegistered =
+        !!card ||
+        checkoutStatus === 'PAID' ||
+        (sub?.status === 'ACTIVE' && sub?.billingType === 'CREDIT_CARD')
 
       // Próxima cobrança: prioridade pra cobrança PENDING real; se não houver,
       // o nextDueDate da assinatura.
@@ -130,11 +155,16 @@ async function syncAll() {
         .eq('clinic_id', row.clinic_id)
       if (upErr) item.problemas.push(`update falhou: ${upErr.message}`)
 
-      // Espelha o acesso no app com a próxima cobrança real
+      // Espelha o acesso no app com a próxima cobrança real, com 5 dias de
+      // carência — a cobrança no cartão é processada no dia do vencimento e
+      // o webhook de confirmação pode demorar; travar a clínica exatamente na
+      // data seria bloquear quem está em dia.
       if (nextChargeAt) {
+        const limite = new Date(`${nextChargeAt}T23:59:59-03:00`)
+        limite.setDate(limite.getDate() + 5)
         await svc
           .from('clinics')
-          .update({ plan_expires_at: new Date(`${nextChargeAt}T23:59:59-03:00`).toISOString() })
+          .update({ plan_expires_at: limite.toISOString() })
           .eq('id', row.clinic_id)
       }
 
