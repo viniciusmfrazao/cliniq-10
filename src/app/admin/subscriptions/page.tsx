@@ -17,6 +17,10 @@ export default async function SubscriptionsPage() {
   if (clinicsErr) {
     console.error('[admin/subscriptions] erro ao buscar clinics+subscriptions:', clinicsErr)
   }
+  console.log(
+    '[admin/subscriptions] clinics:', clinics?.length,
+    '| primeiro com sub:', JSON.stringify(clinics?.find((c: any) => c.clinic_subscriptions?.length > 0))
+  )
 
   const { data: plans } = await svc
     .from('plans')
