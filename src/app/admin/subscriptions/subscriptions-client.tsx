@@ -12,9 +12,8 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   blocked:   { label: 'Bloqueado', color: 'bg-red-200 text-red-800' },
 }
 
-const CARD_CONFIRM_EVENTS = ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAYMENT_ANTICIPATED', 'PAYMENT_DUNNING_RECEIVED']
-
 const EVENT_LABELS: Record<string, string> = {
+  PAYMENT_CREATED: '📅 Cobrança gerada',
   PAYMENT_CONFIRMED: '✅ Pagamento confirmado',
   PAYMENT_RECEIVED: '✅ Pagamento recebido',
   PAYMENT_ANTICIPATED: '✅ Pagamento antecipado',
@@ -28,6 +27,32 @@ const EVENT_LABELS: Record<string, string> = {
   PAYMENT_AWAITING_CHARGEBACK_REVERSAL: '🔄 Aguardando reversão de chargeback',
   SUBSCRIPTION_INACTIVATED: '🚫 Assinatura inativada',
   SUBSCRIPTION_DELETED: '🚫 Assinatura removida',
+  CHECKOUT_PAID: '💳 Cartão cadastrado',
+  CHECKOUT_EXPIRED: '⌛ Link expirou sem cadastro',
+  CHECKOUT_CANCELED: '❌ Checkout cancelado',
+}
+
+/** Formata 'YYYY-MM-DD' sem passar por UTC (evita voltar um dia no BRT). */
+function fmtDay(d?: string | null) {
+  if (!d) return null
+  const [y, m, day] = d.slice(0, 10).split('-')
+  return `${day}/${m}/${y}`
+}
+function fmtDateTime(d?: string | null) {
+  if (!d) return null
+  return new Date(d).toLocaleDateString('pt-BR')
+}
+function money(v: any) {
+  if (v == null) return null
+  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+function daysUntil(d?: string | null) {
+  if (!d) return null
+  const [y, m, day] = d.slice(0, 10).split('-').map(Number)
+  const target = new Date(y, m - 1, day)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / 86400000)
 }
 
 export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: { clinics: any[]; plans: any[]; eventsByClinic: Record<string, any[]> }) {
@@ -38,8 +63,29 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
   const [result, setResult] = useState<{ url?: string; error?: string } | null>(null)
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
   const filtered = clinics.filter(c => normalizeText(c.name).includes(normalizeText(search)))
+
+  async function syncAsaas() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const r = await fetch('/api/asaas/sync', { method: 'POST' })
+      const data = await r.json()
+      if (data.ok) {
+        const comProblema = (data.report || []).filter((x: any) => x.problemas?.length).length
+        setSyncMsg(`✅ ${data.sincronizadas} clínicas sincronizadas${comProblema ? ` — ${comProblema} com pendência` : ''}. Recarregando...`)
+        setTimeout(() => window.location.reload(), 1200)
+      } else {
+        setSyncMsg(`❌ ${data.error}`)
+      }
+    } catch (e: any) {
+      setSyncMsg(`❌ ${e.message}`)
+    }
+    setSyncing(false)
+  }
 
   async function sendLink() {
     if (!modal) return
@@ -79,6 +125,10 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
           <p className="text-slate-500 text-sm mt-1">Gerencie os planos e cobranças das clínicas</p>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={syncAsaas} disabled={syncing}
+            className="text-xs px-3 py-1.5 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium disabled:opacity-50">
+            {syncing ? '⏳ Sincronizando...' : '🔄 Sincronizar Asaas'}
+          </button>
           <a href="/admin/subscriptions/relatorio"
             className="text-xs px-3 py-1.5 border border-violet-200 text-violet-700 rounded-lg hover:bg-violet-50 font-medium">
             📊 Relatório de cobranças
@@ -88,6 +138,10 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
           </div>
         </div>
       </div>
+
+      {syncMsg && (
+        <div className="px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-700">{syncMsg}</div>
+      )}
 
       {/* Busca */}
       <input type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -101,8 +155,10 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
           const status = sub?.status || 'pending'
           const { label, color } = STATUS_LABELS[status] || STATUS_LABELS.pending
           const events = eventsByClinic[clinic.id] || []
-          const cardConfirmed = events.some(e => CARD_CONFIRM_EVENTS.includes(e.event))
           const isExpanded = expanded === clinic.id
+          const cardOk = !!sub?.card_registered_at
+          const dias = daysUntil(sub?.next_charge_at)
+          const cobrancaPaga = sub?.next_charge_status === 'PAID' || (!!sub?.last_payment_at && dias != null && dias > 0)
 
           return (
             <div key={clinic.id} className="bg-white rounded-2xl border border-slate-200 p-5">
@@ -116,9 +172,13 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
                     <p className="font-semibold text-slate-800 truncate">{clinic.name}</p>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>{label}</span>
                     {sub?.checkout_sent_at && (
-                      cardConfirmed
-                        ? <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">💳 Cartão cadastrado</span>
-                        : <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">⏳ Aguardando cadastro do cartão</span>
+                      cardOk
+                        ? <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+                            💳 Cartão cadastrado{sub.card_last4 ? ` ····${sub.card_last4}` : ''}
+                          </span>
+                        : sub?.checkout_status === 'EXPIRED'
+                          ? <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">⌛ Link expirou sem cadastro</span>
+                          : <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">⏳ Aguardando cadastro do cartão</span>
                     )}
                     {!hasCnpj(clinic) && (
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700" title="Sem CNPJ/CPF cadastrado — não é possível gerar link de cobrança">
@@ -126,22 +186,60 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
                       </span>
                     )}
                   </div>
+
                   <div className="flex items-center gap-4 mt-1 flex-wrap">
                     {sub?.plan_name && (
                       <p className="text-xs text-slate-500">
-                        📦 {sub.plan_name} — R$ {sub.plan_price}/mês{sub?.payment_method && ` · ${sub.payment_method === 'PIX' ? 'Pix' : 'Cartão'}`}
+                        📦 {sub.plan_name} — {money(sub.plan_price)}/mês{sub?.payment_method && ` · ${sub.payment_method === 'PIX' ? 'Pix' : 'Cartão'}`}
                       </p>
                     )}
-                    {sub?.last_payment_at && (
-                      <p className="text-xs text-slate-500">💰 Último pagamento: {new Date(sub.last_payment_at).toLocaleDateString('pt-BR')}</p>
-                    )}
-                    {sub?.trial_ends_at && (
-                      <p className="text-xs text-blue-500">⏳ Trial até {new Date(sub.trial_ends_at).toLocaleDateString('pt-BR')}</p>
+                    {sub?.trial_ends_at && !sub?.last_payment_at && (
+                      <p className="text-xs text-blue-500">⏳ Trial até {fmtDateTime(sub.trial_ends_at)}</p>
                     )}
                     {sub?.checkout_sent_at && (
-                      <p className="text-xs text-slate-400">📤 Link enviado em {new Date(sub.checkout_sent_at).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-xs text-slate-400">📤 Link enviado em {fmtDateTime(sub.checkout_sent_at)}</p>
+                    )}
+                    {sub?.last_sync_at && (
+                      <p className="text-xs text-slate-300">🔄 Sync {new Date(sub.last_sync_at).toLocaleString('pt-BR')}</p>
                     )}
                   </div>
+
+                  {/* Linha do dinheiro — próxima e última cobrança */}
+                  {(sub?.next_charge_at || sub?.last_payment_at) && (
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {sub?.next_charge_at && (
+                        <span className={`text-xs px-2.5 py-1 rounded-lg font-medium ${
+                          sub.next_charge_status === 'OVERDUE'
+                            ? 'bg-red-50 text-red-700 border border-red-200'
+                            : dias != null && dias <= 3
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-slate-50 text-slate-700 border border-slate-200'
+                        }`}>
+                          📅 Próxima cobrança: {fmtDay(sub.next_charge_at)}
+                          {sub.next_charge_value != null && ` — ${money(sub.next_charge_value)}`}
+                          {dias != null && (dias === 0 ? ' · hoje' : dias > 0 ? ` · em ${dias}d` : ` · ${Math.abs(dias)}d atrasada`)}
+                        </span>
+                      )}
+                      {sub?.last_payment_at && (
+                        <span className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 font-medium">
+                          ✅ Última paga: {fmtDateTime(sub.last_payment_at)}
+                          {sub.last_payment_value != null && ` — ${money(sub.last_payment_value)}`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Alertas de inconsistência */}
+                  {cardOk && !sub?.next_charge_at && (
+                    <p className="text-xs text-red-600 mt-2 font-medium">
+                      ⚠️ Cartão cadastrado mas sem cobrança agendada na Asaas — rode o sync ou confira a assinatura.
+                    </p>
+                  )}
+                  {!cardOk && sub?.checkout_sent_at && !cobrancaPaga && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      Link enviado em {fmtDateTime(sub.checkout_sent_at)} e o cartão ainda não foi cadastrado.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -171,13 +269,14 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
 
               {isExpanded && events.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-slate-100">
-                  <p className="text-xs font-semibold text-slate-500 mb-2">Histórico de pagamentos</p>
+                  <p className="text-xs font-semibold text-slate-500 mb-2">Histórico de cobranças</p>
                   <div className="space-y-1.5">
                     {events.map((ev, i) => (
                       <div key={i} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
                         <span>{EVENT_LABELS[ev.event] || ev.event}</span>
                         <div className="flex items-center gap-3">
-                          {ev.value != null && <span className="text-slate-500">R$ {Number(ev.value).toFixed(2)}</span>}
+                          {ev.value != null && <span className="text-slate-500">{money(ev.value)}</span>}
+                          {ev.due_date && <span className="text-slate-400">venc. {fmtDay(ev.due_date)}</span>}
                           {ev.billing_type && <span className="text-slate-400">{ev.billing_type === 'PIX' ? 'Pix' : 'Cartão'}</span>}
                           <span className="text-slate-400">{new Date(ev.occurred_at).toLocaleString('pt-BR')}</span>
                         </div>
@@ -304,5 +403,3 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
     </div>
   )
 }
-
-
