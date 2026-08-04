@@ -110,18 +110,21 @@ export async function POST(req: Request) {
     // Log histórico — o insert do supabase-js NÃO lança erro, devolve `error`.
     // Precisa checar explicitamente, senão a falha some (foi o que aconteceu
     // com o cache de schema do PostgREST em ago/2026).
-    const { error: logErr } = await svc.from('clinic_payment_events').insert({
-      clinic_id: clinicId,
-      event,
-      asaas_payment_id: payment?.id || null,
-      asaas_subscription_id: subscriptionId || null,
-      billing_type: payment?.billingType || null,
-      value: payment?.value ?? null,
-      due_date: payment?.dueDate || null,
-      payment_status: payment?.status || null,
-      source: 'webhook',
-      raw: body,
-    })
+    const { error: logErr } = await svc.from('clinic_payment_events').upsert(
+      {
+        clinic_id: clinicId,
+        event,
+        asaas_payment_id: payment?.id || null,
+        asaas_subscription_id: subscriptionId || null,
+        billing_type: payment?.billingType || null,
+        value: payment?.value ?? null,
+        due_date: payment?.dueDate || null,
+        payment_status: payment?.status || null,
+        source: 'webhook',
+        raw: body,
+      },
+      { onConflict: 'clinic_id,asaas_payment_id,event' }
+    )
     if (logErr) console.error('[asaas-webhook] ⚠️ falha ao gravar histórico:', logErr.message)
 
     switch (event) {
