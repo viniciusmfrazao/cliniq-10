@@ -168,6 +168,10 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
           const cardOk = !!sub?.card_registered_at
           const dias = daysUntil(sub?.next_charge_at)
           const cobrancaPaga = sub?.next_charge_status === 'PAID' || (!!sub?.last_payment_at && dias != null && dias > 0)
+          // Captura recusada ainda em aberto: a Asaas recusou o cartão e não
+          // entrou pagamento depois disso.
+          const capturaRecusada = !!sub?.last_capture_refused_at &&
+            (!sub?.last_payment_at || sub.last_capture_refused_at > sub.last_payment_at)
 
           return (
             <div key={clinic.id} className="bg-white rounded-2xl border border-slate-200 p-5">
@@ -188,6 +192,12 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
                         : sub?.checkout_status === 'EXPIRED'
                           ? <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">⌛ Link expirou sem cadastro</span>
                           : <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">⏳ Aguardando cadastro do cartão</span>
+                    )}
+                    {capturaRecusada && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700"
+                        title="A Asaas tentou capturar no cartão e foi recusado. Ela ainda vai retentar até 2 dias após o vencimento.">
+                        💳❌ Captura recusada {fmtDateTime(sub.last_capture_refused_at)}
+                      </span>
                     )}
                     {!hasCnpj(clinic) && (
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700" title="Sem CNPJ/CPF cadastrado — não é possível gerar link de cobrança">

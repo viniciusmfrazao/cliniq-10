@@ -32,7 +32,7 @@ async function syncAll() {
 
   const { data: subs, error } = await svc
     .from('clinic_subscriptions')
-    .select('clinic_id, asaas_customer_id, asaas_checkout_id, asaas_subscription_id, payment_method, plan_price, clinics(name)')
+    .select('clinic_id, asaas_customer_id, asaas_checkout_id, asaas_subscription_id, payment_method, plan_price, last_capture_refused_at, clinics(name)')
     .not('asaas_customer_id', 'is', null)
 
   if (error) throw new Error(`Erro ao ler clinic_subscriptions: ${error.message}`)
@@ -99,7 +99,18 @@ async function syncAll() {
           a.confirmedDate || a.paymentDate || a.dueDate || ''
         )
       )[0]
-      const nextOpen = pending[0] || null
+
+      // Cobrança em aberto = vencida OU pendente, a mais antiga primeiro.
+      // Antes olhava só PENDING: uma clínica com cobrança vencida em 03/08 e a
+      // do ciclo seguinte em 03/09 aparecia como "próxima cobrança 03/09" e
+      // ganhava mais um mês de acesso (bug em prod, ago/2026).
+      const emAberto = [...overdue, ...pending].sort((a, b) =>
+        (a.dueDate || '').localeCompare(b.dueDate || '')
+      )
+      const nextOpen = emAberto[0] || null
+      const vencidaMaisAntiga = overdue.sort((a, b) =>
+        (a.dueDate || '').localeCompare(b.dueDate || '')
+      )[0] || null
 
       // Cartão salvo. Duas evidências, porque o checkout continua com status
       // ACTIVE mesmo depois do cliente cadastrar o cartão (confirmado em prod
@@ -147,6 +158,13 @@ async function syncAll() {
           lastPaid.confirmedDate || lastPaid.paymentDate || lastPaid.dueDate
         ).toISOString()
         patch.last_payment_value = lastPaid.value
+
+        // O webhook marca a captura recusada; se depois disso entrou pagamento
+        // e não sobrou nada vencido, o alerta já não vale mais.
+        const recusa = row.last_capture_refused_at
+        if (recusa && overdue.length === 0 && patch.last_payment_at > recusa) {
+          patch.last_capture_refused_at = null
+        }
       }
 
       const { error: upErr } = await svc
@@ -159,8 +177,11 @@ async function syncAll() {
       // carência — a cobrança no cartão é processada no dia do vencimento e
       // o webhook de confirmação pode demorar; travar a clínica exatamente na
       // data seria bloquear quem está em dia.
-      if (nextChargeAt) {
-        const limite = new Date(`${nextChargeAt}T23:59:59-03:00`)
+      // Se existe cobrança VENCIDA, o acesso é medido por ela — não pela do
+      // ciclo seguinte. Senão a inadimplente ganha mais um mês de graça.
+      const baseAcesso = vencidaMaisAntiga?.dueDate || nextChargeAt
+      if (baseAcesso) {
+        const limite = new Date(`${baseAcesso}T23:59:59-03:00`)
         limite.setDate(limite.getDate() + 5)
         await svc
           .from('clinics')
