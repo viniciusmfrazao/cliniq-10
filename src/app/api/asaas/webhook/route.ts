@@ -179,6 +179,14 @@ export async function POST(req: Request) {
         break
       }
 
+      // ⚠️ Uma tentativa de captura falhou (não é a vencida final — a Asaas
+      // ainda vai tentar de novo, até 2 dias após o vencimento). Só regista
+      // pra dar visibilidade de qual tentativa falhou; não muda status.
+      case 'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED': {
+        console.log(`[asaas-webhook] 💳❌ tentativa de captura recusada — clínica ${clinicId}`)
+        break
+      }
+
       // ⚠️ Vencido → inadimplente (ainda acessa, só aviso)
       case 'PAYMENT_OVERDUE': {
         await svc

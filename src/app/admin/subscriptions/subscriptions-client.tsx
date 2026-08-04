@@ -38,6 +38,7 @@ const EVENT_LABELS: Record<string, string> = {
   CHECKOUT_PAID: '💳 Cartão cadastrado',
   CHECKOUT_EXPIRED: '⌛ Link expirou sem cadastro',
   CHECKOUT_CANCELED: '❌ Checkout cancelado',
+  PAYMENT_CREDIT_CARD_CAPTURE_REFUSED: '💳❌ Tentativa de captura recusada',
 }
 
 /** Formata 'YYYY-MM-DD' sem passar por UTC (evita voltar um dia no BRT). */
