@@ -11,6 +11,7 @@ const NAV = [
   { href: '/admin/contratos',     icon: '📄', label: 'Contratos' },
   { href: '/admin/plans',         icon: '📦', label: 'Planos' },
   { href: '/admin/users',         icon: '👥', label: 'Usuários' },
+  { href: '/admin/importar',      icon: '📥', label: 'Importar' },
   { href: '/admin/subscriptions', icon: '💳', label: 'Assinaturas' },
   { href: '/admin/logs',          icon: '📋', label: 'Logs' },
   { href: '/admin/eva-logs',      icon: '🤖', label: 'Eva Logs' },
