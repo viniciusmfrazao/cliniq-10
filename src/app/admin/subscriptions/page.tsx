@@ -6,13 +6,17 @@ export const dynamic = 'force-dynamic'
 export default async function SubscriptionsPage() {
   const svc = createServiceClient()
 
-  const { data: clinics } = await svc
+  const { data: clinics, error: clinicsErr } = await svc
     .from('clinics')
     .select(`
       id, name, cnpj, settings, created_at, trial_ends_at, plan_expires_at, billing_whatsapp,
       clinic_subscriptions(*)
     `)
     .order('created_at', { ascending: false })
+
+  if (clinicsErr) {
+    console.error('[admin/subscriptions] erro ao buscar clinics+subscriptions:', clinicsErr)
+  }
 
   const { data: plans } = await svc
     .from('plans')
