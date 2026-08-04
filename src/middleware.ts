@@ -69,21 +69,25 @@ export async function middleware(request: NextRequest) {
   )
 
   let session = null
+  let checkFailed = false
   try {
-    // Timeout curto: se o Auth do Supabase travar/der timeout (522), não
-    // deixa o middleware travar a navegação inteira — cai no fallback de
-    // /login (o usuário só precisa recarregar/logar de novo) em vez de dar
-    // erro não tratado e a tela ficar em branco.
+    // Timeout: se o Auth do Supabase travar/der timeout (522) ou a rede do
+    // celular estiver ruim (comum no app iOS voltando de background), não
+    // trata isso como "sessão inválida". Timeout de rede != usuário deslogado.
     const result = await Promise.race([
       supabase.auth.getSession(),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('auth_timeout')), 5000)),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('auth_timeout')), 8000)),
     ])
     session = result.data.session
   } catch {
-    session = null
+    checkFailed = true
   }
 
-  if (!session) {
+  // Fail-open: só redireciona pro /login quando o Supabase respondeu de fato
+  // dizendo que não há sessão. Se a checagem falhou por timeout/rede, deixa
+  // passar — RLS no banco continua protegendo os dados independentemente
+  // desta checagem ter rodado ou não.
+  if (!session && !checkFailed) {
     const redirect = NextResponse.redirect(new URL('/login', request.url))
     redirect.headers.set('Cache-Control', 'private, no-store')
     return redirect
