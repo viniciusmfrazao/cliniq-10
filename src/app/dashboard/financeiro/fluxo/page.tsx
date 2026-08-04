@@ -32,7 +32,7 @@ export default async function FluxoPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/dashboard/financeiro" className="p-2 hover:bg-slate-100 rounded-xl transition">
+        <Link href="/dashboard/financeiro/relatorios" className="p-2 hover:bg-slate-100 rounded-xl transition">
           <Icon name="arrowLeft" className="w-5 h-5 text-slate-500" />
         </Link>
         <div>
