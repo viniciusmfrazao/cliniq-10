@@ -8,6 +8,7 @@ import {
   FORMAS_PAGAMENTO as FORMAS, BANDEIRAS_CARTAO as BANDEIRAS,
   calcPagamento, isBoleto, isCartao, type TaxaPag,
 } from '@/lib/pagamento-helpers'
+import { gerarVencimentosBoleto } from '@/lib/recebiveis'
 
 function PacienteBusca({ pacientes, onSelect }: { pacientes: { id: string; name: string }[], onSelect: (id: string) => void }) {
   const [query, setQuery] = useState('')
@@ -314,12 +315,39 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
       }
     })
 
-    const { error } = await supabase.from('entradas').insert(rows)
+    const { data: entradasInseridas, error } = await supabase.from('entradas').insert(rows).select('id')
 
     if (error) {
       alert('Erro ao salvar: ' + error.message)
       setLoading(false)
       return
+    }
+
+    // Boleto não vem "aprovado" como o cartão — gera uma linha por parcela
+    // em boleto_parcelas com o vencimento real, pra validar em Previsão
+    // de Recebimento (ao contrário do cartão, que assume recebido).
+    const parcelasBoleto = pagamentos.flatMap((p, i) => {
+      if (!isBoleto(p.forma) || !p.vencimento) return []
+      const entradaId = entradasInseridas?.[i]?.id
+      if (!entradaId) return []
+      const calc = pagamentosCalc[i]
+      const vencimentos = gerarVencimentosBoleto(p.vencimento, calc.nParcelas)
+      const valorParcela = Math.round((calc.valorLiquido / calc.nParcelas) * 100) / 100
+      const somaAteAqui = valorParcela * (calc.nParcelas - 1)
+      return vencimentos.map((venc, idx) => ({
+        clinic_id: clinicId,
+        entrada_id: entradaId,
+        numero_parcela: idx + 1,
+        total_parcelas: calc.nParcelas,
+        valor_liquido: idx === calc.nParcelas - 1 ? Math.round((calc.valorLiquido - somaAteAqui) * 100) / 100 : valorParcela,
+        vencimento: venc,
+        paciente_nome: pacienteNome || null,
+        procedimento_nome: procedimentoNome || null,
+      }))
+    })
+    if (parcelasBoleto.length > 0) {
+      const { error: errParcelas } = await supabase.from('boleto_parcelas').insert(parcelasBoleto)
+      if (errParcelas) console.error('Erro ao criar parcelas do boleto:', errParcelas)
     }
 
     router.push('/dashboard/financeiro/entradas')

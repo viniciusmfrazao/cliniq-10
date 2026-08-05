@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
+import { gerarVencimentosBoleto } from '@/lib/recebiveis'
 import SellProductModal from '@/components/vendas/sell-product-modal'
 
 type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; taxa_fixa?: number | null }
@@ -232,6 +233,27 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         }).select('id').single()
 
         if (errEntrada) { console.error('Erro ao criar entrada:', errEntrada); continue }
+
+        // Boleto não vem "aprovado" como o cartão — precisa de baixa manual
+        // depois. Gera uma linha por parcela em boleto_parcelas com o
+        // vencimento real, pra validar em Previsão de Recebimento.
+        if (s.forma === 'boleto' && s.vencimento) {
+          const vencimentos = gerarVencimentosBoleto(s.vencimento, s.parcelas)
+          const valorParcela = Math.round((liquido / s.parcelas) * 100) / 100
+          const somaAteAqui = valorParcela * (s.parcelas - 1)
+          const parcelasBoleto = vencimentos.map((venc, i) => ({
+            clinic_id: clinicId,
+            entrada_id: entradaInserida.id,
+            numero_parcela: i + 1,
+            total_parcelas: s.parcelas,
+            valor_liquido: i === s.parcelas - 1 ? Math.round((liquido - somaAteAqui) * 100) / 100 : valorParcela,
+            vencimento: venc,
+            paciente_nome: patientName,
+            procedimento_nome: procedimentoNomeCombinado,
+          }))
+          const { error: errParcelas } = await supabase.from('boleto_parcelas').insert(parcelasBoleto)
+          if (errParcelas) console.error('Erro ao criar parcelas do boleto:', errParcelas)
+        }
 
         // Detalhe por procedimento (rateio proporcional ao preço de cada procedimento
         // dentro do valor deste split de pagamento)
