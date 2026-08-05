@@ -65,6 +65,9 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
   const [boletos, setBoletos] = useState<BoletoParcela[]>([])
   const [loading, setLoading] = useState(true)
   const [marcandoId, setMarcandoId] = useState<string | null>(null)
+  const [buscaBoleto, setBuscaBoleto] = useState('')
+  const [verTodosBoletos, setVerTodosBoletos] = useState(false)
+  const [verTodosPagos, setVerTodosPagos] = useState(false)
 
   async function carregar() {
     setLoading(true)
@@ -132,15 +135,42 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
   }
 
   const hojeStr = todayBR()
-  const boletosPendentes = useMemo(
+  const limite30d = addDaysBR(hojeStr, 30)
+
+  const boletosPendentesTodos = useMemo(
     () => boletos.filter(b => b.status === 'pendente').sort((a, b) => a.vencimento.localeCompare(b.vencimento)),
     [boletos]
   )
+  // Com muitas clínicas em boleto essa lista pode crescer bastante — por
+  // padrão só mostra o que precisa de atenção agora (atrasado ou vencendo
+  // nos próximos 30 dias); o resto fica atrás de "ver todos".
+  const buscaNormalizada = buscaBoleto.trim().toLowerCase()
+  const boletosPendentesFiltrados = useMemo(() => {
+    if (!buscaNormalizada) return boletosPendentesTodos
+    return boletosPendentesTodos.filter(b =>
+      (b.paciente_nome || '').toLowerCase().includes(buscaNormalizada) ||
+      (b.procedimento_nome || '').toLowerCase().includes(buscaNormalizada)
+    )
+  }, [boletosPendentesTodos, buscaNormalizada])
+  const boletosUrgentes = useMemo(
+    () => boletosPendentesFiltrados.filter(b => b.vencimento <= limite30d),
+    [boletosPendentesFiltrados, limite30d]
+  )
+  const boletosFuturos = useMemo(
+    () => boletosPendentesFiltrados.filter(b => b.vencimento > limite30d),
+    [boletosPendentesFiltrados, limite30d]
+  )
+  const boletosPendentesVisiveis = verTodosBoletos || buscaNormalizada
+    ? boletosPendentesFiltrados
+    : boletosUrgentes
+
   const boletosPagosRecentes = useMemo(
     () => boletos.filter(b => b.status === 'pago' && (b.data_pagamento || '') >= addDaysBR(hojeStr, -60))
       .sort((a, b) => (b.data_pagamento || '').localeCompare(a.data_pagamento || '')),
     [boletos, hojeStr]
   )
+  const PAGOS_LIMITE_INICIAL = 8
+  const boletosPagosVisiveis = verTodosPagos ? boletosPagosRecentes : boletosPagosRecentes.slice(0, PAGOS_LIMITE_INICIAL)
 
   const { from, to } = useMemo(() => getRange(periodo), [periodo])
 
@@ -253,46 +283,75 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
       {/* Boletos — ao contrário do cartão, precisam de baixa manual: a linha
           real de cada parcela vem de boleto_parcelas, com status confirmado
           pela equipe, não só projetado a partir das taxas configuradas. */}
-      {!loading && boletosPendentes.length > 0 && (
+      {!loading && boletosPendentesTodos.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <p className="text-sm font-bold text-slate-900">Boletos a receber</p>
-            <p className="text-xs text-slate-400">{boletosPendentes.length} parcela{boletosPendentes.length > 1 ? 's' : ''} pendente{boletosPendentes.length > 1 ? 's' : ''}</p>
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Boletos a receber</p>
+              <p className="text-xs text-slate-400">
+                {boletosPendentesTodos.length} parcela{boletosPendentesTodos.length > 1 ? 's' : ''} pendente{boletosPendentesTodos.length > 1 ? 's' : ''}
+                {!verTodosBoletos && !buscaNormalizada && boletosFuturos.length > 0 && ` · mostrando os próximos 30 dias`}
+              </p>
+            </div>
+            <input
+              type="text"
+              value={buscaBoleto}
+              onChange={e => setBuscaBoleto(e.target.value)}
+              placeholder="Buscar paciente..."
+              className="input text-sm h-9 !w-auto min-w-[180px] py-0"
+            />
           </div>
-          <div className="divide-y divide-slate-50">
-            {boletosPendentes.map(b => {
-              const atrasado = b.vencimento < hojeStr
-              return (
-                <div key={b.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">
-                      {b.paciente_nome || 'Paciente'} · {b.numero_parcela}/{b.total_parcelas}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">{b.procedimento_nome || 'Procedimento'}</p>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-slate-900">{formatBRL(b.valor_liquido)}</p>
-                      <p className={`text-xs ${atrasado ? 'text-rose-600 font-semibold' : 'text-slate-400'}`}>
-                        {atrasado ? `Venceu em ${parseDateBR(b.vencimento)}` : `Vence em ${parseDateBR(b.vencimento)}`}
+
+          {boletosPendentesVisiveis.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-slate-400">
+              {buscaNormalizada ? 'Nenhum boleto encontrado' : 'Nenhum boleto vencendo nos próximos 30 dias'}
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {boletosPendentesVisiveis.map(b => {
+                const atrasado = b.vencimento < hojeStr
+                return (
+                  <div key={b.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">
+                        {b.paciente_nome || 'Paciente'} · {b.numero_parcela}/{b.total_parcelas}
                       </p>
+                      <p className="text-xs text-slate-500 truncate">{b.procedimento_nome || 'Procedimento'}</p>
                     </div>
-                    {atrasado && (
-                      <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">
-                        ATRASADO
-                      </span>
-                    )}
-                    <button
-                      onClick={() => marcarComoPago(b.id)}
-                      disabled={marcandoId === b.id}
-                      className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap">
-                      {marcandoId === b.id ? '...' : 'Marcar pago'}
-                    </button>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-slate-900">{formatBRL(b.valor_liquido)}</p>
+                        <p className={`text-xs ${atrasado ? 'text-rose-600 font-semibold' : 'text-slate-400'}`}>
+                          {atrasado ? `Venceu em ${parseDateBR(b.vencimento)}` : `Vence em ${parseDateBR(b.vencimento)}`}
+                        </p>
+                      </div>
+                      {atrasado && (
+                        <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">
+                          ATRASADO
+                        </span>
+                      )}
+                      <button
+                        onClick={() => marcarComoPago(b.id)}
+                        disabled={marcandoId === b.id}
+                        className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap">
+                        {marcandoId === b.id ? '...' : 'Marcar pago'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
+
+          {!buscaNormalizada && boletosFuturos.length > 0 && (
+            <button
+              onClick={() => setVerTodosBoletos(v => !v)}
+              className="w-full py-2.5 text-xs font-semibold text-violet-600 hover:bg-violet-50 border-t border-slate-100 transition-colors">
+              {verTodosBoletos
+                ? 'Mostrar só os próximos 30 dias'
+                : `Ver mais ${boletosFuturos.length} boleto${boletosFuturos.length > 1 ? 's' : ''} futuro${boletosFuturos.length > 1 ? 's' : ''}`}
+            </button>
+          )}
         </div>
       )}
 
@@ -300,9 +359,10 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
         <div className="card overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100">
             <p className="text-sm font-bold text-slate-900">Boletos pagos recentemente</p>
+            <p className="text-xs text-slate-400">últimos 60 dias</p>
           </div>
           <div className="divide-y divide-slate-50">
-            {boletosPagosRecentes.map(b => (
+            {boletosPagosVisiveis.map(b => (
               <div key={b.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-900 truncate">
@@ -324,6 +384,13 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
               </div>
             ))}
           </div>
+          {boletosPagosRecentes.length > PAGOS_LIMITE_INICIAL && (
+            <button
+              onClick={() => setVerTodosPagos(v => !v)}
+              className="w-full py-2.5 text-xs font-semibold text-violet-600 hover:bg-violet-50 border-t border-slate-100 transition-colors">
+              {verTodosPagos ? 'Mostrar menos' : `Ver mais ${boletosPagosRecentes.length - PAGOS_LIMITE_INICIAL} pagos`}
+            </button>
+          )}
         </div>
       )}
 
