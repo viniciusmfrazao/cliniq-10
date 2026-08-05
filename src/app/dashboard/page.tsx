@@ -188,7 +188,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     monthlyRevenue = entMes?.reduce((s, e) => s + (e.valor_liquido || 0), 0) || 0
     todayRevenue = entHoje?.reduce((s, e) => s + (e.valor_liquido || 0), 0) || 0
     monthlySaidas = saidas?.reduce((s, e) => s + (Number(e.valor) || 0), 0) || 0
-
   }
 
   const { data: nextAppointments } = await supabase
