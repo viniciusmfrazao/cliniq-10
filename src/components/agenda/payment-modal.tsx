@@ -7,9 +7,9 @@ import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 import SellProductModal from '@/components/vendas/sell-product-modal'
 
-type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number }
+type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; taxa_fixa?: number | null }
 type ProcItem = { id: string; name: string; price: number }
-type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; liquido: number }
+type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; taxaFixa: number; liquido: number; vencimento: string }
 type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean }
 type VendaProdutoInfo = { produtoNome: string; quantidade: number; valor: number }
 
@@ -28,8 +28,8 @@ type Props = {
   onSuccess: () => void
 }
 
-const FORMAS = ['pix', 'dinheiro', 'credito', 'debito']
-const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', credito: 'Crédito', debito: 'Débito' }
+const FORMAS = ['pix', 'dinheiro', 'credito', 'debito', 'boleto']
+const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', credito: 'Crédito', debito: 'Débito', boleto: 'Boleto' }
 
 // Mesma lista de Configurações → Taxas de Pagamento — sempre visível,
 // independente de já existir taxa configurada pra bandeira ou não.
@@ -74,7 +74,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
       // Taxas
       const { data: taxasData } = await supabase
-        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual').eq('clinic_id', clinicId)
+        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual, taxa_fixa').eq('clinic_id', clinicId)
       setTaxas(taxasData || [])
 
       // Múltiplos procedimentos
@@ -98,7 +98,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
       const total = procList.reduce((s, p) => s + p.price, 0)
       const initialValor = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : total
-      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, liquido: initialValor }])
+      setSplits([{ id: uid(), forma: 'pix', bandeira: '', valor: initialValor, parcelas: 1, taxa: 0, taxaFixa: 0, liquido: initialValor, vencimento: '' }])
 
       // Todos os procedimentos da clínica (para adicionar no pagamento)
       const { data: clinicProcsData } = await supabase
@@ -129,16 +129,30 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
     init()
   }, [appointmentId, clinicId, patientId])
 
-  function getTaxa(forma: string, bandeira: string, parcelas: number = 1) {
-    // Para crédito, monta a chave com parcelas: credito_1x, credito_2x, etc
+  // Boleto usa uma chave só ('boleto') — o parcelamento não muda a taxa,
+  // e o custo por boleto emitido fica em taxa_fixa (R$ por documento).
+  function findTaxaRow(forma: string, bandeira: string, parcelas: number = 1): Taxa | undefined {
     const formaKey = forma === 'credito' ? `credito_${parcelas}x` : forma
     return (
-      taxas.find(t => t.forma === formaKey && t.bandeira === bandeira)?.taxa_percentual ??
-      taxas.find(t => t.forma === formaKey && (t.bandeira === 'todas' || !t.bandeira))?.taxa_percentual ??
-      taxas.find(t => t.forma === forma && t.bandeira === bandeira)?.taxa_percentual ??
-      taxas.find(t => t.forma === forma && (t.bandeira === 'todas' || !t.bandeira))?.taxa_percentual ??
-      0
+      taxas.find(t => t.forma === formaKey && t.bandeira === bandeira) ??
+      taxas.find(t => t.forma === formaKey && (t.bandeira === 'todas' || !t.bandeira)) ??
+      taxas.find(t => t.forma === forma && t.bandeira === bandeira) ??
+      taxas.find(t => t.forma === forma && (t.bandeira === 'todas' || !t.bandeira))
     )
+  }
+
+  function getTaxa(forma: string, bandeira: string, parcelas: number = 1) {
+    return Number(findTaxaRow(forma, bandeira, parcelas)?.taxa_percentual) || 0
+  }
+
+  function getTaxaFixa(forma: string, bandeira: string, parcelas: number = 1) {
+    return Number(findTaxaRow(forma, bandeira, parcelas)?.taxa_fixa) || 0
+  }
+
+  // Total descontado do split: % sobre o valor + taxa fixa por boleto emitido.
+  function calcTaxaValor(s: Pick<Split, 'forma' | 'valor' | 'taxa' | 'taxaFixa' | 'parcelas'>) {
+    const fixaTotal = s.forma === 'boleto' ? s.taxaFixa * Math.max(1, s.parcelas) : 0
+    return Math.min(s.valor, Math.round((s.valor * (s.taxa / 100) + fixaTotal) * 100) / 100)
   }
 
   function updateSplit(id: string, changes: Partial<Split>) {
@@ -146,7 +160,10 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       if (s.id !== id) return s
       const u = { ...s, ...changes }
       u.taxa = getTaxa(u.forma, u.bandeira, u.parcelas)
-      u.liquido = u.valor * (1 - u.taxa / 100)
+      u.taxaFixa = getTaxaFixa(u.forma, u.bandeira, u.parcelas)
+      if (u.forma !== 'boleto') u.vencimento = ''
+      if (u.forma !== 'credito' && u.forma !== 'boleto') u.parcelas = 1
+      u.liquido = Math.round((u.valor - calcTaxaValor(u)) * 100) / 100
       return u
     }))
   }
@@ -176,7 +193,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         ? Math.max(0, baseTotal * (1 - num / 100))
         : Math.max(0, baseTotal - num)
       setSplits(prev => prev.map((s, i) =>
-        i === 0 ? { ...s, valor: novoTotal, liquido: novoTotal * (1 - s.taxa / 100) } : s
+        i === 0 ? { ...s, valor: novoTotal, liquido: Math.round((novoTotal - calcTaxaValor({ ...s, valor: novoTotal })) * 100) / 100 } : s
       ))
     }
   }
@@ -195,8 +212,11 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
       const procedimentoNomeCombinado = procs.map(p => p.name).join(' + ')
       for (const s of splits) {
         if (s.valor <= 0) continue
-        const taxa = Math.round(s.valor * s.taxa) / 100
+        const taxa = calcTaxaValor(s)
         const liquido = Math.round((s.valor - taxa) * 100) / 100
+        // Grava o % efetivo (inclui a taxa fixa do boleto) pra que
+        // valor_bruto × taxa_percentual continue batendo com valor_taxa.
+        const taxaPctEfetiva = s.valor > 0 ? Math.round((taxa / s.valor) * 1000000) / 10000 : 0
         const { data: entradaInserida, error: errEntrada } = await supabase.from('entradas').insert({
           clinic_id: clinicId, data_venda: hoje,
           paciente_id: patientId, paciente_nome: patientName,
@@ -204,9 +224,10 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
           procedimento_nome: procedimentoNomeCombinado,
           profissional_id: professionalId, profissional_nome: professionalName,
           forma_pagamento: s.forma, bandeira: s.bandeira || null,
-          valor_bruto: s.valor, taxa_percentual: s.taxa,
+          valor_bruto: s.valor, taxa_percentual: taxaPctEfetiva,
           valor_taxa: taxa, valor_liquido: liquido,
           n_parcelas: s.parcelas, observacoes: obs || null,
+          primeiro_vencimento: s.forma === 'boleto' ? (s.vencimento || null) : null,
           appointment_id: appointmentId,
         }).select('id').single()
 
@@ -495,6 +516,22 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                       </div>
                     </div>
                   )}
+                  {s.forma === 'boleto' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Parcelas</label>
+                        <select value={s.parcelas} onChange={e => updateSplit(s.id, { parcelas: parseInt(e.target.value) })} className="input w-full text-sm">
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => <option key={p} value={p}>{p}x</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Venc. 1º boleto *</label>
+                        <input type="date" value={s.vencimento}
+                          onChange={e => updateSplit(s.id, { vencimento: e.target.value })}
+                          className={`input w-full text-sm ${!s.vencimento ? 'border-amber-400' : ''}`} />
+                      </div>
+                    </div>
+                  )}
                   {s.forma === 'debito' && (
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block">Bandeira *</label>
@@ -508,13 +545,21 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                     </div>
                   )}
                   <div className="flex justify-between text-xs text-slate-500">
-                    <span>Taxa: {s.taxa}%</span>
+                    <span>
+                      Taxa: {s.taxa}%
+                      {s.forma === 'boleto' && s.taxaFixa > 0 && ` + ${fmt(s.taxaFixa)}/boleto`}
+                    </span>
                     <span className="font-medium text-emerald-600">Líquido: {fmt(s.liquido)}</span>
                   </div>
+                  {s.forma === 'boleto' && s.parcelas > 1 && s.vencimento && (
+                    <p className="text-[11px] text-slate-400">
+                      {s.parcelas}x de {fmt(s.liquido / s.parcelas)} líquidos, vencendo mês a mês a partir de {s.vencimento.split('-').reverse().join('/')}.
+                    </p>
+                  )}
                 </div>
               ))}
 
-              <button onClick={() => setSplits(p => [...p, { id: uid(), forma: 'pix', bandeira: '', valor: 0, parcelas: 1, taxa: 0, liquido: 0 }])}
+              <button onClick={() => setSplits(p => [...p, { id: uid(), forma: 'pix', bandeira: '', valor: 0, parcelas: 1, taxa: 0, taxaFixa: 0, liquido: 0, vencimento: '' }])}
                 className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-violet-300 hover:text-violet-500 transition-colors flex items-center justify-center gap-2">
                 <Icon name="plus" className="w-4 h-4" /> Adicionar forma de pagamento
               </button>
@@ -555,6 +600,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
           {splits.some(s => (s.forma === 'credito' || s.forma === 'debito') && s.valor > 0 && !s.bandeira) && (
             <p className="text-xs text-amber-600 text-center">Selecione a bandeira do cartão antes de confirmar.</p>
           )}
+          {splits.some(s => s.forma === 'boleto' && s.valor > 0 && !s.vencimento) && (
+            <p className="text-xs text-amber-600 text-center">Informe o vencimento do 1º boleto antes de confirmar.</p>
+          )}
           <div className="flex gap-3">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
               Cancelar
@@ -564,7 +612,8 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
               disabled={
                 saving || loading ||
                 splits.every(s => s.valor <= 0) ||
-                splits.some(s => (s.forma === 'credito' || s.forma === 'debito') && s.valor > 0 && !s.bandeira)
+                splits.some(s => (s.forma === 'credito' || s.forma === 'debito') && s.valor > 0 && !s.bandeira) ||
+                splits.some(s => s.forma === 'boleto' && s.valor > 0 && !s.vencimento)
               }
               className="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50 transition-all">
               {saving ? 'Salvando...' : 'Confirmar Pagamento'}

@@ -180,7 +180,7 @@ export default function DevedoresList({ debitos, pacientes, clinicId, clinicName
   useEffect(() => {
     async function loadTaxas() {
       const { data } = await supabase
-        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual').eq('clinic_id', clinicId)
+        .from('taxas_pagamento').select('forma, bandeira, taxa_percentual, taxa_fixa').eq('clinic_id', clinicId)
       setTaxas(data || [])
     }
     loadTaxas()

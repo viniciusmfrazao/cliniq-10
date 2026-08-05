@@ -12,6 +12,17 @@
 
 import { addDaysBR } from './datetime'
 
+// Soma meses mantendo o dia do mês (dia 31 → último dia do mês seguinte).
+// Boleto vence sempre no mesmo dia do mês, então a projeção anda de mês em mês,
+// e não de 30 em 30 dias corridos como o repasse de cartão.
+function addMonthsBR(base: string, months: number): string {
+  const [y, m, d] = base.slice(0, 10).split('-').map(Number)
+  const alvo = new Date(Date.UTC(y, m - 1 + months, 1))
+  const ultimoDia = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate()
+  const dia = String(Math.min(d, ultimoDia)).padStart(2, '0')
+  return `${alvo.getUTCFullYear()}-${String(alvo.getUTCMonth() + 1).padStart(2, '0')}-${dia}`
+}
+
 export type TaxaPag = {
   forma: string
   bandeira: string | null
@@ -23,6 +34,9 @@ export type TaxaPag = {
 export type EntradaParaProjecao = {
   id: string
   data_venda: string
+  // Boleto: data do 1º vencimento escolhida no lançamento. Quando presente,
+  // é a data base da projeção no lugar de data_venda.
+  primeiro_vencimento?: string | null
   paciente_nome?: string | null
   procedimento_nome?: string | null
   forma_pagamento: string
@@ -51,6 +65,7 @@ const FORMA_PARA_KEY: Record<string, string> = {
   'Crédito 4x': 'credito_4x', 'Crédito 5x': 'credito_5x', 'Crédito 6x': 'credito_6x',
   'Crédito 7x': 'credito_7x', 'Crédito 8x': 'credito_8x', 'Crédito 9x': 'credito_9x',
   'Crédito 10x': 'credito_10x', 'Crédito 11x': 'credito_11x', 'Crédito 12x': 'credito_12x',
+  'Boleto': 'boleto',
 }
 
 const BANDEIRA_PARA_KEY: Record<string, string[]> = {
@@ -70,6 +85,8 @@ export function normalizeFormaKey(formaPagamento: string, nParcelas: number): st
   const raw = (formaPagamento || '').trim()
   if (FORMA_PARA_KEY[raw]) return FORMA_PARA_KEY[raw]
   const lower = raw.toLowerCase()
+  // Boleto é uma chave só ('boleto'); o parcelamento vem em n_parcelas, não no label.
+  if (lower.startsWith('boleto')) return 'boleto'
   if (lower === 'credito' || lower === 'crédito') return `credito_${nParcelas || 1}x`
   if (/^credito_\d+x$/.test(lower)) return lower
   if (FORMAS_SIMPLES.includes(lower)) return lower
@@ -98,14 +115,17 @@ export function getPrazo(
 ): { dias: number; modo: 'fixo' | 'parcelado'; intervalo: number } {
   const formaKey = normalizeFormaKey(formaPagamento, nParcelas)
   if (!formaKey) return { dias: 30, modo: 'fixo', intervalo: 30 }
+  // Boleto: cai no dia seguinte ao vencimento, uma parcela por mês.
+  const fallback: { dias: number; modo: 'fixo' | 'parcelado'; intervalo: number } =
+    formaKey === 'boleto' ? { dias: 1, modo: 'parcelado', intervalo: 30 } : { dias: 30, modo: 'fixo', intervalo: 30 }
   const bandeiraKeys = normalizeBandeiraKeys(bandeira)
   for (const bKey of bandeiraKeys) {
     const t = taxas.find(t => t.forma === formaKey && t.bandeira === bKey)
-    if (t) return { dias: t.dias_repasse, modo: t.modo_repasse, intervalo: t.intervalo_dias_parcelas ?? 30 }
+    if (t) return { dias: t.dias_repasse, modo: t.modo_repasse, intervalo: t.intervalo_dias_parcelas ?? fallback.intervalo }
   }
   const todas = taxas.find(t => t.forma === formaKey && t.bandeira === 'todas')
-  if (todas) return { dias: todas.dias_repasse, modo: todas.modo_repasse, intervalo: todas.intervalo_dias_parcelas ?? 30 }
-  return { dias: 30, modo: 'fixo', intervalo: 30 }
+  if (todas) return { dias: todas.dias_repasse, modo: todas.modo_repasse, intervalo: todas.intervalo_dias_parcelas ?? fallback.intervalo }
+  return fallback
 }
 
 // Gera a projeção completa de parcelas (passadas e futuras) a partir de uma
@@ -119,9 +139,16 @@ export function gerarParcelas(entradas: EntradaParaProjecao[], taxas: TaxaPag[])
     const valorLiquido = Number(e.valor_liquido) || 0
     const { dias, modo, intervalo } = getPrazo(taxas, e.forma_pagamento, e.bandeira, nParcelas)
 
-    if (modo === 'fixo' || nParcelas <= 1) {
+    // Boleto: a contagem parte do 1º vencimento informado no lançamento, não da
+    // data da venda. Cartão continua partindo da data da venda.
+    const dataBase = e.primeiro_vencimento || e.data_venda
+    // Se a clínica informou o 1º vencimento e a venda foi dividida, sempre
+    // parcelamos — não depende do modo_repasse configurado.
+    const parcelado = modo === 'parcelado' || (!!e.primeiro_vencimento && nParcelas > 1)
+
+    if (!parcelado || nParcelas <= 1) {
       // Todo o valor líquido cai de uma vez, em D+dias
-      const data = addDaysBR(e.data_venda, dias)
+      const data = addDaysBR(dataBase, dias)
       geradas.push({
         key: `${e.id}-1`,
         entradaId: e.id,
@@ -140,7 +167,12 @@ export function gerarParcelas(entradas: EntradaParaProjecao[], taxas: TaxaPag[])
     // Parcelado: 1ª parcela em D+dias, demais a cada `intervalo` dias a partir da 1ª
     const valorParcela = valorLiquido / nParcelas
     for (let i = 1; i <= nParcelas; i++) {
-      const data = addDaysBR(e.data_venda, dias + (i - 1) * intervalo)
+      // Com 1º vencimento informado (boleto), cada parcela vence no mesmo dia
+      // do mês seguinte e cai `dias` depois. Sem ele (cartão), mantém o
+      // intervalo em dias corridos configurado em taxas_pagamento.
+      const data = e.primeiro_vencimento
+        ? addDaysBR(addMonthsBR(dataBase, i - 1), dias)
+        : addDaysBR(dataBase, dias + (i - 1) * intervalo)
       geradas.push({
         key: `${e.id}-${i}`,
         entradaId: e.id,

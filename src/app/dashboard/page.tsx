@@ -204,7 +204,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       const [{ data: entradasAmplo }, { data: taxas }] = await Promise.all([
         supabase
           .from('entradas')
-          .select('id, data_venda, forma_pagamento, bandeira, valor_liquido, n_parcelas')
+          .select('id, data_venda, primeiro_vencimento, forma_pagamento, bandeira, valor_liquido, n_parcelas')
           .eq('clinic_id', userData?.clinic_id)
           .gte('data_venda', dataMin),
         supabase

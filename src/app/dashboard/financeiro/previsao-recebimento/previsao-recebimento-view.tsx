@@ -67,7 +67,7 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
 
         const { data: entradas } = await supabase
           .from('entradas')
-          .select('id, data_venda, paciente_nome, procedimento_nome, forma_pagamento, bandeira, valor_liquido, n_parcelas')
+          .select('id, data_venda, primeiro_vencimento, paciente_nome, procedimento_nome, forma_pagamento, bandeira, valor_liquido, n_parcelas')
           .eq('clinic_id', clinicId)
           .gte('data_venda', dataMin)
 

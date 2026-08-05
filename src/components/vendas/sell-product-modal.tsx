@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 import { parseSupabaseError } from '@/lib/error-messages'
 import { todayBR } from '@/lib/datetime'
-import { FORMAS_PAGAMENTO, BANDEIRAS_CARTAO, getTaxaPct, type TaxaPag } from '@/lib/pagamento-helpers'
+import { FORMAS_PAGAMENTO, BANDEIRAS_CARTAO, calcPagamento, isBoleto, isCartao, type TaxaPag } from '@/lib/pagamento-helpers'
 import { useToast } from '@/components/ui/Toast'
 
 type Produto = { id: string; name: string; sale_price: number; current_stock: number }
@@ -28,6 +28,8 @@ function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 }
 
+type Pagamento = { forma: string; bandeira: string; valor: string; vencimento: string }
+
 export default function SellProductModal({ clinicId, userId, patientId, patientName, onClose, onSuccess }: Props) {
   const supabase = createClient()
   const router = useRouter()
@@ -40,8 +42,8 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
   const [taxasPagamento, setTaxasPagamento] = useState<TaxaPag[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [observacoes, setObservacoes] = useState('')
-  const [pagamentos, setPagamentos] = useState<Array<{ forma: string; bandeira: string; valor: string }>>([
-    { forma: 'Pix', bandeira: '', valor: '' }
+  const [pagamentos, setPagamentos] = useState<Array<Pagamento>>([
+    { forma: 'Pix', bandeira: '', valor: '', vencimento: '' }
   ])
 
   useEffect(() => { setMounted(true) }, [])
@@ -60,7 +62,7 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
 
       const { data: taxasData } = await supabase
         .from('taxas_pagamento')
-        .select('forma, bandeira, taxa_percentual')
+        .select('forma, bandeira, taxa_percentual, taxa_fixa')
         .eq('clinic_id', clinicId)
       setTaxasPagamento(taxasData || [])
 
@@ -107,13 +109,8 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
     })
   }
 
-  function linhaCalc(p: { forma: string; bandeira: string; valor: string }) {
-    const v = parseFloat(p.valor) || 0
-    const taxaPct = getTaxaPct(taxasPagamento, p.forma, p.bandeira)
-    const valorTaxa = v * (taxaPct / 100)
-    const valorLiquido = v - valorTaxa
-    const nParcelas = p.forma.match(/(\d+)x/) ? parseInt(p.forma.match(/(\d+)x/)![1]) : 1
-    return { v, taxaPct, valorTaxa, valorLiquido, nParcelas }
+  function linhaCalc(p: Pagamento) {
+    return calcPagamento(taxasPagamento, p.forma, p.bandeira, parseFloat(p.valor) || 0)
   }
 
   const valorTotal = cart.reduce((s, i) => s + i.sale_price * i.quantidade, 0)
@@ -125,18 +122,19 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
   const itensComEstoqueNegativo = cart.filter(i => i.quantidade > i.current_stock)
 
   function addPagamento() {
-    setPagamentos(prev => [...prev, { forma: 'Pix', bandeira: '', valor: restante > 0 ? restante.toFixed(2) : '' }])
+    setPagamentos(prev => [...prev, { forma: 'Pix', bandeira: '', valor: restante > 0 ? restante.toFixed(2) : '', vencimento: '' }])
   }
   function removePagamento(idx: number) {
     setPagamentos(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
   }
-  function updatePagamento(idx: number, patch: Partial<{ forma: string; bandeira: string; valor: string }>) {
+  function updatePagamento(idx: number, patch: Partial<Pagamento>) {
     setPagamentos(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p))
   }
 
   async function handleSubmit() {
     if (cart.length === 0) { toast.error('Adicione ao menos um produto'); return }
     if (pagamentosCalc.some(p => p.v <= 0)) { toast.error('Cada forma de pagamento precisa de um valor maior que zero'); return }
+    if (pagamentos.some(p => isBoleto(p.forma) && !p.vencimento)) { toast.error('Informe o vencimento do 1º boleto'); return }
     if (Math.abs(restante) > 0.01) {
       const ok = confirm(
         restante > 0
@@ -156,10 +154,11 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
       const calc = pagamentosCalc[i]
       return {
         forma: p.forma,
-        bandeira: (p.forma.startsWith('Crédito') || p.forma === 'Débito') ? (p.bandeira || '') : '',
+        bandeira: isCartao(p.forma) ? (p.bandeira || '') : '',
         valor: calc.v,
-        taxa_percentual: calc.taxaPct,
+        taxa_percentual: calc.taxaEfetivaPct,
         n_parcelas: calc.nParcelas,
+        primeiro_vencimento: isBoleto(p.forma) ? (p.vencimento || null) : null,
       }
     })
 
@@ -276,7 +275,8 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
 
                 <div className="space-y-3">
                   {pagamentos.map((p, idx) => {
-                    const showBandeira = p.forma.startsWith('Crédito') || p.forma === 'Débito'
+                    const showBandeira = isCartao(p.forma)
+                    const showVencimento = isBoleto(p.forma)
                     return (
                       <div key={idx} className="border border-slate-200 rounded-xl p-3 space-y-2">
                         <div className="grid grid-cols-1 gap-2">
@@ -300,9 +300,25 @@ export default function SellProductModal({ clinicId, userId, patientId, patientN
                             )}
                           </div>
                         </div>
-                        {pagamentosCalc[idx].v > 0 && pagamentosCalc[idx].taxaPct > 0 && (
+                        {showVencimento && (
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Vencimento do 1º boleto</label>
+                            <input type="date" value={p.vencimento}
+                              onChange={e => updatePagamento(idx, { vencimento: e.target.value })}
+                              className="input text-sm py-2" />
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              {pagamentosCalc[idx].nParcelas} parcela{pagamentosCalc[idx].nParcelas > 1 ? 's' : ''} vencendo mês a mês a partir dessa data.
+                            </p>
+                          </div>
+                        )}
+                        {pagamentosCalc[idx].v > 0 && pagamentosCalc[idx].valorTaxa > 0 && (
                           <p className="text-xs text-slate-500">
-                            Taxa {pagamentosCalc[idx].taxaPct}% (-{fmt(pagamentosCalc[idx].valorTaxa)}) · líquido {fmt(pagamentosCalc[idx].valorLiquido)}
+                            Taxa {pagamentosCalc[idx].taxaPct > 0 ? `${pagamentosCalc[idx].taxaPct}%` : ''}
+                            {pagamentosCalc[idx].taxaFixaTotal > 0
+                              ? `${pagamentosCalc[idx].taxaPct > 0 ? ' + ' : ''}${fmt(pagamentosCalc[idx].taxaFixaUnit)}/boleto`
+                              : ''}
+                            {' '}(-{fmt(pagamentosCalc[idx].valorTaxa)}) · líquido {fmt(pagamentosCalc[idx].valorLiquido)}
+                            {pagamentosCalc[idx].nParcelas > 1 && ` · ${pagamentosCalc[idx].nParcelas}x`}
                           </p>
                         )}
                       </div>

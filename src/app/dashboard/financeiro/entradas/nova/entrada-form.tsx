@@ -4,6 +4,10 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { normalizeText } from '@/lib/text'
+import {
+  FORMAS_PAGAMENTO as FORMAS, BANDEIRAS_CARTAO as BANDEIRAS,
+  calcPagamento, isBoleto, isCartao, type TaxaPag,
+} from '@/lib/pagamento-helpers'
 
 function PacienteBusca({ pacientes, onSelect }: { pacientes: { id: string; name: string }[], onSelect: (id: string) => void }) {
   const [query, setQuery] = useState('')
@@ -61,46 +65,7 @@ type Props = {
   userId: string
 }
 
-const FORMAS = [
-  'Pix', 'Dinheiro', 'Débito', 
-  'Crédito 1x', 'Crédito 2x', 'Crédito 3x', 'Crédito 4x', 'Crédito 5x', 'Crédito 6x',
-  'Crédito 7x', 'Crédito 8x', 'Crédito 9x', 'Crédito 10x', 'Crédito 11x', 'Crédito 12x'
-]
-
-const BANDEIRAS = ['Visa', 'Mastercard', 'Amex, Elo, outros']
-
-// Mapeamento: label do form → chave no banco (taxas_pagamento.forma)
-const FORMA_PARA_KEY: Record<string, string> = {
-  'Pix': 'pix', 'Dinheiro': 'dinheiro', 'Débito': 'debito',
-  'Crédito 1x': 'credito_1x', 'Crédito 2x': 'credito_2x', 'Crédito 3x': 'credito_3x',
-  'Crédito 4x': 'credito_4x', 'Crédito 5x': 'credito_5x', 'Crédito 6x': 'credito_6x',
-  'Crédito 7x': 'credito_7x', 'Crédito 8x': 'credito_8x', 'Crédito 9x': 'credito_9x',
-  'Crédito 10x': 'credito_10x', 'Crédito 11x': 'credito_11x', 'Crédito 12x': 'credito_12x',
-}
-
-// Mapeamento: label da bandeira → chaves candidatas no banco
-const BANDEIRA_PARA_KEY: Record<string, string[]> = {
-  'Visa': ['visa'],
-  'Mastercard': ['master'],
-  'Amex, Elo, outros': ['amex', 'elo'],
-}
-
-type TaxaPag = { forma: string; bandeira: string; taxa_percentual: number }
-
-function getTaxaPct(taxasPagamento: TaxaPag[], forma: string, bandeira: string): number {
-  const formaKey = FORMA_PARA_KEY[forma]
-  if (!formaKey || formaKey === 'pix' || formaKey === 'dinheiro') return 0
-  const bandeiraKeys = BANDEIRA_PARA_KEY[bandeira] || []
-  // 1. Tenta match específico pela bandeira selecionada
-  for (const bKey of bandeiraKeys) {
-    const t = taxasPagamento.find(t => t.forma === formaKey && t.bandeira === bKey)
-    if (t) return Number(t.taxa_percentual)
-  }
-  // 2. Fallback para 'todas' (taxa padrão sem especificação de bandeira)
-  const todas = taxasPagamento.find(t => t.forma === formaKey && t.bandeira === 'todas')
-  if (todas) return Number(todas.taxa_percentual)
-  return 0
-}
+type Pagamento = { forma: string; bandeira: string; valor: string; vencimento: string }
 
 function fmt(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
@@ -171,20 +136,15 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
   }
 
   // Pagamento: lista de linhas (permite dividir entre múltiplas formas)
-  const [pagamentos, setPagamentos] = useState<Array<{ forma: string; bandeira: string; valor: string }>>([
-    { forma: 'Pix', bandeira: '', valor: '' }
+  const [pagamentos, setPagamentos] = useState<Array<Pagamento>>([
+    { forma: 'Pix', bandeira: '', valor: '', vencimento: '' }
   ])
 
   const valorNum = parseFloat(valorBruto) || 0
   const totalQuantidade = selectedProcs.reduce((s, p) => s + p.quantidade, 0)
 
-  function linhaCalc(p: { forma: string; bandeira: string; valor: string }) {
-    const v = parseFloat(p.valor) || 0
-    const taxaPct = getTaxaPct(taxasPagamento, p.forma, p.bandeira)
-    const valorTaxa = v * (taxaPct / 100)
-    const valorLiquido = v - valorTaxa
-    const nParcelas = p.forma.match(/(\d+)x/) ? parseInt(p.forma.match(/(\d+)x/)![1]) : 1
-    return { v, taxaPct, valorTaxa, valorLiquido, nParcelas }
+  function linhaCalc(p: Pagamento) {
+    return calcPagamento(taxasPagamento, p.forma, p.bandeira, parseFloat(p.valor) || 0)
   }
 
   const pagamentosCalc = pagamentos.map(linhaCalc)
@@ -194,14 +154,14 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
   const valorLiquidoTotal = pagamentosCalc.reduce((s, p) => s + p.valorLiquido, 0)
 
   function addPagamento() {
-    setPagamentos(prev => [...prev, { forma: 'Pix', bandeira: '', valor: restante > 0 ? restante.toFixed(2) : '' }])
+    setPagamentos(prev => [...prev, { forma: 'Pix', bandeira: '', valor: restante > 0 ? restante.toFixed(2) : '', vencimento: '' }])
   }
 
   function removePagamento(idx: number) {
     setPagamentos(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
   }
 
-  function updatePagamento(idx: number, patch: Partial<{ forma: string; bandeira: string; valor: string }>) {
+  function updatePagamento(idx: number, patch: Partial<Pagamento>) {
     setPagamentos(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p))
   }
 
@@ -287,12 +247,13 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
         const calc = pagamentosCalc[i]
         return {
           forma: p.forma,
-          bandeira: (p.forma.startsWith('Crédito') || p.forma === 'Débito') ? (p.bandeira || '') : '',
+          bandeira: isCartao(p.forma) ? (p.bandeira || '') : '',
           valor: calc.v,
-          taxa_percentual: calc.taxaPct,
+          taxa_percentual: calc.taxaEfetivaPct,
           valor_taxa: calc.valorTaxa,
           valor_liquido: calc.valorLiquido,
           n_parcelas: calc.nParcelas,
+          primeiro_vencimento: isBoleto(p.forma) ? (p.vencimento || null) : null,
         }
       })
 
@@ -343,12 +304,13 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
       return {
         ...baseRow,
         forma_pagamento: p.forma,
-        bandeira: (p.forma.startsWith('Crédito') || p.forma === 'Débito') ? (p.bandeira || null) : null,
+        bandeira: isCartao(p.forma) ? (p.bandeira || null) : null,
         valor_bruto: calc.v,
-        taxa_percentual: calc.taxaPct,
+        taxa_percentual: calc.taxaEfetivaPct,
         valor_taxa: calc.valorTaxa,
         valor_liquido: calc.valorLiquido,
         n_parcelas: calc.nParcelas,
+        primeiro_vencimento: isBoleto(p.forma) ? (p.vencimento || null) : null,
       }
     })
 
@@ -576,7 +538,8 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
 
         <div className="space-y-3">
           {pagamentos.map((p, idx) => {
-            const showBandeiraLinha = p.forma.startsWith('Crédito') || p.forma === 'Débito'
+            const showBandeiraLinha = isCartao(p.forma)
+            const showVencimento = isBoleto(p.forma)
             return (
               <div key={idx} className="border border-slate-200 rounded-xl p-3 space-y-3">
                 <div className={`grid gap-3 ${showBandeiraLinha ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
@@ -623,9 +586,32 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
                     )}
                   </div>
                 </div>
-                {pagamentosCalc[idx].v > 0 && pagamentosCalc[idx].taxaPct > 0 && (
+
+                {showVencimento && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Vencimento do 1º boleto
+                    </label>
+                    <input
+                      type="date"
+                      value={p.vencimento}
+                      onChange={e => updatePagamento(idx, { vencimento: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      As {pagamentosCalc[idx].nParcelas} parcelas vencem mês a mês a partir dessa data.
+                    </p>
+                  </div>
+                )}
+
+                {pagamentosCalc[idx].v > 0 && pagamentosCalc[idx].valorTaxa > 0 && (
                   <p className="text-xs text-slate-500">
-                    Taxa {pagamentosCalc[idx].taxaPct}% (-{fmt(pagamentosCalc[idx].valorTaxa)}) · líquido {fmt(pagamentosCalc[idx].valorLiquido)}
+                    Taxa {pagamentosCalc[idx].taxaPct > 0 ? `${pagamentosCalc[idx].taxaPct}%` : ''}
+                    {pagamentosCalc[idx].taxaFixaTotal > 0
+                      ? `${pagamentosCalc[idx].taxaPct > 0 ? ' + ' : ''}${fmt(pagamentosCalc[idx].taxaFixaUnit)}/boleto`
+                      : ''}
+                    {' '}(-{fmt(pagamentosCalc[idx].valorTaxa)}) · líquido {fmt(pagamentosCalc[idx].valorLiquido)}
                     {pagamentosCalc[idx].nParcelas > 1 && ` · ${pagamentosCalc[idx].nParcelas}x`}
                   </p>
                 )}
