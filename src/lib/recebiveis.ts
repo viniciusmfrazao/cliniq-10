@@ -15,7 +15,7 @@ import { addDaysBR } from './datetime'
 // Soma meses mantendo o dia do mês (dia 31 → último dia do mês seguinte).
 // Boleto vence sempre no mesmo dia do mês, então a projeção anda de mês em mês,
 // e não de 30 em 30 dias corridos como o repasse de cartão.
-function addMonthsBR(base: string, months: number): string {
+export function addMonthsBR(base: string, months: number): string {
   const [y, m, d] = base.slice(0, 10).split('-').map(Number)
   const alvo = new Date(Date.UTC(y, m - 1 + months, 1))
   const ultimoDia = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate()
@@ -189,4 +189,13 @@ export function gerarParcelas(entradas: EntradaParaProjecao[], taxas: TaxaPag[])
   }
 
   return geradas
+}
+
+// Gera as datas de vencimento de todas as parcelas de um boleto a partir do
+// 1º vencimento (mesma regra usada em gerarParcelas: dia fixo, mês a mês).
+// Usado tanto pra criar as linhas em `boleto_parcelas` no lançamento quanto
+// por qualquer tela que precise pré-visualizar as datas antes de salvar.
+export function gerarVencimentosBoleto(primeiroVencimento: string, nParcelas: number): string[] {
+  const n = Math.max(1, nParcelas || 1)
+  return Array.from({ length: n }, (_, i) => addMonthsBR(primeiroVencimento, i))
 }

@@ -43,44 +43,104 @@ function getRange(periodo: string): { from: string; to: string | null } {
   return { from: hoje, to: null }
 }
 
+type BoletoParcela = {
+  id: string
+  entrada_id: string
+  numero_parcela: number
+  total_parcelas: number
+  valor_liquido: number
+  vencimento: string
+  status: 'pendente' | 'pago'
+  data_pagamento: string | null
+  paciente_nome: string | null
+  procedimento_nome: string | null
+}
+
 export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string }) {
   const supabase = createClient()
 
   const [periodo, setPeriodo] = useState('proximos_30')
   const [groupBy, setGroupBy] = useState<'mes' | 'forma' | 'dia'>('mes')
   const [parcelas, setParcelas] = useState<ReturnType<typeof gerarParcelas>>([])
+  const [boletos, setBoletos] = useState<BoletoParcela[]>([])
   const [loading, setLoading] = useState(true)
+  const [marcandoId, setMarcandoId] = useState<string | null>(null)
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true)
-      try {
-        const { data: taxas } = await supabase
-          .from('taxas_pagamento')
-          .select('forma, bandeira, dias_repasse, modo_repasse, intervalo_dias_parcelas')
-          .eq('clinic_id', clinicId)
+  async function carregar() {
+    setLoading(true)
+    try {
+      const { data: taxas } = await supabase
+        .from('taxas_pagamento')
+        .select('forma, bandeira, dias_repasse, modo_repasse, intervalo_dias_parcelas')
+        .eq('clinic_id', clinicId)
 
-        // Vendas parceladas podem levar até 12 parcelas de ~30 dias para
-        // quitar — olhamos 12 meses para trás pra pegar tudo que ainda pode
-        // ter parcela futura em aberto.
-        const dataMin = addDaysBR(todayBR(), -365)
+      // Vendas parceladas podem levar até 12 parcelas de ~30 dias para
+      // quitar — olhamos 12 meses para trás pra pegar tudo que ainda pode
+      // ter parcela futura em aberto.
+      const dataMin = addDaysBR(todayBR(), -365)
 
-        const { data: entradas } = await supabase
-          .from('entradas')
-          .select('id, data_venda, primeiro_vencimento, paciente_nome, procedimento_nome, forma_pagamento, bandeira, valor_liquido, n_parcelas')
-          .eq('clinic_id', clinicId)
-          .gte('data_venda', dataMin)
+      const { data: entradas } = await supabase
+        .from('entradas')
+        .select('id, data_venda, primeiro_vencimento, paciente_nome, procedimento_nome, forma_pagamento, bandeira, valor_liquido, n_parcelas')
+        .eq('clinic_id', clinicId)
+        .gte('data_venda', dataMin)
 
-        const hoje = todayBR()
-        const geradas = gerarParcelas((entradas || []) as any[], (taxas || []) as TaxaPag[])
-          .filter(p => p.data >= hoje)
-        geradas.sort((a, b) => a.data.localeCompare(b.data))
-        setParcelas(geradas)
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [clinicId])
+      // Boleto não vem "aprovado" como o cartão — só sabemos se o dinheiro
+      // realmente entrou quando alguém dá baixa manual aqui. Por isso o
+      // boleto tem uma linha real por parcela (com status), diferente do
+      // cartão, que é só projetado a partir das taxas configuradas.
+      const { data: boletoParcelas } = await supabase
+        .from('boleto_parcelas')
+        .select('id, entrada_id, numero_parcela, total_parcelas, valor_liquido, vencimento, status, data_pagamento, paciente_nome, procedimento_nome')
+        .eq('clinic_id', clinicId)
+        .order('vencimento', { ascending: true })
+
+      const hoje = todayBR()
+      const geradas = gerarParcelas((entradas || []) as any[], (taxas || []) as TaxaPag[])
+        .filter(p => p.data >= hoje)
+      geradas.sort((a, b) => a.data.localeCompare(b.data))
+      setParcelas(geradas)
+      setBoletos((boletoParcelas || []) as BoletoParcela[])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { carregar() }, [clinicId])
+
+  async function marcarComoPago(id: string) {
+    setMarcandoId(id)
+    const hoje = todayBR()
+    const { error } = await supabase
+      .from('boleto_parcelas')
+      .update({ status: 'pago', data_pagamento: hoje, updated_at: new Date().toISOString() })
+      .eq('id', id)
+    setMarcandoId(null)
+    if (error) { alert('Erro ao marcar como pago: ' + error.message); return }
+    setBoletos(prev => prev.map(b => b.id === id ? { ...b, status: 'pago', data_pagamento: hoje } : b))
+  }
+
+  async function desfazerPagamento(id: string) {
+    setMarcandoId(id)
+    const { error } = await supabase
+      .from('boleto_parcelas')
+      .update({ status: 'pendente', data_pagamento: null, updated_at: new Date().toISOString() })
+      .eq('id', id)
+    setMarcandoId(null)
+    if (error) { alert('Erro ao desfazer: ' + error.message); return }
+    setBoletos(prev => prev.map(b => b.id === id ? { ...b, status: 'pendente', data_pagamento: null } : b))
+  }
+
+  const hojeStr = todayBR()
+  const boletosPendentes = useMemo(
+    () => boletos.filter(b => b.status === 'pendente').sort((a, b) => a.vencimento.localeCompare(b.vencimento)),
+    [boletos]
+  )
+  const boletosPagosRecentes = useMemo(
+    () => boletos.filter(b => b.status === 'pago' && (b.data_pagamento || '') >= addDaysBR(hojeStr, -60))
+      .sort((a, b) => (b.data_pagamento || '').localeCompare(a.data_pagamento || '')),
+    [boletos, hojeStr]
+  )
 
   const { from, to } = useMemo(() => getRange(periodo), [periodo])
 
@@ -186,6 +246,83 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Boletos — ao contrário do cartão, precisam de baixa manual: a linha
+          real de cada parcela vem de boleto_parcelas, com status confirmado
+          pela equipe, não só projetado a partir das taxas configuradas. */}
+      {!loading && boletosPendentes.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <p className="text-sm font-bold text-slate-900">Boletos a receber</p>
+            <p className="text-xs text-slate-400">{boletosPendentes.length} parcela{boletosPendentes.length > 1 ? 's' : ''} pendente{boletosPendentes.length > 1 ? 's' : ''}</p>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {boletosPendentes.map(b => {
+              const atrasado = b.vencimento < hojeStr
+              return (
+                <div key={b.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">
+                      {b.paciente_nome || 'Paciente'} · {b.numero_parcela}/{b.total_parcelas}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">{b.procedimento_nome || 'Procedimento'}</p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-slate-900">{formatBRL(b.valor_liquido)}</p>
+                      <p className={`text-xs ${atrasado ? 'text-rose-600 font-semibold' : 'text-slate-400'}`}>
+                        {atrasado ? `Venceu em ${parseDateBR(b.vencimento)}` : `Vence em ${parseDateBR(b.vencimento)}`}
+                      </p>
+                    </div>
+                    {atrasado && (
+                      <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">
+                        ATRASADO
+                      </span>
+                    )}
+                    <button
+                      onClick={() => marcarComoPago(b.id)}
+                      disabled={marcandoId === b.id}
+                      className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap">
+                      {marcandoId === b.id ? '...' : 'Marcar pago'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {!loading && boletosPagosRecentes.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100">
+            <p className="text-sm font-bold text-slate-900">Boletos pagos recentemente</p>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {boletosPagosRecentes.map(b => (
+              <div key={b.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-900 truncate">
+                    {b.paciente_nome || 'Paciente'} · {b.numero_parcela}/{b.total_parcelas}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">
+                    {b.procedimento_nome || 'Procedimento'} · pago em {b.data_pagamento ? parseDateBR(b.data_pagamento) : '—'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <p className="text-sm font-semibold text-emerald-600">{formatBRL(b.valor_liquido)}</p>
+                  <button
+                    onClick={() => desfazerPagamento(b.id)}
+                    disabled={marcandoId === b.id}
+                    className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors whitespace-nowrap">
+                    Desfazer
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
