@@ -99,7 +99,7 @@ function NewPackageModal({
 }) {
   const [form, setForm] = useState({
     name: '',
-    total_sessions: 3,
+    total_sessions: '3',
     price_total: '',
     procedure_id: '',
     sold_at: new Date().toISOString().split('T')[0],
@@ -111,7 +111,8 @@ function NewPackageModal({
 
   async function handleSubmit() {
     if (!form.name.trim()) { setError('Nome do pacote é obrigatório.'); return }
-    if (form.total_sessions < 1) { setError('Mínimo 1 sessão.'); return }
+    const totalSessoes = Math.min(Math.max(parseInt(form.total_sessions, 10) || 0, 0), 100)
+    if (totalSessoes < 1) { setError('Mínimo 1 sessão.'); return }
     setError('')
 
     startSaving(async () => {
@@ -122,7 +123,7 @@ function NewPackageModal({
           clinic_id: clinicId,
           patient_id: patientId,
           name: form.name.trim(),
-          total_sessions: form.total_sessions,
+          total_sessions: totalSessoes,
           price_total: form.price_total ? parseFloat(form.price_total) : null,
           procedure_id: form.procedure_id || null,
           sold_at: form.sold_at,
@@ -167,9 +168,19 @@ function NewPackageModal({
                 type="number"
                 min={1}
                 max={100}
+                inputMode="numeric"
                 className="input"
                 value={form.total_sessions}
-                onChange={e => setForm(f => ({ ...f, total_sessions: parseInt(e.target.value) || 1 }))}
+                onFocus={e => e.target.select()}
+                onChange={e => {
+                  const v = e.target.value
+                  if (v === '' || /^\d{1,3}$/.test(v)) setForm(f => ({ ...f, total_sessions: v }))
+                }}
+                onBlur={e => {
+                  const n = parseInt(e.target.value, 10)
+                  const clamped = isNaN(n) ? 1 : Math.min(Math.max(n, 1), 100)
+                  setForm(f => ({ ...f, total_sessions: String(clamped) }))
+                }}
               />
             </div>
             <div>

@@ -99,7 +99,7 @@ export default function AppointmentForm({
 
   // Estado do pacote a criar no agendamento
   const [isPackage, setIsPackage] = useState(false)
-  const [packageForm, setPackageForm] = useState({ name: '', total_sessions: 3, price_total: '' })
+  const [packageForm, setPackageForm] = useState({ name: '', total_sessions: '3', price_total: '' })
 
   // Pré-preenche nome do pacote com o procedimento selecionado
   useEffect(() => {
@@ -297,7 +297,7 @@ export default function AppointmentForm({
           clinic_id: clinicId,
           patient_id: form.patient_id,
           name: packageForm.name.trim(),
-          total_sessions: packageForm.total_sessions,
+          total_sessions: Math.min(Math.max(parseInt(packageForm.total_sessions, 10) || 1, 1), 100),
           price_total: packageForm.price_total ? parseFloat(packageForm.price_total) : null,
           procedure_id: selectedProcedures[0] || null,
           sold_at: form.date,
@@ -638,10 +638,19 @@ export default function AppointmentForm({
                 <div>
                   <label className="text-xs font-medium text-slate-600 mb-1 block">Total de sessões *</label>
                   <input
-                    type="number" min={1} max={100}
+                    type="number" min={1} max={100} inputMode="numeric"
                     className="input"
                     value={packageForm.total_sessions}
-                    onChange={e => setPackageForm(f => ({ ...f, total_sessions: parseInt(e.target.value) || 1 }))}
+                    onFocus={e => e.target.select()}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (v === '' || /^\d{1,3}$/.test(v)) setPackageForm(f => ({ ...f, total_sessions: v }))
+                    }}
+                    onBlur={e => {
+                      const n = parseInt(e.target.value, 10)
+                      const clamped = isNaN(n) ? 1 : Math.min(Math.max(n, 1), 100)
+                      setPackageForm(f => ({ ...f, total_sessions: String(clamped) }))
+                    }}
                   />
                 </div>
                 <div>
