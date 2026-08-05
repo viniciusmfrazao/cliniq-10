@@ -47,10 +47,42 @@ export default async function FinanceiroPage({
 
   const { data: entradasMes } = await supabase
     .from('entradas')
-    .select('valor_bruto, valor_liquido')
+    .select('id, valor_bruto, valor_liquido, forma_pagamento')
     .eq('clinic_id', clinicId)
     .gte('data_venda', startOfMonth)
     .lte('data_venda', endOfMonth)
+
+  // "Resultado (caixa)" precisa ser dinheiro de verdade, não venda registrada.
+  // Cartão/pix/dinheiro continuam contados no dia da venda (como sempre foi —
+  // repasse do cartão é praticamente garantido). Boleto é diferente: o
+  // paciente pode não pagar, então só entra aqui quando a parcela é
+  // confirmada via boleto_parcelas — no mês em que a baixa foi dada, não no
+  // mês da venda.
+  const { data: boletosPagosNoMes } = isOwnScope
+    ? { data: [] as { valor_liquido: number }[] }
+    : await supabase
+        .from('boleto_parcelas')
+        .select('valor_liquido')
+        .eq('clinic_id', clinicId)
+        .eq('status', 'pago')
+        .gte('data_pagamento', startOfMonth)
+        .lte('data_pagamento', endOfMonth)
+
+  // Quanto dos boletos vendidos este mês ainda falta confirmar — mostrado
+  // como nota no card, pra não parecer que o valor "sumiu" do resultado.
+  // Precisa olhar as parcelas reais (não o valor da venda): parte já pode
+  // ter sido paga mesmo dentro do mesmo mês da venda.
+  const entradaIdsBoletoMes = (entradasMes || [])
+    .filter(e => (e.forma_pagamento || '').toLowerCase().startsWith('boleto'))
+    .map(e => e.id)
+  const { data: parcelasPendentesDesteMes } = (isOwnScope || entradaIdsBoletoMes.length === 0)
+    ? { data: [] as { valor_liquido: number }[] }
+    : await supabase
+        .from('boleto_parcelas')
+        .select('valor_liquido')
+        .eq('status', 'pendente')
+        .in('entrada_id', entradaIdsBoletoMes)
+  const boletoPendenteMes = (parcelasPendentesDesteMes || []).reduce((s, p) => s + Number(p.valor_liquido || 0), 0)
 
   // Saídas do mês: apenas pagas (pago=true) até hoje — exclui futuros agendados
   // (escopo 'own' não vê saídas — RLS já bloqueia, então nem consultamos)
@@ -87,7 +119,12 @@ export default async function FinanceiroPage({
   const receitaMes    = entradasMes?.reduce((s, e)  => s + Number(e.valor_bruto  || 0), 0) || 0
   const liquidoMes    = entradasMes?.reduce((s, e)  => s + Number(e.valor_liquido|| 0), 0) || 0
   const despesasMes   = saidasMes?.reduce((s, d)    => s + Number(d.valor        || 0), 0) || 0
-  const resultadoMes  = liquidoMes - despesasMes
+  const liquidoMesNaoBoleto = (entradasMes || [])
+    .filter(e => !(e.forma_pagamento || '').toLowerCase().startsWith('boleto'))
+    .reduce((s, e) => s + Number(e.valor_liquido || 0), 0)
+  const boletoRecebidoMes = (boletosPagosNoMes || []).reduce((s, b) => s + Number(b.valor_liquido || 0), 0)
+  const liquidoMesCaixa = liquidoMesNaoBoleto + boletoRecebidoMes
+  const resultadoMes  = liquidoMesCaixa - despesasMes
   const ticketMedio   = entradasMes?.length ? liquidoMes / entradasMes.length : 0
 
   const mesLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
@@ -234,6 +271,11 @@ export default async function FinanceiroPage({
               <span className="hidden md:inline">{fmt(resultadoMes)}</span>
             </p>
             <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado (caixa)</p>
+            {boletoPendenteMes > 0 && (
+              <p className="text-[11px] text-slate-500 mt-1 truncate" title={`${fmt(boletoPendenteMes)} em boletos deste mês ainda sem confirmação de pagamento`}>
+                + {fmt(boletoPendenteMes)} em boleto ainda não confirmado
+              </p>
+            )}
           </div>
         )}
       </div>
