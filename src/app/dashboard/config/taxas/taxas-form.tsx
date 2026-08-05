@@ -9,16 +9,17 @@ type Taxa = {
   forma: string
   bandeira: string
   taxa_percentual: number
+  taxa_fixa: number | null
   dias_repasse: number | null
   modo_repasse: 'fixo' | 'parcelado' | null
 }
 
-type Config = { taxa: number; dias: number; modo: 'fixo' | 'parcelado' }
+type Config = { taxa: number; taxaFixa: number; dias: number; modo: 'fixo' | 'parcelado' }
 
 const FORMAS = [
   { key: 'pix', label: 'Pix', parcelavel: false },
   { key: 'dinheiro', label: 'Dinheiro', parcelavel: false },
-  { key: 'boleto', label: 'Boleto', parcelavel: false },
+  { key: 'boleto', label: 'Boleto', parcelavel: false, boleto: true },
   { key: 'debito', label: 'Débito', parcelavel: false },
   { key: 'credito_1x', label: 'Crédito 1x', parcelavel: true, n: 1 },
   { key: 'credito_2x', label: 'Crédito 2x', parcelavel: true, n: 2 },
@@ -61,12 +62,20 @@ const DIAS_PRESETS = [
 ]
 
 function defaultConfig(forma: string): Config {
-  if (forma === 'pix' || forma === 'dinheiro' || forma === 'boleto') return { taxa: 0, dias: 0, modo: 'fixo' }
-  if (forma === 'debito') return { taxa: 0, dias: 1, modo: 'fixo' }
-  return { taxa: 0, dias: 30, modo: 'parcelado' } // crédito
+  // Boleto: o parcelamento e a data do 1º vencimento vêm do lançamento; aqui só
+  // se configura em quantos dias após o vencimento o dinheiro cai no caixa.
+  if (forma === 'boleto') return { taxa: 0, taxaFixa: 0, dias: 1, modo: 'parcelado' }
+  if (forma === 'pix' || forma === 'dinheiro') return { taxa: 0, taxaFixa: 0, dias: 0, modo: 'fixo' }
+  if (forma === 'debito') return { taxa: 0, taxaFixa: 0, dias: 1, modo: 'fixo' }
+  return { taxa: 0, taxaFixa: 0, dias: 30, modo: 'parcelado' } // crédito
 }
 
-function prazoResumo(c: Config, n: number): string {
+function prazoResumo(c: Config, n: number, boleto = false): string {
+  if (boleto) {
+    return c.dias === 0
+      ? 'Cai no dia do vencimento'
+      : `Cai ${c.dias} dia${c.dias > 1 ? 's' : ''} após cada vencimento`
+  }
   if (c.dias === 0 && c.modo === 'fixo') return 'Recebe na hora'
   if (c.modo === 'parcelado' && n > 1) {
     const ultima = 30 + (n - 1) * 30
@@ -81,7 +90,7 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
   const [configs, setConfigs] = useState<Record<string, Config>>(
     Object.fromEntries(initialTaxas.map(t => [
       `${t.forma}__${t.bandeira}`,
-      { taxa: t.taxa_percentual, dias: t.dias_repasse ?? defaultConfig(t.forma).dias, modo: t.modo_repasse ?? defaultConfig(t.forma).modo },
+      { taxa: t.taxa_percentual, taxaFixa: Number(t.taxa_fixa) || 0, dias: t.dias_repasse ?? defaultConfig(t.forma).dias, modo: t.modo_repasse ?? defaultConfig(t.forma).modo },
     ]))
   )
   const [bandeira, setBandeira] = useState('todas')
@@ -90,7 +99,7 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
 
   // Modal
   const [modalForma, setModalForma] = useState<string | null>(null)
-  const [draft, setDraft] = useState<Config>({ taxa: 0, dias: 30, modo: 'parcelado' })
+  const [draft, setDraft] = useState<Config>({ taxa: 0, taxaFixa: 0, dias: 30, modo: 'parcelado' })
 
   function getConfig(formaKey: string): Config {
     const proprio = configs[`${formaKey}__${bandeira}`]
@@ -116,6 +125,7 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
         forma: formaKey,
         bandeira,
         taxa_percentual: cfg.taxa,
+        taxa_fixa: cfg.taxaFixa,
         dias_repasse: cfg.dias,
         modo_repasse: cfg.modo,
       }, { onConflict: 'clinic_id,forma,bandeira' })
@@ -211,10 +221,14 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
                 )}
               </div>
               <div className={`text-sm ${configurado ? (usandoPadrao ? 'text-slate-500' : 'text-slate-900 font-semibold') : 'text-slate-300'}`}>
-                {configurado ? `${efetivo!.taxa}%` : '—'}
+                {configurado
+                  ? (efetivo!.taxaFixa > 0
+                      ? `${efetivo!.taxa}% + R$ ${efetivo!.taxaFixa.toFixed(2)}`
+                      : `${efetivo!.taxa}%`)
+                  : '—'}
               </div>
               <div className={`hidden sm:block text-xs ${configurado ? 'text-slate-500' : 'text-slate-300'}`}>
-                {configurado ? prazoResumo(efetivo!, (forma as any).n || 1) : 'Não configurado'}
+                {configurado ? prazoResumo(efetivo!, (forma as any).n || 1, !!(forma as any).boleto) : 'Não configurado'}
               </div>
               <Icon name="edit" className="w-4 h-4 text-slate-300 justify-self-end" />
             </button>
@@ -292,7 +306,7 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
 
               <div>
                 <label className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
-                  Você recebe em:
+                  {(modalFormaObj as any).boleto ? 'Após o vencimento, você recebe em:' : 'Você recebe em:'}
                   <span title="Dias corridos até o valor entrar no seu financeiro.">
                     <Icon name="info" className="w-3.5 h-3.5 text-slate-400" />
                   </span>
@@ -309,11 +323,15 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
                       CONFORME PARCELAS
                     </button>
                   )}
-                  {DIAS_PRESETS.map(p => (
+                  {DIAS_PRESETS.filter(p => !(modalFormaObj as any).boleto || p.dias <= 7).map(p => (
                     <button key={p.dias}
-                      onClick={() => setDraft(d => ({ ...d, modo: 'fixo', dias: p.dias }))}
+                      onClick={() => setDraft(d => ({
+                        ...d,
+                        modo: (modalFormaObj as any).boleto ? 'parcelado' : 'fixo',
+                        dias: p.dias,
+                      }))}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                        draft.modo === 'fixo' && draft.dias === p.dias
+                        draft.dias === p.dias && (draft.modo === 'fixo' || (modalFormaObj as any).boleto)
                           ? 'bg-slate-800 border-slate-800 text-white'
                           : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                       }`}>
@@ -322,13 +340,19 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
                   ))}
                 </div>
 
+                {(modalFormaObj as any).boleto && (
+                  <p className="text-sm text-blue-600 mt-3">
+                    O número de parcelas e a data do 1º vencimento são escolhidos na hora do lançamento.
+                    Cada parcela entra no caixa {draft.dias === 0 ? 'no próprio dia do vencimento' : `${draft.dias} dia${draft.dias > 1 ? 's' : ''} depois de vencer`}.
+                  </p>
+                )}
                 {draft.modo === 'parcelado' && modalFormaObj.parcelavel && (
                   <p className="text-sm text-blue-600 mt-3">
                     Com esta opção, a primeira parcela cairá no financeiro em 30 dias, a segunda em 60 dias e assim por diante
                     {(modalFormaObj as any).n > 2 ? `, até a ${(modalFormaObj as any).n}ª em ${30 * (modalFormaObj as any).n} dias.` : '.'}
                   </p>
                 )}
-                {draft.modo === 'fixo' && (
+                {draft.modo === 'fixo' && !(modalFormaObj as any).boleto && (
                   <p className="text-sm text-slate-500 mt-3">
                     {draft.dias === 0
                       ? 'O valor cheio cai no financeiro no mesmo dia da venda.'
@@ -352,6 +376,25 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
                   )}
                 </div>
               </div>
+
+              {(modalFormaObj as any).boleto && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Taxa fixa por boleto (R$)</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500">R$</span>
+                    <input
+                      type="number" min={0} step={0.01}
+                      value={draft.taxaFixa}
+                      onChange={e => setDraft(d => ({ ...d, taxaFixa: parseFloat(e.target.value) || 0 }))}
+                      className="input w-28 text-center"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1.5">
+                    Cobrada por boleto emitido — numa venda em 10x, é descontada 10 vezes.
+                    Deixe 0 se o banco não cobra por boleto.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100">

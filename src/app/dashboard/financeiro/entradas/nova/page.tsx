@@ -36,7 +36,7 @@ export default async function NovaEntradaPage() {
 
   const { data: taxasPagamento } = await supabase
     .from('taxas_pagamento')
-    .select('forma, bandeira, taxa_percentual')
+    .select('forma, bandeira, taxa_percentual, taxa_fixa')
     .eq('clinic_id', clinicId)
 
   const { data: produtos } = await supabase
