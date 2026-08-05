@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import ToastProvider from '@/components/ui/Toast'
 
 const NAV = [
   { href: '/admin',               icon: '📊', label: 'Dashboard' },
@@ -11,6 +12,7 @@ const NAV = [
   { href: '/admin/contratos',     icon: '📄', label: 'Contratos' },
   { href: '/admin/plans',         icon: '📦', label: 'Planos' },
   { href: '/admin/users',         icon: '👥', label: 'Usuários' },
+  { href: '/admin/importar',      icon: '📥', label: 'Importar' },
   { href: '/admin/subscriptions', icon: '💳', label: 'Assinaturas' },
   { href: '/admin/logs',          icon: '📋', label: 'Logs' },
   { href: '/admin/eva-logs',      icon: '🤖', label: 'Eva Logs' },
@@ -59,6 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
+    <ToastProvider>
     <div className="h-screen bg-slate-100 dark:bg-slate-900 flex flex-col overflow-hidden">
 
       {/* Top Bar — padding-top respeita safe area do iPhone (notch/Dynamic Island) */}
@@ -137,5 +140,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
     </div>
+    </ToastProvider>
   )
 }
