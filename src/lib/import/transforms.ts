@@ -72,11 +72,13 @@ export function parseFlag(raw: unknown): boolean {
   return s === 'X' || s === 'TRUE' || s === 'SIM' || s === '1'
 }
 
+/** Banco aceita apenas 'M' | 'F' | 'O' (patients_gender_check). */
 export function parseGender(raw: unknown): string | null {
   if (!raw) return null
   const s = String(raw).trim().toUpperCase()
-  if (s.startsWith('F')) return 'feminino'
-  if (s.startsWith('M')) return 'masculino'
+  if (s.startsWith('F')) return 'F'
+  if (s.startsWith('M')) return 'M'
+  if (s.startsWith('O')) return 'O'
   return null
 }
 
