@@ -99,8 +99,14 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
         .order('vencimento', { ascending: true })
 
       const hoje = todayBR()
+      // Só cartão/pix/dinheiro aqui — repasse é praticamente garantido, então
+      // a projeção por taxas configuradas já serve como "quase certo". Boleto
+      // fica de fora dessa lista: ele tem risco real de inadimplência e só
+      // deve contar como certo depois de confirmado na seção "Boletos a
+      // receber" abaixo (senão o total do topo mistura dinheiro garantido
+      // com dinheiro que pode nunca chegar).
       const geradas = gerarParcelas((entradas || []) as any[], (taxas || []) as TaxaPag[])
-        .filter(p => p.data >= hoje)
+        .filter(p => p.data >= hoje && !p.formaPagamento.toLowerCase().startsWith('boleto'))
       geradas.sort((a, b) => a.data.localeCompare(b.data))
       setParcelas(geradas)
       setBoletos((boletoParcelas || []) as BoletoParcela[])
@@ -234,7 +240,7 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-emerald-600">{formatBRL(totalPrevisto)}</p>
-          <p className="text-xs text-slate-500 mt-0.5">Líquido a receber no período</p>
+          <p className="text-xs text-slate-500 mt-0.5">Líquido a receber (cartão/pix/dinheiro)</p>
         </div>
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-slate-900">{filtradas.length}</p>
@@ -256,7 +262,7 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
 
       <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
         <Icon name="alertCircle" className="w-4 h-4 flex-shrink-0" />
-        Projeta apenas parcelas de vendas já lançadas em Entradas. Prazo de repasse por bandeira/parcela vem de Configurações → Taxas de Pagamento.
+        Projeta apenas cartão/pix/dinheiro de vendas já lançadas em Entradas (prazo de repasse por bandeira/parcela vem de Configurações → Taxas de Pagamento) — repasse praticamente garantido. Boleto não entra aqui: veja "Boletos a receber" abaixo, que só conta como certo depois de confirmado.
       </div>
 
       {/* Gráfico de recebíveis */}

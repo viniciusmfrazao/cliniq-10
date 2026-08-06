@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 
@@ -128,7 +129,7 @@ export default function FluxoView({ entradas: initialEntradas, saidas: initialSa
         )}
         {scope === 'all' && (
         <div className={`rounded-2xl p-5 border shadow-sm ${totalResultado >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-          <p className={`text-sm ${totalResultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado</p>
+          <p className={`text-sm ${totalResultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado (competência)</p>
           <p className={`text-2xl font-black ${totalResultado >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{fmt(totalResultado)}</p>
         </div>
         )}
@@ -137,6 +138,20 @@ export default function FluxoView({ entradas: initialEntradas, saidas: initialSa
           <p className="text-2xl font-black text-slate-900">{totalAtendimentos}</p>
         </div>
       </div>
+
+      {scope === 'all' && (
+        <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+          <Icon name="alertCircle" className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <span>
+            Todos os valores aqui contam pela <strong>data da venda</strong> (competência), inclusive boleto vendido mas ainda não confirmado.
+            Pra ver o que já caiu de fato na conta, use o{' '}
+            <Link href="/dashboard/financeiro" className="text-violet-600 font-medium underline">card "Resultado (caixa)"</Link> do início do Financeiro,
+            a linha "Caixa real" do{' '}
+            <Link href="/dashboard/financeiro/dre" className="text-violet-600 font-medium underline">DRE</Link>, ou a{' '}
+            <Link href="/dashboard/financeiro/previsao-recebimento" className="text-violet-600 font-medium underline">Previsão de Recebimento</Link>.
+          </span>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <h3 className="font-bold text-slate-900 mb-4">Gráfico de Fluxo</h3>

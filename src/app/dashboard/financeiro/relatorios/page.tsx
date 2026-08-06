@@ -32,8 +32,8 @@ const REPORTS: ReportCard[] = [
     icon: 'activity',
     iconBg: 'bg-blue-100',
     iconColor: 'text-blue-600',
-    title: 'Fluxo de Caixa',
-    description: 'Visão anual de entradas e saídas',
+    title: 'Faturamento x Despesas',
+    description: 'Visão anual por competência (data da venda)',
   },
   {
     href: '/dashboard/financeiro/rankings',

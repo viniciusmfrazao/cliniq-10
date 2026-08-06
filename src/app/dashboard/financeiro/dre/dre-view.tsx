@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
-import { todayBR, addDaysBR } from '@/lib/datetime'
-import { gerarParcelas, type TaxaPag } from '@/lib/recebiveis'
+import { todayBR } from '@/lib/datetime'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts'
 
 type Entrada = {
@@ -99,30 +98,31 @@ export default function DreView({ entradas: initialEntradas, saidas: initialSaid
     setEntradas(e || [])
     setSaidas(s || [])
 
-    // Caixa real do mês: parcelas (próprias ou de vendas de meses anteriores)
-    // cujo repasse efetivamente cai dentro do mês selecionado. Só calculamos
-    // se scope='all' — visão de caixa é nível clínica, não por profissional.
+    // Caixa real do mês: cartão/pix/dinheiro contam no dia da venda (repasse
+    // praticamente garantido — mesma regra do card "Resultado (caixa)" do
+    // dashboard). Boleto é diferente: só entra quando a parcela é confirmada
+    // de verdade em boleto_parcelas (status='pago'), no mês em que a baixa
+    // foi dada — não quando a venda foi lançada nem quando "deveria" cair
+    // pela projeção. Antes esse card usava gerarParcelas() (só projeção,
+    // baseada na data prevista) pra TODAS as formas, inclusive boleto — ou
+    // seja, um boleto vencido e nunca confirmado ainda assim entrava aqui
+    // como "recebido". Só calculamos em scope='all' — visão de caixa é
+    // nível clínica, não por profissional.
     if (scope === 'all') {
-      // Vendas parceladas podem levar até 12 parcelas de ~30 dias pra quitar —
-      // olhamos 12 meses pra trás pra pegar toda entrada que pode ter parcela
-      // caindo no mês selecionado.
-      const dataMin = addDaysBR(startOfMonth, -365)
-      const [{ data: entradasAmplo }, { data: taxas }] = await Promise.all([
-        supabase
-          .from('entradas')
-          .select('id, data_venda, primeiro_vencimento, paciente_nome, procedimento_nome, forma_pagamento, bandeira, valor_liquido, n_parcelas')
-          .eq('clinic_id', clinicId)
-          .gte('data_venda', dataMin)
-          .lte('data_venda', endOfMonth),
-        supabase
-          .from('taxas_pagamento')
-          .select('forma, bandeira, dias_repasse, modo_repasse, intervalo_dias_parcelas')
-          .eq('clinic_id', clinicId)
-      ])
+      const liquidoMesNaoBoleto = (e || [])
+        .filter(en => !(en.forma_pagamento || '').toLowerCase().startsWith('boleto'))
+        .reduce((sum, en) => sum + Number(en.valor_liquido || 0), 0)
 
-      const parcelas = gerarParcelas((entradasAmplo || []) as any[], (taxas || []) as TaxaPag[])
-      const doMes = parcelas.filter(p => p.data >= startOfMonth && p.data <= endOfMonth)
-      setCaixaRealMes(doMes.reduce((sum, p) => sum + p.valorLiquido, 0))
+      const { data: boletosPagosNoMes } = await supabase
+        .from('boleto_parcelas')
+        .select('valor_liquido')
+        .eq('clinic_id', clinicId)
+        .eq('status', 'pago')
+        .gte('data_pagamento', startOfMonth)
+        .lte('data_pagamento', endOfMonth)
+
+      const boletoRecebidoMes = (boletosPagosNoMes || []).reduce((sum, b) => sum + Number(b.valor_liquido || 0), 0)
+      setCaixaRealMes(liquidoMesNaoBoleto + boletoRecebidoMes)
     } else {
       setCaixaRealMes(null)
     }
