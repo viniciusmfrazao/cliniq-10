@@ -7,6 +7,7 @@ import { todayBR, startOfMonthBR, endOfMonthBR, parseDateBR } from '@/lib/dateti
 import { getFinancialAccess } from '@/lib/financial-access'
 import RentabilidadeFiltro from './RentabilidadeFiltro'
 import RentabilidadeTendenciaChart from './RentabilidadeTendenciaChart'
+import KpiCard from './KpiCard'
 
 function fmt(v: number) { return formatBRL(v || 0) }
 function fmtCompact(v: number) { return formatBRLCompact(v || 0) }
@@ -192,91 +193,79 @@ export default async function FinanceiroPage({
 
       {/* KPIs */}
       <div className={`grid grid-cols-2 md:grid-cols-3 ${isOwnScope ? 'lg:grid-cols-4' : 'lg:grid-cols-6'} gap-3 md:gap-4`}>
-        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
-          <div className="flex items-center gap-3 mb-2 md:mb-3">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Icon name="trendingUp" className="w-5 h-5 text-emerald-600" />
-            </div>
-          </div>
-          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(receitaHoje)}>
-            <span className="md:hidden">{fmtCompact(receitaHoje)}</span>
-            <span className="hidden md:inline">{fmt(receitaHoje)}</span>
-          </p>
-          <p className="text-xs md:text-sm text-slate-500 truncate">Receita bruta hoje</p>
-        </div>
+        <KpiCard
+          icon="trendingUp" iconBg="bg-emerald-100" iconColor="text-emerald-600"
+          valueCompact={fmtCompact(receitaHoje)} valueFull={fmt(receitaHoje)} valueTitle={fmt(receitaHoje)}
+          label="Receita bruta hoje"
+          explanation={<>
+            <p>Soma do <strong>valor bruto</strong> (antes de taxas) de todas as vendas lançadas com data de hoje.</p>
+            <p>Conta no dia da venda, não no dia em que o dinheiro efetivamente cai na conta (regime de competência) — inclusive vendas parceladas no cartão ou em boleto entram aqui pelo valor total, de uma vez.</p>
+          </>}
+        />
 
-        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
-          <div className="flex items-center gap-3 mb-2 md:mb-3">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Icon name="dollarSign" className="w-5 h-5 text-blue-600" />
-            </div>
-          </div>
-          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(receitaMes)}>
-            <span className="md:hidden">{fmtCompact(receitaMes)}</span>
-            <span className="hidden md:inline">{fmt(receitaMes)}</span>
-          </p>
-          <p className="text-xs md:text-sm text-slate-500 truncate">Receita bruta do mês</p>
-        </div>
+        <KpiCard
+          icon="dollarSign" iconBg="bg-blue-100" iconColor="text-blue-600"
+          valueCompact={fmtCompact(receitaMes)} valueFull={fmt(receitaMes)} valueTitle={fmt(receitaMes)}
+          label="Receita bruta do mês"
+          explanation={<>
+            <p>Soma do <strong>valor bruto</strong> (antes de taxas) de todas as vendas do mês atual, pela data da venda.</p>
+            <p>Mesma lógica da Receita bruta hoje, só que olhando o mês inteiro. É "quanto a clínica vendeu", não "quanto já recebeu" — pra isso, veja o Resultado (caixa).</p>
+          </>}
+        />
 
-        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
-          <div className="flex items-center gap-3 mb-2 md:mb-3">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Icon name="activity" className="w-5 h-5 text-violet-600" />
-            </div>
-          </div>
-          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(liquidoMes)}>
-            <span className="md:hidden">{fmtCompact(liquidoMes)}</span>
-            <span className="hidden md:inline">{fmt(liquidoMes)}</span>
-          </p>
-          <p className="text-xs md:text-sm text-slate-500 truncate">Líquido do mês</p>
-        </div>
+        <KpiCard
+          icon="activity" iconBg="bg-violet-100" iconColor="text-violet-600"
+          valueCompact={fmtCompact(liquidoMes)} valueFull={fmt(liquidoMes)} valueTitle={fmt(liquidoMes)}
+          label="Líquido do mês"
+          explanation={<>
+            <p>Soma do <strong>valor líquido</strong> das vendas do mês — o bruto já descontando taxa de cartão/boleto configurada em cada venda.</p>
+            <p>Assim como a Receita bruta, conta pela data da venda (competência), não pela data em que o dinheiro cai.</p>
+          </>}
+        />
 
-        <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
-          <div className="flex items-center gap-3 mb-2 md:mb-3">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Icon name="receipt" className="w-5 h-5 text-amber-600" />
-            </div>
-          </div>
-          <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(ticketMedio)}>
-            <span className="md:hidden">{fmtCompact(ticketMedio)}</span>
-            <span className="hidden md:inline">{fmt(ticketMedio)}</span>
-          </p>
-          <p className="text-xs md:text-sm text-slate-500 truncate">Ticket médio</p>
-        </div>
+        <KpiCard
+          icon="receipt" iconBg="bg-amber-100" iconColor="text-amber-600"
+          valueCompact={fmtCompact(ticketMedio)} valueFull={fmt(ticketMedio)} valueTitle={fmt(ticketMedio)}
+          label="Ticket médio"
+          explanation={<p><strong>Líquido do mês ÷ número de vendas do mês.</strong> Se a clínica fez {entradasMes?.length || 0} venda(s) este mês somando {fmt(liquidoMes)} líquido, o ticket médio é {fmt(ticketMedio)}.</p>}
+        />
 
         {!isOwnScope && (
-          <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-sm min-w-0">
-            <div className="flex items-center gap-3 mb-2 md:mb-3">
-              <div className="w-9 h-9 md:w-10 md:h-10 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Icon name="trendingDown" className="w-5 h-5 text-rose-600" />
-              </div>
-            </div>
-            <p className="text-lg md:text-2xl font-black text-slate-900 truncate" title={fmt(despesasMes)}>
-              <span className="md:hidden">{fmtCompact(despesasMes)}</span>
-              <span className="hidden md:inline">{fmt(despesasMes)}</span>
-            </p>
-            <p className="text-xs md:text-sm text-slate-500 truncate">Saídas do mês</p>
-          </div>
+          <KpiCard
+            icon="trendingDown" iconBg="bg-rose-100" iconColor="text-rose-600"
+            valueCompact={fmtCompact(despesasMes)} valueFull={fmt(despesasMes)} valueTitle={fmt(despesasMes)}
+            label="Saídas do mês"
+            explanation={<>
+              <p>Soma das despesas <strong>já pagas</strong> (aluguel, salários, insumos, etc.) com data até hoje, dentro do mês atual.</p>
+              <p>Despesas agendadas pra depois de hoje, ou ainda marcadas como não pagas, não entram nessa conta.</p>
+            </>}
+          />
         )}
 
         {!isOwnScope && (
-          <div className={`rounded-2xl p-4 md:p-5 border shadow-sm min-w-0 ${resultadoMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-            <div className="flex items-center gap-3 mb-2 md:mb-3">
-              <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${resultadoMes >= 0 ? 'bg-emerald-200' : 'bg-rose-200'}`}>
-                <Icon name={resultadoMes >= 0 ? 'trendingUp' : 'trendingDown'} className={`w-5 h-5 ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} />
-              </div>
-            </div>
-            <p className={`text-lg md:text-2xl font-black truncate ${resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} title={fmt(resultadoMes)}>
-              <span className="md:hidden">{fmtCompact(resultadoMes)}</span>
-              <span className="hidden md:inline">{fmt(resultadoMes)}</span>
-            </p>
-            <p className={`text-xs md:text-sm truncate ${resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Resultado (caixa)</p>
-            {boletoPendenteMes > 0 && (
+          <KpiCard
+            icon={resultadoMes >= 0 ? 'trendingUp' : 'trendingDown'}
+            iconBg={resultadoMes >= 0 ? 'bg-emerald-200' : 'bg-rose-200'}
+            iconColor={resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}
+            cardClassName={resultadoMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}
+            valueClassName={resultadoMes >= 0 ? 'text-emerald-700' : 'text-rose-700'}
+            labelClassName={resultadoMes >= 0 ? 'text-emerald-600' : 'text-rose-600'}
+            valueCompact={fmtCompact(resultadoMes)} valueFull={fmt(resultadoMes)} valueTitle={fmt(resultadoMes)}
+            label="Resultado (caixa)"
+            note={boletoPendenteMes > 0 && (
               <p className="text-[11px] text-slate-500 mt-1 truncate" title={`${fmt(boletoPendenteMes)} em boletos deste mês ainda sem confirmação de pagamento`}>
                 + {fmt(boletoPendenteMes)} em boleto ainda não confirmado
               </p>
             )}
-          </div>
+            explanation={<>
+              <p>Esse é o único card em <strong>regime de caixa</strong> (dinheiro que realmente entrou), diferente dos outros que contam pela data da venda.</p>
+              <p>Pix, débito, crédito e dinheiro contam no dia da venda — o repasse da maquininha é praticamente garantido. <strong>Boleto é diferente</strong>: só entra aqui quando a parcela é confirmada como paga (em Previsão de Recebimento), no mês em que a baixa foi dada.</p>
+              <p><strong>Fórmula:</strong> (Líquido do mês em pix/débito/crédito/dinheiro + boletos confirmados no mês) − Saídas pagas do mês.</p>
+              {boletoPendenteMes > 0 && (
+                <p>Ainda há <strong>{fmt(boletoPendenteMes)}</strong> em parcelas de boleto vendidas este mês que não foram confirmadas — por isso não entram nesse resultado.</p>
+              )}
+            </>}
+          />
         )}
       </div>
 
