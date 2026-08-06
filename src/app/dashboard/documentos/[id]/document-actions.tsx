@@ -39,7 +39,7 @@ export default function DocumentActions({ docId, status, patientName, patientPho
   }
 
   const resendDocument = async () => {
-    const newToken = Array.from({ length: 32 }, () => Math.random().toString(36).charAt(2)).join('')
+    const newToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
 

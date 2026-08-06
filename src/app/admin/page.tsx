@@ -1,9 +1,13 @@
-import { getAdminMetrics, getAllClinics } from '@/lib/super-admin'
+import { getAdminMetrics, getAllClinics, isSuperAdmin } from '@/lib/super-admin'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminDashboard() {
+  const ok = await isSuperAdmin()
+  if (!ok) redirect('/dashboard')
+
   const [metrics, clinics] = await Promise.all([
     getAdminMetrics(),
     getAllClinics(),

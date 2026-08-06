@@ -1,7 +1,7 @@
-import { getClinicDetails } from '@/lib/super-admin'
+import { getClinicDetails, isSuperAdmin } from '@/lib/super-admin'
 import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import ClinicModulesEditor from './modules-editor'
 import ClinicSettingsEditor from './clinic-settings-editor'
 
@@ -9,6 +9,9 @@ import ClinicSettingsEditor from './clinic-settings-editor'
 export const dynamic = 'force-dynamic'
 
 export default async function ClinicDetailsPage({ params }: { params: { id: string } }) {
+  const ok = await isSuperAdmin()
+  if (!ok) redirect('/dashboard')
+
   const service = createServiceClient()
   const data = await getClinicDetails(params.id)
   const { data: plans } = await service
