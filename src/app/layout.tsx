@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 import BrazilCopa from '@/components/BrazilCopa'
 import PWAProvider from '@/components/PWAProvider'
 import AuthLifecycleProvider from '@/components/AuthLifecycleProvider'
+import SessionGuardProvider from '@/components/SessionGuardProvider'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
 export const metadata: Metadata = {
@@ -107,6 +108,7 @@ export default function RootLayout({
         <BrazilCopa />
         <PWAProvider />
         <AuthLifecycleProvider />
+        <SessionGuardProvider />
         <SpeedInsights />
       </body>
     </html>
