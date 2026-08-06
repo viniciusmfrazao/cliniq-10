@@ -165,7 +165,7 @@ export default function SendDocumentForm({ clinicId, clinicName, templates, pati
   }
 
   const generateToken = () => {
-    return Array.from({ length: 32 }, () => Math.random().toString(36).charAt(2)).join('')
+    return crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
   }
 
   const handleSubmit = async () => {

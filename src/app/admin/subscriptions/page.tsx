@@ -1,9 +1,14 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { isSuperAdmin } from '@/lib/super-admin'
+import { redirect } from 'next/navigation'
 import SubscriptionsClient from './subscriptions-client'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SubscriptionsPage() {
+  const ok = await isSuperAdmin()
+  if (!ok) redirect('/dashboard')
+
   const svc = createServiceClient()
 
   const { data: clinics, error: clinicsErr } = await svc
