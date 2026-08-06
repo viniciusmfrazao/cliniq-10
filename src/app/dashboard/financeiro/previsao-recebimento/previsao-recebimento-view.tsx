@@ -185,6 +185,13 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
   }, [parcelas, from, to])
 
   const totalPrevisto = useMemo(() => filtradas.reduce((s, p) => s + p.valorLiquido, 0), [filtradas])
+  const boletoPendenteNoPeriodo = useMemo(
+    () => boletosPendentesTodos
+      .filter(b => b.vencimento >= from && (to === null || b.vencimento <= to))
+      .reduce((s, b) => s + Number(b.valor_liquido || 0), 0),
+    [boletosPendentesTodos, from, to]
+  )
+  const totalGeralComBoleto = totalPrevisto + boletoPendenteNoPeriodo
   const proxima = filtradas[0]
 
   const grouped = useMemo(() => {
@@ -264,6 +271,16 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
         <Icon name="alertCircle" className="w-4 h-4 flex-shrink-0" />
         Projeta apenas cartão/pix/dinheiro de vendas já lançadas em Entradas (prazo de repasse por bandeira/parcela vem de Configurações → Taxas de Pagamento) — repasse praticamente garantido. Boleto não entra aqui: veja "Boletos a receber" abaixo, que só conta como certo depois de confirmado.
       </div>
+
+      {boletoPendenteNoPeriodo > 0 && (
+        <div className="card p-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-bold text-slate-900">Visão completa do período</p>
+            <p className="text-xs text-slate-500">{formatBRL(totalPrevisto)} garantido (cartão/pix/dinheiro) + {formatBRL(boletoPendenteNoPeriodo)} em boleto ainda pendente de confirmação</p>
+          </div>
+          <p className="text-xl font-bold text-slate-900">{formatBRL(totalGeralComBoleto)}</p>
+        </div>
+      )}
 
       {/* Gráfico de recebíveis */}
       {!loading && grouped.length > 0 && (
