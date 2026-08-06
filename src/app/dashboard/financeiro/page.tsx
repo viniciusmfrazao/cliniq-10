@@ -266,6 +266,9 @@ export default async function FinanceiroPage({
               {boletoPendenteMes > 0 && (
                 <p>Ainda há <strong>{fmt(boletoPendenteMes)}</strong> em parcelas de boleto vendidas este mês que não foram confirmadas — por isso não entram nesse resultado.</p>
               )}
+              {boletoPendenteMes > 0 && (
+                <p>Pra confirmar um pagamento: <Link href="/dashboard/financeiro/previsao-recebimento" className="text-violet-600 font-medium underline">Financeiro → Relatórios → Previsão de Recebimento</Link>, na seção "Boletos a receber", clique em <strong>Marcar pago</strong> na parcela correspondente.</p>
+              )}
             </>}
           />
         )}
