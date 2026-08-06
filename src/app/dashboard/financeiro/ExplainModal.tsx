@@ -16,11 +16,11 @@ type Props = {
 export default function ExplainModal({ title, valueFull, explanation, onClose }: Props) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 p-0 md:p-4"
+      className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/40 p-0 md:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-md max-h-[80vh] overflow-y-auto p-5"
+        className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-md max-h-[80vh] overflow-y-auto p-5 pb-safe"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
