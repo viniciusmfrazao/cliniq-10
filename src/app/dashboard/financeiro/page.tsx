@@ -8,6 +8,7 @@ import { getFinancialAccess } from '@/lib/financial-access'
 import RentabilidadeFiltro from './RentabilidadeFiltro'
 import RentabilidadeTendenciaChart from './RentabilidadeTendenciaChart'
 import KpiCard from './KpiCard'
+import RentCard from './RentCard'
 
 function fmt(v: number) { return formatBRL(v || 0) }
 function fmtCompact(v: number) { return formatBRLCompact(v || 0) }
@@ -192,6 +193,7 @@ export default async function FinanceiroPage({
       </div>
 
       {/* KPIs */}
+      <p className="text-xs text-slate-400">Toque em um card para ver como o número é calculado.</p>
       <div className={`grid grid-cols-2 md:grid-cols-3 ${isOwnScope ? 'lg:grid-cols-4' : 'lg:grid-cols-6'} gap-3 md:gap-4`}>
         <KpiCard
           icon="trendingUp" iconBg="bg-emerald-100" iconColor="text-emerald-600"
@@ -295,32 +297,65 @@ export default async function FinanceiroPage({
         )}
 
         {/* Cards do período selecionado */}
+        <p className="text-xs text-slate-400 mb-2">Toque em um card para ver como o número é calculado.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-          <div className="p-3 bg-emerald-50 rounded-xl">
-            <p className="text-xs text-slate-500 mb-1">Receita</p>
-            <p className="text-sm font-bold text-emerald-700">{fmt(rent.receita)}</p>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-xl">
-            <p className="text-xs text-slate-500 mb-1">CMV consumido</p>
-            <p className="text-sm font-bold text-slate-700">{fmt(rent.cmv)}</p>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-xl">
-            <p className="text-xs text-slate-500 mb-1">Lucro bruto</p>
-            <p className={`text-sm font-bold ${rent.lucro_bruto >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(rent.lucro_bruto)}</p>
-          </div>
-          <div className={`p-3 rounded-xl border ${rentMargemBg}`}>
-            <p className="text-xs text-slate-500 mb-1">Margem</p>
-            <p className={`text-sm font-bold ${rentMargemColor}`}>{rent.margem_pct.toFixed(0)}%</p>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-xl">
-            <p className="text-xs text-slate-500 mb-1">Fixos (ref./atend.)</p>
-            <p className="text-sm font-bold text-slate-400">{fmt(rent.fixos_por_atendimento)}</p>
-            <p className="text-xs text-slate-400">total: {fmtCompact(rent.fixos)}</p>
-          </div>
-          <div className={`p-3 rounded-xl border ${rent.lucro_operacional >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-            <p className="text-xs text-slate-500 mb-1">Lucro operacional</p>
-            <p className={`text-sm font-bold ${rent.lucro_operacional >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(rent.lucro_operacional)}</p>
-          </div>
+          <RentCard
+            label="Receita"
+            valueDisplay={fmt(rent.receita)}
+            valueFull={fmt(rent.receita)}
+            cardClassName="bg-emerald-50"
+            valueClassName="text-emerald-700"
+            explanation={<p>Soma do valor bruto das vendas no período selecionado acima ({rent.atendimentos} atendimento{rent.atendimentos === 1 ? '' : 's'}). Mesmo cálculo da Receita bruta do mês, só que respeitando o filtro de período desta seção.</p>}
+          />
+          <RentCard
+            label="CMV consumido"
+            valueDisplay={fmt(rent.cmv)}
+            valueFull={fmt(rent.cmv)}
+            explanation={<>
+              <p>Custo dos produtos e insumos <strong>efetivamente baixados do estoque</strong> nos atendimentos do período — não é o que foi comprado, é o que foi de fato usado.</p>
+              {rent.receita > 0 && rent.cmv === 0 && (
+                <p>Está zerado porque não há baixa de estoque registrada nesse período. Isso não significa custo zero — só que a clínica ainda não deu baixa dos produtos usados nos atendimentos, então a Margem abaixo aparece maior do que a real.</p>
+              )}
+            </>}
+          />
+          <RentCard
+            label="Lucro bruto"
+            valueDisplay={fmt(rent.lucro_bruto)}
+            valueFull={fmt(rent.lucro_bruto)}
+            valueClassName={rent.lucro_bruto >= 0 ? 'text-emerald-700' : 'text-red-600'}
+            explanation={<p><strong>Receita − CMV consumido.</strong> Ainda não desconta os custos fixos (aluguel, salários) — isso vem no Lucro operacional, mais à frente.</p>}
+          />
+          <RentCard
+            label="Margem"
+            valueDisplay={`${rent.margem_pct.toFixed(0)}%`}
+            valueFull={`${rent.margem_pct.toFixed(0)}%`}
+            cardClassName={`border ${rentMargemBg}`}
+            valueClassName={rentMargemColor}
+            explanation={<>
+              <p><strong>Lucro bruto ÷ Receita</strong>, em porcentagem.</p>
+              <p>Cor por faixa: verde acima de 50%, amarelo entre 20% e 50%, vermelho abaixo de 20%.</p>
+            </>}
+          />
+          <RentCard
+            label="Fixos (ref./atend.)"
+            valueDisplay={<>
+              <p className="text-slate-400">{fmt(rent.fixos_por_atendimento)}</p>
+              <p className="text-xs text-slate-400 font-normal">total: {fmtCompact(rent.fixos)}</p>
+            </>}
+            valueFull={fmt(rent.fixos)}
+            explanation={<>
+              <p>Todas as saídas <strong>pagas</strong> no período (aluguel, salários, etc.), <strong>exceto</strong> compras de estoque/insumos — essas já entram no CMV pelo que foi consumido, não pelo que foi comprado (evita contar o mesmo custo duas vezes).</p>
+              <p>O valor grande no card é a <strong>média por atendimento</strong> ({fmt(rent.fixos_por_atendimento)}); "total" é a soma de todos os fixos pagos no período ({fmt(rent.fixos)}).</p>
+            </>}
+          />
+          <RentCard
+            label="Lucro operacional"
+            valueDisplay={fmt(rent.lucro_operacional)}
+            valueFull={fmt(rent.lucro_operacional)}
+            cardClassName={`border ${rent.lucro_operacional >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}
+            valueClassName={rent.lucro_operacional >= 0 ? 'text-emerald-700' : 'text-red-600'}
+            explanation={<p><strong>Lucro bruto − Fixos totais do período</strong> (usa o total, não a média por atendimento).</p>}
+          />
         </div>
 
         <p className="text-xs text-slate-400 -mt-3 mb-6">
