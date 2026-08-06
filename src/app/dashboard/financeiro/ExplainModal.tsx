@@ -1,6 +1,7 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
 
 type Props = {
@@ -14,7 +15,16 @@ type Props = {
 // tela inteira), modal centralizado no desktop. Compartilhado por KpiCard e
 // RentCard pra manter o mesmo comportamento em todo o dashboard Financeiro.
 export default function ExplainModal({ title, valueFull, explanation, onClose }: Props) {
-  return (
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prevOverflow }
+  }, [])
+  if (!mounted) return null
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/40 p-0 md:p-4"
       onClick={onClose}
@@ -37,6 +47,7 @@ export default function ExplainModal({ title, valueFull, explanation, onClose }:
         <p className="text-2xl font-black text-slate-900 mb-4">{valueFull}</p>
         <div className="text-sm text-slate-600 space-y-2 leading-relaxed">{explanation}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
