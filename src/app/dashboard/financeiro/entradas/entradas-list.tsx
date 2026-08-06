@@ -343,6 +343,46 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
   const supabase = createClient()
   const toast = useToast()
 
+  // Parcelas de boleto (status real de confirmação, independente da venda em `entradas`).
+  // Carregado uma vez por clínica, sem filtro de data — é só um mapa de apoio pra mostrar
+  // "X/Y confirmadas" ao lado da venda, então cobre qualquer período que o usuário filtrar.
+  const [boletoParcelas, setBoletoParcelas] = useState<{
+    entrada_id: string; status: string; valor_liquido: number; vencimento: string
+  }[]>([])
+  useEffect(() => {
+    if (!clinicId) return
+    supabase
+      .from('boleto_parcelas')
+      .select('entrada_id, status, valor_liquido, vencimento')
+      .eq('clinic_id', clinicId)
+      .then(({ data }) => setBoletoParcelas(data || []))
+  }, [clinicId])
+
+  const parcelasPorEntrada = new Map<string, { confirmadas: number; total: number; pendenteValor: number }>()
+  for (const p of boletoParcelas) {
+    const cur = parcelasPorEntrada.get(p.entrada_id) || { confirmadas: 0, total: 0, pendenteValor: 0 }
+    cur.total += 1
+    if (p.status === 'pago') cur.confirmadas += 1
+    else cur.pendenteValor += Number(p.valor_liquido || 0)
+    parcelasPorEntrada.set(p.entrada_id, cur)
+  }
+
+  function BadgeParcelas({ entradaId }: { entradaId: string }) {
+    const info = parcelasPorEntrada.get(entradaId)
+    if (!info || info.total === 0) return null
+    const tudoConfirmado = info.confirmadas === info.total
+    return (
+      <span
+        title={tudoConfirmado ? 'Todas as parcelas confirmadas' : `${info.total - info.confirmadas} parcela(s) ainda não confirmada(s) — ${fmt(info.pendenteValor)}`}
+        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+          tudoConfirmado ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+        }`}
+      >
+        {info.confirmadas}/{info.total} confirmadas
+      </span>
+    )
+  }
+
   async function buscar() {
     startTransition(async () => {
       const params = new URLSearchParams()
@@ -887,6 +927,21 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
         <div className="bg-violet-50 text-violet-700 px-4 py-2 rounded-xl">
           <span className="font-medium">Total Líquido:</span> {fmt(totalLiquido)}
         </div>
+        {(() => {
+          const pendenteBoletoPeriodo = baseFiltered.reduce(
+            (s, e) => s + (parcelasPorEntrada.get(e.id)?.pendenteValor || 0), 0
+          )
+          if (pendenteBoletoPeriodo <= 0) return null
+          return (
+            <a
+              href="/dashboard/financeiro/previsao-recebimento"
+              className="bg-amber-50 text-amber-700 px-4 py-2 rounded-xl hover:bg-amber-100 transition"
+              title="Parcelas de boleto ainda não confirmadas — o valor já está em Total Líquido, mas ainda não caiu na conta"
+            >
+              <span className="font-medium">Aguardando confirmação (boleto):</span> {fmt(pendenteBoletoPeriodo)}
+            </a>
+          )
+        })()}
         {totalProdutos > 0 && (
           <>
             <div className="bg-teal-50 text-teal-700 px-4 py-2 rounded-xl">
@@ -996,6 +1051,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">
                       {e.forma_pagamento}{(e.n_parcelas || 0) > 1 && ` ${e.n_parcelas}x`}
                     </span>
+                    <BadgeParcelas entradaId={e.id} />
                     {e.profissional_nome && (
                       <span className="text-xs text-slate-400">{e.profissional_nome}</span>
                     )}
@@ -1093,6 +1149,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                         {e.bandeira && ` (${e.bandeira})`}
                         {(e.n_parcelas || 0) > 1 && ` ${e.n_parcelas}x`}
                       </span>
+                      {' '}
+                      <BadgeParcelas entradaId={e.id} />
                     </td>
                     <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">{fmt(e.valor_bruto)}</td>
                     <td className="px-4 py-3 text-sm text-right">
