@@ -71,8 +71,8 @@ function ultimoDiaMes() {
   return `${y}-${String(m).padStart(2,'0')}-${String(ultimo).padStart(2,'0')}`
 }
 
-const FORMAS = ['pix', 'dinheiro', 'credito', 'debito']
-const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', credito: 'Crédito', debito: 'Débito' }
+const FORMAS = ['pix', 'dinheiro', 'credito', 'debito', 'boleto']
+const FORMA_LABEL: Record<string, string> = { pix: 'PIX', dinheiro: 'Dinheiro', credito: 'Crédito', debito: 'Débito', boleto: 'Boleto' }
 
 function ProcedimentoBusca({
   procedimentos,
