@@ -36,8 +36,8 @@ export default async function FluxoPage() {
           <Icon name="arrowLeft" className="w-5 h-5 text-slate-500" />
         </Link>
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900">Fluxo de Caixa</h1>
-          <p className="text-slate-500">Visão anual de entradas e saídas</p>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900">Faturamento x Despesas</h1>
+          <p className="text-slate-500">Visão anual por competência (data da venda) — não é o dinheiro que já caiu na conta</p>
         </div>
       </div>
 
