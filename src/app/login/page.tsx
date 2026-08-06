@@ -1,29 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
-const SESSION_MOTIVO_MESSAGES: Record<string, string> = {
-  'limite-dispositivos': 'Sua sessão foi encerrada porque o limite de 5 dispositivos conectados nesta conta foi atingido.',
-}
-
 export default function LoginPage() {
-  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-
-  useEffect(() => {
-    const motivo = searchParams.get('motivo')
-    if (motivo && SESSION_MOTIVO_MESSAGES[motivo]) {
-      setError(SESSION_MOTIVO_MESSAGES[motivo])
-    }
-  }, [searchParams])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
