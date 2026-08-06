@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import Icon from '@/components/ui/Icon'
+import ExplainModal from './ExplainModal'
 
 type Props = {
   icon: string
@@ -32,7 +33,7 @@ export default function KpiCard({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`text-left rounded-2xl p-4 md:p-5 border shadow-sm min-w-0 w-full hover:ring-2 hover:ring-slate-200 transition ${cardClassName || 'bg-white border-slate-100'}`}
+        className={`text-left rounded-2xl p-4 md:p-5 border shadow-sm min-w-0 w-full hover:ring-2 hover:ring-slate-200 active:ring-2 active:ring-slate-300 transition ${cardClassName || 'bg-white border-slate-100'}`}
       >
         <div className="flex items-center gap-3 mb-2 md:mb-3">
           <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
@@ -47,29 +48,7 @@ export default function KpiCard({
         {note}
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 p-0 md:p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-md max-h-[85vh] overflow-y-auto p-5"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="font-bold text-slate-900">{label}</h3>
-              <button
-                onClick={() => setOpen(false)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center flex-shrink-0"
-              >
-                <Icon name="x" className="w-4 h-4 text-slate-400" />
-              </button>
-            </div>
-            <p className="text-2xl font-black text-slate-900 mb-4">{valueFull}</p>
-            <div className="text-sm text-slate-600 space-y-2 leading-relaxed">{explanation}</div>
-          </div>
-        </div>
-      )}
+      {open && <ExplainModal title={label} valueFull={valueFull} explanation={explanation} onClose={() => setOpen(false)} />}
     </>
   )
 }
