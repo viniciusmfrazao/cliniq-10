@@ -221,6 +221,7 @@ export default async function FinanceiroPage({
           label="Líquido do mês"
           explanation={<>
             <p>Soma do <strong>valor líquido</strong> das vendas do mês — o bruto já descontando taxa de cartão/boleto configurada em cada venda.</p>
+            <p><strong>Não desconta</strong> custo de produto/insumo (CMV) nem despesas fixas (aluguel, salários, contas recorrentes) — isso aparece mais abaixo, na seção <strong>Rentabilidade</strong>, no card "Lucro operacional".</p>
             <p>Assim como a Receita bruta, conta pela data da venda (competência), não pela data em que o dinheiro cai.</p>
           </>}
         />
@@ -357,7 +358,10 @@ export default async function FinanceiroPage({
             valueFull={fmt(rent.lucro_operacional)}
             cardClassName={`border ${rent.lucro_operacional >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}
             valueClassName={rent.lucro_operacional >= 0 ? 'text-emerald-700' : 'text-red-600'}
-            explanation={<p><strong>Lucro bruto − Fixos totais do período</strong> (usa o total, não a média por atendimento).</p>}
+            explanation={<>
+              <p><strong>Lucro bruto − Fixos totais do período</strong> (usa o total, não a média por atendimento).</p>
+              <p>Esse é o número que já descontou tudo: taxa de pagamento, custo de produto (CMV) e despesas fixas. É diferente do "Líquido do mês" lá em cima, que só desconta a taxa de pagamento.</p>
+            </>}
           />
         </div>
 
