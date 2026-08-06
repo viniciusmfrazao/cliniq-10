@@ -26,6 +26,7 @@ type Entrada = {
   n_parcelas?: number | null
   tipo_receita?: string
   nota_fiscal_status?: string | null
+  nota_fiscal_tipo?: string | null
   nota_fiscal_numero?: string | null
   nota_fiscal_url_pdf?: string | null
   nota_fiscal_erro?: string | null
@@ -316,7 +317,7 @@ function EditEntradaModal({
   return createPortal(modal, document.body)
 }
 
-export default function EntradasList({ entradas, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoBase = 'bruto', comissaoConfig = [], nfseAtivo = false, readOnly = false }: Props) {
+export default function EntradasList({ entradas, pacientes, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoBase = 'bruto', comissaoConfig = [], nfseAtivo = false, readOnly = false }: Props) {
   const [list, setList] = useState(entradas)
   const comissaoMap = new Map(comissaoConfig.map(c => [c.id, c]))
 
@@ -500,10 +501,19 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
   }
 
   const [emitindo, setEmitindo] = useState<string | null>(null)
-  const [enderecoModalEntrada, setEnderecoModalEntrada] = useState<Entrada | null>(null)
+  const [emitirModalEntrada, setEmitirModalEntrada] = useState<Entrada | null>(null)
   const [cancelEntrada, setCancelEntrada] = useState<Entrada | null>(null)
   const [justificativaCancelamento, setJustificativaCancelamento] = useState('')
   const [cancelando, setCancelando] = useState(false)
+
+  // Tipo da nota emitida (ou a emitir): usa nota_fiscal_tipo quando já existe emissão
+  // (pode divergir de tipo_receita, já que o tipo da nota agora é escolhido na hora de
+  // emitir); antes de emitir, cai pro tipo_receita como sugestão inicial.
+  function notaTipoDe(entrada: Entrada): 'nfse' | 'nfe' {
+    return entrada.nota_fiscal_tipo === 'nfe' ? 'nfe'
+      : entrada.nota_fiscal_tipo === 'nfse' ? 'nfse'
+      : entrada.tipo_receita === 'produto' ? 'nfe' : 'nfse'
+  }
 
   async function handleCancelarNota() {
     if (!cancelEntrada) return
@@ -514,7 +524,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
     setCancelando(true)
     try {
-      const endpoint = cancelEntrada.tipo_receita === 'produto'
+      const endpoint = notaTipoDe(cancelEntrada) === 'nfe'
         ? '/api/financeiro/nota-fiscal/cancelar-nfe'
         : '/api/financeiro/nota-fiscal/cancelar'
       const res = await fetch(endpoint, {
@@ -535,7 +545,10 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
   }
 
-  function EnderecoDestinatarioModal({ entrada, onClose }: { entrada: Entrada; onClose: () => void }) {
+  function EmitirNotaModal({ entrada, onClose }: { entrada: Entrada; onClose: () => void }) {
+    const [tipo, setTipo] = useState<'servico' | 'produto'>(
+      notaTipoDe(entrada) === 'nfe' ? 'produto' : 'servico'
+    )
     const [cpf, setCpf] = useState('')
     const [logradouro, setLogradouro] = useState('')
     const [numero, setNumero] = useState('')
@@ -543,14 +556,28 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     const [municipio, setMunicipio] = useState('')
     const [uf, setUf] = useState('')
     const [cep, setCep] = useState('')
-    const [carregandoPaciente, setCarregandoPaciente] = useState(!!entrada.paciente_id)
+
+    // Se a entrada não está linkada a um cadastro (paciente_id nulo), tenta achar por
+    // nome normalizado na lista de pacientes da clínica — cobre entradas avulsas onde o
+    // nome foi digitado livre mas já existe cadastro com CPF/endereço.
+    const matchPorNome = !entrada.paciente_id
+      ? (() => {
+          const norm = normalizeText(entrada.paciente_nome || '')
+          if (!norm) return null
+          const matches = pacientes.filter(p => normalizeText(p.name) === norm)
+          return matches.length === 1 ? matches[0].id : null
+        })()
+      : null
+    const pacienteIdParaBusca = entrada.paciente_id || matchPorNome
+
+    const [carregandoPaciente, setCarregandoPaciente] = useState(!!pacienteIdParaBusca)
 
     useEffect(() => {
-      if (!entrada.paciente_id) { setCarregandoPaciente(false); return }
+      if (!pacienteIdParaBusca) { setCarregandoPaciente(false); return }
       let cancelado = false
       async function carregar() {
         const { data } = await supabase.from('patients').select('cpf, address, address_number, neighborhood, city, state, zip_code')
-          .eq('id', entrada.paciente_id).maybeSingle()
+          .eq('id', pacienteIdParaBusca).maybeSingle()
         if (cancelado) return
         if (data) {
           if (data.cpf) setCpf(data.cpf)
@@ -573,22 +600,32 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
       }
       carregar()
       return () => { cancelado = true }
-    }, [entrada.paciente_id])
+    }, [pacienteIdParaBusca])
 
     const cpfLimpo = cpf.replace(/\D/g, '')
-    const podeEnviar = cpfLimpo.length === 11 && logradouro && numero && bairro && municipio && uf
+    const cpfValido = cpfLimpo.length === 0 || cpfLimpo.length === 11
+    const podeEnviar = tipo === 'produto'
+      ? cpfLimpo.length === 11 && !!logradouro && !!numero && !!bairro && !!municipio && !!uf
+      : cpfValido
 
     function confirmar() {
       onClose()
-      emitirNota(entrada.id, 'nfe', {
-        destinatario_cpf: cpfLimpo,
-        destinatario_logradouro: logradouro,
-        destinatario_numero: numero,
-        destinatario_bairro: bairro,
-        destinatario_municipio: municipio,
-        destinatario_uf: uf,
-        destinatario_cep: cep,
-      })
+      if (tipo === 'produto') {
+        emitirNota(entrada.id, 'nfe', {
+          destinatario_cpf: cpfLimpo,
+          destinatario_logradouro: logradouro,
+          destinatario_numero: numero,
+          destinatario_bairro: bairro,
+          destinatario_municipio: municipio,
+          destinatario_uf: uf,
+          destinatario_cep: cep,
+        })
+      } else {
+        emitirNota(entrada.id, 'nfse', {
+          tomador_cpf: cpfLimpo,
+          tomador_nome: entrada.paciente_nome,
+        })
+      }
     }
 
     return createPortal(
@@ -597,62 +634,90 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
         <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
             <div>
-              <h2 className="font-bold text-slate-900">Dados do comprador</h2>
-              <p className="text-sm text-slate-500 mt-0.5">{entrada.paciente_nome} — CPF e endereço são obrigatórios na NFe</p>
+              <h2 className="font-bold text-slate-900">Emitir nota fiscal</h2>
+              <p className="text-sm text-slate-500 mt-0.5">{entrada.paciente_nome}</p>
             </div>
             <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
               <Icon name="x" className="w-4 h-4 text-slate-400" />
             </button>
           </div>
           <div className="p-5 overflow-y-auto space-y-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Tipo de nota</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setTipo('servico')}
+                  className={`py-2 rounded-xl text-sm font-semibold border transition ${
+                    tipo === 'servico' ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}>
+                  Serviço (NFS-e)
+                </button>
+                <button type="button" onClick={() => setTipo('produto')}
+                  className={`py-2 rounded-xl text-sm font-semibold border transition ${
+                    tipo === 'produto' ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}>
+                  Produto (NFe)
+                </button>
+              </div>
+            </div>
             {carregandoPaciente && (
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <LoadingSpinner size="sm" /> Buscando dados do cadastro do paciente...
               </div>
             )}
-            {!carregandoPaciente && entrada.paciente_id && (
+            {!carregandoPaciente && pacienteIdParaBusca && (
               <p className="text-xs text-slate-400">
-                Pré-preenchido com o cadastro do paciente (número/bairro só vêm certos se o
-                cadastro já tiver esses campos preenchidos) — confira antes de emitir.
+                {entrada.paciente_id
+                  ? 'Pré-preenchido com o cadastro do paciente'
+                  : 'Encontramos um cadastro com esse nome — dados pré-preenchidos'}
+                {' '}(número/bairro só vêm certos se o cadastro já tiver esses campos) — confira antes de emitir.
               </p>
             )}
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">CPF *</label>
+              <label className="text-xs text-slate-500 mb-1 block">
+                CPF {tipo === 'produto' ? '*' : '(opcional)'}
+              </label>
               <input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" className="input w-full text-sm" />
-              {cpf && cpfLimpo.length !== 11 && (
+              {cpf && !cpfValido && (
                 <p className="text-xs text-rose-600 mt-1">CPF precisa ter 11 dígitos</p>
               )}
+              {tipo === 'servico' && !cpf && (
+                <p className="text-xs text-slate-400 mt-1">Sem CPF a nota sai sem tomador identificado.</p>
+              )}
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <label className="text-xs text-slate-500 mb-1 block">Logradouro *</label>
-                <input value={logradouro} onChange={e => setLogradouro(e.target.value)} className="input w-full text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Número *</label>
-                <input value={numero} onChange={e => setNumero(e.target.value)} className="input w-full text-sm" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Bairro *</label>
-                <input value={bairro} onChange={e => setBairro(e.target.value)} className="input w-full text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">CEP</label>
-                <input value={cep} onChange={e => setCep(e.target.value)} className="input w-full text-sm" />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <label className="text-xs text-slate-500 mb-1 block">Município *</label>
-                <input value={municipio} onChange={e => setMunicipio(e.target.value)} className="input w-full text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">UF *</label>
-                <input value={uf} onChange={e => setUf(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} className="input w-full text-sm" />
-              </div>
-            </div>
+            {tipo === 'produto' && (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-xs text-slate-500 mb-1 block">Logradouro *</label>
+                    <input value={logradouro} onChange={e => setLogradouro(e.target.value)} className="input w-full text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Número *</label>
+                    <input value={numero} onChange={e => setNumero(e.target.value)} className="input w-full text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Bairro *</label>
+                    <input value={bairro} onChange={e => setBairro(e.target.value)} className="input w-full text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">CEP</label>
+                    <input value={cep} onChange={e => setCep(e.target.value)} className="input w-full text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-xs text-slate-500 mb-1 block">Município *</label>
+                    <input value={municipio} onChange={e => setMunicipio(e.target.value)} className="input w-full text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">UF *</label>
+                    <input value={uf} onChange={e => setUf(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} className="input w-full text-sm" />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <div className="p-5 border-t border-slate-100 flex gap-3 flex-shrink-0">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
@@ -660,7 +725,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
             </button>
             <button onClick={confirmar} disabled={!podeEnviar || carregandoPaciente}
               className="flex-1 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
-              Emitir NFe
+              {tipo === 'produto' ? 'Emitir NFe' : 'Emitir NFS-e'}
             </button>
           </div>
         </div>
@@ -684,7 +749,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
         setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'erro', nota_fiscal_erro: data.error } : e))
         return
       }
-      setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'processando' } : e))
+      setList(prev => prev.map(e => e.id === entradaId ? { ...e, nota_fiscal_status: 'processando', nota_fiscal_tipo: tipo } : e))
       toast.success('Nota fiscal enviada, aguardando autorização')
       // Consulta automática após alguns segundos (a autorização é assíncrona)
       setTimeout(() => consultarNota(entradaId, tipo, true), 6000)
@@ -721,14 +786,18 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
   }
 
-  function BotaoNfse({ entrada }: { entrada: Entrada }) {
+  function BotaoNota({ entrada }: { entrada: Entrada }) {
     const status = entrada.nota_fiscal_status || 'nao_emitida'
     const carregando = emitindo === entrada.id
+    const tipo = notaTipoDe(entrada)
+    const isNfe = tipo === 'nfe'
+    const icone = isNfe ? 'box' : 'receipt'
+    const label = isNfe ? 'NFe' : 'NFS-e'
 
     if (status === 'cancelada') {
       return (
-        <span title="NFS-e cancelada" className="p-2 text-slate-400 inline-flex">
-          <Icon name="receipt" className="w-4 h-4 opacity-40" />
+        <span title={`${label} cancelada`} className="p-2 text-slate-400 inline-flex">
+          <Icon name={icone} className="w-4 h-4 opacity-40" />
         </span>
       )
     }
@@ -737,14 +806,14 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
       return (
         <>
           <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
-            title={`NFS-e nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
+            title={`${label} nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
             onClick={e => e.stopPropagation()}
             className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
-            <Icon name="receipt" className="w-4 h-4" />
+            <Icon name={icone} className="w-4 h-4" />
           </a>
           {!readOnly && (
             <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
-              title="Cancelar NFS-e"
+              title={`Cancelar ${label}`}
               className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
               <Icon name="x" className="w-4 h-4" />
             </button>
@@ -755,8 +824,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
     if (status === 'processando') {
       return (
-        <button onClick={e => { e.stopPropagation(); consultarNota(entrada.id) }} disabled={carregando}
-          title="NFS-e processando — clique para atualizar status"
+        <button onClick={e => { e.stopPropagation(); consultarNota(entrada.id, tipo) }} disabled={carregando}
+          title={`${label} processando — clique para atualizar status`}
           className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition">
           {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-4 h-4" />}
         </button>
@@ -765,8 +834,8 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
     if (status === 'erro') {
       return (
-        <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
-          title={entrada.nota_fiscal_erro || 'Erro ao emitir NFS-e — clique para tentar de novo'}
+        <button onClick={e => { e.stopPropagation(); setEmitirModalEntrada(entrada) }} disabled={carregando}
+          title={entrada.nota_fiscal_erro || `Erro ao emitir ${label} — clique para tentar de novo`}
           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
           {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
         </button>
@@ -774,71 +843,10 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
 
     return (
-      <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
-        title="Emitir NFS-e (nota de serviço)"
+      <button onClick={e => { e.stopPropagation(); setEmitirModalEntrada(entrada) }} disabled={carregando}
+        title="Emitir nota fiscal"
         className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
-        {carregando ? <LoadingSpinner size="sm" /> : <Icon name="receipt" className="w-4 h-4" />}
-      </button>
-    )
-  }
-
-  function BotaoNfe({ entrada }: { entrada: Entrada }) {
-    const status = entrada.nota_fiscal_status || 'nao_emitida'
-    const carregando = emitindo === entrada.id
-
-    if (status === 'cancelada') {
-      return (
-        <span title="NFe cancelada" className="p-2 text-slate-400 inline-flex">
-          <Icon name="box" className="w-4 h-4 opacity-40" />
-        </span>
-      )
-    }
-
-    if (status === 'autorizada') {
-      return (
-        <>
-          <a href={entrada.nota_fiscal_url_pdf || undefined} target="_blank" rel="noopener noreferrer"
-            title={`NFe nº ${entrada.nota_fiscal_numero || '-'} — ver PDF`}
-            onClick={e => e.stopPropagation()}
-            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition inline-flex">
-            <Icon name="box" className="w-4 h-4" />
-          </a>
-          {!readOnly && (
-            <button onClick={e => { e.stopPropagation(); setCancelEntrada(entrada) }}
-              title="Cancelar NFe"
-              className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition">
-              <Icon name="x" className="w-4 h-4" />
-            </button>
-          )}
-        </>
-      )
-    }
-
-    if (status === 'processando') {
-      return (
-        <button onClick={e => { e.stopPropagation(); consultarNota(entrada.id, 'nfe') }} disabled={carregando}
-          title="NFe processando — clique para atualizar status"
-          className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition">
-          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="loader" className="w-4 h-4" />}
-        </button>
-      )
-    }
-
-    if (status === 'erro') {
-      return (
-        <button onClick={e => { e.stopPropagation(); setEnderecoModalEntrada(entrada) }} disabled={carregando}
-          title={entrada.nota_fiscal_erro || 'Erro ao emitir NFe — clique para tentar de novo'}
-          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
-          {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
-        </button>
-      )
-    }
-
-    return (
-      <button onClick={e => { e.stopPropagation(); setEnderecoModalEntrada(entrada) }} disabled={carregando}
-        title="Emitir NFe (nota de produto)"
-        className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
-        {carregando ? <LoadingSpinner size="sm" /> : <Icon name="box" className="w-4 h-4" />}
+        {carregando ? <LoadingSpinner size="sm" /> : <Icon name={icone} className="w-4 h-4" />}
       </button>
     )
   }
@@ -854,10 +862,10 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
         />
       )}
 
-      {enderecoModalEntrada && (
-        <EnderecoDestinatarioModal
-          entrada={enderecoModalEntrada}
-          onClose={() => setEnderecoModalEntrada(null)}
+      {emitirModalEntrada && (
+        <EmitirNotaModal
+          entrada={emitirModalEntrada}
+          onClose={() => setEmitirModalEntrada(null)}
         />
       )}
 
@@ -1085,8 +1093,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     )
                   })()}
                   <div className="flex items-center justify-end gap-1 mt-1">
-                    {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
-                    {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
+                    {nfseAtivo && <BotaoNota entrada={e} />}
                     {!readOnly && (
                       <>
                         <button onClick={() => setEditEntry(e)}
@@ -1193,8 +1200,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
                     })()}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {nfseAtivo && e.tipo_receita !== 'produto' && <BotaoNfse entrada={e} />}
-                        {nfseAtivo && e.tipo_receita === 'produto' && <BotaoNfe entrada={e} />}
+                        {nfseAtivo && <BotaoNota entrada={e} />}
                         {!readOnly && (
                           <>
                             <button onClick={() => setEditEntry(e)}

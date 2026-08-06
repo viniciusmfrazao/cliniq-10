@@ -389,6 +389,22 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
               placeholder="Nome do paciente"
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             />
+            {(() => {
+              const norm = normalizeText(pacienteNome.trim())
+              if (!norm) return null
+              const match = pacientes.find(p => normalizeText(p.name) === norm)
+              if (!match) return null
+              return (
+                <p className="text-xs text-amber-600 mt-1.5">
+                  Já existe um cadastro com esse nome —{' '}
+                  <button type="button" onClick={() => handlePacienteChange(match.id)}
+                    className="underline font-medium hover:text-amber-700">
+                    selecionar da lista
+                  </button>
+                  {' '}pra vincular CPF/endereço automaticamente (útil pra emitir nota fiscal depois).
+                </p>
+              )
+            })()}
           </div>
         )}
 

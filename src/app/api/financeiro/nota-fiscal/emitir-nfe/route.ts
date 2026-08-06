@@ -47,9 +47,6 @@ export async function POST(req: NextRequest) {
 
   if (!entrada) return NextResponse.json({ error: 'entrada não encontrada' }, { status: 404 })
 
-  if (entrada.tipo_receita !== 'produto') {
-    return NextResponse.json({ error: 'esta entrada não é de produto — emissão de NFe não se aplica' }, { status: 400 })
-  }
   if (entrada.nota_fiscal_status === 'autorizada') {
     return NextResponse.json({ error: 'esta entrada já tem nota fiscal autorizada' }, { status: 400 })
   }
@@ -101,6 +98,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('entradas').update({
         nota_fiscal_status: 'processando',
         nota_fiscal_ref: ref,
+        nota_fiscal_tipo: 'nfe',
         nota_fiscal_erro: null,
       }).eq('id', entrada.id)
       return NextResponse.json({ success: true, status: 'processando' })
@@ -110,6 +108,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('entradas').update({
         nota_fiscal_status: 'processando',
         nota_fiscal_ref: ref,
+        nota_fiscal_tipo: 'nfe',
         nota_fiscal_erro: null,
       }).eq('id', entrada.id)
       return NextResponse.json({ success: true, status: 'processando' })
