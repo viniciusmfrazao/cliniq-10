@@ -42,6 +42,31 @@ function RedefinirSenhaInner() {
         return
       }
 
+      // Fluxo com token_hash na query string (link do email apontando
+      // direto pro nosso app, nao pro endpoint de verify do Supabase).
+      // A verificacao acontece aqui, client-side, de proposito: scanners
+      // de seguranca de email (Outlook Safe Links, antivirus corporativo,
+      // proxies) fazem GET automatico nos links pra escanear ANTES do
+      // usuario clicar, o que consumiria o token se a verificacao fosse
+      // server-side. Como scanners nao executam JS, so o clique real
+      // do usuario dispara o verifyOtp abaixo.
+      const searchParams = new URLSearchParams(window.location.search)
+      const queryTokenHash = searchParams.get('token_hash')
+      const queryType = searchParams.get('type')
+
+      if (queryTokenHash && queryType === 'recovery') {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: queryTokenHash,
+          type: 'recovery'
+        })
+        window.history.replaceState(null, '', '/redefinir-senha')
+        if (!error) {
+          setSessionReady(true)
+        }
+        setChecking(false)
+        return
+      }
+
       // Fluxo padrao: veio do /auth/callback, que ja verificou o link
       // no servidor e deixou um cookie httpOnly de uso unico como prova.
       // NAO usamos "existe uma sessao ativa no navegador" sozinho como
