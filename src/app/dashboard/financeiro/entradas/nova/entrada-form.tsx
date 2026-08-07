@@ -389,22 +389,6 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
               placeholder="Nome do paciente"
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             />
-            {(() => {
-              const norm = normalizeText(pacienteNome.trim())
-              if (!norm) return null
-              const match = pacientes.find(p => normalizeText(p.name) === norm)
-              if (!match) return null
-              return (
-                <p className="text-xs text-amber-600 mt-1.5">
-                  Já existe um cadastro com esse nome —{' '}
-                  <button type="button" onClick={() => handlePacienteChange(match.id)}
-                    className="underline font-medium hover:text-amber-700">
-                    selecionar da lista
-                  </button>
-                  {' '}pra vincular CPF/endereço automaticamente (útil pra emitir nota fiscal depois).
-                </p>
-              )
-            })()}
           </div>
         )}
 
@@ -463,7 +447,16 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
                           className="w-5 h-5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-l-md text-xs font-bold">
                           −
                         </button>
-                        <span className="text-xs font-semibold text-emerald-900 w-4 text-center">{p.quantidade}</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={p.quantidade}
+                          onChange={e => {
+                            const v = parseInt(e.target.value, 10)
+                            updateProcQuantidade(p.id, isNaN(v) ? 1 : v)
+                          }}
+                          className="text-xs font-semibold text-emerald-900 w-8 text-center bg-transparent focus:outline-none focus:ring-1 focus:ring-emerald-400 rounded"
+                        />
                         <button type="button" onClick={() => updateProcQuantidade(p.id, p.quantidade + 1)}
                           className="w-5 h-5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-r-md text-xs font-bold">
                           +
@@ -503,7 +496,17 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
                       className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold">
                       −
                     </button>
-                    <span className="text-xs font-semibold text-amber-900 w-5 text-center">{selectedProduto.quantidade}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={selectedProduto.quantidade}
+                      onChange={e => {
+                        const v = parseInt(e.target.value, 10)
+                        const q = isNaN(v) ? 1 : Math.max(1, v)
+                        setSelectedProduto(prev => prev ? { ...prev, quantidade: q } : prev)
+                      }}
+                      className="text-xs font-semibold text-amber-900 w-9 text-center bg-transparent focus:outline-none focus:ring-1 focus:ring-amber-400 rounded"
+                    />
                     <button type="button" onClick={() => updateProdutoQuantidade(1)}
                       className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold">
                       +
