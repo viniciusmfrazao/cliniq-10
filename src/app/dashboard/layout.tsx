@@ -8,6 +8,7 @@ import AppProviders from '@/components/layout/AppProviders'
 import WhatsappHealthBanner from '@/components/layout/WhatsappHealthBanner'
 import WhatsappHealthBannerWrapper from '@/components/layout/WhatsappHealthBannerWrapper'
 import BillingOverdueBanner from '@/components/layout/BillingOverdueBanner'
+import ImpersonationBanner from '@/components/layout/ImpersonationBanner'
 import MetaBatidaCelebration from '@/components/layout/MetaBatidaCelebration'
 import { FACTORY_DEFAULTS } from '@/lib/permissions'
 
@@ -90,6 +91,7 @@ export default async function DashboardLayout({ children, searchParams }: { chil
       <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden fixed inset-0 w-full">
         <Sidebar clinicName={clinic?.name || 'Clinike'} userName={userData?.name || ''} userRole={userData?.role || 'viewer'} trialDaysLeft={trialDaysLeft} userId={user.id} activeModules={activeModules} userPermissions={userPermissions} comissaoAtiva={comissaoAtiva} />
         <div className="flex-1 flex flex-col min-w-0">
+          <ImpersonationBanner />
           <TopBar
             clinicName={clinic?.name || 'Clinike'}
             userName={userData?.name || ''}

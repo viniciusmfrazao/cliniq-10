@@ -34,9 +34,9 @@ export default async function ClinicsPage() {
   const atendimentoCountMap: Record<string, number> = {}
 
   const [adminsRes, waListRes, usersRes, lastActivityRes, ...countResults] = await Promise.all([
-    svc.from('users').select('clinic_id, name, email').in('clinic_id', clinicIds).eq('role', 'admin'),
+    svc.from('users').select('id, clinic_id, name, email').in('clinic_id', clinicIds).eq('role', 'admin').eq('active', true),
     svc.from('clinic_whatsapp').select('clinic_id, status, instance_name, is_default').in('clinic_id', clinicIds),
-    svc.from('users').select('clinic_id, name, email, role').in('clinic_id', clinicIds).eq('active', true).order('name'),
+    svc.from('users').select('id, clinic_id, name, email, role').in('clinic_id', clinicIds).eq('active', true).order('name'),
     svc.rpc('admin_last_clinic_activity'),
     ...clinicIds.flatMap(id => [
       svc.from('users').select('id', { count: 'exact', head: true }).eq('clinic_id', id).eq('active', true),
@@ -72,15 +72,15 @@ export default async function ClinicsPage() {
     atendimentoCountMap[id] = countResults[i * 4 + 3]?.count ?? 0
   })
 
-  const adminMap: Record<string, { name: string; email: string }> = {}
+  const adminMap: Record<string, { id: string; name: string; email: string }> = {}
   for (const a of (admins || [] as any[])) {
-    if (!adminMap[a.clinic_id]) adminMap[a.clinic_id] = { name: a.name, email: a.email }
+    if (!adminMap[a.clinic_id]) adminMap[a.clinic_id] = { id: a.id, name: a.name, email: a.email }
   }
 
-  const usersMap: Record<string, Array<{ name: string; email: string; role: string }>> = {}
+  const usersMap: Record<string, Array<{ id: string; name: string; email: string; role: string }>> = {}
   for (const u of allClinicUsers) {
     if (!usersMap[u.clinic_id]) usersMap[u.clinic_id] = []
-    usersMap[u.clinic_id].push({ name: u.name, email: u.email, role: u.role })
+    usersMap[u.clinic_id].push({ id: u.id, name: u.name, email: u.email, role: u.role })
   }
 
   const waMap: Record<string, { status: string; instance: string }> = {}
@@ -93,6 +93,9 @@ export default async function ClinicsPage() {
   const enriched = (rawClinics || []).map((c: any) => ({
     ...c,
     admin: adminMap[c.id] || null,
+    // Usuário usado pelo botão "Acessar como": prioriza o admin ativo da
+    // clínica; sem admin, cai pro primeiro usuário ativo da lista.
+    impersonate_user_id: adminMap[c.id]?.id || usersMap[c.id]?.[0]?.id || null,
     whatsapp: waMap[c.id] || null,
     users_count: userCountMap[c.id] || 0,
     users: usersMap[c.id] || [],
