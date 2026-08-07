@@ -29,9 +29,10 @@ type Clinic = {
     entity_name: string
     user_name: string
   } | null
-  admin: { name: string; email: string } | null
+  admin: { id: string; name: string; email: string } | null
+  impersonate_user_id: string | null
   whatsapp: { status: string; instance: string } | null
-  users: Array<{ name: string; email: string; role: string }>
+  users: Array<{ id: string; name: string; email: string; role: string }>
 }
 
 function getDaysLeft(dateStr: string | null): number | null {
@@ -104,6 +105,7 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
   const [waInputs, setWaInputs] = useState<Record<string, string>>({})
   const [savingWa, setSavingWa] = useState<string | null>(null)
   const [chargeResult, setChargeResult] = useState<Record<string, string>>({})
+  const [impersonating, setImpersonating] = useState<string | null>(null)
 
   const filtered = clinics.filter(c => {
     const matchSearch = !search || normalizeText(c.name).includes(normalizeText(search)) ||
@@ -175,6 +177,31 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
       setChargeResult(r => ({ ...r, [clinic.id]: '❌ Erro ao enviar cobrança' }))
     } finally {
       setCharging(null)
+    }
+  }
+
+  async function handleImpersonate(clinic: Clinic) {
+    if (!clinic.impersonate_user_id) {
+      alert('Essa clínica não tem nenhum usuário ativo pra acessar')
+      return
+    }
+    setImpersonating(clinic.id)
+    try {
+      const resp = await fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: clinic.impersonate_user_id }),
+      })
+      if (resp.ok) {
+        window.location.href = '/dashboard'
+      } else {
+        const data = await resp.json().catch(() => ({}))
+        alert(`Erro ao acessar como usuário: ${data.error || 'desconhecido'}`)
+        setImpersonating(null)
+      }
+    } catch {
+      alert('Erro ao acessar como usuário')
+      setImpersonating(null)
     }
   }
 
@@ -303,6 +330,14 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
                   >
                     {charging === clinic.id ? '⏳...' : '💸 Cobrar'}
                   </button>
+                  <button
+                    onClick={() => handleImpersonate(clinic)}
+                    disabled={impersonating === clinic.id || !clinic.impersonate_user_id}
+                    title={clinic.impersonate_user_id ? `Entrar como ${clinic.admin?.name || 'usuário'}` : 'Sem usuário ativo'}
+                    className="text-xs px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg font-medium transition"
+                  >
+                    {impersonating === clinic.id ? '⏳...' : '🔓 Acessar como'}
+                  </button>
                   <Link
                     href={`/admin/clinics/${clinic.id}`}
                     className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
@@ -338,17 +373,27 @@ export default function ClinicsAdminClient({ clinics }: { clinics: Clinic[] }) {
                       }`}>{u.role}</span>
                       <span className="text-slate-700 font-medium">{u.name}</span>
                     </div>
-                    <button
-                      onClick={() => {
-                        setEditingWa(clinic.id)
-                        // Pré-preencher com número do usuário (extraído do email/nome)
-                        setWaInputs(prev => ({ ...prev, [clinic.id]: clinic.billing_whatsapp || '' }))
-                      }}
-                      className="text-[10px] text-slate-400 hover:text-violet-600 ml-2"
-                      title="Usar este usuário para cobrança"
-                    >
-                      📱
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleImpersonate({ ...clinic, impersonate_user_id: u.id })}
+                        disabled={impersonating === clinic.id}
+                        className="text-[10px] text-slate-400 hover:text-amber-600 ml-2"
+                        title={`Acessar como ${u.name}`}
+                      >
+                        🔓
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingWa(clinic.id)
+                          // Pré-preencher com número do usuário (extraído do email/nome)
+                          setWaInputs(prev => ({ ...prev, [clinic.id]: clinic.billing_whatsapp || '' }))
+                        }}
+                        className="text-[10px] text-slate-400 hover:text-violet-600 ml-2"
+                        title="Usar este usuário para cobrança"
+                      >
+                        📱
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {clinic.users.length === 0 && (
