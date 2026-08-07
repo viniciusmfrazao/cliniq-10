@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { isSuperAdmin } from '@/lib/super-admin'
 
@@ -73,7 +74,15 @@ export async function POST(request: NextRequest) {
   })
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('clinike-impersonating', JSON.stringify({
+  // Usa o mesmo mecanismo (next/headers cookies()) que o supabase ssr usa
+  // pra gravar os cookies de sessão logo acima — criar um NextResponse
+  // separado e chamar .cookies.set() nele é uma segunda via de escrita de
+  // Set-Cookie que pode não se combinar com a primeira dependendo do
+  // runtime, deixando esse cookie de fora da resposta final (foi o que
+  // causou o super admin ficar preso na conta impersonada sem o botão
+  // "Voltar pro admin").
+  const cookieStore = await cookies()
+  cookieStore.set('clinike-impersonating', JSON.stringify({
     superAdminEmail: superAdminUser.email,
     targetUserName: targetUser.name,
     targetClinicName: clinicName,
