@@ -87,6 +87,9 @@ type FiscalConfig = {
   emite_nfse: boolean | null
   ibs_cbs_classificacao_padrao: string | null
   ibs_cbs_situacao_padrao: string | null
+  // Código NBS — usado só no Ambiente Nacional da NFSe (padrao_nfse='nacional').
+  // Opcional no schema base da Focus, mas alguns municípios exigem (ver Anexo VIII).
+  codigo_nbs: string | null
 }
 
 // Resolve qual CNPJ usar pra NFe: o dedicado se existir, senão o mesmo da NFS-e
@@ -277,6 +280,80 @@ export async function cancelarNfseMunicipal(config: FiscalConfig, ref: string, j
   if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
 
   const url = `${focusBaseUrl(config.ambiente)}/nfse/${encodeURIComponent(ref)}`
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': authHeader(token),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ justificativa }),
+  })
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
+// ── NFS-e Nacional (Ambiente Nacional / DPS) ────────────────────────────────
+// Usado quando padrao_nfse='nacional' — municípios que aderiram ao Emissor Nacional
+// da NFS-e (ex: Salvador/BA desde a IN 08/2025) exigem esse fluxo em vez do endpoint
+// municipal tradicional (/nfse). Endpoint, payload e formato de resposta são
+// diferentes: base /nfsen em vez de /nfse. Doc: doc.focusnfe.com.br/reference/emitir_dps_nacional
+export async function emitirNfseNacional({ config, ref, valor, dataVenda, tomadorCpf, tomadorNome }: EmitirNfseParams) {
+  const token = focusToken(config)
+  if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
+
+  const cnpjLimpo = (config.cnpj || '').replace(/\D/g, '')
+  const cpfLimpo = (tomadorCpf || '').replace(/\D/g, '')
+
+  const payload: Record<string, unknown> = {
+    data_emissao: `${dataVenda}T12:00:00-03:00`,
+    data_competencia: dataVenda,
+    codigo_municipio_emissora: config.codigo_municipio_ibge,
+    cnpj_prestador: cnpjLimpo,
+    codigo_opcao_simples_nacional: config.regime_tributario === 'simples_nacional' ? 1 : 2,
+    regime_especial_tributacao: 0,
+    ...(cpfLimpo ? { cpf_tomador: cpfLimpo, razao_social_tomador: tomadorNome || undefined } : {}),
+    codigo_municipio_prestacao: config.codigo_municipio_ibge,
+    codigo_tributacao_nacional_iss: config.codigo_tributacao_nacional_iss,
+    ...(config.codigo_nbs ? { codigo_nbs: config.codigo_nbs } : {}),
+    descricao_servico: config.descricao_servico_padrao || 'Serviço de estética conforme registro interno',
+    valor_servico: valor,
+    tributacao_iss: 1, // 1 = operação tributável (padrão — sem isenção/imunidade configurada)
+  }
+
+  const url = `${focusBaseUrl(config.ambiente)}/nfsen?ref=${encodeURIComponent(ref)}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': authHeader(token),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
+export async function consultarNfseNacional(config: FiscalConfig, ref: string) {
+  const token = focusToken(config)
+  if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
+
+  const url = `${focusBaseUrl(config.ambiente)}/nfsen/${encodeURIComponent(ref)}`
+  const res = await fetch(url, {
+    headers: { 'Authorization': authHeader(token) },
+  })
+  const data = await res.json().catch(() => ({}))
+  return { httpStatus: res.status, data }
+}
+
+// Assim como no municipal, cancelamento é definitivo. A Focus aceita cancelamento sem
+// corpo no nacional (justificativa só é obrigatória se codigo_cancelamento=4), mas
+// mandamos sempre pra manter rastreabilidade e consistência com o fluxo municipal.
+export async function cancelarNfseNacional(config: FiscalConfig, ref: string, justificativa: string) {
+  const token = focusToken(config)
+  if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
+
+  const url = `${focusBaseUrl(config.ambiente)}/nfsen/${encodeURIComponent(ref)}`
   const res = await fetch(url, {
     method: 'DELETE',
     headers: {

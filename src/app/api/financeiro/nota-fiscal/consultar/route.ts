@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { consultarNfseMunicipal, resolverUrlArquivo, baixarXmlAutorizado, focusToken } from '@/lib/focus-nfe'
+import { consultarNfseMunicipal, consultarNfseNacional, resolverUrlArquivo, baixarXmlAutorizado, focusToken } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
 
   if (!config) return NextResponse.json({ error: 'configuração fiscal não encontrada' }, { status: 400 })
 
-  const { httpStatus, data } = await consultarNfseMunicipal(config, entrada.nota_fiscal_ref)
+  const consultar = config.padrao_nfse === 'nacional' ? consultarNfseNacional : consultarNfseMunicipal
+  const { httpStatus, data } = await consultar(config, entrada.nota_fiscal_ref)
 
   if (httpStatus === 404) {
     return NextResponse.json({ status: entrada.nota_fiscal_status })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal, extrairErroFocus } from '@/lib/focus-nfe'
+import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal, emitirNfseNacional, extrairErroFocus } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,8 +72,10 @@ export async function POST(req: NextRequest) {
 
   const ref = entrada.id
 
+  const emitir = config!.padrao_nfse === 'nacional' ? emitirNfseNacional : emitirNfseMunicipal
+
   try {
-    const { httpStatus, data } = await emitirNfseMunicipal({
+    const { httpStatus, data } = await emitir({
       config: config!,
       ref,
       valor: Number(entrada.valor_bruto),

@@ -31,6 +31,7 @@ type InitialConfig = {
   codigo_opcao_simples_nacional: number | null
   ambiente: string
   padrao_nfse: string
+  codigo_nbs: string | null
   token_homologacao_mask: string | null
   token_producao_mask: string | null
   updated_at: string | null
@@ -81,6 +82,7 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [codigoSimples, setCodigoSimples] = useState(String(initialConfig?.codigo_opcao_simples_nacional ?? ''))
   const [ambiente, setAmbiente] = useState(initialConfig?.ambiente || 'homologacao')
   const [padraoNfse, setPadraoNfse] = useState(initialConfig?.padrao_nfse || 'municipal')
+  const [codigoNbs, setCodigoNbs] = useState(initialConfig?.codigo_nbs || '')
   const [tokenHomologacao, setTokenHomologacao] = useState('')
   const [tokenProducao, setTokenProducao] = useState('')
   const [inscricaoEstadual, setInscricaoEstadual] = useState(initialConfig?.inscricao_estadual || '')
@@ -157,6 +159,7 @@ export default function FiscalForm({ initialConfig }: Props) {
           codigo_opcao_simples_nacional: codigoSimples ? parseInt(codigoSimples) : null,
           ambiente,
           padrao_nfse: padraoNfse,
+          codigo_nbs: padraoNfse === 'nacional' ? codigoNbs : null,
           token_homologacao: tokenHomologacao,
           token_producao: tokenProducao,
           inscricao_estadual: inscricaoEstadual,
@@ -330,6 +333,21 @@ export default function FiscalForm({ initialConfig }: Props) {
               <option value="nacional">NFS-e Nacional</option>
             </select>
           </div>
+        </div>
+        )}
+
+        {emiteNfse && padraoNfse === 'nacional' && (
+        <div>
+          <label className="text-xs text-slate-500 mb-1 block">
+            Código NBS (Nomenclatura Brasileira de Serviços)
+          </label>
+          <input value={codigoNbs} onChange={e => setCodigoNbs(e.target.value)}
+            placeholder="ex: 121012200" className="input w-full text-sm" />
+          <p className="text-xs text-slate-400 mt-1">
+            Opcional no padrão nacional, mas alguns municípios exigem. Consulte a tabela de
+            correlação do serviço (item da lista × NBS × cClassTrib) no site do Ambiente
+            Nacional da NFS-e (gov.br/nfse).
+          </p>
         </div>
         )}
       </div>
