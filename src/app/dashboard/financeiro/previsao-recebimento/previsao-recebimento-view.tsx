@@ -10,6 +10,16 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 
 
 const RECEB_SHADES = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#eff6ff', '#f5f8ff']
 
+// Troca o dia do mês de uma data mantendo ano/mês, com clamp pro último dia
+// do mês (ex: dia 31 num mês de 30 dias vira dia 30). Usado pra replicar a
+// correção de vencimento (ex: dia 10 -> dia 05) pras demais parcelas do boleto.
+function withDayBR(dateStr: string, day: number): string {
+  const [y, m] = dateStr.slice(0, 10).split('-').map(Number)
+  const ultimoDia = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const dia = String(Math.min(day, ultimoDia)).padStart(2, '0')
+  return `${y}-${String(m).padStart(2, '0')}-${dia}`
+}
+
 function RecebimentoTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
   const row = payload[0]?.payload
@@ -65,6 +75,10 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
   const [boletos, setBoletos] = useState<BoletoParcela[]>([])
   const [loading, setLoading] = useState(true)
   const [marcandoId, setMarcandoId] = useState<string | null>(null)
+  const [editandoVenc, setEditandoVenc] = useState<{ id: string; entradaId: string; vencimentoAtual: string } | null>(null)
+  const [novoVenc, setNovoVenc] = useState('')
+  const [replicarDemais, setReplicarDemais] = useState(true)
+  const [salvandoVenc, setSalvandoVenc] = useState(false)
   const [buscaBoleto, setBuscaBoleto] = useState('')
   const [verTodosBoletos, setVerTodosBoletos] = useState(false)
   const [verTodosPagos, setVerTodosPagos] = useState(false)
@@ -138,6 +152,56 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
     setMarcandoId(null)
     if (error) { alert('Erro ao desfazer: ' + error.message); return }
     setBoletos(prev => prev.map(b => b.id === id ? { ...b, status: 'pendente', data_pagamento: null } : b))
+  }
+
+  function abrirEdicaoVencimento(b: BoletoParcela) {
+    setEditandoVenc({ id: b.id, entradaId: b.entrada_id, vencimentoAtual: b.vencimento })
+    setNovoVenc(b.vencimento.slice(0, 10))
+    setReplicarDemais(true)
+  }
+
+  async function salvarVencimento() {
+    if (!editandoVenc || !novoVenc) return
+    setSalvandoVenc(true)
+    const novoDia = Number(novoVenc.slice(8, 10))
+
+    const { error } = await supabase
+      .from('boleto_parcelas')
+      .update({ vencimento: novoVenc, updated_at: new Date().toISOString() })
+      .eq('id', editandoVenc.id)
+
+    if (error) {
+      setSalvandoVenc(false)
+      alert('Erro ao salvar vencimento: ' + error.message)
+      return
+    }
+
+    let atualizadas: { id: string; vencimento: string }[] = [
+      { id: editandoVenc.id, vencimento: novoVenc },
+    ]
+
+    if (replicarDemais) {
+      const demais = boletos.filter(
+        b => b.entrada_id === editandoVenc.entradaId && b.id !== editandoVenc.id && b.status === 'pendente'
+      )
+      for (const b of demais) {
+        const vencAjustado = withDayBR(b.vencimento, novoDia)
+        const { error: errDemais } = await supabase
+          .from('boleto_parcelas')
+          .update({ vencimento: vencAjustado, updated_at: new Date().toISOString() })
+          .eq('id', b.id)
+        if (!errDemais) atualizadas.push({ id: b.id, vencimento: vencAjustado })
+      }
+    }
+
+    setBoletos(prev =>
+      prev.map(b => {
+        const upd = atualizadas.find(a => a.id === b.id)
+        return upd ? { ...b, vencimento: upd.vencimento } : b
+      })
+    )
+    setSalvandoVenc(false)
+    setEditandoVenc(null)
   }
 
   const hojeStr = todayBR()
@@ -354,6 +418,12 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
                         </span>
                       )}
                       <button
+                        onClick={() => abrirEdicaoVencimento(b)}
+                        title="Editar vencimento"
+                        className="w-8 h-8 flex-shrink-0 rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 flex items-center justify-center transition-colors">
+                        <Icon name="edit" className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={() => marcarComoPago(b.id)}
                         disabled={marcandoId === b.id}
                         className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap">
@@ -463,6 +533,58 @@ export default function PrevisaoRecebimentoView({ clinicId }: { clinicId: string
               </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {editandoVenc && (
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !salvandoVenc && setEditandoVenc(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+            <div>
+              <h3 className="font-bold text-slate-900">Editar vencimento do boleto</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Atual: {parseDateBR(editandoVenc.vencimentoAtual)}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Nova data de vencimento</label>
+              <input
+                type="date"
+                value={novoVenc}
+                onChange={e => setNovoVenc(e.target.value)}
+                className="input w-full text-sm"
+              />
+            </div>
+
+            <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={replicarDemais}
+                onChange={e => setReplicarDemais(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Aplicar o novo dia ({novoVenc ? novoVenc.slice(8, 10) : '--'}) às demais parcelas
+                pendentes deste mesmo boleto, mantendo o mês de cada uma.
+              </span>
+            </label>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setEditandoVenc(null)}
+                disabled={salvandoVenc}
+                className="flex-1 px-3 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button
+                onClick={salvarVencimento}
+                disabled={salvandoVenc || !novoVenc}
+                className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                {salvandoVenc ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
