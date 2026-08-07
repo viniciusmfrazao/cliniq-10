@@ -221,6 +221,16 @@ export function fiscalConfigCompletaNfe(config: FiscalConfig | null): { ok: bool
 
   return { ok: faltando.length === 0, faltando }
 }
+type ServicoFiscalOverride = {
+  item_lista_servico: string
+  codigo_tributario_municipio: string | null
+  codigo_nbs: string | null
+  ibs_cbs_classificacao_tributaria: string | null
+  ibs_cbs_situacao_tributaria: string | null
+  codigo_indicador_operacao: string | null
+  descricao_servico: string | null
+}
+
 type EmitirNfseParams = {
   config: FiscalConfig
   ref: string
@@ -228,14 +238,29 @@ type EmitirNfseParams = {
   dataVenda: string // YYYY-MM-DD
   tomadorCpf: string | null
   tomadorNome: string | null
+  // Perfil fiscal de serviço selecionado (clinic_fiscal_servicos). Quando ausente,
+  // usa os campos legados de FiscalConfig — retrocompatível com clínicas de um serviço só.
+  servicoOverride?: ServicoFiscalOverride | null
 }
 
-export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomadorCpf, tomadorNome }: EmitirNfseParams) {
+export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomadorCpf, tomadorNome, servicoOverride }: EmitirNfseParams) {
   const token = focusToken(config)
   if (!token) throw new Error('Token da Focus NFe não configurado para este ambiente')
 
   const cnpjLimpo = (config.cnpj || '').replace(/\D/g, '')
   const cpfLimpo = (tomadorCpf || '').replace(/\D/g, '')
+
+  // Campos de classificação do serviço: usa o perfil selecionado se houver, senão
+  // cai nos campos legados fixos de FiscalConfig (comportamento anterior, inalterado).
+  const itemListaServico = servicoOverride?.item_lista_servico || config.codigo_tributacao_nacional_iss
+  const codigoTributarioMunicipio = servicoOverride
+    ? (servicoOverride.codigo_tributario_municipio || servicoOverride.item_lista_servico)
+    : (config.codigo_tributario_municipio || config.codigo_tributacao_nacional_iss)
+  const codigoNbs = servicoOverride ? servicoOverride.codigo_nbs : config.codigo_nbs
+  const cClassTrib = servicoOverride ? servicoOverride.ibs_cbs_classificacao_tributaria : config.ibs_cbs_classificacao_padrao_servico
+  const cst = servicoOverride ? servicoOverride.ibs_cbs_situacao_tributaria : config.ibs_cbs_situacao_padrao_servico
+  const indOp = servicoOverride ? servicoOverride.codigo_indicador_operacao : config.codigo_indicador_operacao
+  const discriminacao = servicoOverride?.descricao_servico || config.descricao_servico_padrao || 'Serviço de estética conforme registro interno'
 
   const payload: Record<string, unknown> = {
     data_emissao: `${dataVenda}T12:00:00-03:00`,
@@ -256,18 +281,18 @@ export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomad
     servico: {
       valor_servicos: valor,
       iss_retido: false,
-      item_lista_servico: config.codigo_tributacao_nacional_iss,
+      item_lista_servico: itemListaServico,
       // CTISS pode ser um código proprietário diferente do item LC116 (ex: Salvador
       // usa "0408003" enquanto o item é "0408") — cai no valor antigo se não configurado.
-      codigo_tributario_municipio: config.codigo_tributario_municipio || config.codigo_tributacao_nacional_iss,
-      discriminacao: config.descricao_servico_padrao || 'Serviço de estética conforme registro interno',
+      codigo_tributario_municipio: codigoTributarioMunicipio,
+      discriminacao,
       codigo_municipio: config.codigo_municipio_ibge,
       // Campos da Reforma Tributária — só entram no payload se configurados, pra não
       // quebrar municípios que ainda não pedem isso (ex: Sarah Pina/prod hoje).
-      ...(config.codigo_nbs ? { codigo_nbs: config.codigo_nbs } : {}),
-      ...(config.ibs_cbs_classificacao_padrao_servico ? { ibs_cbs_classificacao_tributaria: config.ibs_cbs_classificacao_padrao_servico } : {}),
-      ...(config.ibs_cbs_situacao_padrao_servico ? { ibs_cbs_situacao_tributaria: config.ibs_cbs_situacao_padrao_servico } : {}),
-      ...(config.codigo_indicador_operacao ? { codigo_indicador_operacao: config.codigo_indicador_operacao } : {}),
+      ...(codigoNbs ? { codigo_nbs: codigoNbs } : {}),
+      ...(cClassTrib ? { ibs_cbs_classificacao_tributaria: cClassTrib } : {}),
+      ...(cst ? { ibs_cbs_situacao_tributaria: cst } : {}),
+      ...(indOp ? { codigo_indicador_operacao: indOp } : {}),
     },
   }
 

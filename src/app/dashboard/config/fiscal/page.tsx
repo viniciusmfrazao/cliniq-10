@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import FiscalForm from './fiscal-form'
+import ServicosFiscais from './servicos-fiscais'
 
 export const dynamic = 'force-dynamic'
 
@@ -99,6 +100,7 @@ export default async function FiscalPage() {
         </p>
       </div>
       <FiscalForm clinicId={userData!.clinic_id} initialConfig={initialConfig} />
+      <ServicosFiscais />
     </div>
   )
 }

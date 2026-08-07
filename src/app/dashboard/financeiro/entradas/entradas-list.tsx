@@ -343,6 +343,61 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
   const supabase = createClient()
   const toast = useToast()
 
+  const [servicosFiscais, setServicosFiscais] = useState<{ id: string; nome: string; is_default: boolean }[]>([])
+  useEffect(() => {
+    if (!nfseAtivo) return
+    fetch('/api/config/fiscal/servicos')
+      .then(res => res.json())
+      .then(data => setServicosFiscais(data.servicos || []))
+      .catch(() => {})
+  }, [nfseAtivo])
+  const [servicoModalEntrada, setServicoModalEntrada] = useState<Entrada | null>(null)
+
+  // Se a clínica tem mais de um serviço fiscal cadastrado (ex: fisioterapia + estética),
+  // pede pra escolher qual antes de emitir. Com 0 ou 1, emite direto (retrocompatível).
+  function iniciarEmissaoNfse(entrada: Entrada) {
+    if (servicosFiscais.length > 1) {
+      setServicoModalEntrada(entrada)
+      return
+    }
+    const unico = servicosFiscais[0]
+    emitirNota(entrada.id, 'nfse', unico ? { servico_fiscal_id: unico.id } : undefined)
+  }
+
+  function ServicoFiscalModal({ entrada, onClose }: { entrada: Entrada; onClose: () => void }) {
+    const [escolhido, setEscolhido] = useState(servicosFiscais.find(s => s.is_default)?.id || servicosFiscais[0]?.id || '')
+    return createPortal(
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+          <div className="p-5 border-b border-slate-100">
+            <h2 className="font-bold text-slate-900">Qual serviço?</h2>
+            <p className="text-sm text-slate-500 mt-0.5">{entrada.paciente_nome}</p>
+          </div>
+          <div className="p-5 space-y-2">
+            {servicosFiscais.map(s => (
+              <label key={s.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input type="radio" name="servico-fiscal" checked={escolhido === s.id} onChange={() => setEscolhido(s.id)} />
+                {s.nome} {s.is_default && <span className="text-xs text-slate-400">(padrão)</span>}
+              </label>
+            ))}
+          </div>
+          <div className="p-5 border-t border-slate-100 flex gap-3">
+            <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button
+              onClick={() => { emitirNota(entrada.id, 'nfse', { servico_fiscal_id: escolhido }); onClose() }}
+              disabled={!escolhido}
+              className="flex-1 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
+              Emitir NFS-e
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
   // Parcelas de boleto (status real de confirmação, independente da venda em `entradas`).
   // Carregado uma vez por clínica, sem filtro de data — é só um mapa de apoio pra mostrar
   // "X/Y confirmadas" ao lado da venda, então cobre qualquer período que o usuário filtrar.
@@ -765,7 +820,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
 
     if (status === 'erro') {
       return (
-        <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
+        <button onClick={e => { e.stopPropagation(); iniciarEmissaoNfse(entrada) }} disabled={carregando}
           title={entrada.nota_fiscal_erro || 'Erro ao emitir NFS-e — clique para tentar de novo'}
           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
           {carregando ? <LoadingSpinner size="sm" /> : <Icon name="x" className="w-4 h-4" />}
@@ -774,7 +829,7 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
     }
 
     return (
-      <button onClick={e => { e.stopPropagation(); emitirNota(entrada.id) }} disabled={carregando}
+      <button onClick={e => { e.stopPropagation(); iniciarEmissaoNfse(entrada) }} disabled={carregando}
         title="Emitir NFS-e (nota de serviço)"
         className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition">
         {carregando ? <LoadingSpinner size="sm" /> : <Icon name="receipt" className="w-4 h-4" />}
@@ -858,6 +913,13 @@ export default function EntradasList({ entradas, procedimentos, profissionais, c
         <EnderecoDestinatarioModal
           entrada={enderecoModalEntrada}
           onClose={() => setEnderecoModalEntrada(null)}
+        />
+      )}
+
+      {servicoModalEntrada && (
+        <ServicoFiscalModal
+          entrada={servicoModalEntrada}
+          onClose={() => setServicoModalEntrada(null)}
         />
       )}
 
