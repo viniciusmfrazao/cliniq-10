@@ -151,7 +151,7 @@ export default function PackageManageModal({
           notes: r.notes.trim() || null,
         }
       })
-      const invalid = r => r.mode === 'appointment' ? !r.appointment_id : !r.date
+      const invalid = (r: PendingRow) => r.mode === 'appointment' ? !r.appointment_id : !r.date
       if (rows.some((r, i) => invalid(pendingRows[i]))) {
         setError('Preencha data ou selecione um atendimento em todas as linhas.')
         return
