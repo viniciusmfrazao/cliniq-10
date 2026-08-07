@@ -104,6 +104,9 @@ type FiscalConfig = {
   // uma clínica pode vender produto e serviço com classificações tributárias diferentes.
   ibs_cbs_situacao_padrao_servico: string | null
   ibs_cbs_classificacao_padrao_servico: string | null
+  // Alguns municípios (ex: Salvador) exigem o elemento Tomador sempre presente no XML,
+  // mesmo sem CPF do paciente. Default false preserva o comportamento de quem já funciona.
+  tomador_sempre_obrigatorio: boolean
 }
 
 // Resolve qual CNPJ usar pra NFe: o dedicado se existir, senão o mesmo da NFS-e
@@ -243,9 +246,13 @@ export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomad
       inscricao_municipal: config.isento_inscricao_municipal ? 'ISENTO' : config.inscricao_municipal,
       codigo_municipio: config.codigo_municipio_ibge,
     },
+    // Por padrão, omitimos o Tomador quando não há CPF do paciente (funciona hoje
+    // pra municípios que aceitam "consumidor não identificado", como Sarah Pina).
+    // Alguns municípios (ex: Salvador) exigem o elemento sempre presente — controlado
+    // por tomador_sempre_obrigatorio pra não mudar o comportamento de quem já funciona.
     tomador: cpfLimpo
       ? { cpf: cpfLimpo, razao_social: tomadorNome || undefined }
-      : undefined,
+      : (config.tomador_sempre_obrigatorio ? { razao_social: tomadorNome || 'Consumidor Final' } : undefined),
     servico: {
       valor_servicos: valor,
       iss_retido: false,
