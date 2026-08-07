@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 // Volta da sessão impersonada pra sessão original do super admin, usando o
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('clinike-impersonating', '', { path: '/', maxAge: 0 })
+  const cookieStore = await cookies()
+  cookieStore.set('clinike-impersonating', '', { path: '/', maxAge: 0 })
   return response
 }
