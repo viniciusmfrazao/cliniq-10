@@ -817,7 +817,7 @@ async function PackagesTabServer({
   clinicId: string
 }) {
   const supabase = await createClient()
-  const [packagesResult, proceduresResult] = await Promise.all([
+  const [packagesResult, proceduresResult, appointmentsResult] = await Promise.all([
     supabase
       .from('patient_packages')
       .select('*, patient_package_sessions(*)')
@@ -829,7 +829,21 @@ async function PackagesTabServer({
       .eq('clinic_id', clinicId)
       .eq('active', true)
       .order('name'),
+    // Atendimentos realizados — para vincular sessões de pacote criadas retroativamente
+    supabase
+      .from('appointments')
+      .select('id, start_time, procedures(name)')
+      .eq('patient_id', patientId)
+      .eq('status', 'completed')
+      .order('start_time', { ascending: false })
+      .limit(50),
   ])
+
+  const pastAppointments = (appointmentsResult.data || []).map((a: any) => ({
+    id: a.id,
+    start_time: a.start_time,
+    procedure_name: a.procedures?.name || null,
+  }))
 
   return (
     <PackagesTab
@@ -837,6 +851,7 @@ async function PackagesTabServer({
       clinicId={clinicId}
       initialPackages={packagesResult.data || []}
       procedures={proceduresResult.data || []}
+      pastAppointments={pastAppointments}
     />
   )
 }

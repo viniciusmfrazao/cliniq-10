@@ -113,10 +113,16 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
   // Pacotes ativos do paciente (para mostrar alerta de usar sessão)
   const { data: activePackages } = await supabase
     .from('patient_packages')
-    .select('id, name, total_sessions, used_sessions, status')
+    .select('id, name, total_sessions, used_sessions, status, patient_package_sessions(*)')
     .eq('patient_id', patient.id)
     .eq('status', 'active')
     .order('created_at', { ascending: false })
+
+  const pastAppointmentsForPackages = (pastAppointments || []).map((a: any) => ({
+    id: a.id,
+    start_time: a.start_time,
+    procedure_name: a.procedures?.name || null,
+  }))
 
   // Anamnese mais recente preenchida pelo paciente — se não houver
   // preenchida ainda, mostramos a pendente (pra avisar o profissional
@@ -186,6 +192,7 @@ export default async function AtendimentoPage({ params }: { params: { appointmen
                 packages={activePackages}
                 clinicId={userData?.clinic_id || ''}
                 appointmentId={appointmentId}
+                pastAppointments={pastAppointmentsForPackages}
               />
             )}
 
