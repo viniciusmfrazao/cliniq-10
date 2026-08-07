@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
+import PackageManageModal, { type ManagedPackage, type PastAppointmentOption } from '@/components/packages/PackageManageModal'
 
 // ─────────────────────────────────────────────
 // Types
@@ -261,122 +262,22 @@ function NewPackageModal({
 }
 
 // ─────────────────────────────────────────────
-// Modal de usar sessão
-// ─────────────────────────────────────────────
-
-function UseSessionModal({
-  pkg,
-  clinicId,
-  onClose,
-  onUsed,
-}: {
-  pkg: Package
-  clinicId: string
-  onClose: () => void
-  onUsed: (updatedPkg: Package) => void
-}) {
-  const [notes, setNotes] = useState('')
-  const [saving, startSaving] = useTransition()
-  const [error, setError] = useState('')
-
-  async function handleConfirm() {
-    startSaving(async () => {
-      const supabase = createClient()
-      const { error: err } = await supabase
-        .from('patient_package_sessions')
-        .insert({
-          clinic_id: clinicId,
-          package_id: pkg.id,
-          performed_at: new Date().toISOString().split('T')[0],
-          notes: notes.trim() || null,
-        })
-
-      if (err) { setError(err.message); return }
-
-      // Buscar pacote atualizado
-      const { data } = await supabase
-        .from('patient_packages')
-        .select('*, patient_package_sessions(*)')
-        .eq('id', pkg.id)
-        .single()
-
-      if (data) onUsed(data as Package)
-      onClose()
-    })
-  }
-
-  const remaining = pkg.total_sessions - pkg.used_sessions
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-slate-900">Usar sessão</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <Icon name="x" className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="bg-violet-50 rounded-2xl p-4 mb-4">
-          <p className="text-sm font-semibold text-violet-900">{pkg.name}</p>
-          <p className="text-xs text-violet-600 mt-0.5">
-            Restam <strong>{remaining - 1}</strong> sessão{remaining - 1 !== 1 ? 'ões' : ''} após esta
-          </p>
-          <ProgressBar used={pkg.used_sessions + 1} total={pkg.total_sessions} />
-        </div>
-
-        <div className="mb-4">
-          <label className="text-xs font-medium text-slate-600 mb-1 block">Observação (opcional)</label>
-          <textarea
-            className="input resize-none"
-            rows={2}
-            placeholder="Notas sobre esta sessão..."
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-          />
-        </div>
-
-        {error && (
-          <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl mb-3">{error}</p>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            className="btn-secondary flex-1 py-2.5"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancelar
-          </button>
-          <button
-            className="btn-primary flex-1 py-2.5"
-            onClick={handleConfirm}
-            disabled={saving}
-          >
-            {saving ? 'Registrando...' : 'Confirmar sessão'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────
 // Card de cada pacote
 // ─────────────────────────────────────────────
 
 function PackageCard({
   pkg,
   clinicId,
+  pastAppointments,
   onUpdate,
 }: {
   pkg: Package
   clinicId: string
+  pastAppointments: PastAppointmentOption[]
   onUpdate: (updatedPkg: Package) => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [useModal, setUseModal] = useState(false)
+  const [manageModal, setManageModal] = useState(false)
   const [cancelling, startCancel] = useTransition()
 
   const remaining = pkg.total_sessions - pkg.used_sessions
@@ -394,18 +295,6 @@ function PackageCard({
         .single()
       if (data) onUpdate(data as Package)
     })
-  }
-
-  async function handleRemoveSession(sessionId: string) {
-    if (!confirm('Desfazer esta sessão?')) return
-    const supabase = createClient()
-    await supabase.from('patient_package_sessions').delete().eq('id', sessionId)
-    const { data } = await supabase
-      .from('patient_packages')
-      .select('*, patient_package_sessions(*)')
-      .eq('id', pkg.id)
-      .single()
-    if (data) onUpdate(data as Package)
   }
 
   return (
@@ -427,16 +316,15 @@ function PackageCard({
             </p>
           </div>
 
-          {/* Botão usar sessão */}
-          {pkg.status === 'active' && remaining > 0 && (
-            <button
-              onClick={() => setUseModal(true)}
-              className="flex-shrink-0 text-xs font-semibold text-white px-3 py-1.5 rounded-xl"
-              style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}
-            >
-              + Sessão
-            </button>
-          )}
+          {/* Gerenciar sessões */}
+          <button
+            onClick={() => setManageModal(true)}
+            className="flex-shrink-0 text-xs font-semibold text-white px-3 py-1.5 rounded-xl flex items-center gap-1"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}
+          >
+            <Icon name="edit" className="w-3.5 h-3.5" />
+            Sessões
+          </button>
         </div>
 
         {/* Barra de progresso */}
@@ -464,24 +352,18 @@ function PackageCard({
                 .sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime())
                 .map((s, i) => (
                   <div key={s.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2 gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <span className="w-5 h-5 rounded-full bg-violet-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                         {pkg.patient_package_sessions.length - i}
                       </span>
-                      <div>
-                        <p className="text-xs font-medium text-slate-700">
-                          {new Date(s.performed_at).toLocaleDateString('pt-BR')}
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+                          {new Date(s.performed_at + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          {s.appointment_id && <Icon name="link" className="w-3 h-3 text-violet-400 flex-shrink-0" />}
                         </p>
-                        {s.notes && <p className="text-[10px] text-slate-400">{s.notes}</p>}
+                        {s.notes && <p className="text-[10px] text-slate-400 truncate">{s.notes}</p>}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleRemoveSession(s.id)}
-                      className="text-slate-300 hover:text-red-400 transition-colors"
-                      title="Desfazer sessão"
-                    >
-                      <Icon name="trash" className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 ))
             )}
@@ -500,12 +382,13 @@ function PackageCard({
         )}
       </div>
 
-      {useModal && (
-        <UseSessionModal
-          pkg={pkg}
+      {manageModal && (
+        <PackageManageModal
+          pkg={pkg as unknown as ManagedPackage}
           clinicId={clinicId}
-          onClose={() => setUseModal(false)}
-          onUsed={onUpdate}
+          pastAppointments={pastAppointments}
+          onClose={() => setManageModal(false)}
+          onUpdated={updated => onUpdate(updated as unknown as Package)}
         />
       )}
     </>
@@ -521,11 +404,13 @@ export default function PackagesTab({
   clinicId,
   initialPackages,
   procedures,
+  pastAppointments,
 }: {
   patientId: string
   clinicId: string
   initialPackages: Package[]
   procedures: Procedure[]
+  pastAppointments: PastAppointmentOption[]
 }) {
   const [packages, setPackages] = useState<Package[]>(initialPackages)
   const [showNewModal, setShowNewModal] = useState(false)
@@ -620,6 +505,7 @@ export default function PackagesTab({
                 key={pkg.id}
                 pkg={pkg}
                 clinicId={clinicId}
+                pastAppointments={pastAppointments}
                 onUpdate={handleUpdate}
               />
             ))}

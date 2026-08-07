@@ -3,28 +3,24 @@
 import { useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
+import PackageManageModal, { type ManagedPackage, type PastAppointmentOption } from '@/components/packages/PackageManageModal'
 
-type ActivePackage = {
-  id: string
-  name: string
-  total_sessions: number
-  used_sessions: number
-  status: string
-}
+type ActivePackage = ManagedPackage & { status: string }
 
 export default function PackageSessionAlert({
   packages,
   clinicId,
   appointmentId,
+  pastAppointments,
 }: {
   packages: ActivePackage[]
   clinicId: string
   appointmentId: string
+  pastAppointments: PastAppointmentOption[]
 }) {
   const [localPackages, setLocalPackages] = useState(packages)
   const [registering, setRegistering] = useState<string | null>(null) // package id
-  const [done, setDone] = useState<Set<string>>(new Set())
-  const [isPending, startTransition] = useTransition()
+  const [managingId, setManagingId] = useState<string | null>(null)
 
   if (localPackages.length === 0) return null
 
@@ -39,17 +35,25 @@ export default function PackageSessionAlert({
     })
 
     if (!error) {
-      setDone(prev => new Set([...prev, pkg.id]))
-      setLocalPackages(prev =>
-        prev.map(p =>
-          p.id === pkg.id
-            ? { ...p, used_sessions: p.used_sessions + 1 }
-            : p
-        )
-      )
+      const { data } = await supabase
+        .from('patient_packages')
+        .select('id, name, total_sessions, used_sessions, status, patient_package_sessions(*)')
+        .eq('id', pkg.id)
+        .single()
+      if (data) {
+        setLocalPackages(prev => prev.map(p => (p.id === pkg.id ? (data as ActivePackage) : p)))
+      }
     }
     setRegistering(null)
   }
+
+  function handleUpdated(updated: ManagedPackage) {
+    setLocalPackages(prev =>
+      prev.map(p => (p.id === updated.id ? { ...p, ...updated } : p))
+    )
+  }
+
+  const managingPkg = localPackages.find(p => p.id === managingId) || null
 
   return (
     <div className="card p-5 border border-violet-100 bg-gradient-to-br from-violet-50/50 to-white">
@@ -63,14 +67,16 @@ export default function PackageSessionAlert({
       <div className="space-y-2">
         {localPackages.map(pkg => {
           const remaining = pkg.total_sessions - pkg.used_sessions
-          const isUsed = done.has(pkg.id)
+          const usedThisAppointment = pkg.patient_package_sessions.some(
+            s => s.appointment_id === appointmentId
+          )
           const isLoading = registering === pkg.id
 
           return (
             <div
               key={pkg.id}
               className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-all ${
-                isUsed
+                usedThisAppointment
                   ? 'bg-emerald-50 border border-emerald-100'
                   : 'bg-white border border-slate-100'
               }`}
@@ -78,7 +84,7 @@ export default function PackageSessionAlert({
               <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-800 truncate">{pkg.name}</p>
                 <p className="text-xs text-slate-400">
-                  {isUsed
+                  {usedThisAppointment
                     ? `✓ Sessão ${pkg.used_sessions} de ${pkg.total_sessions} registrada`
                     : `${remaining} sessão${remaining !== 1 ? 'ões' : ''} restante${remaining !== 1 ? 's' : ''} de ${pkg.total_sessions}`
                   }
@@ -86,33 +92,53 @@ export default function PackageSessionAlert({
                 {/* mini barra */}
                 <div className="w-24 h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${isUsed ? 'bg-emerald-400' : 'bg-violet-400'}`}
+                    className={`h-full rounded-full transition-all ${usedThisAppointment ? 'bg-emerald-400' : 'bg-violet-400'}`}
                     style={{
-                      width: `${Math.min(((isUsed ? pkg.used_sessions : pkg.used_sessions) / pkg.total_sessions) * 100, 100)}%`
+                      width: `${Math.min((pkg.used_sessions / pkg.total_sessions) * 100, 100)}%`
                     }}
                   />
                 </div>
               </div>
 
-              {isUsed ? (
-                <span className="text-xs font-semibold text-emerald-600 whitespace-nowrap flex items-center gap-1">
-                  <Icon name="check" className="w-3.5 h-3.5" />
-                  Usada
-                </span>
-              ) : (
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={() => handleUse(pkg)}
-                  disabled={isLoading || remaining === 0}
-                  className="flex-shrink-0 text-xs font-semibold text-white px-3 py-1.5 rounded-xl disabled:opacity-50 transition-all active:scale-95"
-                  style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}
+                  onClick={() => setManagingId(pkg.id)}
+                  className="text-slate-300 hover:text-violet-500 transition-colors"
+                  title="Corrigir / gerenciar sessões"
                 >
-                  {isLoading ? '...' : 'Usar sessão'}
+                  <Icon name="edit" className="w-4 h-4" />
                 </button>
-              )}
+
+                {usedThisAppointment ? (
+                  <span className="text-xs font-semibold text-emerald-600 whitespace-nowrap flex items-center gap-1">
+                    <Icon name="check" className="w-3.5 h-3.5" />
+                    Usada
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleUse(pkg)}
+                    disabled={isLoading || remaining === 0}
+                    className="flex-shrink-0 text-xs font-semibold text-white px-3 py-1.5 rounded-xl disabled:opacity-50 transition-all active:scale-95"
+                    style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}
+                  >
+                    {isLoading ? '...' : 'Usar sessão'}
+                  </button>
+                )}
+              </div>
             </div>
           )
         })}
       </div>
+
+      {managingPkg && (
+        <PackageManageModal
+          pkg={managingPkg}
+          clinicId={clinicId}
+          pastAppointments={pastAppointments}
+          onClose={() => setManagingId(null)}
+          onUpdated={handleUpdated}
+        />
+      )}
     </div>
   )
 }
