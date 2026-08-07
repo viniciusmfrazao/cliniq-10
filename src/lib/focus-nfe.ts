@@ -87,9 +87,23 @@ type FiscalConfig = {
   emite_nfse: boolean | null
   ibs_cbs_classificacao_padrao: string | null
   ibs_cbs_situacao_padrao: string | null
-  // Código NBS — usado só no Ambiente Nacional da NFSe (padrao_nfse='nacional').
-  // Opcional no schema base da Focus, mas alguns municípios exigem (ver Anexo VIII).
+  // Código NBS — usado no Ambiente Nacional (padrao_nfse='nacional') e também em
+  // municípios que mantiveram emissor próprio mas passaram a exigir NBS no padrão
+  // municipal por causa da Reforma Tributária (ex: Salvador/BA). Opcional no schema
+  // base da Focus, mas alguns municípios exigem (ver Anexo VIII).
   codigo_nbs: string | null
+  // CTISS / código de tributação do município (ABRASF) — alguns municípios (ex:
+  // Salvador) usam um código proprietário diferente do item_lista_servico (LC116).
+  // Se vazio, cai no valor de codigo_tributacao_nacional_iss (comportamento anterior).
+  codigo_tributario_municipio: string | null
+  // cIndOp (Anexo VII) — indicador do local/característica da operação p/ IBS-CBS,
+  // exigido por alguns municípios desde a Reforma Tributária. Opcional.
+  codigo_indicador_operacao: string | null
+  // CST e cClassTrib padrão específicos de NFS-e (serviço) — distintos dos usados em
+  // NFe/produto (ibs_cbs_situacao_padrao / ibs_cbs_classificacao_padrao acima), já que
+  // uma clínica pode vender produto e serviço com classificações tributárias diferentes.
+  ibs_cbs_situacao_padrao_servico: string | null
+  ibs_cbs_classificacao_padrao_servico: string | null
 }
 
 // Resolve qual CNPJ usar pra NFe: o dedicado se existir, senão o mesmo da NFS-e
@@ -236,9 +250,17 @@ export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomad
       valor_servicos: valor,
       iss_retido: false,
       item_lista_servico: config.codigo_tributacao_nacional_iss,
-      codigo_tributario_municipio: config.codigo_tributacao_nacional_iss,
+      // CTISS pode ser um código proprietário diferente do item LC116 (ex: Salvador
+      // usa "0408003" enquanto o item é "0408") — cai no valor antigo se não configurado.
+      codigo_tributario_municipio: config.codigo_tributario_municipio || config.codigo_tributacao_nacional_iss,
       discriminacao: config.descricao_servico_padrao || 'Serviço de estética conforme registro interno',
       codigo_municipio: config.codigo_municipio_ibge,
+      // Campos da Reforma Tributária — só entram no payload se configurados, pra não
+      // quebrar municípios que ainda não pedem isso (ex: Sarah Pina/prod hoje).
+      ...(config.codigo_nbs ? { codigo_nbs: config.codigo_nbs } : {}),
+      ...(config.ibs_cbs_classificacao_padrao_servico ? { ibs_cbs_classificacao_tributaria: config.ibs_cbs_classificacao_padrao_servico } : {}),
+      ...(config.ibs_cbs_situacao_padrao_servico ? { ibs_cbs_situacao_tributaria: config.ibs_cbs_situacao_padrao_servico } : {}),
+      ...(config.codigo_indicador_operacao ? { codigo_indicador_operacao: config.codigo_indicador_operacao } : {}),
     },
   }
 
