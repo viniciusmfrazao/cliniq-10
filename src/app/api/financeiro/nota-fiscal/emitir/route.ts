@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal, extrairErroFocus } from '@/lib/focus-nfe'
+import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal, emitirNfseNacional, extrairErroFocus } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   }
 
   const clinicId = userData!.clinic_id
-  const { entrada_id, tomador_cpf, tomador_nome } = await req.json()
+  const { entrada_id } = await req.json()
   if (!entrada_id) return NextResponse.json({ error: 'entrada_id é obrigatório' }, { status: 400 })
 
   // Módulo precisa estar ativo pra essa clínica
@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
 
   if (!entrada) return NextResponse.json({ error: 'entrada não encontrada' }, { status: 404 })
 
+  if (entrada.tipo_receita !== 'servico') {
+    return NextResponse.json({ error: 'esta entrada não é de serviço — emissão de NFS-e não se aplica' }, { status: 400 })
+  }
   if (entrada.nota_fiscal_status === 'autorizada') {
     return NextResponse.json({ error: 'esta entrada já tem nota fiscal autorizada' }, { status: 400 })
   }
@@ -60,31 +63,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Configuração fiscal com erro: ${errosFormato.join('; ')}` }, { status: 400 })
   }
 
-  let tomadorCpf: string | null = (tomador_cpf || '').replace(/\D/g, '') || null
-  if (!tomadorCpf && entrada.paciente_id) {
+  let tomadorCpf: string | null = null
+  if (entrada.paciente_id) {
     const { data: paciente } = await supabase
       .from('patients').select('cpf').eq('id', entrada.paciente_id).maybeSingle()
     tomadorCpf = paciente?.cpf || null
   }
-  const tomadorNome: string | null = tomador_nome || entrada.paciente_nome || null
 
   const ref = entrada.id
 
+  const emitir = config!.padrao_nfse === 'nacional' ? emitirNfseNacional : emitirNfseMunicipal
+
   try {
-    const { httpStatus, data } = await emitirNfseMunicipal({
+    const { httpStatus, data } = await emitir({
       config: config!,
       ref,
       valor: Number(entrada.valor_bruto),
       dataVenda: entrada.data_venda,
       tomadorCpf,
-      tomadorNome,
+      tomadorNome: entrada.paciente_nome,
     })
 
     if (httpStatus === 201 || httpStatus === 202 || data?.status === 'processando_autorizacao') {
       await supabase.from('entradas').update({
         nota_fiscal_status: 'processando',
         nota_fiscal_ref: ref,
-        nota_fiscal_tipo: 'nfse',
         nota_fiscal_erro: null,
       }).eq('id', entrada.id)
       return NextResponse.json({ success: true, status: 'processando' })
@@ -95,7 +98,6 @@ export async function POST(req: NextRequest) {
       await supabase.from('entradas').update({
         nota_fiscal_status: 'processando',
         nota_fiscal_ref: ref,
-        nota_fiscal_tipo: 'nfse',
         nota_fiscal_erro: null,
       }).eq('id', entrada.id)
       return NextResponse.json({ success: true, status: 'processando' })

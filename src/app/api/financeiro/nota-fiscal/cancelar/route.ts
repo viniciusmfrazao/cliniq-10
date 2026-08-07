@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { cancelarNfseMunicipal, baixarXmlAutorizado, focusToken } from '@/lib/focus-nfe'
+import { cancelarNfseMunicipal, cancelarNfseNacional, baixarXmlAutorizado, focusToken } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
 
   if (!config) return NextResponse.json({ error: 'configuração fiscal não encontrada' }, { status: 400 })
 
-  const { data } = await cancelarNfseMunicipal(config, entrada.nota_fiscal_ref, justificativa.trim())
+  const cancelar = config.padrao_nfse === 'nacional' ? cancelarNfseNacional : cancelarNfseMunicipal
+  const { data } = await cancelar(config, entrada.nota_fiscal_ref, justificativa.trim())
 
   if (data?.status !== 'cancelado') {
     const mensagem = (data?.erros || []).map((e: { mensagem?: string }) => e.mensagem).filter(Boolean).join('; ')
