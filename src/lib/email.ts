@@ -128,3 +128,89 @@ export async function sendWelcomeEmail({
     html,
   })
 }
+
+export async function sendWhatsappDisconnectedEmail({
+  to,
+  clinicName,
+  instanceLabel,
+}: {
+  to: string[]
+  clinicName: string
+  instanceLabel: string
+}) {
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp desconectado</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#dc2626,#b91c1c);padding:40px 40px 32px;text-align:center;">
+              <div style="font-size:28px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Clinike</div>
+              <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-top:4px;">Alerta de conexão</div>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px;">
+              <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1e293b;">
+                ⚠️ WhatsApp desconectado
+              </p>
+              <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.6;">
+                O número <strong style="color:#1e293b;">${instanceLabel}</strong> da <strong style="color:#1e293b;">${clinicName}</strong> foi desconectado do Clinike. Enquanto estiver desconectado, mensagens automáticas, lembretes e a Eva não vão funcionar.
+              </p>
+
+              <!-- CTA -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
+                <tr>
+                  <td align="center">
+                    <a href="${APP_URL}/configuracoes/whatsapp"
+                       style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 40px;border-radius:10px;">
+                      Reconectar agora →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 40px;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#94a3b8;">
+                Este email foi enviado automaticamente pelo Clinike quando detectamos a queda da conexão.<br>
+                Em caso de dúvidas, entre em contato com o suporte.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY não configurada — email de WhatsApp desconectado não enviado')
+    return null
+  }
+  const resend = new Resend(process.env.RESEND_API_KEY)
+
+  return resend.emails.send({
+    from: FROM,
+    to,
+    subject: `⚠️ WhatsApp desconectado — ${clinicName}`,
+    html,
+  })
+}

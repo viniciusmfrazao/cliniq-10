@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { mapEvolutionStateToStatus } from '@/lib/evolution'
 import { getSettings } from '@/lib/app-settings'
 import { logEva } from '@/lib/eva-logger'
+import { sendWhatsappDisconnectedEmail } from '@/lib/email'
 import {
   fetchEvolutionMediaBase64,
   cleanMimeType,
@@ -215,6 +216,47 @@ function parseNpsScore(text: string): { score: number | null; comment: string | 
   return { score: null, comment: null }
 }
 
+/**
+ * Notifica os admins ativos da clinica por email quando o WhatsApp desconecta.
+ * Fire-and-forget (chamado com `void`) — falha aqui nunca deve afetar a
+ * resposta do webhook pro Evolution.
+ */
+async function notifyWhatsappDisconnected({
+  svc,
+  clinicId,
+  instanceLabel,
+}: {
+  svc: ReturnType<typeof createServiceClient>
+  clinicId: string
+  instanceLabel: string
+}) {
+  try {
+    const [{ data: clinic }, { data: admins }] = await Promise.all([
+      svc.from('clinics').select('name').eq('id', clinicId).maybeSingle(),
+      svc
+        .from('users')
+        .select('email')
+        .eq('clinic_id', clinicId)
+        .eq('role', 'admin')
+        .eq('active', true),
+    ])
+
+    const emails = (admins ?? [])
+      .map((a) => a.email)
+      .filter((e): e is string => !!e)
+
+    if (emails.length === 0) return
+
+    await sendWhatsappDisconnectedEmail({
+      to: emails,
+      clinicName: clinic?.name ?? 'sua clínica',
+      instanceLabel,
+    })
+  } catch (e) {
+    console.error('[whatsapp-disconnect-email] falha ao notificar admins:', e)
+  }
+}
+
 async function logWebhook(args: {
   svc: ReturnType<typeof createServiceClient>
   instance: string
@@ -300,11 +342,35 @@ export async function POST(
     return NextResponse.json({ error: 'token ausente' }, { status: 401 })
   }
 
-  const { data: row } = await svc
+  const { data: row, error: lookupError } = await svc
     .from('clinic_whatsapp')
     .select('clinic_id, webhook_token, instance_name, auto_reply_enabled, role_inbound, role_outbound_automation, role_outbound_manual')
     .eq('instance_name', instance)
     .maybeSingle()
+
+  // IMPORTANTE: separar "falha ao consultar o banco" (500, transitorio, o
+  // Evolution deve re-tentar normalmente) de "token realmente invalido"
+  // (401, definitivo). Antes os dois casos caiam juntos em 401 -- se o
+  // Supabase desse um soluco (timeout, 522 etc), a query falhava, `row`
+  // vinha null, e a gente respondia 401 como se o token estivesse errado.
+  // Isso aconteceu no incidente de 2026-07-24: um soluco no banco gerou
+  // 401 falso pra uma instancia saudavel, e o Evolution reagiu entrando
+  // num loop agressivo de retry/reconexao, o que alimentou o proprio
+  // incidente. 500 sinaliza "tenta de novo mais tarde", nao "conserta sua
+  // config" -- reduz a chance desse efeito cascata se repetir.
+  if (lookupError) {
+    await logWebhook({
+      svc,
+      instance,
+      event: body.event,
+      statusCode: 500,
+      error: `falha ao consultar clinic_whatsapp: ${lookupError.message}`,
+      body: parseError ? { __raw: rawText.slice(0, 4000), __parseError: parseError } : body,
+      headers: headerSnapshot,
+      query: querySnapshot,
+    })
+    return NextResponse.json({ error: 'erro interno, tente novamente' }, { status: 500 })
+  }
 
   if (!row || row.webhook_token !== token) {
     await logWebhook({
@@ -386,6 +452,16 @@ export async function POST(
       case 'connection_update': {
         const state = (data as { state?: string }).state ?? 'unknown'
         const mapped = mapEvolutionStateToStatus(state)
+
+        // Busca status anterior + timestamp do ultimo email de alerta, pra
+        // decidir se dispara notificacao de queda (evita spam em flapping).
+        const { data: prevRow } = await svc
+          .from('clinic_whatsapp')
+          .select('status, disconnect_email_sent_at, label')
+          .eq('clinic_id', clinicId)
+          .eq('instance_name', instance)
+          .maybeSingle()
+
         const updates: Record<string, unknown> = {
           status: mapped,
           last_event_at: new Date().toISOString(),
@@ -394,12 +470,35 @@ export async function POST(
           updates.connected_at = new Date().toISOString()
           updates.qr_code = null
           updates.qr_expires_at = null
+          // Reconectou: zera o cooldown pra que uma queda futura dispare
+          // um novo alerta.
+          updates.disconnect_email_sent_at = null
           // Quando conecta, o JID vem em data.wuid ou data.profilePictureUrl etc
           const phoneFromJid =
             jidToPhone((data as { wuid?: string }).wuid) ??
             jidToPhone((data as { ownerJid?: string }).ownerJid)
           if (phoneFromJid) updates.phone_number = phoneFromJid
         }
+
+        // Alerta por email só na TRANSICAO para desconectado (nao em todo
+        // evento que ja chega desconectado), com cooldown de 20min pra nao
+        // floodar em caso de instabilidade (flapping de conexao).
+        const DISCONNECT_EMAIL_COOLDOWN_MS = 20 * 60 * 1000
+        if (
+          mapped === 'disconnected' &&
+          prevRow?.status !== 'disconnected' &&
+          (!prevRow?.disconnect_email_sent_at ||
+            Date.now() - new Date(prevRow.disconnect_email_sent_at).getTime() > DISCONNECT_EMAIL_COOLDOWN_MS)
+        ) {
+          updates.disconnect_email_sent_at = new Date().toISOString()
+          // Fire-and-forget: nao pode atrasar/derrubar a resposta do webhook.
+          void notifyWhatsappDisconnected({
+            svc,
+            clinicId,
+            instanceLabel: prevRow?.label || instance,
+          })
+        }
+
         // Multi-numero: atualiza so a instance que recebeu o evento
         await svc
           .from('clinic_whatsapp')
