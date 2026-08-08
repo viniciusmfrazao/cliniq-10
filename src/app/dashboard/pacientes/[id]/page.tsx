@@ -13,10 +13,10 @@ import OrcamentosTab from './orcamentos-tab'
 import PackagesTab from './packages-tab'
 import OdontogramTab from './odontogram-tab'
 import DocumentosTab from './documentos-tab'
+import FinanceiroTab from './financeiro-tab'
 import PatientAttachments from '@/components/PatientAttachments'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 import AnamnesePresencialButton from './anamnese-presencial-button'
-import PatientMarginCard from './patient-margin-card'
 import SellProductButton from './sell-product-button'
 import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
@@ -65,6 +65,7 @@ export default async function PatientCentralPage({
     packagesCountResult,
     documentsCountResult,
     attachmentsCountResult,
+    entradasCountResult,
   ] = await Promise.all([
     supabase.from('patients').select('*').eq('id', id).maybeSingle(),
     supabase.from('medical_records').select('*').eq('patient_id', id).maybeSingle(),
@@ -106,6 +107,10 @@ export default async function PatientCentralPage({
       .from('patient_attachments')
       .select('id', { count: 'exact', head: true })
       .eq('patient_id', id),
+    supabase
+      .from('entradas')
+      .select('id', { count: 'exact', head: true })
+      .eq('paciente_id', id),
   ])
 
   const activeAppointment = activeAppointmentResult.data
@@ -141,6 +146,7 @@ export default async function PatientCentralPage({
     pacotes: packagesCountResult.count || 0,
     documentos: documentsCountResult.count || 0,
     anexos: attachmentsCountResult.count || 0,
+    financeiro: entradasCountResult.count || 0,
   }
 
   const age = patient.birth_date
@@ -283,13 +289,6 @@ export default async function PatientCentralPage({
               )}
             </Suspense>
           </div>
-          <div className="mt-6">
-            <Suspense fallback={<TabSkeleton />}>
-              {userData?.clinic_id && (
-                <PatientMarginCard patientId={id} clinicId={userData.clinic_id} />
-              )}
-            </Suspense>
-          </div>
         </>
       )}
       {currentTab === 'evolucoes' && (
@@ -353,6 +352,13 @@ export default async function PatientCentralPage({
         <Suspense fallback={<TabSkeleton />}>
           {userData?.clinic_id && (
             <PackagesTabServer patientId={id} clinicId={userData.clinic_id} />
+          )}
+        </Suspense>
+      )}
+      {currentTab === 'financeiro' && (
+        <Suspense fallback={<TabSkeleton />}>
+          {userData?.clinic_id && (
+            <FinanceiroTab patientId={id} clinicId={userData.clinic_id} />
           )}
         </Suspense>
       )}
