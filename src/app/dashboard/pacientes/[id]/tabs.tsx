@@ -8,6 +8,7 @@ export type PatientTab =
   | 'anamneses'
   | 'injetaveis'
   | 'pacotes'
+  | 'financeiro'
   | 'documentos'
   | 'anexos'
   | 'odontograma'
@@ -19,6 +20,7 @@ const TABS: Array<{ id: PatientTab; label: string; icon: string; module?: string
   { id: 'anamneses', label: 'Anamneses', icon: 'clipboard' },
   { id: 'injetaveis', label: 'Injetáveis', icon: 'syringe' },
   { id: 'pacotes', label: 'Pacotes', icon: 'package' },
+  { id: 'financeiro', label: 'Financeiro', icon: 'dollarSign' },
   { id: 'documentos', label: 'Documentos', icon: 'file' },
   { id: 'anexos', label: 'Anexos', icon: 'paperclip' },
 ]
