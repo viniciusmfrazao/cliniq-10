@@ -90,6 +90,7 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
   const [valorBruto, setValorBruto] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [tipoReceita, setTipoReceitaRaw] = useState<'servico' | 'produto'>('servico')
+  const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({})
 
   function setTipoReceita(tipo: 'servico' | 'produto') {
     setTipoReceitaRaw(tipo)
@@ -128,6 +129,16 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
     setSelectedProduto(prev => {
       if (!prev) return prev
       const q = Math.max(1, prev.quantidade + delta)
+      const next = { ...prev, quantidade: q }
+      setValorBruto((next.sale_price * q).toString())
+      syncPagamentoUnico(next.sale_price * q)
+      return next
+    })
+  }
+
+  function setProdutoQuantidadeExata(q: number) {
+    setSelectedProduto(prev => {
+      if (!prev) return prev
       const next = { ...prev, quantidade: q }
       setValorBruto((next.sale_price * q).toString())
       syncPagamentoUnico(next.sale_price * q)
@@ -449,10 +460,21 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
                         <input
                           type="number"
                           min={1}
-                          value={p.quantidade}
+                          value={qtyDrafts[p.id] ?? String(p.quantidade)}
                           onChange={e => {
-                            const v = parseInt(e.target.value, 10)
-                            updateProcQuantidade(p.id, isNaN(v) ? 1 : v)
+                            const raw = e.target.value
+                            setQtyDrafts(prev => ({ ...prev, [p.id]: raw }))
+                            const v = parseInt(raw, 10)
+                            if (!isNaN(v) && v >= 1) updateProcQuantidade(p.id, v)
+                          }}
+                          onBlur={() => {
+                            setQtyDrafts(prev => {
+                              const next = { ...prev }
+                              delete next[p.id]
+                              return next
+                            })
+                            const v = parseInt(qtyDrafts[p.id] ?? '', 10)
+                            if (isNaN(v) || v < 1) updateProcQuantidade(p.id, 1)
                           }}
                           className="text-xs font-semibold text-emerald-900 w-8 text-center bg-transparent focus:outline-none focus:ring-1 focus:ring-emerald-400 rounded"
                         />
@@ -498,11 +520,22 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
                     <input
                       type="number"
                       min={1}
-                      value={selectedProduto.quantidade}
+                      value={qtyDrafts['__produto__'] ?? String(selectedProduto.quantidade)}
                       onChange={e => {
-                        const v = parseInt(e.target.value, 10)
-                        const q = isNaN(v) ? 1 : Math.max(1, v)
-                        setSelectedProduto(prev => prev ? { ...prev, quantidade: q } : prev)
+                        const raw = e.target.value
+                        setQtyDrafts(prev => ({ ...prev, __produto__: raw }))
+                        const v = parseInt(raw, 10)
+                        if (!isNaN(v) && v >= 1) setProdutoQuantidadeExata(v)
+                      }}
+                      onBlur={() => {
+                        const raw = qtyDrafts['__produto__']
+                        setQtyDrafts(prev => {
+                          const next = { ...prev }
+                          delete next.__produto__
+                          return next
+                        })
+                        const v = parseInt(raw ?? '', 10)
+                        if (isNaN(v) || v < 1) setProdutoQuantidadeExata(1)
                       }}
                       className="text-xs font-semibold text-amber-900 w-9 text-center bg-transparent focus:outline-none focus:ring-1 focus:ring-amber-400 rounded"
                     />
