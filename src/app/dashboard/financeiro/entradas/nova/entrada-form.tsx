@@ -94,17 +94,18 @@ export default function EntradaForm({ pacientes, procedimentos, produtos, profis
 
   function setTipoReceita(tipo: 'servico' | 'produto') {
     setTipoReceitaRaw(tipo)
-    // Troca só qual bloco fica ativo pro lançamento (e pro cálculo do valor bruto).
-    // Não apaga o que já foi preenchido no outro modo — assim dá pra ir e voltar
-    // entre serviço e produto sem perder nada, e lançar cada um em sua vez.
+    // Limpa seleção do outro modo pra nao misturar procedimento + produto num mesmo lancamento
     if (tipo === 'servico') {
+      setSelectedProduto(null)
       const v = selectedProcs.reduce((s, p) => s + p.price * p.quantidade, 0)
-      setValorBruto(v > 0 ? v.toString() : '')
+      setValorBruto(v.toString())
       syncPagamentoUnico(v)
     } else {
-      const v = selectedProduto ? selectedProduto.sale_price * selectedProduto.quantidade : 0
-      setValorBruto(v > 0 ? v.toString() : '')
-      syncPagamentoUnico(v)
+      setSelectedProcs([])
+      setProcedimentoId('')
+      setProcedimentoNome('')
+      setValorBruto('')
+      syncPagamentoUnico(0)
     }
   }
 
