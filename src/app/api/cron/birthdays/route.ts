@@ -272,18 +272,61 @@ export async function GET(req: NextRequest) {
         .select('id')
         .maybeSingle()
 
+      let claimedRowId: string | undefined = lockRow?.id
+
       if (errInsert) {
-        // Conflito de unique = outra execução já está cuidando, ou já enviado
+        // Conflito de unique key: já existe registro pra esse paciente/ano.
+        // Pode ser: (a) outra execução concorrente que já está processando
+        // (status='skipped', reservado agora mesmo), (b) já enviado com
+        // sucesso (status='sent'), ou (c) uma tentativa anterior que falhou
+        // (status='error', ex: rate_limited pelo pacer anti-ban) — nesse
+        // caso o cron (roda a cada 10min) deve poder RETENTAR, senão o
+        // aniversariante fica sem mensagem até o ano seguinte.
         if ((errInsert as { code?: string }).code === '23505') {
-          summary.skippedAlreadySent++
+          const { data: existing, error: errFetch } = await svc
+            .from('birthday_messages_log')
+            .select('id, status')
+            .eq('clinic_id', automation.clinic_id)
+            .eq('patient_id', b.patient_id)
+            .eq('year', b.year)
+            .maybeSingle()
+
+          if (errFetch || !existing) {
+            summary.skippedAlreadySent++
+            continue
+          }
+
+          if (existing.status !== 'error') {
+            // 'sent' ou 'skipped' (outra execução em andamento) — não retenta
+            summary.skippedAlreadySent++
+            continue
+          }
+
+          // Reivindica atomicamente a linha em erro: só ganha quem conseguir
+          // fazer essa update condicional (protege contra corrida entre
+          // execuções concorrentes do cron).
+          const { data: claimed, error: errClaim } = await svc
+            .from('birthday_messages_log')
+            .update({ status: 'skipped', message: text, error: null })
+            .eq('id', existing.id)
+            .eq('status', 'error')
+            .select('id')
+            .maybeSingle()
+
+          if (errClaim || !claimed) {
+            summary.skippedAlreadySent++
+            continue
+          }
+
+          claimedRowId = claimed.id
+        } else {
+          summary.errors.push({
+            clinic_id: automation.clinic_id,
+            patient_id: b.patient_id,
+            error: `lock_insert: ${errInsert.message}`,
+          })
           continue
         }
-        summary.errors.push({
-          clinic_id: automation.clinic_id,
-          patient_id: b.patient_id,
-          error: `lock_insert: ${errInsert.message}`,
-        })
-        continue
       }
 
       // Tenta enviar
@@ -300,13 +343,13 @@ export async function GET(req: NextRequest) {
         await svc
           .from('birthday_messages_log')
           .update({ status: 'sent', sent_at: new Date().toISOString() })
-          .eq('id', lockRow!.id)
+          .eq('id', claimedRowId!)
         summary.sent++
       } else {
         await svc
           .from('birthday_messages_log')
           .update({ status: 'error', error: result.error })
-          .eq('id', lockRow!.id)
+          .eq('id', claimedRowId!)
         summary.errors.push({
           clinic_id: automation.clinic_id,
           patient_id: b.patient_id,
