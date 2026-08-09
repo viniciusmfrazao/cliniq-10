@@ -19,6 +19,7 @@ type Procedure = {
   professional_ids?: string[] | null
   active?: boolean
   custo_fixo_rateavel?: number | null
+  is_consulta?: boolean | null
 }
 
 type Props = {
@@ -44,6 +45,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
     category: procedure?.category || '',
     professional_ids: (procedure?.professional_ids || []) as string[],
     custo_fixo_rateavel: procedure?.custo_fixo_rateavel != null ? String(procedure.custo_fixo_rateavel) : '',
+    is_consulta: procedure?.is_consulta ?? false,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -73,6 +75,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
       price: parseFloat(form.price) || 0,
       category: form.category || null,
       professional_ids: form.professional_ids,
+      is_consulta: form.is_consulta,
       ...(hasCustoRateavel
         ? { custo_fixo_rateavel: form.custo_fixo_rateavel !== '' ? parseFloat(form.custo_fixo_rateavel) : null }
         : {}),
@@ -97,6 +100,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
         category: '',
         professional_ids: [],
         custo_fixo_rateavel: '',
+        is_consulta: false,
       })
     }
     setLoading(false)
@@ -168,6 +172,23 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
             value={form.category}
             onChange={e => update('category', e.target.value)}
           />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={form.is_consulta}
+              onChange={e => update('is_consulta', e.target.checked)}
+            />
+            <span className="text-sm text-slate-700">
+              Consulta/avaliação
+              <span className="block text-xs text-slate-400 font-normal">
+                Não conta como atendimento real no recall de pacientes inativos.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="md:col-span-2">

@@ -21,6 +21,7 @@ type Procedure = {
   includes_return: boolean | null
   return_days: number | null
   custo_fixo_rateavel?: number | null
+  is_consulta?: boolean | null
 }
 
 type Props = {
@@ -153,7 +154,14 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
                     }`}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900">{proc.name}</p>
+                      <p className="text-sm font-medium text-slate-900 flex items-center gap-1.5">
+                        {proc.name}
+                        {proc.is_consulta && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-normal">
+                            Consulta/avaliação
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {proc.duration_minutes} min • R$ {Number(proc.price).toFixed(2)}
                         {hasCustoRateavel && proc.custo_fixo_rateavel != null && (
