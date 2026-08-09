@@ -22,13 +22,18 @@ export default async function AutomacoesPage() {
 
   const clinicId = userRow.clinic_id
 
-  const [{ data: automation }, { data: whatsapp }, { data: clinic }] = await Promise.all([
+  const [{ data: automation }, { data: whatsapp }, { data: clinic }, { data: procedures }] = await Promise.all([
     supabase.from('clinic_automations').select('*').eq('clinic_id', clinicId).maybeSingle(),
     supabase
       .from('clinic_whatsapp')
       .select('status')
       .eq('clinic_id', clinicId),
     supabase.from('clinics').select('id, name').eq('id', clinicId).maybeSingle(),
+    supabase
+      .from('procedures')
+      .select('id, name, is_consulta, active')
+      .eq('clinic_id', clinicId)
+      .order('name', { ascending: true }),
   ])
 
   return (
@@ -37,6 +42,7 @@ export default async function AutomacoesPage() {
       clinicName={clinic?.name || 'Clínica'}
       auto={automation}
       whatsappConnected={(whatsapp ?? []).some((w: { status: string }) => w.status === 'connected')}
+      procedures={procedures ?? []}
     />
   )
 }

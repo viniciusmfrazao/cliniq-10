@@ -24,10 +24,18 @@ interface Initial {
   seq: RecallStep[]
 }
 
+interface ProcedureOption {
+  id: string
+  name: string
+  is_consulta: boolean | null
+  active: boolean | null
+}
+
 interface Props {
   clinicId: string
   clinicName: string
   initial: Initial
+  procedures: ProcedureOption[]
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -351,9 +359,37 @@ function StepCard({
 
 // ─── Form principal ────────────────────────────────────────────────────────────
 
-export default function RecallForm({ clinicId, clinicName, initial }: Props) {
+export default function RecallForm({ clinicId, clinicName, initial, procedures }: Props) {
   const router = useRouter()
   const supabase = createClient()
+
+  // ── Procedimentos excluídos do recall (consulta/avaliação etc.) ──
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(
+    () => new Set(procedures.filter((p) => p.is_consulta).map((p) => p.id)),
+  )
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+
+  async function toggleExcluded(procId: string, next: boolean) {
+    setTogglingId(procId)
+    const prev = new Set(excludedIds)
+    setExcludedIds((s) => {
+      const copy = new Set(s)
+      if (next) copy.add(procId)
+      else copy.delete(procId)
+      return copy
+    })
+    const { error } = await supabase
+      .from('procedures')
+      .update({ is_consulta: next })
+      .eq('id', procId)
+    if (error) {
+      setExcludedIds(prev)
+      alert(parseSupabaseError(error))
+    } else {
+      router.refresh()
+    }
+    setTogglingId(null)
+  }
 
   const [enabled, setEnabled] = useState(initial.enabled)
   // Inicializa seq: se já tem dados no novo formato, usa; caso contrário,
@@ -603,6 +639,48 @@ export default function RecallForm({ clinicId, clinicName, initial }: Props) {
                   onMoveDown={() => moveStep(idx, 'down')}
                 />
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Procedimentos excluídos do recall */}
+        <div className="space-y-2 mt-6">
+          <div>
+            <p className="font-semibold text-slate-900">Procedimentos que não contam para o recall</p>
+            <p className="text-sm text-slate-500">
+              Marque consultas, avaliações ou qualquer procedimento que não deve ser considerado
+              "atendimento real". Pacientes cuja última visita foi um desses não recebem recall.
+            </p>
+          </div>
+
+          {procedures.length === 0 ? (
+            <div className="p-4 text-center border-2 border-dashed border-slate-200 rounded-xl">
+              <p className="text-slate-400 text-sm">Nenhum procedimento cadastrado ainda.</p>
+            </div>
+          ) : (
+            <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+              {procedures.map((proc) => {
+                const checked = excludedIds.has(proc.id)
+                return (
+                  <label
+                    key={proc.id}
+                    className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors ${
+                      proc.active === false ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={togglingId === proc.id}
+                      onChange={(e) => toggleExcluded(proc.id, e.target.checked)}
+                    />
+                    <span className="text-sm text-slate-700 flex-1">{proc.name}</span>
+                    {proc.active === false && (
+                      <span className="text-[10px] text-slate-400">inativo</span>
+                    )}
+                  </label>
+                )
+              })}
             </div>
           )}
         </div>

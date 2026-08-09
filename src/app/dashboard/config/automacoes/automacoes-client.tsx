@@ -74,11 +74,19 @@ type AutomationRow = {
   relatorio_telefones?: any
 }
 
+interface ProcedureOption {
+  id: string
+  name: string
+  is_consulta: boolean | null
+  active: boolean | null
+}
+
 interface Props {
   clinicId: string
   clinicName: string
   auto: AutomationRow | null
   whatsappConnected: boolean
+  procedures: ProcedureOption[]
 }
 
 // ─── Accordion item ───────────────────────────────────────────────────────────
@@ -275,6 +283,7 @@ export default function AutomacoesClient({
   clinicName,
   auto,
   whatsappConnected,
+  procedures,
 }: Props) {
   // Controla qual accordion está aberto (null = todos fechados)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -466,6 +475,7 @@ export default function AutomacoesClient({
         <RecallForm
           clinicId={clinicId}
           clinicName={clinicName}
+          procedures={procedures}
           initial={{
             enabled: auto?.recall_inativos ?? false,
             diasInativo: auto?.recall_dias ?? 150,
