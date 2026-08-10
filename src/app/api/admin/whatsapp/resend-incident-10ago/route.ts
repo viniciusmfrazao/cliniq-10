@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
 
   // ---------------------------------------------------------------------
   // 1) Mariana Dantas — destrava a fila do cron de confirmação de agendamento
+  //    (rodada 1, já confirmada ok — mantido idempotente)
   // ---------------------------------------------------------------------
   const appointmentId = '3dc03805-9247-4067-89e1-fc3c51d1c1a5'
   const { data: appt, error: apptErr } = await svc
@@ -68,19 +69,30 @@ export async function GET(req: NextRequest) {
   }
 
   // ---------------------------------------------------------------------
-  // 2) Tacciane — reenvia o termo agora (mesma lógica de /api/documento/send)
+  // 2) Reenvio de documentos (rodada 1: Tacciane, já confirmada ok;
+  //    rodada 2: 3 documentos da Sarah Pina achados na varredura completa
+  //    00:17-17:07 depois do restart do container). Mesma lógica de
+  //    /api/documento/send, via helper reutilizável.
   // ---------------------------------------------------------------------
-  const documentoId = '37d5c603-98ac-4c05-a498-69fca4164a42'
+  const documentoIds = [
+    '37d5c603-98ac-4c05-a498-69fca4164a42', // Tacciane (rodada 1, idempotente)
+    'd1c97f1b-82f4-4dea-bf04-61e9397587c7', // Sarah Pina / Thamires Carvalho — TERMO DE CONSENTIMENTO
+    'f705c229-955a-4194-b9ab-6b4038c202af', // Sarah Pina / Thamires Carvalho — Cuidados Pos Procedimento
+    '58de02e0-4632-4a4f-b7ad-21b53d7ea1cd', // Sarah Pina / Andressa Lopo Ribas — Cuidados Pos Procedimento
+  ]
 
-  const { data: doc, error: errDoc } = await svc
-    .from('documents_sent')
-    .select('*, document_templates(name, image_url, requires_signature), patients(id, name, phone), clinic_id')
-    .eq('id', documentoId)
-    .maybeSingle()
+  for (const documentoId of documentoIds) {
+    const { data: doc, error: errDoc } = await svc
+      .from('documents_sent')
+      .select('*, document_templates(name, image_url, requires_signature), patients(id, name, phone), clinic_id')
+      .eq('id', documentoId)
+      .maybeSingle()
 
-  if (errDoc || !doc) {
-    log.push(`[Tacciane] ERRO ao buscar documento: ${errDoc?.message || 'não encontrado'}`)
-  } else {
+    if (errDoc || !doc) {
+      log.push(`[${documentoId}] ERRO ao buscar documento: ${errDoc?.message || 'não encontrado'}`)
+      continue
+    }
+
     const clinicId = doc.clinic_id as string
     const patient = doc.patients as unknown as { name: string; phone: string } | null
     const template = doc.document_templates as unknown as {
@@ -89,65 +101,67 @@ export async function GET(req: NextRequest) {
       requires_signature: boolean
     } | null
     const phone = (patient?.phone || '').trim()
+    const label = `${patient?.name || documentoId} / ${template?.name || doc.name}`
 
     if (!phone) {
-      log.push('[Tacciane] ERRO: paciente sem telefone cadastrado')
-    } else {
-      const { data: clinic } = await svc.from('clinics').select('name').eq('id', clinicId).maybeSingle()
-      const clinicName = clinic?.name || 'nossa clínica'
-      const firstName = (patient?.name || '').split(' ')[0]
-      const templateName = template?.name || doc.name || 'documento'
+      log.push(`[${label}] ERRO: paciente sem telefone cadastrado`)
+      continue
+    }
 
-      const siteUrl =
-        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://app.clinike.com.br'
-      const link = `${siteUrl}/assinar/${doc.sign_token}`
+    const { data: clinic } = await svc.from('clinics').select('name').eq('id', clinicId).maybeSingle()
+    const clinicName = clinic?.name || 'nossa clínica'
+    const firstName = (patient?.name || '').split(' ')[0]
+    const templateName = template?.name || doc.name || 'documento'
 
-      const alreadySigned = doc.status === 'signed' && doc.signer_role === 'profissional'
-      const message = alreadySigned
-        ? `Olá ${firstName}! 👋\n\n` +
-          `A ${clinicName} enviou o documento *"${templateName}"* já assinado:\n\n` +
-          `${link}\n\n` +
-          `Qualquer dúvida é só chamar! 🤍`
-        : `Olá ${firstName}! 👋\n\n` +
-          `A ${clinicName} enviou o documento *"${templateName}"* para você assinar digitalmente:\n\n` +
-          `${link}\n\n` +
-          `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://app.clinike.com.br'
+    const link = `${siteUrl}/assinar/${doc.sign_token}`
 
-      const fileUrl = (template?.image_url || '') as string
-      const hasAttachment = !!fileUrl
-      const isPdf = hasAttachment && fileUrl.toLowerCase().endsWith('.pdf')
+    const alreadySigned = doc.status === 'signed' && doc.signer_role === 'profissional'
+    const message = alreadySigned
+      ? `Olá ${firstName}! 👋\n\n` +
+        `A ${clinicName} enviou o documento *"${templateName}"* já assinado:\n\n` +
+        `${link}\n\n` +
+        `Qualquer dúvida é só chamar! 🤍`
+      : `Olá ${firstName}! 👋\n\n` +
+        `A ${clinicName} enviou o documento *"${templateName}"* para você assinar digitalmente:\n\n` +
+        `${link}\n\n` +
+        `O link expira em 7 dias. Qualquer dúvida é só chamar! 🤍`
 
-      if (hasAttachment) {
-        const attResult = await sendWhatsappImage({
-          clinicId,
-          phone,
-          media: fileUrl,
-          mimetype: isPdf ? 'application/pdf' : 'image/jpeg',
-          caption: '',
-          fileName: isPdf ? `${templateName}.pdf` : undefined,
-          purpose: 'automation',
+    const fileUrl = (template?.image_url || '') as string
+    const hasAttachment = !!fileUrl
+    const isPdf = hasAttachment && fileUrl.toLowerCase().endsWith('.pdf')
+
+    if (hasAttachment) {
+      const attResult = await sendWhatsappImage({
+        clinicId,
+        phone,
+        media: fileUrl,
+        mimetype: isPdf ? 'application/pdf' : 'image/jpeg',
+        caption: '',
+        fileName: isPdf ? `${templateName}.pdf` : undefined,
+        purpose: 'automation',
+      })
+      log.push(
+        attResult.ok
+          ? `[${label}] anexo reenviado ok`
+          : `[${label}] falha ao reenviar anexo: ${attResult.error}`,
+      )
+    }
+
+    const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
+
+    if (result.ok) {
+      await svc
+        .from('documents_sent')
+        .update({
+          whatsapp_sent_at: new Date().toISOString(),
+          status: doc.status === 'pending' ? 'sent' : doc.status,
         })
-        log.push(
-          attResult.ok
-            ? '[Tacciane] anexo reenviado ok'
-            : `[Tacciane] falha ao reenviar anexo: ${attResult.error}`,
-        )
-      }
-
-      const result = await sendWhatsappMessage({ clinicId, phone, message, purpose: 'automation' })
-
-      if (result.ok) {
-        await svc
-          .from('documents_sent')
-          .update({
-            whatsapp_sent_at: new Date().toISOString(),
-            status: doc.status === 'pending' ? 'sent' : doc.status,
-          })
-          .eq('id', documentoId)
-        log.push('[Tacciane] termo reenviado com sucesso')
-      } else {
-        log.push(`[Tacciane] ERRO ao reenviar termo: ${result.error}`)
-      }
+        .eq('id', documentoId)
+      log.push(`[${label}] reenviado com sucesso`)
+    } else {
+      log.push(`[${label}] ERRO ao reenviar: ${result.error}`)
     }
   }
 
