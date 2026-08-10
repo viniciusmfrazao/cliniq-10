@@ -473,6 +473,30 @@ function randomTypingDelayMs(): number {
   return Math.floor(1000 + Math.random() * 2000)
 }
 
+/**
+ * Detecta o erro "Connection Closed" (statusCode 428) que a Evolution
+ * devolve quando o presenceSubscribe do "digitando..." (delay + presence:
+ * 'composing') falha porque o socket do Baileys não está realmente pronto
+ * pra escrita — mesmo com connectionState reportando "open" (sessão
+ * zumbi). Identificado em incidente 10/ago/2026: afetou 7+ instances
+ * simultaneamente, sempre no mesmo ponto (presenceSubscribe antes do
+ * sendText), e restart de instance não resolvia.
+ *
+ * Quando isso acontece, o texto NUNCA chega a ser escrito no socket —
+ * a chamada inteira aborta antes. Por isso vale tentar de novo sem
+ * presence/delay: se o socket aceitar escrita "crua" mas não aguentar o
+ * presence subscribe extra, essa segunda tentativa passa.
+ */
+function isPresenceSubscribeConnectionClosed(error: string): boolean {
+  // A Evolution embrulha o erro interno (statusCode 428/Precondition
+  // Required do Baileys) numa resposta HTTP 400 Bad Request pro caller —
+  // só a mensagem "Connection Closed" sobrevive nesse wrapper, então é o
+  // único sinal confiável aqui (visto em produção: "Evolution 400:
+  // {"status":400,"error":"Bad Request","response":{"message":["Error:
+  // Connection Closed"]}}").
+  return /connection closed/i.test(error)
+}
+
 async function postEvolution(
   url: string,
   apiKey: string,
@@ -540,7 +564,7 @@ export async function sendWhatsappMessage(args: {
     }
   }
 
-  const sendRes = await postEvolution(
+  let sendRes = await postEvolution(
     `${r.data.baseUrl}/message/sendText/${r.data.instanceName}`,
     r.data.apiKey,
     {
@@ -550,6 +574,20 @@ export async function sendWhatsappMessage(args: {
       presence: 'composing',
     },
   )
+
+  // Fallback: socket zumbi derruba o presenceSubscribe do "digitando..."
+  // antes do texto sair. Tenta de novo sem presence/delay — ver
+  // isPresenceSubscribeConnectionClosed.
+  if (!sendRes.ok && isPresenceSubscribeConnectionClosed(sendRes.error)) {
+    sendRes = await postEvolution(
+      `${r.data.baseUrl}/message/sendText/${r.data.instanceName}`,
+      r.data.apiKey,
+      {
+        number: normalizePhone(phone),
+        text: message,
+      },
+    )
+  }
 
   if (sendRes.ok && purpose === 'automation') {
     await persistOutboundMessage({
@@ -598,23 +636,33 @@ export async function sendWhatsappButtons(args: {
     }
   }
 
-  const sendRes = await postEvolution(
+  const buildButtonsPayload = (withPresence: boolean) => ({
+    number: normalizePhone(phone),
+    title: body,
+    footer: footer ?? '',
+    buttons: buttons.slice(0, 3).map((b) => ({
+      buttonId: b.id,
+      buttonText: { displayText: b.text },
+      type: 1,
+    })),
+    headerType: 1,
+    ...(withPresence ? { delay: randomTypingDelayMs(), presence: 'composing' as const } : {}),
+  })
+
+  let sendRes = await postEvolution(
     `${r.data.baseUrl}/message/sendButtons/${r.data.instanceName}`,
     r.data.apiKey,
-    {
-      number: normalizePhone(phone),
-      title: body,
-      footer: footer ?? '',
-      buttons: buttons.slice(0, 3).map((b) => ({
-        buttonId: b.id,
-        buttonText: { displayText: b.text },
-        type: 1,
-      })),
-      headerType: 1,
-      delay: randomTypingDelayMs(),
-      presence: 'composing',
-    },
+    buildButtonsPayload(true),
   )
+
+  // Fallback: mesmo problema de socket zumbi descrito em sendWhatsappMessage.
+  if (!sendRes.ok && isPresenceSubscribeConnectionClosed(sendRes.error)) {
+    sendRes = await postEvolution(
+      `${r.data.baseUrl}/message/sendButtons/${r.data.instanceName}`,
+      r.data.apiKey,
+      buildButtonsPayload(false),
+    )
+  }
 
   if (sendRes.ok && purpose === 'automation') {
     await persistOutboundMessage({
