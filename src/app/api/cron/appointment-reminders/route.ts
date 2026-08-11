@@ -466,7 +466,16 @@ export async function GET(req: NextRequest) {
       result = { ok: false, code: 'evolution_error', error: 'Modo de envio inválido' }
     }
 
-    if (!result.ok) {
+    // Fix 11/ago/2026: pacientes recebendo confirmação duplicada. Causa: quando
+    // o fetch pra Evolution lança exceção de rede (timeout/conexão caindo no meio
+    // da requisição — code 'unknown'), NÃO temos resposta HTTP nenhuma da Evolution.
+    // Não dá pra saber se ela já processou e despachou os botões antes da conexão
+    // cair. O fallback abaixo mandava um SEGUNDO texto de qualquer forma — se os
+    // botões já tinham sido entregues, a paciente recebia as duas mensagens.
+    // Erros com resposta HTTP real da Evolution (code 'evolution_error', ex.:
+    // "Connection Closed" antes do sendText/sendButtons, ou número inválido) são
+    // seguros pro fallback: a Evolution confirmou que a mensagem não foi escrita.
+    if (!result.ok && result.code !== 'unknown') {
       // Fallback: texto simples (com instrução de resposta só se a clínica pediu botões)
       result = await sendWhatsappMessage({
         clinicId: app.clinic_id,
@@ -487,7 +496,11 @@ export async function GET(req: NextRequest) {
       // — paciente não recebia nada e o sistema achava que tinha enviado.
       // Outras falhas (ex.: número inválido) permanecem travadas, já que
       // retentar não resolveria.
-      if (result.code === 'rate_limited') {
+      // 'rate_limited': nunca chegamos a chamar a Evolution (adiado pelo pacer).
+      // 'unknown': exceção de rede sem resposta HTTP — não sabemos se já enviou
+      // (ver comentário acima). Em ambos, destrava pra tentar de novo no próximo
+      // ciclo em vez de arriscar um fallback duplicado agora.
+      if (result.code === 'rate_limited' || result.code === 'unknown') {
         await svc
           .from('appointments')
           .update({ confirmation_sent_at: null })
