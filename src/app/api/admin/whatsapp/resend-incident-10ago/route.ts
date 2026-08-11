@@ -49,24 +49,13 @@ export async function GET(req: NextRequest) {
   const log: string[] = []
 
   // ---------------------------------------------------------------------
-  // 1) Mariana Dantas — destrava a fila do cron de confirmação de agendamento
-  //    (rodada 1, já confirmada ok — mantido idempotente)
+  // 1) Mariana Dantas / Maria Fernanda (3dc03805) — REMOVIDO 10/ago 22h.
+  //    Essa etapa destravava agendamento_sent_at toda vez que a rota era
+  //    aberta, sem checar se já tinha sido entregue. Entrega já confirmada
+  //    (dupla checagem de tique + paciente respondeu "Ok obg" às 17:16) —
+  //    manter isso aqui causava reenvio duplicado cada vez que alguém
+  //    reabria o link. Não mexer mais nesse appointment por essa rota.
   // ---------------------------------------------------------------------
-  const appointmentId = '3dc03805-9247-4067-89e1-fc3c51d1c1a5'
-  const { data: appt, error: apptErr } = await svc
-    .from('appointments')
-    .update({ agendamento_sent_at: null, agendamento_scheduled_at: new Date().toISOString() })
-    .eq('id', appointmentId)
-    .select('id')
-    .maybeSingle()
-
-  if (apptErr) {
-    log.push(`[Mariana Dantas] ERRO ao destravar fila: ${apptErr.message}`)
-  } else if (!appt) {
-    log.push('[Mariana Dantas] appointment não encontrado (id mudou?)')
-  } else {
-    log.push('[Mariana Dantas] fila destravada — cron /api/cron/msg-agendamento reenvia em até 5min')
-  }
 
   // ---------------------------------------------------------------------
   // 2) Reenvio de documentos (rodada 1: Tacciane, já confirmada ok;
