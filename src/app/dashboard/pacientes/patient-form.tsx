@@ -108,11 +108,6 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
       setLoading(false)
       return
     }
-    if (!form.birth_date) {
-      setError('Data de nascimento é obrigatória')
-      setLoading(false)
-      return
-    }
     if (!form.gender) {
       setError('O campo Sexo é obrigatório')
       setLoading(false)
@@ -253,13 +248,12 @@ export default function PatientForm({ patient }: { patient?: Patient }) {
         </div>
 
         <div>
-          <label className="label">Data de nascimento *</label>
+          <label className="label">Data de nascimento</label>
           <input
             className="input"
             type="date"
             value={form.birth_date}
             onChange={e => update('birth_date', e.target.value)}
-            required
           />
         </div>
 
