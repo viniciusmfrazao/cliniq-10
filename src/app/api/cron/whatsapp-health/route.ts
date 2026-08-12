@@ -58,8 +58,10 @@ const STALE_MS = STALE_HOURS * 60 * 60 * 1000
 // que estava funcionando normal, e email errado pra dona da clinica custa mais
 // caro que 45min de atraso no aviso. Voce (founder) recebe assim que confirma.
 const CLINIC_ALERT_DELAY_MS = 45 * 60 * 1000
-// Nao reenvia o mesmo alerta antes disso (senao vira 1 email a cada 15min).
-const ALERT_COOLDOWN_MS = 60 * 60 * 1000
+// Regra de envio: 1 email por episodio de queda, pra cada destinatario.
+// Os timestamps abaixo funcionam como trava — sao zerados na reconexao, entao
+// a proxima queda volta a alertar normalmente. Sem repeticao periodica: quem
+// quer saber o estado atual olha o banner no painel.
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -283,11 +285,7 @@ export async function GET(req: NextRequest) {
         const detectedAtMs = new Date(detectedAtIso).getTime()
         if (!r.disconnect_detected_at) nextDetectedAt = nowIso
 
-        const founderDue =
-          !r.disconnect_email_sent_at ||
-          nowMs - new Date(r.disconnect_email_sent_at).getTime() > ALERT_COOLDOWN_MS
-
-        if (founderDue) {
+        if (!r.disconnect_email_sent_at) {
           pendingAlerts.push({
             kind: 'down',
             audience: 'founder',
@@ -305,9 +303,8 @@ export async function GET(req: NextRequest) {
         // queda nova, pra nao disparar email sobre instance caida ha semanas.
         const hardFailure = nextReason === 'instance_not_found' && freshTransition
         const clinicDue =
-          (hardFailure || nowMs - detectedAtMs >= CLINIC_ALERT_DELAY_MS) &&
-          (!r.disconnect_clinic_email_sent_at ||
-            nowMs - new Date(r.disconnect_clinic_email_sent_at).getTime() > ALERT_COOLDOWN_MS)
+          !r.disconnect_clinic_email_sent_at &&
+          (hardFailure || nowMs - detectedAtMs >= CLINIC_ALERT_DELAY_MS)
 
         if (clinicDue) {
           pendingAlerts.push({

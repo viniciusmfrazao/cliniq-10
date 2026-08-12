@@ -384,7 +384,7 @@ export async function sendWhatsappDownEmail({
     intro:
       audience === 'clinic'
         ? 'Enquanto isso, mensagens automáticas (confirmações, lembretes e a Eva) não estão sendo enviadas nem recebidas. É só reconectar pelo painel para voltar ao normal.'
-        : 'A checagem automática confirmou a queda em dois ciclos seguidos. A clínica também será avisada se não voltar.',
+        : 'A checagem automática confirmou a queda em dois ciclos seguidos. Este é o único aviso desta queda — o próximo e-mail chega quando a conexão voltar.',
     rows,
     ctaLabel: 'Reconectar WhatsApp',
     ctaUrl: `${APP_URL}/dashboard/config/whatsapp`,
