@@ -10,6 +10,13 @@ const PIX_CIDADE = 'Uberlandia'
 const DIAS_ALERTA = 7 // Cobrar X dias antes do vencimento
 
 export async function GET(req: NextRequest) {
+  // DESATIVADO em 2026-08-12: fluxo de cobrança não é mais usado, e a lógica
+  // de seleção de instância (linha ~40, sem filtro por clinic_id) estava usando
+  // o WhatsApp comercial de clínicas clientes aleatórias para disparar cobranças
+  // do Clinike para outras clínicas. Não reativar sem corrigir a seleção de
+  // instância e sem confirmação explícita do Vinicius.
+  return NextResponse.json({ ok: true, disabled: true }, { status: 200 })
+
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get('authorization')
   if (secret && auth !== `Bearer ${secret}`) {
