@@ -9,7 +9,6 @@ import WhatsappHealthBanner from '@/components/layout/WhatsappHealthBanner'
 import WhatsappHealthBannerWrapper from '@/components/layout/WhatsappHealthBannerWrapper'
 import BillingOverdueBanner from '@/components/layout/BillingOverdueBanner'
 import ImpersonationBanner from '@/components/layout/ImpersonationBanner'
-import MetaBatidaCelebration from '@/components/layout/MetaBatidaCelebration'
 import { FACTORY_DEFAULTS } from '@/lib/permissions'
 
 export default async function DashboardLayout({ children, searchParams }: { children: React.ReactNode, searchParams?: { admin?: string } }) {
@@ -115,7 +114,6 @@ export default async function DashboardLayout({ children, searchParams }: { chil
         </div>
         <BottomNav userRole={userData?.role || 'viewer'} activeModules={activeModules} userPermissions={userPermissions} />
 
-        <MetaBatidaCelebration />
 
         <ChatWidget
           currentUserId={user.id}
