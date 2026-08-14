@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -25,6 +26,9 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
+
+    // Login normal nunca deve carregar uma impersonação de sessão anterior
+    clearImpersonationCookie()
 
     // Reload completo garante que o servidor lê o novo cookie
     window.location.href = '/dashboard'

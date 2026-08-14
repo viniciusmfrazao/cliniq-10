@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useEffect } from 'react'
+import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
 
 const URL = 'https://yqrjbyaucimvmzpfipgs.supabase.co'
 const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmpieWF1Y2ltdm16cGZpcGdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzE0ODcsImV4cCI6MjA5MTM0NzQ4N30.T8kjp-2Nl0HGe9_UIvQNZXPT6DNJgaqK3awUKU0HeYA'
@@ -17,6 +18,7 @@ export default function EntrarPage() {
     try {
       document.cookie = 'clinike-auth-token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
       localStorage.removeItem('clinike-auth-token')
+      clearImpersonationCookie()
     } catch {}
   }, [])
 
@@ -34,6 +36,7 @@ export default function EntrarPage() {
         setLoading(false)
         return
       }
+      clearImpersonationCookie()
       window.location.href = '/dashboard'
     } catch {
       setError('Erro ao conectar. Tente novamente.')

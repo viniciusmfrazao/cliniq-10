@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
 import ToastProvider from '@/components/ui/Toast'
 
 const NAV = [
@@ -57,6 +58,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   async function handleLogout() {
     await supabase.auth.signOut()
+    clearImpersonationCookie()
     router.push('/login')
   }
 
