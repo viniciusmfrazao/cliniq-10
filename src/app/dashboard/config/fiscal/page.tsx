@@ -29,7 +29,7 @@ export default async function FiscalPage() {
   // Busca config existente via rota server-only (mascara tokens antes de chegar no client)
   const { data: config } = await supabase
     .from('clinic_fiscal_config')
-    .select('cnpj, inscricao_municipal, codigo_municipio_ibge, codigo_tributacao_nacional_iss, regime_tributario, codigo_opcao_simples_nacional, ambiente, padrao_nfse, token_homologacao, token_producao, updated_at, inscricao_estadual, ncm_padrao, cfop_padrao, csosn_padrao, descricao_produto_padrao, cnpj_nfe, razao_social_nfe, logradouro_nfe, numero_nfe, bairro_nfe, municipio_nfe, uf_nfe, cep_nfe, token_homologacao_nfe, token_producao_nfe, cst_icms_padrao, aliquota_icms_padrao, cst_pis_padrao, aliquota_pis_padrao, cst_cofins_padrao, aliquota_cofins_padrao, isento_inscricao_municipal, emite_nfse, ibs_cbs_classificacao_padrao, ibs_cbs_situacao_padrao, codigo_nbs, codigo_tributario_municipio, codigo_indicador_operacao, ibs_cbs_situacao_padrao_servico, ibs_cbs_classificacao_padrao_servico')
+    .select('cnpj, inscricao_municipal, codigo_municipio_ibge, codigo_tributacao_nacional_iss, regime_tributario, codigo_opcao_simples_nacional, ambiente, padrao_nfse, token_homologacao, token_producao, updated_at, inscricao_estadual, ncm_padrao, cfop_padrao, csosn_padrao, descricao_produto_padrao, cnpj_nfe, razao_social_nfe, logradouro_nfe, numero_nfe, bairro_nfe, municipio_nfe, uf_nfe, cep_nfe, token_homologacao_nfe, token_producao_nfe, cst_icms_padrao, aliquota_icms_padrao, cst_pis_padrao, aliquota_pis_padrao, cst_cofins_padrao, aliquota_cofins_padrao, isento_inscricao_municipal, emite_nfse, ibs_cbs_classificacao_padrao, ibs_cbs_situacao_padrao, codigo_nbs, codigo_tributario_municipio, codigo_indicador_operacao, ibs_cbs_situacao_padrao_servico, ibs_cbs_classificacao_padrao_servico, codigo_cnae, aliquota_iss')
     .eq('clinic_id', userData!.clinic_id)
     .maybeSingle()
 
@@ -78,6 +78,8 @@ export default async function FiscalPage() {
     codigo_indicador_operacao: config.codigo_indicador_operacao,
     ibs_cbs_situacao_padrao_servico: config.ibs_cbs_situacao_padrao_servico,
     ibs_cbs_classificacao_padrao_servico: config.ibs_cbs_classificacao_padrao_servico,
+    codigo_cnae: config.codigo_cnae,
+    aliquota_iss: config.aliquota_iss,
   } : null
 
   return (

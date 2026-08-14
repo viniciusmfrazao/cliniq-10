@@ -34,6 +34,8 @@ type InitialConfig = {
   codigo_nbs: string | null
   codigo_tributario_municipio: string | null
   codigo_indicador_operacao: string | null
+  codigo_cnae: string | null
+  aliquota_iss: number | null
   ibs_cbs_situacao_padrao_servico: string | null
   ibs_cbs_classificacao_padrao_servico: string | null
   token_homologacao_mask: string | null
@@ -89,6 +91,10 @@ export default function FiscalForm({ initialConfig }: Props) {
   const [codigoNbs, setCodigoNbs] = useState(initialConfig?.codigo_nbs || '')
   const [codigoTributarioMunicipio, setCodigoTributarioMunicipio] = useState(initialConfig?.codigo_tributario_municipio || '')
   const [codigoIndicadorOperacao, setCodigoIndicadorOperacao] = useState(initialConfig?.codigo_indicador_operacao || '')
+  const [codigoCnae, setCodigoCnae] = useState(initialConfig?.codigo_cnae || '')
+  const [aliquotaIss, setAliquotaIss] = useState(
+    initialConfig?.aliquota_iss != null ? String(initialConfig.aliquota_iss).replace('.', ',') : ''
+  )
   const [ibsCbsSituacaoServico, setIbsCbsSituacaoServico] = useState(initialConfig?.ibs_cbs_situacao_padrao_servico || '')
   const [ibsCbsClassificacaoServico, setIbsCbsClassificacaoServico] = useState(initialConfig?.ibs_cbs_classificacao_padrao_servico || '')
   const [tokenHomologacao, setTokenHomologacao] = useState('')
@@ -170,6 +176,8 @@ export default function FiscalForm({ initialConfig }: Props) {
           codigo_nbs: codigoNbs || null,
           codigo_tributario_municipio: codigoTributarioMunicipio || null,
           codigo_indicador_operacao: codigoIndicadorOperacao || null,
+          codigo_cnae: codigoCnae || null,
+          aliquota_iss: aliquotaIss || null,
           ibs_cbs_situacao_padrao_servico: ibsCbsSituacaoServico || null,
           ibs_cbs_classificacao_padrao_servico: ibsCbsClassificacaoServico || null,
           token_homologacao: tokenHomologacao,
@@ -344,6 +352,24 @@ export default function FiscalForm({ initialConfig }: Props) {
               <option value="municipal">Municipal (padrão específico da prefeitura)</option>
               <option value="nacional">NFS-e Nacional</option>
             </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">CNAE fiscal</label>
+            <input value={codigoCnae} onChange={e => setCodigoCnae(e.target.value)}
+              placeholder="ex: 8650004" className="input w-full text-sm" />
+            <p className="text-xs text-slate-400 mt-1">
+              7 dígitos, sem máscara. Obrigatório em alguns municípios (ex: Salvador) e é
+              ele que identifica a nota como serviço de saúde para dedução no IR do paciente.
+            </p>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Alíquota do ISS (%)</label>
+            <input value={aliquotaIss} onChange={e => setAliquotaIss(e.target.value)}
+              placeholder="ex: 2,01" className="input w-full text-sm" />
+            <p className="text-xs text-slate-400 mt-1">
+              No Simples Nacional é a alíquota efetiva da tabela — muda conforme o
+              faturamento dos últimos 12 meses. Confirme com o contador periodicamente.
+            </p>
           </div>
         </div>
         )}

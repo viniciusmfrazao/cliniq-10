@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     ibs_cbs_classificacao_padrao, ibs_cbs_situacao_padrao,
     codigo_nbs, codigo_tributario_municipio, codigo_indicador_operacao,
     ibs_cbs_situacao_padrao_servico, ibs_cbs_classificacao_padrao_servico,
+    codigo_cnae, aliquota_iss,
   } = body
 
   const update: Record<string, unknown> = {
@@ -73,6 +74,12 @@ export async function POST(req: NextRequest) {
     codigo_indicador_operacao: codigo_indicador_operacao || null,
     ibs_cbs_situacao_padrao_servico: ibs_cbs_situacao_padrao_servico || null,
     ibs_cbs_classificacao_padrao_servico: ibs_cbs_classificacao_padrao_servico || null,
+    // CNAE guardado só com dígitos — a Focus rejeita máscara (8650-0/04 → 8650004)
+    codigo_cnae: codigo_cnae ? String(codigo_cnae).replace(/\D/g, '') || null : null,
+    // Aceita vírgula decimal ("2,01") porque o contador costuma passar nesse formato
+    aliquota_iss: aliquota_iss !== '' && aliquota_iss != null
+      ? Number(String(aliquota_iss).replace(',', '.'))
+      : null,
   }
 
   if (typeof token_homologacao_nfe === 'string' && token_homologacao_nfe.trim()) {

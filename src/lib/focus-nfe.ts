@@ -107,6 +107,14 @@ type FiscalConfig = {
   // Alguns municípios (ex: Salvador) exigem o elemento Tomador sempre presente no XML,
   // mesmo sem CPF do paciente. Default false preserva o comportamento de quem já funciona.
   tomador_sempre_obrigatorio: boolean
+  // CNAE fiscal (7 dígitos, sem máscara). Exigido por municípios como Salvador/BA e é
+  // ele que identifica a nota como serviço de saúde — sem CNAE o paciente não consegue
+  // deduzir a despesa no IR. Opcional: só entra no payload se configurado.
+  codigo_cnae: string | null
+  // Alíquota do ISS em percentual (ex: 2.01). Para optante do Simples é a alíquota
+  // efetiva da tabela (varia com o RBT12), então precisa de revisão periódica com o
+  // contador — por isso fica em config e não hardcoded. Opcional.
+  aliquota_iss: number | null
 }
 
 // Resolve qual CNPJ usar pra NFe: o dedicado se existir, senão o mesmo da NFS-e
@@ -262,6 +270,12 @@ export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomad
   const indOp = servicoOverride ? servicoOverride.codigo_indicador_operacao : config.codigo_indicador_operacao
   const discriminacao = servicoOverride?.descricao_servico || config.descricao_servico_padrao || 'Serviço de estética conforme registro interno'
 
+  // CNAE e alíquota são da clínica (nível config), não do perfil de serviço: a alíquota
+  // efetiva do Simples é a mesma pra todos os serviços do anexo, e o CNAE fiscal é o da
+  // atividade principal. Se um dia precisar variar por serviço, vira override aqui.
+  const codigoCnae = (config.codigo_cnae || '').replace(/\D/g, '') || null
+  const aliquotaIss = config.aliquota_iss != null ? Number(config.aliquota_iss) : null
+
   const payload: Record<string, unknown> = {
     data_emissao: `${dataVenda}T12:00:00-03:00`,
     natureza_operacao: '1',
@@ -293,6 +307,13 @@ export async function emitirNfseMunicipal({ config, ref, valor, dataVenda, tomad
       ...(cClassTrib ? { ibs_cbs_classificacao_tributaria: cClassTrib } : {}),
       ...(cst ? { ibs_cbs_situacao_tributaria: cst } : {}),
       ...(indOp ? { codigo_indicador_operacao: indOp } : {}),
+      // CNAE fiscal — obrigatório em Salvador/BA e é o campo que classifica a nota como
+      // serviço de saúde (dedução de IR do paciente). Só entra se configurado, pra não
+      // alterar o payload de clínicas que já emitem sem ele.
+      ...(codigoCnae ? { codigo_cnae: codigoCnae } : {}),
+      // Alíquota do ISS em percentual. Municípios que mascaram o valor para optantes do
+      // Simples (ex: Salvador imprime "*") ignoram, mas outros exigem o campo presente.
+      ...(aliquotaIss != null ? { aliquota: aliquotaIss } : {}),
     },
   }
 
