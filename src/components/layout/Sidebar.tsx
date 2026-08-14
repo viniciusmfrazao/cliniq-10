@@ -7,6 +7,7 @@ import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
+import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
 import { useWaLine, type WaLine } from '@/contexts/WaLineContext'
@@ -95,6 +96,7 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
 
   async function logout() {
     await supabase.auth.signOut()
+    clearImpersonationCookie()
     router.push('/login')
     router.refresh()
   }

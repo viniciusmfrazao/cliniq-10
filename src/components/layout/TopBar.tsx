@@ -7,6 +7,7 @@ import { NAV_ITEMS } from '@/lib/nav'
 import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
+import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
 import { useWhatsappUnread } from '@/contexts/WhatsappUnreadContext'
 
@@ -34,6 +35,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
 
   async function logout() {
     await supabase.auth.signOut()
+    clearImpersonationCookie()
     router.push('/login')
     router.refresh()
   }
