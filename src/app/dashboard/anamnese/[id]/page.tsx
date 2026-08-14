@@ -163,9 +163,13 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
         ['Alergia a Insetos', responses['alergia_Insetos']],
         ['Detalhes insetos', responses['alergia_Insetos_desc']],
         ['Alergia a Picada de Abelha', responses['alergia_Picada de Abelha']],
+        ['Detalhes picada de abelha', responses['alergia_Picada de Abelha_desc']],
         ['Alergia a Frutos do Mar', responses['alergia_Frutos do Mar']],
+        ['Detalhes frutos do mar', responses['alergia_Frutos do Mar_desc']],
         ['Alergia a Cosméticos', responses['alergia_Cosméticos']],
+        ['Detalhes cosméticos', responses['alergia_Cosméticos_desc']],
         ['Alergia a Anestésicos', responses['alergia_Anestésicos']],
+        ['Detalhes anestésicos', responses['alergia_Anestésicos_desc']],
         ['Outras Alergias', responses['alergia_Outras Alergias']],
         ['Detalhes outras alergias', responses['alergia_Outras Alergias_desc']],
         ['Herpes', responses.herpes],
@@ -222,6 +226,34 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     })
   }
 
+  // Metadados visuais por seção (ícone/cor). Fica fora do array de dados pra
+  // que tela e PDF usem exatamente a mesma lista de campos.
+  type SectionMeta = { icon: string; iconBg: string; iconColor: string; wide?: boolean }
+  const SECTION_META: Record<string, SectionMeta> = {
+    'Procedimentos Anteriores': { icon: 'calendar', iconBg: 'bg-violet-100', iconColor: 'text-violet-600' },
+    'Hábitos de Vida': { icon: 'user', iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
+    'Alergias': { icon: 'x', iconBg: 'bg-red-100', iconColor: 'text-red-600' },
+    'Medicamentos': { icon: 'file', iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
+    'Saúde Geral': { icon: 'user', iconBg: 'bg-amber-100', iconColor: 'text-amber-600' },
+    'Outras Informações': { icon: 'settings', iconBg: 'bg-slate-100', iconColor: 'text-slate-600' },
+    'Principal Queixa': { icon: 'edit', iconBg: 'bg-pink-100', iconColor: 'text-pink-600', wide: true },
+    'Informações Adicionais': { icon: 'plus', iconBg: 'bg-violet-100', iconColor: 'text-violet-600', wide: true },
+  }
+  const DEFAULT_SECTION_META: SectionMeta = { icon: 'file', iconBg: 'bg-violet-100', iconColor: 'text-violet-600' }
+
+  // Seções desativadas em /dashboard/anamnese/configurar nunca chegam a ser
+  // exibidas ao paciente, então não têm resposta. Campos sem resposta são
+  // removidos da tela E do PDF em vez de sair como "-".
+  const hasValue = (value: any): boolean => {
+    if (Array.isArray(value)) return value.length > 0
+    if (value === null || value === undefined) return false
+    return String(value).trim() !== ''
+  }
+
+  const visibleSections = sections
+    .map((s) => ({ ...s, fields: s.fields.filter(([, value]) => hasValue(value)) }))
+    .filter((s) => s.fields.length > 0)
+
   const htmlFieldValue = (value: any): string => {
     if (Array.isArray(value)) return value.length ? value.map(escapeHtml).join(', ') : '-'
     return value ? escapeHtml(value) : '-'
@@ -250,7 +282,7 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
     : null
 
   const bodyHtml = anamnese.status === 'completed'
-    ? sections
+    ? visibleSections
         .map(s => `
           <div class="section">
             <h2>${escapeHtml(s.title)}</h2>
@@ -324,164 +356,36 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
 
       {/* Responses */}
       {anamnese.status === 'completed' ? (
-        anamnese.template_id ? (
-          <div className="grid md:grid-cols-2 gap-6">
-            {templateInfo && (
-              <div className="card p-4 md:col-span-2 bg-amber-50 border border-amber-200">
-                <p className="text-sm text-amber-800">
-                  Ficha preenchida com o modelo customizado <strong>{templateInfo.nome}</strong>
-                  {templateInfo.descricao ? ` — ${templateInfo.descricao}` : ''}.
-                </p>
-              </div>
-            )}
-            {templateSecoes.map((secao) => (
-              <div key={secao} className="card p-6">
-                <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
-                    <Icon name="file" className="w-4 h-4 text-violet-600" />
-                  </div>
-                  {secao}
-                </h2>
-                {templateFields
-                  .filter((f) => f.secao === secao)
-                  .map((f) => (
-                    <div key={f.id}>{renderResponse(f.label, responses[f.id])}</div>
-                  ))}
-              </div>
-            ))}
+        visibleSections.length === 0 ? (
+          <div className="card p-8 text-center">
+            <p className="text-slate-500 dark:text-slate-400">Nenhuma resposta registrada nesta ficha.</p>
           </div>
         ) : (
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Procedimentos Anteriores */}
-          <div className="card p-6">
-            <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
-                <Icon name="calendar" className="w-4 h-4 text-violet-600" />
-              </div>
-              Procedimentos Anteriores
-            </h2>
-            {renderResponse('Botox', responses.botox)}
-            {renderResponse('Quando fez Botox', responses.botox_quando)}
-            {renderResponse('Preenchimento', responses.preench)}
-            {renderResponse('Quando fez preenchimento', responses.preench_quando)}
-            {renderResponse('Qual preenchedor', responses.preench_qual)}
-            {renderResponse('Bioestimulador', responses.bioestim)}
-            {renderResponse('Quando fez bioestimulador', responses.bioestim_quando)}
-            {renderResponse('Experiências anteriores', responses.experiencia)}
-            {renderResponse('Descrição da experiência', responses.experiencia_desc)}
-          </div>
-
-          {/* Hábitos de Vida */}
-          <div className="card p-6">
-            <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <Icon name="user" className="w-4 h-4 text-emerald-600" />
-              </div>
-              Hábitos de Vida
-            </h2>
-            {renderResponse('Atividade física', responses.atividade)}
-            {renderResponse('Nível de estresse', responses.estresse)}
-            {renderResponse('Tabagismo', responses.tabaco)}
-            {renderResponse('Cigarros por dia', responses.tabaco_qtd)}
-          </div>
-
-          {/* Alergias */}
-          <div className="card p-6">
-            <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                <Icon name="x" className="w-4 h-4 text-red-600" />
-              </div>
-              Alergias
-            </h2>
-            {renderResponse('Alergia a Insetos', responses['alergia_Insetos'])}
-            {renderResponse('Detalhes insetos', responses['alergia_Insetos_desc'])}
-            {renderResponse('Alergia a Picada de Abelha', responses['alergia_Picada de Abelha'])}
-            {renderResponse('Alergia a Frutos do Mar', responses['alergia_Frutos do Mar'])}
-            {renderResponse('Alergia a Cosméticos', responses['alergia_Cosméticos'])}
-            {renderResponse('Alergia a Anestésicos', responses['alergia_Anestésicos'])}
-            {renderResponse('Outras Alergias', responses['alergia_Outras Alergias'])}
-            {renderResponse('Detalhes outras alergias', responses['alergia_Outras Alergias_desc'])}
-            {renderResponse('Herpes', responses.herpes)}
-          </div>
-
-          {/* Medicamentos */}
-          <div className="card p-6">
-            <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Icon name="file" className="w-4 h-4 text-blue-600" />
-              </div>
-              Medicamentos
-            </h2>
-            {renderResponse('Anti-inflamatório', responses.antiinfl)}
-            {renderResponse('Qual anti-inflamatório', responses.antiinfl_qual)}
-            {renderResponse('Antibiótico', responses.antibio)}
-            {renderResponse('Qual antibiótico', responses.antibio_qual)}
-            {renderResponse('Corticóide', responses.cortic)}
-            {renderResponse('Qual corticóide', responses.cortic_qual)}
-            {renderResponse('Outro medicamento', responses.outroMed)}
-            {renderResponse('Qual outro', responses.outroMed_qual)}
-          </div>
-
-          {/* Saúde */}
-          <div className="card p-6">
-            <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Icon name="user" className="w-4 h-4 text-amber-600" />
-              </div>
-              Saúde Geral
-            </h2>
-            {renderResponse('Doença auto-imune', responses.autoim)}
-            {renderResponse('Qual doença auto-imune', responses.autoim_qual)}
-            {renderResponse('Outra patologia', responses.outrapat)}
-            {renderResponse('Qual outra patologia', responses.outrapat_qual)}
-            {renderResponse('Informação adicional', responses.inforelevante)}
-            {renderResponse('Descrição adicional', responses.inforelevante_desc)}
-          </div>
-
-          {/* Outras Informações */}
-          <div className="card p-6">
-            <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                <Icon name="settings" className="w-4 h-4 text-slate-600" />
-              </div>
-              Outras Informações
-            </h2>
-            {renderResponse('Autoriza uso de imagem', responses.imagem)}
-            {renderResponse('Aceita filmagem', responses.filmado)}
-            {renderResponse('Como conheceu a clínica', responses.conheceu)}
-            {renderResponse('Outro canal', responses.conheceu_outro)}
-            {renderResponse('Grávida ou possibilidade', responses.gravida)}
-            {renderResponse('Lactante', responses.lactante)}
-          </div>
-
-          {/* Queixa Principal */}
-          <div className="card p-6 md:col-span-2">
-            <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-pink-100 flex items-center justify-center">
-                <Icon name="edit" className="w-4 h-4 text-pink-600" />
-              </div>
-              Principal Queixa
-            </h2>
-            {renderResponse('Áreas de interesse', responses.queixa)}
-            {renderResponse('Observação', responses.queixa_obs)}
-          </div>
-
-          {/* Perguntas extras configuradas pela clínica */}
-          {perguntasExtras.length > 0 && (
-            <div className="card p-6 md:col-span-2">
-              <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
-                  <Icon name="plus" className="w-4 h-4 text-violet-600" />
-                </div>
-                Informações Adicionais
-              </h2>
-              {perguntasExtras.map((p, idx) => {
-                const val = responses[`extra_${idx}`]
-                if (!val) return null
-                return renderResponse(p.pergunta, val)
-              })}
+          {templateInfo && (
+            <div className="card p-4 md:col-span-2 bg-amber-50 border border-amber-200">
+              <p className="text-sm text-amber-800">
+                Ficha preenchida com o modelo customizado <strong>{templateInfo.nome}</strong>
+                {templateInfo.descricao ? ` — ${templateInfo.descricao}` : ''}.
+              </p>
             </div>
           )}
+          {visibleSections.map((s) => {
+            const meta = SECTION_META[s.title] || DEFAULT_SECTION_META
+            return (
+              <div key={s.title} className={`card p-6${meta.wide ? ' md:col-span-2' : ''}`}>
+                <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-lg ${meta.iconBg} flex items-center justify-center`}>
+                    <Icon name={meta.icon as any} className={`w-4 h-4 ${meta.iconColor}`} />
+                  </div>
+                  {s.title}
+                </h2>
+                {s.fields.map(([label, value], idx) => (
+                  <div key={`${s.title}-${idx}`}>{renderResponse(label, value)}</div>
+                ))}
+              </div>
+            )
+          })}
         </div>
         )
       ) : (
