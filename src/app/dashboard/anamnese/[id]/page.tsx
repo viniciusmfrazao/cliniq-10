@@ -29,6 +29,36 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
   
   if (error || !anamnese) notFound()
 
+  // O select aninhado pode voltar null se a relação não resolver; nesse caso
+  // busca o paciente direto pra garantir nome/CPF/nascimento no cabeçalho.
+  type PatientInfo = { name: string | null; phone: string | null; email: string | null; cpf: string | null; birth_date: string | null }
+  let patient: PatientInfo | null = (anamnese.patients as PatientInfo | null) || null
+  if (!patient && anamnese.patient_id) {
+    const { data: p } = await supabase
+      .from('patients')
+      .select('name, phone, email, cpf, birth_date')
+      .eq('id', anamnese.patient_id)
+      .maybeSingle()
+    patient = (p as PatientInfo | null) || null
+  }
+
+  const formatCpf = (value?: string | null): string | null => {
+    if (!value) return null
+    const digits = String(value).replace(/\D/g, '')
+    if (digits.length !== 11) return String(value)
+    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+  }
+
+  const formatDateBR = (value?: string | null): string | null => {
+    if (!value) return null
+    const [y, m, d] = String(value).slice(0, 10).split('-')
+    return y && m && d ? `${d}/${m}/${y}` : String(value)
+  }
+
+  const patientName = patient?.name || 'Paciente'
+  const patientCpf = formatCpf(patient?.cpf)
+  const patientBirthDate = formatDateBR(patient?.birth_date)
+
   // Buscar config da clínica para exibir perguntas extras
   const { data: anamneseConfig } = await supabase
     .from('anamnese_config')
@@ -206,7 +236,7 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
   const fillConsentVars = (content: string): string => {
     const dt = anamnese.completed_at ? new Date(anamnese.completed_at) : new Date()
     const vars: Record<string, string> = {
-      PACIENTE_NOME: anamnese.patients?.name || '',
+      PACIENTE_NOME: patient?.name || '',
       DATA: dt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       HORA: dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       CLINICA_NOME: anamnese.clinics?.name || '',
@@ -244,7 +274,7 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Ficha de Anamnese</h1>
-          <p className="text-slate-500 dark:text-slate-400">{anamnese.patients?.name}</p>
+          <p className="text-slate-500 dark:text-slate-400">{patient?.name}</p>
         </div>
         {anamnese.status === 'completed' && (
           <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium">
@@ -252,7 +282,9 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
           </span>
         )}
         <ExportAnamnesePdfButton
-          patientName={anamnese.patients?.name || 'Paciente'}
+          patientName={patientName}
+          patientCpf={patientCpf}
+          patientBirthDate={patientBirthDate}
           clinicName={anamnese.clinics?.name || 'Clínica'}
           completedAtLabel={completedAtLabel}
           signatureIp={anamnese.signature_ip || null}
@@ -269,15 +301,15 @@ export default async function AnamneseDetailPage({ params, searchParams }: { par
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p className="text-sm text-slate-500">Nome</p>
-            <p className="font-medium text-slate-900 dark:text-white">{anamnese.patients?.name}</p>
+            <p className="font-medium text-slate-900 dark:text-white">{patient?.name}</p>
           </div>
           <div>
             <p className="text-sm text-slate-500">Telefone</p>
-            <p className="font-medium text-slate-900 dark:text-white">{anamnese.patients?.phone || '-'}</p>
+            <p className="font-medium text-slate-900 dark:text-white">{patient?.phone || '-'}</p>
           </div>
           <div>
             <p className="text-sm text-slate-500">Email</p>
-            <p className="font-medium text-slate-900 dark:text-white">{anamnese.patients?.email || '-'}</p>
+            <p className="font-medium text-slate-900 dark:text-white">{patient?.email || '-'}</p>
           </div>
           <div>
             <p className="text-sm text-slate-500">Preenchido em</p>

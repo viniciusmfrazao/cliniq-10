@@ -5,6 +5,8 @@ import Icon from '@/components/ui/Icon'
 
 type Props = {
   patientName: string
+  patientCpf?: string | null
+  patientBirthDate?: string | null
   clinicName: string
   completedAtLabel: string
   signatureIp: string | null
@@ -20,8 +22,18 @@ type Props = {
  * de lib de geração de PDF no servidor (ex: puppeteer), que é pesada
  * e frágil em serverless/Vercel.
  */
+function escapeHtml(value: any): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 export default function ExportAnamnesePdfButton({
   patientName,
+  patientCpf,
+  patientBirthDate,
   clinicName,
   completedAtLabel,
   signatureIp,
@@ -40,7 +52,7 @@ export default function ExportAnamnesePdfButton({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Ficha de Anamnese - ${patientName}</title>
+          <title>Ficha de Anamnese - ${escapeHtml(patientName)}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -59,6 +71,22 @@ export default function ExportAnamnesePdfButton({
             }
             .header h1 { font-size: 20px; font-weight: bold; margin-bottom: 4px; }
             .header .sub { font-size: 12px; color: #666; }
+            .patient-box {
+              border: 1px solid #1a1410;
+              border-radius: 6px;
+              padding: 12px 14px;
+              margin-bottom: 24px;
+              page-break-inside: avoid;
+            }
+            .patient-box .pname {
+              font-size: 16px;
+              font-weight: bold;
+              text-transform: uppercase;
+              letter-spacing: 0.02em;
+              margin-bottom: 6px;
+            }
+            .patient-box .pmeta { font-size: 12px; color: #444; }
+            .patient-box .pmeta span { margin-right: 18px; white-space: nowrap; }
             .section { margin-bottom: 18px; page-break-inside: avoid; }
             .section h2 {
               font-size: 13px;
@@ -92,7 +120,15 @@ export default function ExportAnamnesePdfButton({
         <body>
           <div class="header">
             <h1>Ficha de Anamnese</h1>
-            <div class="sub">${clinicName} — ${patientName}</div>
+            <div class="sub">${escapeHtml(clinicName)}</div>
+          </div>
+          <div class="patient-box">
+            <div class="pname">${escapeHtml(patientName)}</div>
+            <div class="pmeta">
+              <span><strong>CPF:</strong> ${escapeHtml(patientCpf || '-')}</span>
+              <span><strong>Nascimento:</strong> ${escapeHtml(patientBirthDate || '-')}</span>
+              <span><strong>Preenchido em:</strong> ${escapeHtml(completedAtLabel)}</span>
+            </div>
           </div>
           ${bodyHtml}
           ${signatureDataUrl ? `
