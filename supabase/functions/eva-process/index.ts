@@ -32,11 +32,12 @@
 // deno-lint-ignore-file no-explicit-any
 
 import type { DonnaContext, IncomingPayload, ClaudeMessage } from './types.ts';
-import { sanitizeWhatsapp, fetchJson, parseData } from './utils.ts';
+import { sanitizeWhatsapp, fetchJson, matchProcedimento } from './utils.ts';
 import { buildSystemPrompt, TOOLS, EmotionalMemory } from './prompt.ts';
 import { runConversation, MODEL_PREMIUM } from './claude.ts';
 import type { ConversationStepLog } from './claude.ts';
-import { executeToolByName, criarAgendamento } from './tools.ts';
+import { executeToolByName, criarAgendamento, lerOfertaSlots } from './tools.ts';
+import type { SlotOffer } from './tools.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -611,30 +612,111 @@ function promisedFollowupWithoutEscalating(text: string, toolsUsed: string[]): b
 // criar_agendamento. Pega o ultimo consultar_agenda (data + slots + profs) e
 // o horario que a paciente escolheu (extraido do texto de confirmacao), e
 // cria o agendamento direto. Retorna { created } pro loop decidir.
+/**
+ * Procedimento em discussao na conversa: tenta primeiro a mensagem atual da
+ * paciente (sinal mais forte), depois o historico recente.
+ *
+ * Existia uma terceira implementacao de match aqui (find + includes do nome
+ * inteiro) que quase nunca casava, porque a paciente escreve "botox" e o
+ * cadastro tem "Botox Terco Superior". Resultado: consultar_agenda era chamada
+ * SEM o campo procedimento e devolvia horarios de qualquer profissional.
+ */
+function matchProcedimentoNaConversa(
+  userText: string | null | undefined,
+  lowerHistory: string,
+  procedures: DonnaContext['procedures'],
+): DonnaContext['procedures'][number] | undefined {
+  const MIN_SCORE = 30;
+  const doTurno = matchProcedimento(userText || '', procedures);
+  if (doTurno && doTurno.score >= MIN_SCORE) return doTurno.item;
+  const doHistorico = matchProcedimento(lowerHistory, procedures);
+  if (doHistorico && doHistorico.score >= MIN_SCORE) return doHistorico.item;
+  return undefined;
+}
+
+/**
+ * Devolve o texto de periodo a passar pra consultar_agenda a partir do que a
+ * paciente escreveu.
+ *
+ * parseData entende 'hoje', 'amanha', 'depois de amanha', dias da semana,
+ * 'semana que vem', dd/mm e o periodo do dia ('de manha' / 'a tarde'). Basta
+ * entregar a frase dela inteira em vez de um rotulo reduzido.
+ *
+ * Se a mensagem nao tem NENHUMA referencia temporal reconhecivel, devolvemos
+ * 'amanha' — mesmo default de antes, mas agora e uma decisao explicita e nao
+ * o efeito colateral de um regex que nao cobria o caso.
+ */
+function resolverPeriodoDaMensagem(userText: string | null | undefined): string {
+  const t = (userText || '').trim();
+  if (!t) return 'amanha';
+  const norm = t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const temReferenciaTemporal =
+    /\d{1,2}\/\d{1,2}/.test(norm) ||
+    /\bdia\s+\d{1,2}\b/.test(norm) ||
+    /\b(hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|semana que vem|proxima semana|essa semana|esta semana|manha|tarde|noite)\b/.test(norm);
+  return temReferenciaTemporal ? t : 'amanha';
+}
+
 async function recoverBookingFromSteps(
   steps: ConversationStepLog[],
   confirmText: string,
   ctx: DonnaContext,
   payload: IncomingPayload,
   env: { supabaseUrl: string; serviceKey: string },
-): Promise<{ created: boolean; detail?: string }> {
-  // Acha o ultimo consultar_agenda com resultado de horarios reais
+): Promise<{ created: boolean; detail?: string; dataIso?: string; horario?: string }> {
+  // Fonte 1: consultar_agenda DESTE turno.
   const lastAgenda = [...steps].reverse().find(
     s => s.toolName === 'consultar_agenda' &&
          s.toolResult?.includes('Horarios REAIS disponiveis'),
   );
-  if (!lastAgenda?.toolResult) {
-    return { created: false, detail: 'sem consultar_agenda previo com horarios' };
+
+  let dataAlvo: string | null = null;
+  let procedimentoOferta: string | undefined;
+  let profLines: string[] = [];
+  let fallbackSemProcedimento = false;
+
+  if (lastAgenda?.toolResult) {
+    const agendaInput = lastAgenda.toolInput as { periodo?: string; procedimento?: string } | undefined;
+    procedimentoOferta = agendaInput?.procedimento;
+    // A data ISO vem explicita no cabecalho da tool: "(data: 2026-08-14)".
+    // Antes o codigo pegava o TEXTO LIVRE do periodo ('amanha') e re-parseava
+    // na hora de confirmar — se a paciente confirmasse mais tarde, ou perto da
+    // virada do dia, 'amanha' resolvia pra outra data e o agendamento ia pro
+    // dia errado.
+    const isoMatch = lastAgenda.toolResult.match(/\(data:\s*(\d{4}-\d{2}-\d{2})\)/);
+    if (isoMatch) dataAlvo = isoMatch[1];
+    fallbackSemProcedimento = lastAgenda.toolResult.includes('ATENCAO: nao havia vaga com quem realiza');
+    profLines = lastAgenda.toolResult.split('\n').filter(l => /\(id:\s*[0-9a-f-]+\)/i.test(l));
   }
 
-  // O input do consultar_agenda tem a data (periodo) e procedimento
-  const agendaInput = lastAgenda.toolInput as { periodo?: string; procedimento?: string } | undefined;
+  // Fonte 2: oferta PERSISTIDA de turnos anteriores.
+  //
+  // Este e o caminho que faltava. O caso mais comum de agendamento perdido e a
+  // paciente escolher o horario num turno seguinte ("16:50" solto) — nesse
+  // turno nao ha consultar_agenda em `steps`, entao antes nao havia de onde
+  // tirar data, profissional e horario e a recuperacao morria com
+  // 'sem consultar_agenda previo com horarios'.
+  let ofertaPersistida: SlotOffer | null = null;
+  if (!dataAlvo || profLines.length === 0) {
+    ofertaPersistida = await lerOfertaSlots(payload.clinicId, payload.phone, env);
+    if (ofertaPersistida && Array.isArray(ofertaPersistida.slots) && ofertaPersistida.slots.length > 0) {
+      dataAlvo = ofertaPersistida.data_iso;
+      procedimentoOferta = ofertaPersistida.procedimento_nome ?? undefined;
+      fallbackSemProcedimento = Boolean(ofertaPersistida.fallback_sem_procedimento);
+      profLines = ofertaPersistida.slots.map(
+        (s) => `${s.professional_name} (id: ${s.professional_id}): ${s.horarios.join(', ')}`,
+      );
+    }
+  }
 
-  // Extrai os professional_ids e horarios do resultado da tool
-  // Formato: "Nome (id: UUID): 09:00, 10:00, 14:00"
-  const profLines = lastAgenda.toolResult.split('\n').filter(l => /\(id:\s*[0-9a-f-]+\)/i.test(l));
-  if (profLines.length === 0) {
-    return { created: false, detail: 'nao consegui parsear profs/horarios da agenda' };
+  if (!dataAlvo || profLines.length === 0) {
+    return { created: false, detail: 'sem oferta de horarios (nem neste turno nem persistida)' };
+  }
+
+  // Se os horarios vieram do fallback sem filtro de procedimento, NAO cria
+  // agendamento automatico — pode ser profissional que nao realiza o servico.
+  if (fallbackSemProcedimento) {
+    return { created: false, detail: 'oferta veio de fallback sem filtro de procedimento — nao agendar automatico' };
   }
 
   // Procura no texto de confirmacao um horario HH:MM ou HHh
@@ -653,23 +735,23 @@ async function recoverBookingFromSteps(
     return { created: false, detail: 'nao identifiquei o horario escolhido' };
   }
 
-  // Acha o professional_id do prof que tem esse horario (ou o primeiro)
+  // Acha o profissional que tem ESSE horario. Sem match exato nao inventa:
+  // antes caia no primeiro da lista, o que criava agendamento com profissional
+  // que nunca ofereceu aquele horario.
   let professionalId: string | null = null;
   for (const line of profLines) {
     const idM = line.match(/\(id:\s*([0-9a-f-]+)\)/i);
     if (!idM) continue;
     if (line.includes(horarioEscolhido)) { professionalId = idM[1]; break; }
-    if (!professionalId) professionalId = idM[1]; // fallback: primeiro prof
   }
   if (!professionalId) {
-    return { created: false, detail: 'nao identifiquei o profissional' };
+    return { created: false, detail: `nenhum profissional ofereceu ${horarioEscolhido}` };
   }
 
-  // Resolve a data a partir do input do consultar_agenda
-  const periodo = agendaInput?.periodo || 'amanha';
-  const { dataAlvo } = parseData(periodo);
-
-  const nome = payload.customerName?.trim() || ctx.patient?.name || ctx.lead?.name || 'Paciente';
+  const nome = ctx.patient?.name
+    || (ctx.lead?.name_confirmed_at ? ctx.lead?.name : null)
+    || payload.customerName?.trim()
+    || 'Paciente';
 
   const result = await criarAgendamento(
     {
@@ -677,14 +759,21 @@ async function recoverBookingFromSteps(
       data: dataAlvo,
       horario: horarioEscolhido,
       nome_paciente: nome,
-      procedimento: agendaInput?.procedimento,
+      procedimento: procedimentoOferta,
     },
     ctx,
     payload,
     env,
   );
 
-  return { created: result.appointmentCreated, detail: result.appointmentCreated ? 'ok' : result.toolResultStr.slice(0, 150) };
+  return {
+    created: result.appointmentCreated,
+    detail: result.appointmentCreated
+      ? `ok ${dataAlvo} ${horarioEscolhido}`
+      : result.toolResultStr.slice(0, 150),
+    // devolvido pra CAMADA 1.0 montar a confirmacao com a data certa
+    ...(result.appointmentCreated ? { dataIso: dataAlvo, horario: horarioEscolhido } : {}),
+  } as { created: boolean; detail?: string; dataIso?: string; horario?: string };
 }
 
 
@@ -933,15 +1022,21 @@ Deno.serve(async (req) => {
   // Roda só quando o lead ainda não tem interest preenchido (não sobrescreve
   // se já foi registrado em turno anterior).
   if (!payload.isFollowup && ctx.lead?.id && !ctx.lead.interest) {
-    const lowerTextCamada0 = (payload.userText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const procDetectado = ctx.procedures.find(p => {
-      const procNorm = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      // match exato do nome OU qualquer palavra-chave do procedimento (>=4 chars)
-      if (lowerTextCamada0.includes(procNorm)) return true;
-      return procNorm.split(/\s+/).some(w => w.length >= 4 && lowerTextCamada0.includes(w));
-    });
+    // Usa matchProcedimento (pontuado), igual ao resto do código.
+    //
+    // O match antigo aceitava QUALQUER palavra de 4+ letras do nome do
+    // procedimento aparecendo no texto. "Limpeza de pele" casava com "minha
+    // pele está oleosa"; "Botox Terço Superior" casava com "lábio superior".
+    // O CRM enchia de interesse errado — e, uma vez gravado, o bloco não
+    // reescreve (só roda quando interest está vazio).
+    //
+    // Limiar 30 = pelo menos uma palavra significativa do nome batendo com boa
+    // cobertura, ou o nome inteiro contido no texto (que pontua 100).
+    const MATCH_MIN_SCORE = 30;
+    const m = matchProcedimento(payload.userText || '', ctx.procedures);
+    const procDetectado = m && m.score >= MATCH_MIN_SCORE ? m.item : null;
     if (procDetectado) {
-      console.log(JSON.stringify({ evt: 'camada0_interesse', proc: procDetectado.name, clinic: payload.clinicId }));
+      console.log(JSON.stringify({ evt: 'camada0_interesse', proc: procDetectado.name, score: m?.score, clinic: payload.clinicId }));
       await executeToolByName('registrar_interesse', {
         procedimento: procDetectado.name,
         observacoes: `Detectado automaticamente na mensagem: "${payload.userText.slice(0, 100)}"`,
@@ -997,19 +1092,22 @@ Deno.serve(async (req) => {
   let preConsultaAgenda: string | null = null;
   if (momentoAgendamento && !evaOfereceuHorario && !pedindoPreco) {
     try {
-      let periodo = 'amanha';
-      if (/\bhoje\b/.test(lowerUserText)) periodo = 'hoje';
-      else if (/\bsegunda\b/.test(lowerUserText)) periodo = 'segunda';
-      else if (/\bterca\b/.test(lowerUserText)) periodo = 'terca';
-      else if (/\bquarta\b/.test(lowerUserText)) periodo = 'quarta';
-      else if (/\bquinta\b/.test(lowerUserText)) periodo = 'quinta';
-      else if (/\bsexta\b/.test(lowerUserText)) periodo = 'sexta';
-      else if (/\bsabado\b/.test(lowerUserText)) periodo = 'sabado';
+      // Passa o TEXTO DA PACIENTE inteiro pra parseData.
+      //
+      // Antes havia um mapeamento reduzido aqui que so reconhecia 'hoje' e
+      // nomes de dia da semana — "dia 20", "15/05", "depois de amanha",
+      // "semana que vem", "proxima terca" caiam TODOS silenciosamente em
+      // 'amanha', e o periodo do dia ("de manha"/"a tarde") era descartado.
+      // A paciente perguntava por um dia e recebia horarios de outro.
+      // parseData ja sabe interpretar tudo isso; so estava sendo alimentada
+      // com uma string achatada.
+      const periodo = resolverPeriodoDaMensagem(payload.userText);
 
-      const procMencionado = ctx.procedures.find(p => {
-        const n = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return lowerHistory.includes(n) || lowerUserText.includes(n);
-      });
+      // Mesmo matcher pontuado do resto do codigo. O find() com includes do
+      // nome inteiro quase nunca casava (a paciente escreve "botox", nao
+      // "Botox Terco Superior"), entao a agenda era consultada SEM filtro de
+      // procedimento — e voltava horario de quem nao faz o servico.
+      const procMencionado = matchProcedimentoNaConversa(payload.userText, lowerHistory, ctx.procedures);
 
       const r = await executeToolByName('consultar_agenda', {
         periodo,
@@ -1215,21 +1313,26 @@ Deno.serve(async (req) => {
   // ─── CAMADA 1.0: agendamento direto quando paciente escolheu horário ────────
   //
   // Caso real (Eliney): Eva ofereceu 13:30, 14:20, 16:50 → paciente disse "16:50"
-  // → Eva respondeu "vou confirmar com a Dra" em vez de criar. A Camada 1.1
-  // intercepta a fuga, mas pede pro modelo reapresentar a agenda (errado nesse
-  // caso — o horario ja foi escolhido). Esta camada resolve antes: se o texto
-  // do usuario e um horario isolado (HH:MM ou "as X horas") E a Eva tinha
-  // apresentado horarios recentemente, tenta criar o agendamento direto.
+  // → Eva respondeu "vou confirmar com a Dra" em vez de criar.
+  //
+  // ESTA CAMADA ESTAVA MORTA. A condição exigia `!consultouAgenda` (nenhuma
+  // consulta neste turno), mas recoverBookingFromSteps procurava o step de
+  // consultar_agenda dentro de `conv.steps` — que só tem as tools DESTE turno.
+  // Logo nunca achava nada e retornava sempre 'sem consultar_agenda previo'.
+  // O cenário que ela existe pra resolver — o mais comum de agendamento
+  // perdido — nunca era resolvido.
+  //
+  // Agora o recover lê a oferta PERSISTIDA (eva_slot_offers), gravada pela
+  // consultar_agenda no turno em que os horários foram mostrados.
   const horaEscolhidaMatch = (payload.userText || '').match(/^\s*(\d{1,2})[:h](\d{2})\s*$/) ||
     (payload.userText || '').match(/^\s*(\d{1,2})\s*h(?:oras?)?\s*$/i);
 
-  if (!agendamentoCriado && !consultouAgenda && horaEscolhidaMatch && evaOfereceuHorario) {
+  if (!agendamentoCriado && !consultouAgenda && horaEscolhidaMatch) {
     try {
       const hh = String(horaEscolhidaMatch[1]).padStart(2, '0');
       const min = horaEscolhidaMatch[2] ? horaEscolhidaMatch[2] : '00';
       const horarioEscolhido = `${hh}:${min}`;
 
-      // recoverBookingFromSteps já tem a logica completa de pegar o prof e data
       const rec = await recoverBookingFromSteps(conv.steps, `confirmado ${horarioEscolhido}`, ctx, payload, {
         supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_ROLE_KEY,
       });
@@ -1237,13 +1340,17 @@ Deno.serve(async (req) => {
       if (rec.created) {
         appointmentCreated = true;
         agendamentoCriado = true;
-        // Montar confirmação com os dados reais
-        const [yy, mm, dd] = (conv.steps.find(s => s.toolName === 'consultar_agenda')?.toolInput as any)?.periodo
-          ? ['', '', ''] : ['', '', ''];
+        // Confirmação COM A DATA. Antes saía só "reservado para 16:50" — a
+        // paciente não sabia de que dia era.
+        const iso = rec.dataIso ?? '';
+        const [yy, mm, dd] = iso.split('-');
+        const dataFmt = dd && mm && yy ? `${dd}/${mm}/${yy}` : '';
         finalText = sanitizeWhatsapp(
-          `${firstNamePost ? firstNamePost + ', ' : ''}já deixei seu horário reservado para ${horarioEscolhido}! Qualquer imprevisto, é só me avisar com antecedência. Vai ser um prazer te receber!`
+          `${firstNamePost ? firstNamePost + ', ' : ''}já deixei seu horário reservado para ${dataFmt ? `${dataFmt} às ` : ''}${horarioEscolhido}! Qualquer imprevisto, é só me avisar com antecedência. Vai ser um prazer te receber!`
         );
-        conv.errors.push(`[camada1.0] horario escolhido detectado (${horarioEscolhido}) → agendamento criado direto`);
+        conv.errors.push(`[camada1.0] horario escolhido detectado (${horarioEscolhido}) → agendamento criado em ${iso}`);
+      } else {
+        conv.errors.push(`[camada1.0] nao recuperou: ${rec.detail ?? 'sem detalhe'}`);
       }
     } catch (_e) {
       // se falhar, segue pro fluxo normal (Camada 1.1 vai tentar)
@@ -1263,19 +1370,22 @@ Deno.serve(async (req) => {
   if (!payload.isFollowup && prometeuConferirAgenda && !consultouAgenda && !agendamentoCriado) {
     try {
       // Detecta periodo/procedimento do que a paciente disse (reusa heuristica)
-      let periodo = 'amanha';
-      if (/\bhoje\b/.test(lowerUserText)) periodo = 'hoje';
-      else if (/\bsegunda\b/.test(lowerUserText)) periodo = 'segunda';
-      else if (/\bterca\b/.test(lowerUserText)) periodo = 'terca';
-      else if (/\bquarta\b/.test(lowerUserText)) periodo = 'quarta';
-      else if (/\bquinta\b/.test(lowerUserText)) periodo = 'quinta';
-      else if (/\bsexta\b/.test(lowerUserText)) periodo = 'sexta';
-      else if (/\bsabado\b/.test(lowerUserText)) periodo = 'sabado';
+      // Passa o TEXTO DA PACIENTE inteiro pra parseData.
+      //
+      // Antes havia um mapeamento reduzido aqui que so reconhecia 'hoje' e
+      // nomes de dia da semana — "dia 20", "15/05", "depois de amanha",
+      // "semana que vem", "proxima terca" caiam TODOS silenciosamente em
+      // 'amanha', e o periodo do dia ("de manha"/"a tarde") era descartado.
+      // A paciente perguntava por um dia e recebia horarios de outro.
+      // parseData ja sabe interpretar tudo isso; so estava sendo alimentada
+      // com uma string achatada.
+      const periodo = resolverPeriodoDaMensagem(payload.userText);
 
-      const procMencionado = ctx.procedures.find(p => {
-        const n = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return lowerHistory.includes(n) || lowerUserText.includes(n);
-      });
+      // Mesmo matcher pontuado do resto do codigo. O find() com includes do
+      // nome inteiro quase nunca casava (a paciente escreve "botox", nao
+      // "Botox Terco Superior"), entao a agenda era consultada SEM filtro de
+      // procedimento — e voltava horario de quem nao faz o servico.
+      const procMencionado = matchProcedimentoNaConversa(payload.userText, lowerHistory, ctx.procedures);
 
       const agendaRes = await executeToolByName('consultar_agenda', {
         periodo,

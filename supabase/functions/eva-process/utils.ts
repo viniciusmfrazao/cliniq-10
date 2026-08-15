@@ -142,6 +142,33 @@ export function parseData(texto: string): { dataAlvo: string; periodoAlvo: 'manh
 
   if (tx.includes('hoje')) return { dataAlvo: hojeIso, periodoAlvo };
 
+  // "dia 20", "no dia 5", "pro dia 28" — dia sem mes.
+  //
+  // Nao era tratado: caia no default (proximo dia util) e a paciente que pedia
+  // o dia 20 recebia horario de amanha, sem nenhum aviso. Vem DEPOIS do ramo
+  // dd/mm de proposito, pra "dia 15/09" continuar sendo lido como 15 de
+  // setembro. Se o dia ja passou neste mes, assume o mes seguinte.
+  const diaSoltoMatch = tx.match(/\bdia\s+(\d{1,2})\b/);
+  if (diaSoltoMatch) {
+    const dd = parseInt(diaSoltoMatch[1], 10);
+    if (dd >= 1 && dd <= 31) {
+      const montar = (y: number, m: number) =>
+        `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+      let candidato = montar(hojeY, hojeM);
+      if (candidato < hojeIso) {
+        const proxM = hojeM === 12 ? 1 : hojeM + 1;
+        const proxY = hojeM === 12 ? hojeY + 1 : hojeY;
+        candidato = montar(proxY, proxM);
+      }
+      // Valida que a data existe de fato (ex: "dia 31" em fevereiro)
+      const [cy, cm, cd] = candidato.split('-').map(Number);
+      const check = new Date(Date.UTC(cy, cm - 1, cd));
+      if (check.getUTCDate() === cd && check.getUTCMonth() === cm - 1) {
+        return { dataAlvo: candidato, periodoAlvo };
+      }
+    }
+  }
+
   // "depois de amanha" ANTES de "amanha" — senao o includes('amanha') captura primeiro
   if (tx.includes('depois de amanha') || tx.includes('depois de amanhã')) {
     alvo.setUTCDate(alvo.getUTCDate() + 2);

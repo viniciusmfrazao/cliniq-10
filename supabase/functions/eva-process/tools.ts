@@ -41,6 +41,84 @@ const SLOT_STEP_MIN = 15;
 
 // Quantos dias a frente varrer quando o dia pedido nao tem vaga
 /**
+ * Validade da oferta de horarios guardada em eva_slot_offers. Depois disso a
+ * agenda ja mudou demais pra confiar que a vaga continua livre — o codigo
+ * reconsulta. (A criar_agendamento revalida o slot de qualquer forma, entao
+ * isso e so pra evitar oferecer algo velho.)
+ */
+const SLOT_OFFER_TTL_MIN = 24 * 60;
+
+export interface SlotOffer {
+  data_iso: string;
+  periodo?: string | null;
+  procedimento_nome?: string | null;
+  procedure_id?: string | null;
+  slots: Array<{ professional_id: string; professional_name: string; horarios: string[] }>;
+  fallback_sem_procedimento?: boolean;
+  created_at?: string;
+}
+
+/**
+ * Guarda a ULTIMA oferta de horarios realmente mostrada pra essa paciente.
+ *
+ * Existe porque a paciente frequentemente escolhe o horario num turno
+ * POSTERIOR ("16:50" solto, depois que a Eva mostrou as opcoes). Nesse turno
+ * `conv.steps` esta vazio de consultar_agenda e nao havia de onde tirar data,
+ * profissional e horario — a recuperacao de agendamento morria ali.
+ *
+ * Grava a data JA RESOLVIDA (YYYY-MM-DD), nunca o texto livre do periodo:
+ * re-parsear 'amanha' na hora de confirmar pode cair em outro dia.
+ */
+async function salvarOfertaSlots(
+  clinicId: string,
+  phone: string,
+  offer: SlotOffer,
+  env: ToolEnv,
+): Promise<void> {
+  try {
+    const url = `${env.supabaseUrl}/rest/v1/eva_slot_offers?on_conflict=clinic_id,phone`;
+    await fetchJson(url, {
+      method: 'POST',
+      headers: { ...sbHeaders(env), Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+        clinic_id: clinicId,
+        phone,
+        data_iso: offer.data_iso,
+        periodo: offer.periodo ?? null,
+        procedimento_nome: offer.procedimento_nome ?? null,
+        procedure_id: offer.procedure_id ?? null,
+        slots: offer.slots,
+        fallback_sem_procedimento: offer.fallback_sem_procedimento ?? false,
+        created_at: new Date().toISOString(),
+      }),
+    });
+  } catch (_e) {
+    // Best-effort: falhar aqui nao pode quebrar a resposta pra paciente.
+  }
+}
+
+/** Le a ultima oferta valida (dentro do TTL) pra essa paciente. */
+export async function lerOfertaSlots(
+  clinicId: string,
+  phone: string,
+  env: ToolEnv,
+): Promise<SlotOffer | null> {
+  try {
+    const url = `${env.supabaseUrl}/rest/v1/eva_slot_offers?clinic_id=eq.${clinicId}&phone=eq.${encodeURIComponent(phone)}&select=*&limit=1`;
+    const r = await fetchJson<SlotOffer[]>(url, { method: 'GET', headers: sbHeaders(env) });
+    if (!r.ok || !Array.isArray(r.data) || r.data.length === 0) return null;
+    const offer = r.data[0];
+    if (offer.created_at) {
+      const idadeMin = (Date.now() - new Date(offer.created_at).getTime()) / 60000;
+      if (idadeMin > SLOT_OFFER_TTL_MIN) return null;
+    }
+    return offer;
+  } catch (_e) {
+    return null;
+  }
+}
+
+/**
  * Politica da Eva pro procedimento (procedures.eva_policy). 'escalar' significa
  * que a Eva reconhece o nome mas nao pode ofertar/precificar/agendar — o caso
  * vai pra humano. Ex (Sarah Pina): a Eva so pode oferecer 'Botox Terco Superior'
@@ -384,18 +462,52 @@ export async function consultarAgenda(args: {
   }
 
   const linhas: string[] = [];
+  const ofertaSlots: SlotOffer['slots'] = [];
   for (const [key, horas] of porProf.entries()) {
     const [nome, id] = key.split('|');
     if (horas.length === 0) continue;
-    linhas.push(`${nome} (id: ${id}): ${horas.slice(0, 6).join(', ')}`);
+    const mostrados = horas.slice(0, 6);
+    linhas.push(`${nome} (id: ${id}): ${mostrados.join(', ')}`);
+    ofertaSlots.push({ professional_id: id, professional_name: nome, horarios: mostrados });
   }
 
+  // Guarda a oferta pra quando a paciente escolher o horario num turno
+  // POSTERIOR (o caso mais comum: ela responde so "16:50"). Sem isso, o turno
+  // seguinte nao tem data, profissional nem horario de onde partir.
+  await salvarOfertaSlots(payload.clinicId, payload.phone, {
+    data_iso: dataAlvo,
+    periodo: periodoAlvo,
+    procedimento_nome: args.procedimento ?? null,
+    procedure_id: procedureId,
+    slots: ofertaSlots,
+    fallback_sem_procedimento: usouFallback,
+  }, env);
+
+  // AVISO DE FALLBACK: quando a 1a consulta (com p_procedure_id) nao achou nada
+  // e o codigo reconsultou SEM o filtro, os horarios podem ser de profissionais
+  // que NAO realizam o procedimento pedido. Antes esse caso voltava com o mesmo
+  // cabecalho de sucesso e a variavel `usouFallback` nunca era usada — a Eva
+  // oferecia o horario e o agendamento era criado com o profissional errado.
+  const avisoFallback = usouFallback
+    ? [
+        '',
+        '!! ATENCAO: nao havia vaga com quem realiza esse procedimento nessa data.',
+        'Os horarios acima sao de OUTROS profissionais e podem nao servir pra esse procedimento.',
+        `NAO agende direto. Diga com elegancia que para ${args.procedimento ?? 'esse procedimento'} voce vai confirmar a disponibilidade com a equipe e chame escalar_humano com motivo='duvida_complexa'.`,
+      ].join('\n')
+    : '';
+
   return [
-    `Horarios REAIS disponiveis para ${dataLabel}${periodoLabel}:`,
+    // A data ISO entra explicita porque quem for criar o agendamento depois
+    // precisa dela exata. Antes so havia o rotulo em portugues e o codigo
+    // re-parseava o texto livre do periodo ('amanha'), o que podia resolver
+    // pra outro dia se a confirmacao viesse mais tarde.
+    `Horarios REAIS disponiveis para ${dataLabel}${periodoLabel} (data: ${dataAlvo}):`,
     ...linhas,
+    avisoFallback,
     '',
-    'Quando a paciente confirmar um horario, chame criar_agendamento com o professional_id correto (acima entre parênteses). Apresente apenas 2-3 horarios pra ela escolher.',
-  ].join('\n');
+    'Quando a paciente confirmar um horario, chame criar_agendamento com o professional_id correto (acima entre parênteses) e data=' + dataAlvo + '. Apresente apenas 2-3 horarios pra ela escolher.',
+  ].filter(Boolean).join('\n');
 }
 
 // ─── consultar_meu_agendamento ──────────────────────────────────────────────
@@ -467,81 +579,19 @@ export async function criarAgendamento(args: {
   const professionals = allProfessionals.filter((p) => isBookableName(p.name));
   const validProfIds = new Set<string>(professionals.map((p) => p.id));
 
-  // 1) Validar/resolver professional_id
-  let professionalId = args.professional_id;
-  let profSource = 'claude';
-
-  if (!validProfIds.has(professionalId)) {
-    let matched: ProfessionalRow | null = null;
-
-    // Fallback: nome do profissional — busca do mais recente pro mais antigo
-    // para pegar quem foi CONFIRMADO por último (evita pegar Amanda quando Sarah foi confirmada)
-    const lastMsgs = history.slice(-8).reverse();
-    outerLoop:
-    for (const msg of lastMsgs) {
-      const t = norm(msg.content);
-      for (const p of professionals) {
-        const pNorm = norm(p.name).replace(/^dra?\.?\s+/, '');
-        const firstName = pNorm.split(/\s+/)[0];
-        if (!firstName) continue;
-        if (t.includes(firstName)) {
-          matched = p;
-          profSource = 'historico';
-          break outerLoop;
-        }
-      }
-    }
-
-    // Procedimento → primeiro profissional dele
-    if (!matched && args.procedimento) {
-      const needle = norm(args.procedimento);
-      const proc = procedures.find((p) => {
-        const hay = norm(p.name);
-        return hay.includes(needle) || needle.includes(hay);
-      });
-      if (proc?.professional_ids?.length) {
-        matched = professionals.find((p) => p.id === proc.professional_ids![0]) || null;
-        if (matched) profSource = 'procedimento';
-      }
-    }
-
-    if (!matched && professionals.length === 1) {
-      matched = professionals[0];
-      profSource = 'unico';
-    }
-
-    // Fallback final: usar SOMENTE profissional com agenda cadastrada
-    // Nunca usar admin/recepcionista que não atendem pacientes
-    if (!matched) {
-      const CLINICAL = ['doctor','dentist','biomedic','nurse','esthetician',
-                        'physiotherapist','nutritionist','psychologist'];
-      // Só profissionais clínicos COM horários cadastrados
-      const withSchedule = professionals.filter(p =>
-        CLINICAL.includes(p.role || '') || CLINICAL.includes(p.professional_role || '')
-      );
-      if (withSchedule.length > 0) {
-        matched = withSchedule[0];
-        profSource = 'fallback_clinical';
-      }
-      // Se nenhum encontrado, não agenda — escala para humano
-    }
-
-    if (matched) professionalId = matched.id;
-  }
-
-  if (!validProfIds.has(professionalId)) {
-    return {
-      toolResultStr:
-        'Profissional nao identificado. Responda com elegancia que precisa confirmar com qual profissional ela quer o horario. Apresente as opcoes.',
-      appointmentCreated: false,
-    };
-  }
-
-  // 2) Resolver procedure_id pelo nome (e a duração real dele)
+  // 0) Resolver o PROCEDIMENTO primeiro.
+  //
+  // Antes isso vinha depois da resolução do profissional, o que impedia os
+  // fallbacks de saber quem realmente realiza o procedimento — eles chutavam
+  // pelo histórico ou pegavam o primeiro clínico da lista.
   let procedureId: string | null = null;
   let duracaoMin = 30; // fallback quando o procedimento não é identificado
   let procedimentoResolvido: (typeof procedures)[number] | null = null;
   if (args.procedimento) {
+    // matchProcedimento (pontuado) em vez de find() com includes bidirecional:
+    // com nomes parecidos ("Botox 1 regiao", "Botox Terco Superior", "Botox
+    // completo") o includes pegava o primeiro parecido e puxava duração e
+    // profissional errados.
     const proc = matchProcedimento(args.procedimento, procedures)?.item ?? null;
     if (proc) {
       procedimentoResolvido = proc;
@@ -558,6 +608,110 @@ export async function criarAgendamento(args: {
   if (procedimentoResolvido && politicaProcedimento(procedimentoResolvido) !== 'ofertar') {
     return {
       toolResultStr: respostaEscalar(procedimentoResolvido.name),
+      appointmentCreated: false,
+    };
+  }
+
+  // Quem realiza esse procedimento (vazio = sem restrição cadastrada).
+  const idsQueRealizam = new Set<string>(
+    (procedimentoResolvido?.professional_ids ?? []).filter(Boolean),
+  );
+  const realizaProcedimento = (id: string) =>
+    idsQueRealizam.size === 0 || idsQueRealizam.has(id);
+
+  // 1) Validar/resolver professional_id
+  let professionalId = args.professional_id;
+  let profSource = 'claude';
+
+  if (!validProfIds.has(professionalId)) {
+    let matched: ProfessionalRow | null = null;
+
+    // Procedimento → profissional cadastrado pra ele. Passou pra frente do
+    // fallback por histórico de propósito: o cadastro é fonte de verdade, o
+    // histórico é chute (pega nome citado pela própria paciente ou por uma
+    // mensagem que a atendente digitou).
+    if (procedimentoResolvido?.professional_ids?.length) {
+      matched = professionals.find((p) => idsQueRealizam.has(p.id)) || null;
+      if (matched) profSource = 'procedimento';
+    }
+
+    // Fallback: nome do profissional citado nas últimas mensagens — mas SÓ
+    // aceita quem realmente realiza o procedimento.
+    if (!matched) {
+      const lastMsgs = history.slice(-8).reverse();
+      outerLoop:
+      for (const msg of lastMsgs) {
+        const t = norm(msg.content);
+        for (const p of professionals) {
+          if (!realizaProcedimento(p.id)) continue;
+          const pNorm = norm(p.name).replace(/^dra?\.?\s+/, '');
+          const firstName = pNorm.split(/\s+/)[0];
+          if (!firstName) continue;
+          if (t.includes(firstName)) {
+            matched = p;
+            profSource = 'historico';
+            break outerLoop;
+          }
+        }
+      }
+    }
+
+    if (!matched && professionals.length === 1 && realizaProcedimento(professionals[0].id)) {
+      matched = professionals[0];
+      profSource = 'unico';
+    }
+
+    // Fallback final: profissional clínico QUE REALIZA o procedimento E tem
+    // grade cadastrada. Antes o filtro só olhava `role` (o comentário dizia
+    // "com horários cadastrados" mas nunca checava professional_schedules) e
+    // pegava `withSchedule[0]` — o primeiro da lista, arbitrário.
+    if (!matched) {
+      const CLINICAL = ['doctor','dentist','biomedic','nurse','esthetician',
+                        'physiotherapist','nutritionist','psychologist'];
+      const comGrade = new Set(ctx.professional_schedules.map((ps) => ps.professional_id));
+      const candidatos = professionals.filter((p) =>
+        realizaProcedimento(p.id)
+        && comGrade.has(p.id)
+        && (CLINICAL.includes(p.role || '') || CLINICAL.includes((p as { professional_role?: string }).professional_role || ''))
+      );
+      if (candidatos.length === 1) {
+        matched = candidatos[0];
+        profSource = 'fallback_clinical';
+      }
+      // Mais de um candidato: NÃO chuta. Sem profissional definido a tool
+      // devolve erro logo abaixo e a Eva pergunta/escala em vez de agendar
+      // com quem calhou de estar primeiro no array.
+    }
+
+    if (matched) professionalId = matched.id;
+  }
+
+  if (!validProfIds.has(professionalId)) {
+    return {
+      toolResultStr:
+        'PROFISSIONAL_NAO_IDENTIFICADO: O AGENDAMENTO NAO FOI CRIADO. Nao consegui determinar com seguranca qual profissional faz esse atendimento. NUNCA confirme o horario. Chame consultar_agenda com o nome do procedimento pra pegar o professional_id correto e tente de novo; se ainda assim nao resolver, chame escalar_humano.',
+      appointmentCreated: false,
+    };
+  }
+
+  // GUARD DURO — o profissional escolhido realiza esse procedimento?
+  //
+  // Nenhuma validação anterior cobria isso. validarSlot checa dia, janela,
+  // bloqueio e conflito, mas não "essa profissional não faz esse procedimento".
+  // Combinado com o fallback sem filtro da consultar_agenda, dava pra criar
+  // agendamento com o profissional errado sem nenhum erro aparecer.
+  if (procedimentoResolvido && idsQueRealizam.size > 0 && !idsQueRealizam.has(professionalId)) {
+    const quemFaz = professionals
+      .filter((p) => idsQueRealizam.has(p.id))
+      .map((p) => p.name)
+      .join(', ');
+    return {
+      toolResultStr: [
+        'PROFISSIONAL_NAO_REALIZA_PROCEDIMENTO: O AGENDAMENTO NAO FOI CRIADO.',
+        `${procedimentoResolvido.name} nao e realizado por esse profissional${quemFaz ? ` — quem realiza e: ${quemFaz}` : ''}.`,
+        'NUNCA confirme esse horario pra paciente.',
+        'Chame consultar_agenda passando o nome exato do procedimento pra pegar os horarios de quem realmente realiza, e ofereca essas opcoes. Se nao houver vaga, chame escalar_humano.',
+      ].join('\n'),
       appointmentCreated: false,
     };
   }
@@ -683,6 +837,19 @@ export async function criarAgendamento(args: {
 
   if (new Date(startIso).getTime() <= Date.now()) {
     return recusar('DATA_NO_PASSADO', 'esse horario ja passou');
+  }
+
+  // Antecedencia minima. A consultar_agenda ja filtra por EVA_MIN_LEAD_MIN,
+  // mas a criar_agendamento so rejeitava passado — dava pra a Eva marcar algo
+  // pra daqui a 5 minutos se a paciente pedisse um horario que nao veio da
+  // lista ofertada. A recepcao continua podendo encaixar pela agenda interna;
+  // a trava e so da Eva.
+  const minutosDeAntecedencia = (new Date(startIso).getTime() - Date.now()) / 60000;
+  if (minutosDeAntecedencia < EVA_MIN_LEAD_MIN) {
+    return recusar(
+      'ANTECEDENCIA_INSUFICIENTE',
+      `esse horario e daqui a menos de ${EVA_MIN_LEAD_MIN} minutos e a clinica precisa de mais tempo pra se preparar`,
+    );
   }
 
   // Datas restritas (procedure_available_dates, ja vem no contexto). Antes so a
