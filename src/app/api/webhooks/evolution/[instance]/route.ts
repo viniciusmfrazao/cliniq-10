@@ -10,6 +10,7 @@ import {
   extFromMime,
   sendWhatsappMessage,
   sendWhatsappButtons,
+  PAUSE_INDEFINITE_ISO,
 } from '@/lib/whatsapp'
 
 /**
@@ -840,11 +841,24 @@ export async function POST(
           }
         }
 
+        // AUTORIA da mensagem. `role` diz o papel na conversa pro Claude;
+        // `author` diz QUEM escreveu. Toda mensagem que sai do numero da
+        // clinica tem role='assistant', mas pode ter sido digitada por uma
+        // pessoa da equipe pelo celular/WhatsApp Web. Sem essa distincao a Eva
+        // lia as mensagens da atendente como memoria propria e respondia por
+        // cima do atendimento humano.
+        //
+        // Se a mensagem tem evolution_message_id que ja foi registrado como
+        // envio da Eva/sistema, o dedup acima ja tratou — aqui so cai o que e
+        // digitacao humana de verdade.
+        const messageAuthor: 'patient' | 'human' = fromMe ? 'human' : 'patient'
+
         if (!dedupHit) {
           const insertConv = await svc.from('eva_conversations').insert({
             clinic_id: clinicId,
             phone,
             role: fromMe ? 'assistant' : 'user',
+            author: messageAuthor,
             content,
             customer_name: pushName ?? null,
             metadata: baseMetadata,
@@ -868,6 +882,43 @@ export async function POST(
             }))
           } else {
             debugTrace.push('eva_conversations inserted ok')
+          }
+        }
+
+        // ─── INTERVENÇÃO HUMANA PELO CELULAR ──────────────────────────────
+        //
+        // Antes, só a resposta enviada PELO PAINEL (/api/whatsapp/send com
+        // purpose='manual') pausava a Eva. Quando a atendente respondia direto
+        // pelo WhatsApp do celular ou pelo Web — que é como a maioria das
+        // clínicas trabalha — o evento chegava com fromMe=true e todo o bloco
+        // de decisão da Eva estava dentro de `if (!fromMe)`. Resultado: nada
+        // acontecia. Na mensagem seguinte da paciente a Eva assumia por cima
+        // do atendimento humano, sem saber o que tinha sido combinado.
+        //
+        // Agora qualquer digitação humana pausa a Eva naquele lead, igual ao
+        // painel. Volta ao automático com "Devolver pra Eva".
+        //
+        // Não conta como intervenção humana: mensagens que o próprio sistema
+        // enviou (dedupHit = a row já existia porque /send ou a Eva registrou
+        // antes) e disparos automáticos.
+        if (fromMe && !dedupHit) {
+          const { error: pauseErr } = await svc
+            .from('leads')
+            .update({
+              eva_pause_until: PAUSE_INDEFINITE_ISO,
+              needs_human_review: true,
+              human_review_reason: 'atendimento_humano',
+              human_review_details:
+                'Atendente respondeu manualmente pelo WhatsApp. A Eva fica pausada nesse lead até alguém clicar em "Devolver pra Eva".',
+              human_review_at: new Date().toISOString(),
+              last_contact_at: new Date().toISOString(),
+            })
+            .eq('clinic_id', clinicId)
+            .eq('phone', phone)
+          if (pauseErr) {
+            internalErrors.push(`pause eva on human reply: ${pauseErr.message}`)
+          } else {
+            debugTrace.push('eva paused: resposta manual detectada (fromMe)')
           }
         }
 
@@ -1280,6 +1331,7 @@ Te esperamos ${dateStr} às ${timeStr}. Vai ser ótimo te receber! 💜`
                     clinic_id: clinicId,
                     phone,
                     role: 'assistant',
+                    author: 'automation',
                     content: autoReply,
                     metadata: {
                       kind: 'text',

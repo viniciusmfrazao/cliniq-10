@@ -98,6 +98,28 @@ export interface LeadRow {
   status?: string | null;
   interest?: string | null;
   procedure_id?: string | null;
+  /** pushName original do WhatsApp — NUNCA usar pra chamar a paciente pelo nome. */
+  whatsapp_name?: string | null;
+  /**
+   * Preenchido quando a PROPRIA paciente informou o nome na conversa.
+   * Enquanto for null, `name` pode ser so o pushName do WhatsApp (apelido,
+   * nome de empresa, @usuario) e a Eva nao pode usar.
+   */
+  name_confirmed_at?: string | null;
+}
+
+/**
+ * Quem escreveu a mensagem. Diferente de `role`, que e o papel na conversa
+ * pra API do Claude — toda mensagem que sai do numero da clinica tem
+ * role='assistant', mas pode ter sido digitada por uma pessoa da equipe.
+ */
+export type MessageAuthor = 'patient' | 'eva' | 'human' | 'automation';
+
+export interface HistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  author?: MessageAuthor | null;
+  created_at?: string | null;
 }
 
 export interface EvolutionConfig {
@@ -117,7 +139,7 @@ export interface ProfessionalScheduleRow {
 }
 
 export interface DonnaContext {
-  history: Array<{ role: 'user' | 'assistant'; content: string }>;
+  history: HistoryMessage[];
   professionals: ProfessionalRow[];
   professional_schedules: ProfessionalScheduleRow[];
   procedures: ProcedureRow[];
@@ -125,8 +147,14 @@ export interface DonnaContext {
   patient: PatientRow | null;
   lead: LeadRow | null;
   evolution: EvolutionConfig | null;
-  /** ISO da última msg do assistente — usado pra detectar conversa fria. */
+  /**
+   * ISO da última msg escrita PELA EVA — usado pra detectar conversa fria.
+   * NAO conta mensagem digitada por humano (antes contava, e a Eva achava
+   * que ela mesma tinha respondido quando quem respondeu foi a atendente).
+   */
   last_assistant_at?: string | null;
+  /** ISO da última msg digitada por uma pessoa da equipe da clínica. */
+  last_human_at?: string | null;
 }
 
 // ─── Claude Messages API ───────────────────────────────────────────────────

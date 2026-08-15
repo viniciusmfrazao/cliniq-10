@@ -142,7 +142,14 @@ export function buildSystemPrompt(
   emotionalMemory?: EmotionalMemory | null,
 ): BuiltPrompt {
   const { professionals, procedures, clinic, patient, lead } = ctx;
-  const customerName = payload.customerName || patient?.name || lead?.name || 'cliente';
+  // Ordem de confianca: paciente cadastrada > lead com nome confirmado pela
+  // propria paciente > pushName do WhatsApp (ultimo recurso, e so chega ao
+  // prompt se a trava de nome mais abaixo liberar).
+  const customerName = patient?.name
+    || (lead?.name_confirmed_at ? lead?.name : null)
+    || payload.customerName
+    || lead?.name
+    || 'cliente';
   const firstName = String(customerName).split(/\s+/)[0] || '';
   const knowsRealName = hasRealName(customerName);
   // Verificar sinal de preco na msg atual + so as 2 ultimas mensagens REAIS
@@ -268,6 +275,15 @@ EVITE A TODO CUSTO:
 - Soar como vendedora insistente.
 - Mais de 1 emoji por mensagem.
 - Inventar informacoes que nao estao nos procedimentos ou na info da clinica.
+
+=== REGRA CRITICA 0.5 — MENSAGENS QUE NAO SAO SUAS:
+- No historico, algumas mensagens vem com o prefixo [ATENDENTE DA CLINICA (nao foi voce)] ou [MENSAGEM AUTOMATICA DO SISTEMA].
+- Essas mensagens NAO foram escritas por voce. Foram digitadas por uma pessoa da equipe ou disparadas pelo sistema.
+- NUNCA assuma que voce disse aquilo. Se a atendente passou um horario, voce NAO consultou a agenda — precisa chamar consultar_agenda antes de falar de horario.
+- Se a atendente passou um valor, uma condicao ou uma promessa, voce NAO sabe de onde veio. NAO repita, NAO confirme e NAO contradiga.
+- NUNCA mencione esses prefixos para a paciente. Eles sao so pra voce se localizar.
+- Se a ultima mensagem da clinica foi de uma atendente e a paciente esta dando continuidade AQUELE assunto (negociacao, valor combinado, horario segurado, reclamacao), voce NAO assume a conversa: responda de forma breve e acolhedora e chame escalar_humano com motivo='duvida_complexa' e detalhes explicando que havia atendimento humano em andamento.
+- Voce so segue sozinha quando a paciente claramente abre um assunto NOVO, sem relacao com o que a atendente estava tratando.
 
 === REGRA CRITICA 1 — NAO REPITA O NOME DO CLIENTE:
 - Voce JA cumprimentou ele com o nome na PRIMEIRA mensagem. PRONTO. Nao use mais o nome NAS PROXIMAS 3-4 mensagens.
@@ -471,18 +487,26 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
   const now = new Date();
   const dataAtual = now.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' });
 
+  // A identificacao segue a MESMA trava do nome (nomeFoiConfirmado, logo
+  // abaixo): se o nome nao foi confirmado pela propria paciente, cai sempre no
+  // ramo "nao sabemos o nome" — mesmo que exista um lead com pushName gravado.
+  const nomeConfirmadoParaIdent = Boolean(
+    patient || (lead?.name_confirmed_at && hasRealName(lead?.name || '')),
+  );
+  const conheceNome = knowsRealName && nomeConfirmadoParaIdent;
+
   let identificacaoPart = '';
-  if (patient && knowsRealName && !isNewConversation) {
+  if (patient && conheceNome && !isNewConversation) {
     identificacaoPart = `- ${firstName} ja e PACIENTE da clinica (id: ${patient.id}). Trate com familiaridade. Continue a conversa naturalmente.`;
-  } else if (patient && knowsRealName && isNewConversation) {
+  } else if (patient && conheceNome && isNewConversation) {
     identificacaoPart = `- ${firstName} ja e PACIENTE da clinica mas e uma nova aproximacao.\n- Se apresente como Eva da ${clinic.name}, acolha com calor e retome o relacionamento.`;
-  } else if (lead && knowsRealName && !isNewConversation) {
+  } else if (lead && conheceNome && !isNewConversation) {
     identificacaoPart = `- ${firstName} e um LEAD em acompanhamento (status: ${lead.status})${lead.interest ? `, interesse anterior: ${lead.interest}` : ''}. Continue o relacionamento naturalmente.`;
-  } else if (knowsRealName && isNewConversation) {
+  } else if (conheceNome && isNewConversation) {
     // Nova conversa: ignora pushName — sempre perguntar o nome de forma genuina
     // O pushName do WhatsApp pode ser apelido, nome de empresa, etc — nao confiar
     identificacaoPart = `- PRIMEIRA APROXIMACAO E NAO SABEMOS O NOME AINDA.\n!! ORDEM OBRIGATORIA — NAO PODE PULAR ETAPAS:\n  1) Se apresente como Eva da ${clinic.name}\n  2) Acolha com calor (1 frase curta sobre o interesse dela, NO MAXIMO)\n  3) Pergunte como prefere ser chamada — SEMPRE, SEM EXCECAO\n  4) NAO explique procedimento, NAO mostre horarios, NAO fale de valores ANTES de saber o nome\n- Quando ela responder com o nome, CHAME 'atualizar_nome_lead' ANTES de continuar.`;
-  } else if (!knowsRealName) {
+  } else if (!conheceNome) {
     identificacaoPart = `- PRIMEIRA APROXIMACAO E NAO SABEMOS O NOME AINDA.\n!! ORDEM OBRIGATORIA — NAO PODE PULAR ETAPAS:\n  1) Se apresente como Eva da ${clinic.name}\n  2) Acolha com calor (1 frase curta sobre o interesse dela, NO MAXIMO)\n  3) Pergunte como prefere ser chamada — SEMPRE, SEM EXCECAO\n  4) NAO explique procedimento, NAO mostre horarios, NAO fale de valores ANTES de saber o nome\n- Quando ela responder com o nome, CHAME 'atualizar_nome_lead' ANTES de continuar.`;
   } else {
     identificacaoPart = `- Conversa em andamento. Continue naturalmente.`;
@@ -515,16 +539,26 @@ OBJETIVO: cada paciente deve se sentir especial e acolhida. Voce nao esta venden
     followupPart = `\n${buildContextLine(payload, isNewConversation, historyLength, evaCfg, leadInterest)}`;
   }
 
-  // Em nova conversa com lead/desconhecido, NAO revelar o pushName do WhatsApp ao Claude.
-  // Se ele souber o nome, vai usá-lo diretamente ao invés de perguntar.
-  // Só revelamos o nome quando ele veio de uma confirmação real (paciente cadastrado
-  // ou lead com nome já atualizado via atualizar_nome_lead).
-  const nomeParaPrompt = (isNewConversation && !patient && !(lead && hasRealName(lead?.name || '')))
-    ? 'desconhecido — pergunte o nome'
-    : customerName;
-  const firstNameParaPrompt = (isNewConversation && !patient && !(lead && hasRealName(lead?.name || '')))
-    ? ''
-    : firstName;
+  // TRAVA DE NOME — o modelo so recebe o nome quando ele foi CONFIRMADO.
+  //
+  // Antes a condicao era `lead && hasRealName(lead.name)`. So que tanto o
+  // webhook quanto o ensureLead gravavam o pushName do WhatsApp em leads.name,
+  // entao hasRealName retornava true ja na primeira mensagem e a trava nunca
+  // pegava. Producao registrou "Oi ednafernandescorrea26 !" e "Nega, vou
+  // verificar essa informacao com a equipe" — pushName usado como nome proprio.
+  //
+  // Agora a unica fonte valida e:
+  //   (a) paciente cadastrada na clinica, ou
+  //   (b) lead com name_confirmed_at preenchido — ou seja, a PROPRIA paciente
+  //       informou o nome e a tool atualizar_nome_lead registrou.
+  // Fora isso o modelo recebe literalmente "desconhecido" e tem que perguntar.
+  const nomeFoiConfirmado = Boolean(
+    patient || (lead?.name_confirmed_at && hasRealName(lead?.name || '')),
+  );
+  const nomeParaPrompt = nomeFoiConfirmado
+    ? customerName
+    : 'desconhecido — pergunte o nome e chame atualizar_nome_lead quando ela responder';
+  const firstNameParaPrompt = nomeFoiConfirmado ? firstName : '';
 
   const clienteLabel = firstNameParaPrompt
     ? nomeParaPrompt + ' (chame de ' + firstNameParaPrompt + ')'

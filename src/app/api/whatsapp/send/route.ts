@@ -9,6 +9,7 @@ import {
   cleanMimeType,
   extFromMime,
   normalizePhone,
+  PAUSE_INDEFINITE_ISO as PAUSE_INDEFINITE_ISO_SHARED,
 } from '@/lib/whatsapp'
 import { getSettings } from '@/lib/app-settings'
 
@@ -206,7 +207,10 @@ type PersistResult = {
  * Usar uma data muito distante porque o webhook compara com new Date().getTime().
  * Botão "Devolver pra Eva" zera de volta pra null.
  */
-const PAUSE_INDEFINITE_ISO = '2099-12-31T23:59:59.999Z'
+// Movida pra @/lib/whatsapp — o webhook da Evolution usa a mesma constante
+// pra pausar a Eva quando a atendente responde direto pelo celular.
+// Re-export local mantido pra nao quebrar referencias existentes neste arquivo.
+const PAUSE_INDEFINITE_ISO = PAUSE_INDEFINITE_ISO_SHARED
 
 async function persistOutboundMessage(args: {
   clinicId: string
@@ -317,6 +321,10 @@ async function persistOutboundMessage(args: {
       clinic_id: args.clinicId,
       phone: normalizedPhone,
       role: 'assistant',
+      // Autoria: 'manual' = atendente digitou no painel; qualquer outro
+      // purpose = disparo do sistema. A Eva precisa dessa distincao pra nao
+      // tratar mensagem de outra pessoa como memoria propria.
+      author: args.purpose === 'manual' ? 'human' : 'automation',
       content,
       metadata: {
         evolution_message_id: evolutionMessageId,

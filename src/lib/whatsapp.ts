@@ -1,6 +1,14 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getSettings } from '@/lib/app-settings'
 
+/**
+ * Valor de `leads.eva_pause_until` que representa "pausada por tempo
+ * indeterminado". Usado sempre que um humano assume o atendimento (resposta
+ * pelo painel ou digitação direta pelo WhatsApp da clínica). Só volta ao
+ * automático quando alguém clica em "Devolver pra Eva", que zera o campo.
+ */
+export const PAUSE_INDEFINITE_ISO = '2099-12-31T23:59:59.999Z'
+
 export type PersistResult = {
   ok: boolean
   conversation_id?: string
@@ -130,6 +138,10 @@ export async function persistOutboundMessage(args: {
       clinic_id: args.clinicId,
       phone: normalizedPhone,
       role: 'assistant',
+      // Autoria: 'manual' = uma pessoa da equipe digitou no painel;
+      // 'automation' = disparo do sistema (lembrete, NPS, campanha).
+      // A Eva usa isso pra não confundir mensagem alheia com memória própria.
+      author: args.purpose === 'manual' ? 'human' : 'automation',
       content,
       metadata: {
         evolution_message_id: evolutionMessageId,

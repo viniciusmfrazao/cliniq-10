@@ -199,6 +199,7 @@ async function loadContext(payload: IncomingPayload): Promise<{ ok: boolean; ctx
       lead: data.lead ?? null,
       evolution: data.evolution ?? null,
       last_assistant_at: data.last_assistant_at ?? null,
+      last_human_at: data.last_human_at ?? null,
     },
   };
 }
@@ -217,7 +218,13 @@ async function ensureLead(payload: IncomingPayload, ctx: DonnaContext): Promise<
     },
     body: JSON.stringify({
       clinic_id: payload.clinicId,
-      name: payload.customerName || 'Lead WhatsApp',
+      // O pushName do WhatsApp NAO entra em `name`. Ele e apelido, @usuario ou
+      // nome de empresa na maioria dos casos ("ednafernandescorrea26", "Nega")
+      // e, uma vez em leads.name, derrotava a blindagem do prompt: a Eva
+      // passava a "saber" o nome e cumprimentava sem nunca ter perguntado.
+      // Fica so em whatsapp_name; `name` so vira nome real via
+      // atualizar_nome_lead, que preenche name_confirmed_at.
+      name: 'Lead WhatsApp',
       whatsapp_name: payload.customerName || null, // nome original do WhatsApp
       phone: payload.phone,
       source: 'whatsapp',
@@ -236,6 +243,8 @@ async function ensureLead(payload: IncomingPayload, ctx: DonnaContext): Promise<
       status: r.data[0].status,
       interest: null,
       procedure_id: null,
+      whatsapp_name: payload.customerName || null,
+      name_confirmed_at: null, // lead novo: nome ainda nao veio da paciente
     };
   }
 }
@@ -399,19 +408,29 @@ async function scheduleNextFollowup(payload: IncomingPayload, ctx: DonnaContext,
 // marca o lead como `needs_human_review` e a equipe responde manual pelo
 // painel `/dashboard/whatsapp`. Evita confundir paciente real com "Tive um
 // pequeno contratempo aqui" sem contexto.
+type HumanReviewReason = 'claude_error' | 'iteration_limit' | 'atendimento_humano';
+
 async function markLeadForHumanReview(
   ctx: DonnaContext,
-  reason: 'claude_error' | 'iteration_limit',
+  reason: HumanReviewReason,
   details: string,
 ): Promise<void> {
   if (!ctx.lead?.id) return;
-  const friendlyReason = reason === 'claude_error' ? 'instabilidade' : 'duvida_complexa';
+  const friendlyReason = reason === 'claude_error'
+    ? 'instabilidade'
+    : reason === 'atendimento_humano'
+      ? 'atendimento_humano'
+      : 'duvida_complexa';
   const isBookingFail = details.includes('confirmou agendamento sem chamar criar_agendamento');
   const friendlyDetails = isBookingFail
     ? `⚠️ AGENDAMENTO NÃO CRIADO: paciente confirmou horário mas o sistema não conseguiu registrar. Confirme manualmente na agenda e avise a paciente. ${details.slice(0, 200)}`
-    : reason === 'claude_error'
-      ? `Eva ficou instável tecnicamente. Última msg precisa de resposta manual. ${details.slice(0, 200)}`
-      : `Eva ficou em loop sem chegar numa resposta. Última msg precisa de resposta manual. ${details.slice(0, 200)}`;
+    : reason === 'atendimento_humano'
+      // Handoff humano NAO e falha da Eva — a mensagem no painel precisa
+      // deixar claro que a paciente esta esperando resposta de uma pessoa.
+      ? `👤 ATENDIMENTO HUMANO EM ANDAMENTO: ${details.slice(0, 240)}`
+      : reason === 'claude_error'
+        ? `Eva ficou instável tecnicamente. Última msg precisa de resposta manual. ${details.slice(0, 200)}`
+        : `Eva ficou em loop sem chegar numa resposta. Última msg precisa de resposta manual. ${details.slice(0, 200)}`;
   await fetchJson(`${SUPABASE_URL}/rest/v1/leads?id=eq.${ctx.lead.id}`, {
     method: 'PATCH',
     headers: {
@@ -471,6 +490,9 @@ async function saveTurn(payload: IncomingPayload, ctx: DonnaContext, finalText: 
       lead_id: ctx.lead?.id ?? null,
       patient_id: ctx.patient?.id ?? null,
       last_agent: 'eva',
+      // Autoria explicita: e o que permite distinguir, no proximo turno, o que
+      // a Eva escreveu do que uma atendente digitou pelo celular.
+      author: 'eva',
       metadata: {
         ...baseMeta,
         usage: usage ?? null,
@@ -769,6 +791,55 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 1.4) GUARDA DE INTERVENÇÃO HUMANA — última linha de defesa.
+  //
+  // O webhook já pausa a Eva quando detecta que uma pessoa da equipe respondeu
+  // (leads.eva_pause_until + needs_human_review). Mas aquilo depende do lead
+  // existir e do PATCH ter dado certo. Aqui checamos o fato bruto: a última
+  // mensagem que saiu do número da clínica foi digitada por uma PESSOA?
+  //
+  // Se foi, e faz menos de HUMAN_HANDOFF_WINDOW_MIN, a Eva não entra. Motivo:
+  // ela não tem como saber o que a atendente combinou (preço negociado,
+  // horário segurado, condição especial) e responder por cima quebra o
+  // atendimento na frente da paciente. Melhor ficar calada e deixar o lead
+  // sinalizado no painel.
+  const HUMAN_HANDOFF_WINDOW_MIN = 180; // 3h
+  if (!payload.isFollowup && ctx.last_human_at) {
+    const humanAtMs = new Date(ctx.last_human_at).getTime();
+    const evaAtMs = ctx.last_assistant_at ? new Date(ctx.last_assistant_at).getTime() : 0;
+    const minutosDesdeHumano = (Date.now() - humanAtMs) / 60000;
+    // Só bloqueia se a intervenção humana for MAIS RECENTE que a última fala
+    // da própria Eva — senão seria um humano antigo travando a conversa pra sempre.
+    if (humanAtMs > evaAtMs && minutosDesdeHumano <= HUMAN_HANDOFF_WINDOW_MIN) {
+      console.log(JSON.stringify({
+        evt: 'eva_blocked',
+        reason: 'human_in_the_loop',
+        clinic: payload.clinicId,
+        phone: payload.phone?.slice(-8),
+        minutos_desde_humano: Math.round(minutosDesdeHumano),
+      }));
+      // Marca pra equipe ver no painel que a paciente respondeu e está esperando.
+      await markLeadForHumanReview(
+        ctx,
+        'atendimento_humano',
+        `Atendente respondeu há ${Math.round(minutosDesdeHumano)} min e a paciente voltou a escrever. A Eva não assumiu pra não atropelar o atendimento.`,
+      ).catch(() => {});
+      fetchJson(`${SUPABASE_URL}/rest/v1/rpc/insert_eva_log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({
+          p_clinic_id: payload.clinicId,
+          p_phone: payload.phone?.replace(/\D/g, '').slice(-11) ?? null,
+          p_source: 'eva-process',
+          p_event: 'skipped',
+          p_status: 'skipped',
+          p_details: { reason: 'human_in_the_loop', minutos_desde_humano: Math.round(minutosDesdeHumano) },
+        }),
+      }).catch(() => {});
+      return jsonResponse({ ok: true, skipped: true, reason: 'human_in_the_loop', sent: false });
+    }
+  }
+
   // 1.5) Marca a mensagem recebida como lida (sinal humano — "abriu e leu antes
   // de responder"). Só se aplica a mensagem reativa real (não follow-up, que
   // não tem uma mensagem específica do paciente pra marcar). Fire-and-forget:
@@ -950,8 +1021,23 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Histórico enviado ao modelo com AUTORIA explícita.
+  //
+  // Toda mensagem que sai do número da clínica é gravada com role='assistant',
+  // tenha sido escrita pela Eva ou digitada por uma atendente. Sem marcação, a
+  // Eva lia as mensagens da equipe como memória própria: assumia que já tinha
+  // consultado a agenda, que já tinha passado preço, que já tinha cumprimentado
+  // — e emendava em cima, contradizendo o que a pessoa combinou.
+  //
+  // O prefixo é literal e o prompt tem uma regra explicando o que fazer com ele.
   const messages: ClaudeMessage[] = [
-    ...history.map((m) => ({ role: m.role, content: m.content })),
+    ...history.map((m) => ({
+      role: m.role,
+      content:
+        m.role === 'assistant' && m.author && m.author !== 'eva'
+          ? `[${m.author === 'automation' ? 'MENSAGEM AUTOMATICA DO SISTEMA' : 'ATENDENTE DA CLINICA (nao foi voce)'}]: ${m.content}`
+          : m.content,
+    })),
   ];
 
   // Em follow-up, o "user message" é virtual: pedimos pra Eva proativamente
@@ -1116,7 +1202,15 @@ Deno.serve(async (req) => {
   // Variáveis de pós-processamento — declaradas aqui pra estarem disponíveis
   // nas Camadas 1.0 e 1.1 que vêm a seguir
   const consultouAgenda = toolsUsed.includes('consultar_agenda');
-  const firstNamePost = String(payload.customerName || ctx.patient?.name || ctx.lead?.name || '').trim().split(/\s+/)[0] || '';
+  // Nome usado no pós-processamento (confirmação, escalonamento, stripRepeatedName).
+  // Ordem de confiança: paciente cadastrada > lead com nome CONFIRMADO pela
+  // propria paciente. O pushName do WhatsApp foi removido daqui de proposito —
+  // era ele que produzia coisas como "Oi ednafernandescorrea26!" e "Nega, vou
+  // verificar essa informacao com a equipe" em producao.
+  const nomeConfiavelPost = ctx.patient?.name
+    || (ctx.lead?.name_confirmed_at ? ctx.lead?.name : null)
+    || '';
+  const firstNamePost = String(nomeConfiavelPost).trim().split(/\s+/)[0] || '';
 
   // ─── CAMADA 1.0: agendamento direto quando paciente escolheu horário ────────
   //

@@ -804,19 +804,31 @@ export async function atualizarNomeLead(
     return 'Nome anotado, mas nao ha lead vinculado. Continue conversando normalmente.';
   }
 
+  const nomeFinal = novo.slice(0, 200);
+  const agora = new Date().toISOString();
+
+  // name_confirmed_at e o que libera a Eva a chamar a paciente pelo nome.
+  // Enquanto for null, leads.name pode ser so o pushName do WhatsApp (apelido,
+  // @usuario, nome de empresa) e o prompt trata como "nome desconhecido".
   const url = `${env.supabaseUrl}/rest/v1/leads?id=eq.${ctx.lead.id}`;
   const r = await fetchJson(url, {
     method: 'PATCH',
     headers: sbHeaders(env),
     body: JSON.stringify({
-      name: novo.slice(0, 200),
-      last_contact_at: new Date().toISOString(),
+      name: nomeFinal,
+      name_confirmed_at: agora,
+      last_contact_at: agora,
     }),
   });
 
   if (!r.ok) {
     return `Nao consegui atualizar o nome no sistema (${r.error || 'erro desconhecido'}), mas continue conversando normalmente.`;
   }
+
+  // Reflete no contexto em memoria pro restante DESTE turno ja poder usar o
+  // nome (senao a Eva registra o nome e continua tratando como desconhecido).
+  ctx.lead.name = nomeFinal;
+  ctx.lead.name_confirmed_at = agora;
 
   // Retorno simples — não instrui o Claude a escrever mensagem (evita segunda call)
   // O modelo já sabe continuar naturalmente após registrar o nome.
