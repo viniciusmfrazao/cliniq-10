@@ -43,12 +43,6 @@ type Props = {
   appointmentId?: string | null
   /** Mostra a busca de paciente dentro do modal (usado na tela de Nova entrada). */
   selecionarPaciente?: boolean
-  /**
-   * Esconde o seletor de procedimentos. Usado no fechamento do atendimento, onde
-   * o procedimento ja' e' cobrado pelo proprio fechamento -- oferecer procedimento
-   * ali faz a mesma coisa ser lancada duas vezes.
-   */
-  apenasProdutos?: boolean
   onClose: () => void
   onSuccess?: (resumo: { itens: number; total: number }) => void
 }
@@ -98,7 +92,7 @@ function fmt(v: number) {
 
 export default function VendaModal({
   clinicId, userId, patientId, patientName, appointmentId = null,
-  selecionarPaciente = false, apenasProdutos = false, onClose, onSuccess,
+  selecionarPaciente = false, onClose, onSuccess,
 }: Props) {
   const supabase = createClient()
   const router = useRouter()
@@ -268,7 +262,7 @@ export default function VendaModal({
 
   // -------------------------------------------------------------------- submit
   async function handleSubmit() {
-    if (cart.length === 0) { toast.error(apenasProdutos ? 'Adicione ao menos um produto' : 'Adicione ao menos um item'); return }
+    if (cart.length === 0) { toast.error('Adicione ao menos um item'); return }
     if (cart.some(i => i.valor_unitario <= 0)) { toast.error('Todo item precisa de um valor maior que zero'); return }
     if (pagamentosCalc.some(p => p.v <= 0)) { toast.error('Cada forma de pagamento precisa de um valor maior que zero'); return }
     if (pagamentos.some(p => isBoleto(p.forma) && !p.vencimento)) { toast.error('Informe o vencimento do 1º boleto'); return }
@@ -392,7 +386,7 @@ export default function VendaModal({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <div>
-            <h2 className="font-bold text-slate-900">{apenasProdutos ? 'Vender produto' : 'Nova venda'}</h2>
+            <h2 className="font-bold text-slate-900">Nova venda</h2>
             <p className="text-sm text-slate-500">{pacienteNomeSel || 'Venda avulsa'}</p>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg">
@@ -430,27 +424,16 @@ export default function VendaModal({
               </div>
             </div>
 
-            {!apenasProdutos && (
-              <>
-                <div>
-                  <label className="label">Adicionar procedimento</label>
-                  <select value="" onChange={e => addProcedimento(e.target.value)} className="input text-sm py-2">
-                    <option value="">Selecione um procedimento</option>
-                    {procedimentos.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} — {fmt(p.price)}</option>
-                    ))}
-                  </select>
-                </div>
-                {itensServico.length > 0 && renderItens(itensServico, 'emerald')}
-              </>
-            )}
-
-            {apenasProdutos && (
-              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                Só produtos aqui — o procedimento do atendimento é cobrado no pagamento abaixo,
-                então lançá-lo nesta tela cobraria duas vezes.
-              </p>
-            )}
+            <div>
+              <label className="label">Adicionar procedimento</label>
+              <select value="" onChange={e => addProcedimento(e.target.value)} className="input text-sm py-2">
+                <option value="">Selecione um procedimento</option>
+                {procedimentos.map(p => (
+                  <option key={p.id} value={p.id}>{p.name} — {fmt(p.price)}</option>
+                ))}
+              </select>
+            </div>
+            {itensServico.length > 0 && renderItens(itensServico, 'emerald')}
 
             <div>
               <label className="label">Adicionar produto</label>

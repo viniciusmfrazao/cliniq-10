@@ -5,14 +5,12 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
-import { gerarVencimentosBoleto } from '@/lib/recebiveis'
-import VendaModal from '@/components/vendas/venda-modal'
 
 type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; taxa_fixa?: number | null }
 type ProcItem = { id: string; name: string; price: number }
 type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; taxaFixa: number; liquido: number; vencimento: string }
 type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean }
-type VendaProdutoInfo = { produtoNome: string; quantidade: number; valor: number }
+type ProdItem = { id: string; name: string; sale_price: number; current_stock: number; quantidade: number }
 
 type Props = {
   appointmentId: string
@@ -63,8 +61,10 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [allClinicProcs, setAllClinicProcs] = useState<ProcItem[]>([])
   const [procSearch, setProcSearch] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
-  const [showSellProduct, setShowSellProduct] = useState(false)
-  const [vendasProduto, setVendasProduto] = useState<VendaProdutoInfo[]>([])
+  const [showAddProd, setShowAddProd] = useState(false)
+  const [allClinicProds, setAllClinicProds] = useState<ProdItem[]>([])
+  const [prodSearch, setProdSearch] = useState('')
+  const [produtos, setProdutos] = useState<ProdItem[]>([])
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -111,6 +111,20 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         id: p.id,
         name: p.name,
         price: Number(p.price) || 0,
+      })))
+
+      // Produtos da clínica (pra vender junto com o procedimento)
+      const { data: prodData } = await supabase
+        .from('products')
+        .select('id, name, sale_price, current_stock')
+        .eq('clinic_id', clinicId)
+        .eq('is_active', true)
+        .order('name')
+      setAllClinicProds((prodData || []).map((p: any) => ({
+        id: p.id, name: p.name,
+        sale_price: Number(p.sale_price) || 0,
+        current_stock: p.current_stock ?? 0,
+        quantidade: 1,
       })))
 
       // Débitos pendentes
@@ -170,9 +184,13 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   }
 
   const totalProcs = procs.reduce((s, p) => s + p.price, 0)
+  const totalProdutos = produtos.reduce((s, p) => s + p.sale_price * p.quantidade, 0)
   const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valor, 0)
-  // Use valor_cobrado set by professional if available, otherwise fall back to procedure price
-  const baseTotal = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : totalProcs
+  const estoqueNegativo = produtos.filter(p => p.quantidade > p.current_stock)
+  // Use valor_cobrado set by professional if available, otherwise fall back to procedure price.
+  // Produto vendido no atendimento soma por cima — é item da mesma venda, pago junto.
+  const baseProcs = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : totalProcs
+  const baseTotal = baseProcs + totalProdutos
   const descontoNum = parseFloat(descontoValorStr) || 0
   const totalComDesconto = descontoTipo === 'percentual'
     ? Math.max(0, baseTotal * (1 - descontoNum / 100))
@@ -200,87 +218,112 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   }
 
   async function save() {
+    if (!userId) { console.error('Sem usuário autenticado'); return }
     setSaving(true)
     try {
-      // Data no fuso horário do Brasil (UTC-3) para evitar virada de dia UTC
       const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
         .split('/').reverse().join('-')
 
-      // Uma entrada por forma de pagamento (não mais uma por procedimento).
-      // Quando há mais de um procedimento no mesmo pagamento, o nome vem combinado
-      // ("Botox + Preenchimento") e o detalhe por procedimento fica em entrada_procedimentos
-      // (usado pelos relatórios por procedimento: ranking, contagem em /procedimentos, etc).
-      const procedimentoNomeCombinado = procs.map(p => p.name).join(' + ')
-      for (const s of splits) {
-        if (s.valor <= 0) continue
-        const taxa = calcTaxaValor(s)
-        const liquido = Math.round((s.valor - taxa) * 100) / 100
-        // Grava o % efetivo (inclui a taxa fixa do boleto) pra que
-        // valor_bruto × taxa_percentual continue batendo com valor_taxa.
-        const taxaPctEfetiva = s.valor > 0 ? Math.round((taxa / s.valor) * 1000000) / 10000 : 0
-        const { data: entradaInserida, error: errEntrada } = await supabase.from('entradas').insert({
-          clinic_id: clinicId, data_venda: hoje,
-          paciente_id: patientId, paciente_nome: patientName,
-          procedimento_id: procs.length === 1 ? asProcUuid(procs[0].id) : null,
-          procedimento_nome: procedimentoNomeCombinado,
-          profissional_id: professionalId, profissional_nome: professionalName,
-          forma_pagamento: s.forma, bandeira: s.bandeira || null,
-          valor_bruto: s.valor, taxa_percentual: taxaPctEfetiva,
-          valor_taxa: taxa, valor_liquido: liquido,
-          n_parcelas: s.parcelas, observacoes: obs || null,
-          primeiro_vencimento: s.forma === 'boleto' ? (s.vencimento || null) : null,
-          appointment_id: appointmentId,
-        }).select('id').single()
+      // Procedimentos e produtos vao na MESMA venda: a paciente paga uma vez so'.
+      // A fn_registrar_venda separa em entradas por tipo_receita (servico/produto)
+      // com rateio proporcional, entao o financeiro continua recebendo as linhas
+      // separadas de sempre — DRE, comissao, ranking e nota fiscal sem mudanca.
+      const itens = [
+        ...procs.map(p => ({
+          tipo: 'procedimento' as const,
+          id: asProcUuid(p.id),
+          nome: p.name,
+          quantidade: 1,
+          valor_unitario: p.price,
+        })),
+        ...produtos.map(p => ({
+          tipo: 'produto' as const,
+          id: p.id,
+          nome: p.name,
+          quantidade: p.quantidade,
+          valor_unitario: p.sale_price,
+        })),
+      ].filter(i => i.valor_unitario > 0 || i.tipo === 'procedimento')
 
-        if (errEntrada) { console.error('Erro ao criar entrada:', errEntrada); continue }
+      // Debito quitado nao e' item desta venda — e' divida antiga sendo paga junto.
+      // Fica fora do rateio pra nao inflar a receita de produto/procedimento do dia.
+      const proporcaoItens = totalDever > 0 ? totalComDesconto / totalDever : 1
 
-        // Boleto não vem "aprovado" como o cartão — precisa de baixa manual
-        // depois. Gera uma linha por parcela em boleto_parcelas com o
-        // vencimento real, pra validar em Previsão de Recebimento.
-        if (s.forma === 'boleto' && s.vencimento) {
-          const vencimentos = gerarVencimentosBoleto(s.vencimento, s.parcelas)
-          const valorParcela = Math.round((liquido / s.parcelas) * 100) / 100
-          const somaAteAqui = valorParcela * (s.parcelas - 1)
-          const parcelasBoleto = vencimentos.map((venc, i) => ({
-            clinic_id: clinicId,
-            entrada_id: entradaInserida.id,
-            numero_parcela: i + 1,
-            total_parcelas: s.parcelas,
-            valor_liquido: i === s.parcelas - 1 ? Math.round((liquido - somaAteAqui) * 100) / 100 : valorParcela,
-            vencimento: venc,
-            paciente_nome: patientName,
-            procedimento_nome: procedimentoNomeCombinado,
-          }))
-          const { error: errParcelas } = await supabase.from('boleto_parcelas').insert(parcelasBoleto)
-          if (errParcelas) console.error('Erro ao criar parcelas do boleto:', errParcelas)
-        }
-
-        // Detalhe por procedimento (rateio proporcional ao preço de cada procedimento
-        // dentro do valor deste split de pagamento)
-        const detalhes = procs.map(proc => {
-          const proporcao = totalProcs > 0 ? proc.price / totalProcs : 1 / procs.length
+      const pagamentosItens = splits
+        .filter(sp => sp.valor > 0)
+        .map(sp => {
+          const valorItens = Math.round(sp.valor * proporcaoItens * 100) / 100
+          const taxa = calcTaxaValor({ ...sp, valor: valorItens })
+          const taxaPct = valorItens > 0 ? Math.round((taxa / valorItens) * 1000000) / 10000 : 0
           return {
-            entrada_id: entradaInserida.id,
-            clinic_id: clinicId,
-            procedimento_id: asProcUuid(proc.id),
-            procedimento_nome: proc.name,
-            valor: Math.round(s.valor * proporcao * 100) / 100,
+            forma: sp.forma,
+            bandeira: sp.bandeira || '',
+            valor: valorItens,
+            taxa_percentual: taxaPct,
+            n_parcelas: sp.parcelas,
+            primeiro_vencimento: sp.forma === 'boleto' ? (sp.vencimento || '') : '',
           }
         })
-        const { error: errDetalhe } = await supabase.from('entrada_procedimentos').insert(detalhes)
-        if (errDetalhe) console.error('Erro ao criar detalhe de procedimentos:', errDetalhe)
+        .filter(sp => sp.valor > 0)
+
+      if (itens.length > 0 && pagamentosItens.length > 0) {
+        const { error: errVenda } = await supabase.rpc('fn_registrar_venda', {
+          p_user_id: userId,
+          p_clinic_id: clinicId,
+          p_data_venda: hoje,
+          p_paciente_id: patientId,
+          p_paciente_nome: patientName,
+          p_profissional_id: professionalId,
+          p_profissional_nome: professionalName,
+          p_observacoes: obs || null,
+          p_appointment_id: appointmentId,
+          p_itens: itens,
+          p_pagamentos: pagamentosItens,
+        })
+        if (errVenda) {
+          console.error('Erro ao registrar venda:', errVenda)
+          alert('Erro ao registrar pagamento: ' + errVenda.message)
+          setSaving(false)
+          return
+        }
       }
 
-      // Quitar débitos marcados — com data de pagamento real
-      for (const d of debitos.filter(x => x.quitar)) {
-        const { error } = await supabase.from('debitos').update({
-          status: 'pago',
-          data_pagamento: hoje,
-        }).eq('id', d.id)
-        if (error) console.error('Erro ao quitar débito:', error)
+      // Quitacao de debito: entrada propria, com a descricao do debito.
+      // Antes o valor ficava embutido na entrada do procedimento do dia, o que
+      // escondia a origem da receita nos relatorios.
+      const debitosQuitar = debitos.filter(d => d.quitar)
+      if (debitosQuitar.length > 0) {
+        const formaDebito = splits[0]?.forma || 'pix'
+        const linhasDebito = debitosQuitar.map(d => ({
+          clinic_id: clinicId,
+          data_venda: hoje,
+          paciente_id: patientId,
+          paciente_nome: patientName,
+          procedimento_nome: d.descricao,
+          profissional_id: professionalId,
+          profissional_nome: professionalName,
+          forma_pagamento: formaDebito,
+          valor_bruto: d.valor,
+          taxa_percentual: 0,
+          valor_taxa: 0,
+          valor_liquido: d.valor,
+          n_parcelas: 1,
+          tipo_receita: 'servico',
+          appointment_id: appointmentId,
+          created_by: userId,
+          observacoes: 'Quitação de débito',
+        }))
+        const { error: errDeb } = await supabase.from('entradas').insert(linhasDebito)
+        if (errDeb) console.error('Erro ao lançar quitação de débito:', errDeb)
+
+        for (const d of debitosQuitar) {
+          const { error } = await supabase.from('debitos')
+            .update({ status: 'pago', data_pagamento: hoje })
+            .eq('id', d.id)
+          if (error) console.error('Erro ao quitar débito:', error)
+        }
       }
 
-      // Marcar pagamento (+ desconto aplicado no momento do pagamento, se houver)
       await supabase.from('appointments')
         .update({
           payment_registered_at: new Date().toISOString(),
@@ -425,47 +468,106 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 </div>
               )}
 
-              {/* Vender produto — lançamento separado (tipo_receita='produto'), não entra
-                  no split de pagamento do procedimento acima. Baixa estoque automaticamente.
-                  É uma transação independente: confirma na hora, não espera o
-                  "Confirmar Pagamento" do procedimento lá embaixo. */}
+              {/* Adicionar produto — item da MESMA venda, somado no total a pagar.
+                  Antes era uma venda paralela confirmada na hora, o que fazia a
+                  paciente aparecer com dois pagamentos separados no financeiro. */}
               <button
-                onClick={() => setShowSellProduct(true)}
+                onClick={() => setShowAddProd(v => !v)}
                 className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-amber-600 hover:text-amber-700 border border-dashed border-amber-200 hover:border-amber-400 rounded-xl transition-colors"
               >
-                <span className="text-base leading-none">+</span> Vender produto
+                <span className="text-base leading-none">+</span> Adicionar produto
               </button>
-              {vendasProduto.length > 0 && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-1">
-                  <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
-                    <Icon name="check" className="w-3.5 h-3.5" />
-                    Produto(s) já vendido(s) nesta tela
-                  </p>
-                  {vendasProduto.map((v, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs text-emerald-800">
-                      <span>{v.produtoNome} × {v.quantidade}</span>
-                      <span className="font-medium">{fmt(v.valor)}</span>
-                    </div>
-                  ))}
-                  <p className="text-[11px] text-emerald-600 pt-1">
-                    Já lançado no financeiro — não precisa confirmar de novo. O pagamento abaixo é só do procedimento.
-                  </p>
+              {showAddProd && (
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar produto..."
+                    value={prodSearch}
+                    onChange={e => setProdSearch(e.target.value)}
+                    className="input w-full text-sm"
+                  />
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {allClinicProds
+                      .filter(p => !prodSearch || p.name.toLowerCase().includes(prodSearch.toLowerCase()))
+                      .map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setProdutos(prev => {
+                              const ja = prev.find(x => x.id === p.id)
+                              return ja
+                                ? prev.map(x => x.id === p.id ? { ...x, quantidade: x.quantidade + 1 } : x)
+                                : [...prev, { ...p, quantidade: 1 }]
+                            })
+                            setSplits(prev => prev.map((sp, i) =>
+                              i === 0
+                                ? { ...sp, valor: sp.valor + p.sale_price, liquido: Math.round((sp.valor + p.sale_price - calcTaxaValor({ ...sp, valor: sp.valor + p.sale_price })) * 100) / 100 }
+                                : sp
+                            ))
+                            setShowAddProd(false)
+                            setProdSearch('')
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white text-sm text-left transition-colors"
+                        >
+                          <span className="text-slate-700">{p.name}</span>
+                          <span className="text-slate-500 text-xs ml-2">
+                            {fmt(p.sale_price)}
+                            <span className="text-slate-400 ml-1">
+                              {p.current_stock <= 0 ? '(sem estoque)' : `(${p.current_stock})`}
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    }
+                  </div>
                 </div>
               )}
-              {showSellProduct && userId && (
-                <VendaModal
-                  clinicId={clinicId}
-                  userId={userId}
-                  patientId={patientId}
-                  patientName={patientName}
-                  appointmentId={appointmentId}
-                  apenasProdutos
-                  onClose={() => setShowSellProduct(false)}
-                  onSuccess={({ itens, total }) => setVendasProduto(prev => [
-                    ...prev,
-                    { produtoNome: `${itens} ${itens === 1 ? 'item' : 'itens'}`, quantidade: itens, valor: total },
-                  ])}
-                />
+
+              {produtos.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-semibold text-amber-700">Produtos nesta venda</p>
+                  {produtos.map(item => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <span className="text-xs text-amber-800 font-medium flex-1 truncate">{item.name}</span>
+                      <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProdutos(prev => prev.flatMap(x => {
+                              if (x.id !== item.id) return [x]
+                              return x.quantidade <= 1 ? [] : [{ ...x, quantidade: x.quantidade - 1 }]
+                            }))
+                            setSplits(prev => prev.map((sp, i) =>
+                              i === 0
+                                ? { ...sp, valor: Math.max(0, sp.valor - item.sale_price), liquido: Math.round(Math.max(0, sp.valor - item.sale_price) * 100) / 100 }
+                                : sp
+                            ))
+                          }}
+                          className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold"
+                        >−</button>
+                        <span className="text-xs font-semibold text-amber-900 w-5 text-center">{item.quantidade}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, quantidade: x.quantidade + 1 } : x))
+                            setSplits(prev => prev.map((sp, i) =>
+                              i === 0
+                                ? { ...sp, valor: sp.valor + item.sale_price, liquido: Math.round((sp.valor + item.sale_price) * 100) / 100 }
+                                : sp
+                            ))
+                          }}
+                          className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold"
+                        >+</button>
+                      </div>
+                      <span className="text-xs text-amber-700 w-20 text-right">{fmt(item.sale_price * item.quantidade)}</span>
+                    </div>
+                  ))}
+                  {estoqueNegativo.length > 0 && (
+                    <p className="text-xs text-rose-600">
+                      {estoqueNegativo.map(i => `${i.name} (estoque: ${i.current_stock})`).join(', ')} — vai ficar negativo. Pode continuar, mas lembra de repor.
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* Débitos pendentes */}
@@ -593,8 +695,11 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
               {/* Resumo */}
               <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">
-                {(totalDebitos > 0 || descontoNum > 0) && (
-                  <div className="flex justify-between text-sm text-slate-500"><span>Procedimentos</span><span>{fmt(totalProcs)}</span></div>
+                {(totalDebitos > 0 || descontoNum > 0 || totalProdutos > 0) && (
+                  <div className="flex justify-between text-sm text-slate-500"><span>Procedimentos</span><span>{fmt(baseProcs)}</span></div>
+                )}
+                {totalProdutos > 0 && (
+                  <div className="flex justify-between text-sm text-amber-600"><span>Produtos</span><span>{fmt(totalProdutos)}</span></div>
                 )}
                 {descontoNum > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600">
