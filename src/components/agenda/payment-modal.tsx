@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 import { gerarVencimentosBoleto } from '@/lib/recebiveis'
-import SellProductModal from '@/components/vendas/sell-product-modal'
+import VendaModal from '@/components/vendas/venda-modal'
 
 type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; taxa_fixa?: number | null }
 type ProcItem = { id: string; name: string; price: number }
@@ -453,13 +453,17 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 </div>
               )}
               {showSellProduct && userId && (
-                <SellProductModal
+                <VendaModal
                   clinicId={clinicId}
                   userId={userId}
                   patientId={patientId}
                   patientName={patientName}
+                  appointmentId={appointmentId}
                   onClose={() => setShowSellProduct(false)}
-                  onSuccess={(itens) => setVendasProduto(prev => [...prev, ...itens])}
+                  onSuccess={({ itens, total }) => setVendasProduto(prev => [
+                    ...prev,
+                    { produtoNome: `${itens} ${itens === 1 ? 'item' : 'itens'}`, quantidade: itens, valor: total },
+                  ])}
                 />
               )}
 
