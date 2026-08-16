@@ -66,6 +66,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [allClinicProcs, setAllClinicProcs] = useState<ProcItem[]>([])
   const [procSearch, setProcSearch] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
+  // Desconto que veio do atendimento so' vira campo editavel se quem cobra pedir.
+  // O padrao e' exibir a decisao da profissional, nao convidar a redigitar.
+  const [editandoDesconto, setEditandoDesconto] = useState(false)
   const [showAddProd, setShowAddProd] = useState(false)
   const [allClinicProds, setAllClinicProds] = useState<ProdItem[]>([])
   const [prodSearch, setProdSearch] = useState('')
@@ -432,34 +435,80 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 </div>
               </div>
 
-              {/* Desconto */}
-              <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Desconto</p>
-                <div className="flex gap-2">
-                  <select
-                    value={descontoTipo}
-                    onChange={e => applyDesconto(e.target.value as 'valor' | 'percentual', descontoValorStr)}
-                    className="input text-sm w-20 flex-shrink-0"
-                  >
-                    <option value="valor">R$</option>
-                    <option value="percentual">%</option>
-                  </select>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0"
-                    value={descontoValorStr}
-                    onChange={e => applyDesconto(descontoTipo, e.target.value)}
-                    className="input text-sm flex-1"
-                  />
+              {/* Desconto — quando veio do atendimento, é decisão da profissional:
+                  mostra pra quem cobra, em vez de campo vazio que convida a
+                  redigitar (o que aplicava desconto sobre desconto). */}
+              {descontoValorInicial != null && !editandoDesconto ? (
+                <div className="bg-violet-50 border border-violet-200 rounded-xl p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
+                        <Icon name="gift" className="w-3.5 h-3.5 flex-shrink-0" />
+                        Desconto aplicado no atendimento
+                      </p>
+                      <p className="text-sm text-violet-900 font-bold mt-1">
+                        {descontoTipo === 'percentual' ? `${descontoNum}%` : fmt(descontoNum)}
+                        <span className="font-normal text-violet-600 text-xs ml-1.5">
+                          por {professionalName || 'profissional'}
+                        </span>
+                      </p>
+                      <p className="text-xs text-violet-600 mt-1">
+                        {fmt(subtotalItens)} <span className="text-violet-400">→</span>{' '}
+                        <span className="font-semibold">{fmt(totalComDesconto)}</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setEditandoDesconto(true)}
+                      className="text-xs text-violet-500 hover:text-violet-700 underline flex-shrink-0"
+                    >
+                      Ajustar
+                    </button>
+                  </div>
                 </div>
-                {descontoNum > 0 && (
-                  <p className="text-xs text-slate-500 mt-2">
-                    {fmt(subtotalItens)} <span className="text-slate-400">→</span> <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
-                  </p>
-                )}
-              </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Desconto</p>
+                    {descontoValorInicial != null && (
+                      <button
+                        onClick={() => {
+                          setDescontoTipo(descontoTipoInicial || 'valor')
+                          setDescontoValorStr(String(descontoValorInicial))
+                          setEditandoDesconto(false)
+                        }}
+                        className="text-xs text-slate-400 hover:text-slate-600 underline"
+                      >
+                        Voltar ao do atendimento
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={descontoTipo}
+                      onChange={e => applyDesconto(e.target.value as 'valor' | 'percentual', descontoValorStr)}
+                      className="input text-sm w-20 flex-shrink-0"
+                    >
+                      <option value="valor">R$</option>
+                      <option value="percentual">%</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0"
+                      value={descontoValorStr}
+                      onChange={e => applyDesconto(descontoTipo, e.target.value)}
+                      className="input text-sm flex-1"
+                    />
+                  </div>
+                  {descontoNum > 0 && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      {fmt(subtotalItens)} <span className="text-slate-400">→</span>{' '}
+                      <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Adicionar procedimento */}
               <button
