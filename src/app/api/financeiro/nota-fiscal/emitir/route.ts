@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal, emitirNfseNacional, extrairErroFocus } from '@/lib/focus-nfe'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,14 +10,16 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { data: userData } = await supabase
-    .from('users').select('clinic_id, role').eq('id', user.id).single()
-
-  if (!['admin', 'super_admin', 'manager', 'financial'].includes(userData?.role || '')) {
+  // Antes checava uma lista fixa de roles (admin/manager/financial), o que barrava
+  // qualquer usuario com a permissao financial_edit concedida individualmente ou
+  // via clinic_role_defaults mas com role fora dessa lista -- indo contra o
+  // principio do proprio projeto de nunca fixar checagem de role no codigo.
+  const access = await getEffectiveAccess(supabase, user.id)
+  if (!can(access, 'financial_edit')) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
 
-  const clinicId = userData!.clinic_id
+  const clinicId = access.clinicId
   const { entrada_id } = await req.json()
   if (!entrada_id) return NextResponse.json({ error: 'entrada_id é obrigatório' }, { status: 400 })
 

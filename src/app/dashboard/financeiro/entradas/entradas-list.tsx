@@ -50,6 +50,9 @@ type Props = {
   comissaoBase?: 'bruto' | 'liquido'
   comissaoConfig?: ComissaoConfig[]
   nfseAtivo?: boolean
+  /** Modulo de NFe (produto) configurado por completo -- controla se o toggle
+   *  "Produto (NFe)" aparece no modal de emissao. */
+  nfeAtivo?: boolean
   readOnly?: boolean
 }
 
@@ -317,7 +320,7 @@ function EditEntradaModal({
   return createPortal(modal, document.body)
 }
 
-export default function EntradasList({ entradas, pacientes, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoBase = 'bruto', comissaoConfig = [], nfseAtivo = false, readOnly = false }: Props) {
+export default function EntradasList({ entradas, pacientes, procedimentos, profissionais, clinicId, comissaoAtiva = false, comissaoBase = 'bruto', comissaoConfig = [], nfseAtivo = false, nfeAtivo = false, readOnly = false }: Props) {
   const [list, setList] = useState(entradas)
   const comissaoMap = new Map(comissaoConfig.map(c => [c.id, c]))
 
@@ -546,8 +549,10 @@ export default function EntradasList({ entradas, pacientes, procedimentos, profi
   }
 
   function EmitirNotaModal({ entrada, onClose }: { entrada: Entrada; onClose: () => void }) {
+    // Se a clinica nao tem NFe (produto) configurada, nao faz sentido oferecer a opcao --
+    // so' resultaria num erro de config incompleta. Trava em 'servico' nesse caso.
     const [tipo, setTipo] = useState<'servico' | 'produto'>(
-      notaTipoDe(entrada) === 'nfe' ? 'produto' : 'servico'
+      nfeAtivo && notaTipoDe(entrada) === 'nfe' ? 'produto' : 'servico'
     )
     const [cpf, setCpf] = useState('')
     const [logradouro, setLogradouro] = useState('')
@@ -643,21 +648,25 @@ export default function EntradasList({ entradas, pacientes, procedimentos, profi
           </div>
           <div className="p-5 overflow-y-auto space-y-3">
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Tipo de nota</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setTipo('servico')}
-                  className={`py-2 rounded-xl text-sm font-semibold border transition ${
-                    tipo === 'servico' ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}>
-                  Serviço (NFS-e)
-                </button>
-                <button type="button" onClick={() => setTipo('produto')}
-                  className={`py-2 rounded-xl text-sm font-semibold border transition ${
-                    tipo === 'produto' ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}>
-                  Produto (NFe)
-                </button>
-              </div>
+              {nfeAtivo && (
+                <>
+                  <label className="text-xs text-slate-500 mb-1 block">Tipo de nota</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setTipo('servico')}
+                      className={`py-2 rounded-xl text-sm font-semibold border transition ${
+                        tipo === 'servico' ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}>
+                      Serviço (NFS-e)
+                    </button>
+                    <button type="button" onClick={() => setTipo('produto')}
+                      className={`py-2 rounded-xl text-sm font-semibold border transition ${
+                        tipo === 'produto' ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}>
+                      Produto (NFe)
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
             {carregandoPaciente && (
               <div className="flex items-center gap-2 text-xs text-slate-400">
