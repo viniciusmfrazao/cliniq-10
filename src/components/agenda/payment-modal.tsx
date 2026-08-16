@@ -9,7 +9,7 @@ import Icon from '@/components/ui/Icon'
 type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; taxa_fixa?: number | null }
 type ProcItem = { id: string; name: string; price: number }
 type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; taxaFixa: number; liquido: number; vencimento: string }
-type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean }
+type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean; valorPagar: number }
 type ProdItem = { id: string; name: string; sale_price: number; current_stock: number; quantidade: number }
 
 type Props = {
@@ -144,7 +144,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
           .eq('paciente_id', patientId)
           .eq('status', 'pendente')
           .order('data_vencimento', { ascending: true })
-        setDebitos((deb || []).map((d: any) => ({ ...d, valor: Number(d.valor), quitar: false })))
+        setDebitos((deb || []).map((d: any) => ({ ...d, valor: Number(d.valor), quitar: false, valorPagar: Number(d.valor) })))
       }
 
       setLoading(false)
@@ -193,7 +193,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
   const totalProcs = procs.reduce((s, p) => s + p.price, 0)
   const totalProdutos = produtos.reduce((s, p) => s + p.sale_price * p.quantidade, 0)
-  const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valor, 0)
+  const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valorPagar, 0)
   const estoqueNegativo = produtos.filter(p => p.quantidade > p.current_stock)
   const descontoNum = parseFloat(descontoValorStr) || 0
 
@@ -310,39 +310,51 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         }
       }
 
-      // Quitacao de debito: entrada propria, com a descricao do debito.
-      // Antes o valor ficava embutido na entrada do procedimento do dia, o que
-      // escondia a origem da receita nos relatorios.
-      const debitosQuitar = debitos.filter(d => d.quitar)
+      // Quitacao de debito: entrada propria, com a descricao do debito, PELO
+      // VALOR PAGO — pode ser parcial. Antes o valor ficava embutido na entrada
+      // do procedimento do dia, escondendo a origem da receita nos relatorios.
+      const debitosQuitar = debitos.filter(d => d.quitar && d.valorPagar > 0)
       if (debitosQuitar.length > 0) {
         const formaDebito = splits[0]?.forma || 'pix'
-        const linhasDebito = debitosQuitar.map(d => ({
-          clinic_id: clinicId,
-          data_venda: hoje,
-          paciente_id: patientId,
-          paciente_nome: patientName,
-          procedimento_nome: d.descricao,
-          profissional_id: professionalId,
-          profissional_nome: professionalName,
-          forma_pagamento: formaDebito,
-          valor_bruto: d.valor,
-          taxa_percentual: 0,
-          valor_taxa: 0,
-          valor_liquido: d.valor,
-          n_parcelas: 1,
-          tipo_receita: 'servico',
-          appointment_id: appointmentId,
-          created_by: userId,
-          observacoes: 'Quitação de débito',
-        }))
+        const linhasDebito = debitosQuitar.map(d => {
+          const restante = Math.round((d.valor - d.valorPagar) * 100) / 100
+          return {
+            clinic_id: clinicId,
+            data_venda: hoje,
+            paciente_id: patientId,
+            paciente_nome: patientName,
+            procedimento_nome: d.descricao,
+            profissional_id: professionalId,
+            profissional_nome: professionalName,
+            forma_pagamento: formaDebito,
+            valor_bruto: d.valorPagar,
+            taxa_percentual: 0,
+            valor_taxa: 0,
+            valor_liquido: d.valorPagar,
+            n_parcelas: 1,
+            tipo_receita: 'servico',
+            appointment_id: appointmentId,
+            created_by: userId,
+            observacoes: restante > 0
+              ? `Quitação parcial de débito (restante: ${fmt(restante)})`
+              : 'Quitação de débito',
+          }
+        })
         const { error: errDeb } = await supabase.from('entradas').insert(linhasDebito)
         if (errDeb) console.error('Erro ao lançar quitação de débito:', errDeb)
 
+        // Pagou tudo -> status pago. Pagou parte -> reduz o valor do débito pro
+        // restante e mantém pendente (mesmo padrão de devedores-list.tsx).
         for (const d of debitosQuitar) {
+          const restante = Math.round((d.valor - d.valorPagar) * 100) / 100
           const { error } = await supabase.from('debitos')
-            .update({ status: 'pago', data_pagamento: hoje })
+            .update(
+              restante > 0.01
+                ? { valor: restante, observacao_cobranca: `Pagou ${fmt(d.valorPagar)} em ${new Date().toLocaleDateString('pt-BR')}. Restante: ${fmt(restante)}` }
+                : { status: 'pago', data_pagamento: hoje }
+            )
             .eq('id', d.id)
-          if (error) console.error('Erro ao quitar débito:', error)
+          if (error) console.error('Erro ao atualizar débito:', error)
         }
       }
 
@@ -653,18 +665,41 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   </div>
                   <div className="space-y-2">
                     {debitos.map(d => (
-                      <label key={d.id} className="flex items-center justify-between gap-3 cursor-pointer">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <input type="checkbox" checked={d.quitar}
-                            onChange={e => setDebitos(prev => prev.map(x => x.id === d.id ? { ...x, quitar: e.target.checked } : x))}
-                            className="w-4 h-4 rounded accent-red-500 flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-medium text-red-800 truncate">{d.descricao}</p>
-                            <p className="text-xs text-red-400">Vence: {new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                      <div key={d.id} className="space-y-1.5">
+                        <label className="flex items-center justify-between gap-3 cursor-pointer">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input type="checkbox" checked={d.quitar}
+                              onChange={e => setDebitos(prev => prev.map(x => x.id === d.id ? { ...x, quitar: e.target.checked } : x))}
+                              className="w-4 h-4 rounded accent-red-500 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-red-800 truncate">{d.descricao}</p>
+                              <p className="text-xs text-red-400">Vence: {new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')} · deve {fmt(d.valor)}</p>
+                            </div>
                           </div>
-                        </div>
-                        <span className="text-sm font-bold text-red-600 flex-shrink-0">{fmt(d.valor)}</span>
-                      </label>
+                          {!d.quitar && (
+                            <span className="text-sm font-bold text-red-600 flex-shrink-0">{fmt(d.valor)}</span>
+                          )}
+                        </label>
+                        {d.quitar && (
+                          <div className="flex items-center gap-2 pl-6.5 ml-0.5">
+                            <span className="text-xs text-red-500">Pagar agora</span>
+                            <input
+                              type="number" step="0.01" min="0.01" max={d.valor}
+                              value={d.valorPagar}
+                              onChange={e => {
+                                const v = Math.min(d.valor, Math.max(0, parseFloat(e.target.value) || 0))
+                                setDebitos(prev => prev.map(x => x.id === d.id ? { ...x, valorPagar: v } : x))
+                              }}
+                              className="w-24 text-xs px-2 py-1 border border-red-200 rounded-md text-right bg-white"
+                            />
+                            {d.valorPagar < d.valor && (
+                              <span className="text-xs text-red-400">
+                                restam {fmt(Math.round((d.valor - d.valorPagar) * 100) / 100)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ))}
                     {totalDebitos > 0 && (
                       <div className="flex justify-between pt-1.5 border-t border-red-200">
