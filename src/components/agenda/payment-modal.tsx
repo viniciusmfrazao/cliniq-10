@@ -7,10 +7,10 @@ import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 
 type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; taxa_fixa?: number | null }
-type ProcItem = { id: string; name: string; price: number }
+type ProcItem = { id: string; name: string; price: number; precoOriginal: number }
 type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; taxaFixa: number; liquido: number; vencimento: string }
 type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean; valorPagar: number }
-type ProdItem = { id: string; name: string; sale_price: number; current_stock: number; quantidade: number }
+type ProdItem = { id: string; name: string; sale_price: number; current_stock: number; quantidade: number; precoOriginal: number }
 
 type Props = {
   appointmentId: string
@@ -98,10 +98,12 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
           id: ap.procedure_id || uid(),
           name: ap.procedure_name,
           price: Number(ap.price) || 0,
+          precoOriginal: Number(ap.price) || 0,
         }))
       } else {
         // Fallback: procedimento principal
-        procList = [{ id: procedureId || uid(), name: procedureName, price: Number(procedurePrice) || 0 }]
+        const p = Number(procedurePrice) || 0
+        procList = [{ id: procedureId || uid(), name: procedureName, price: p, precoOriginal: p }]
       }
       setProcs(procList)
 
@@ -119,6 +121,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         id: p.id,
         name: p.name,
         price: Number(p.price) || 0,
+        precoOriginal: Number(p.price) || 0,
       })))
 
       // Produtos da clínica (pra vender junto com o procedimento)
@@ -133,6 +136,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         sale_price: Number(p.sale_price) || 0,
         current_stock: p.current_stock ?? 0,
         quantidade: 1,
+        precoOriginal: Number(p.sale_price) || 0,
       })))
 
       // Débitos pendentes
@@ -418,7 +422,12 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   {procs.map((p, idx) => (
                     <div key={`${p.id}-${idx}`} className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
-                      <span className="text-sm text-slate-700 flex-1 truncate">{p.name}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-slate-700 truncate block">{p.name}</span>
+                        {p.price !== p.precoOriginal && (
+                          <span className="text-xs text-slate-400 line-through">{fmt(p.precoOriginal)}</span>
+                        )}
+                      </div>
                       <input
                         type="number" step="0.01" min="0"
                         value={p.price}
@@ -426,7 +435,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                           const v = parseFloat(e.target.value) || 0
                           setProcs(prev => prev.map((x, i) => i === idx ? { ...x, price: v } : x))
                         }}
-                        className="w-24 text-xs px-2 py-1 border border-slate-200 rounded-md text-right bg-white"
+                        className={`w-24 text-xs px-2 py-1 rounded-md text-right bg-white border ${
+                          p.price !== p.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold' : 'border-slate-200'
+                        }`}
                       />
                       <button
                         type="button"
@@ -540,7 +551,12 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   <p className="text-xs font-semibold text-amber-700">Produtos nesta venda</p>
                   {produtos.map(item => (
                     <div key={item.id} className="flex items-center gap-2">
-                      <span className="text-xs text-amber-800 font-medium flex-1 truncate">{item.name}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs text-amber-800 font-medium truncate block">{item.name}</span>
+                        {item.sale_price !== item.precoOriginal && (
+                          <span className="text-xs text-amber-400 line-through">{fmt(item.precoOriginal)}</span>
+                        )}
+                      </div>
                       <input
                         type="number" step="0.01" min="0"
                         value={item.sale_price}
@@ -548,7 +564,9 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                           const v = parseFloat(e.target.value) || 0
                           setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, sale_price: v } : x))
                         }}
-                        className="w-20 text-xs px-2 py-1 border border-amber-200 rounded-md text-right bg-white"
+                        className={`w-20 text-xs px-2 py-1 rounded-md text-right bg-white border ${
+                          item.sale_price !== item.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold' : 'border-amber-200'
+                        }`}
                       />
                       <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
                         <button

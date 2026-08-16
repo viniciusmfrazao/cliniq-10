@@ -28,6 +28,7 @@ type CartItem = {
   id: string
   nome: string
   valor_unitario: number
+  precoOriginal: number
   quantidade: number
   current_stock?: number
 }
@@ -180,7 +181,7 @@ export default function VendaModal({
       const existing = prev.find(i => i.tipo === 'procedimento' && i.id === id)
       const next = existing
         ? prev.map(i => (i.tipo === 'procedimento' && i.id === id) ? { ...i, quantidade: i.quantidade + 1 } : i)
-        : [...prev, { tipo: 'procedimento' as const, id: proc.id, nome: proc.name, valor_unitario: proc.price, quantidade: 1 }]
+        : [...prev, { tipo: 'procedimento' as const, id: proc.id, nome: proc.name, valor_unitario: proc.price, precoOriginal: proc.price, quantidade: 1 }]
       syncPagamentoUnico(next)
       return next
     })
@@ -196,7 +197,8 @@ export default function VendaModal({
         ? prev.map(i => (i.tipo === 'produto' && i.id === id) ? { ...i, quantidade: i.quantidade + 1 } : i)
         : [...prev, {
             tipo: 'produto' as const, id: prod.id, nome: prod.name,
-            valor_unitario: prod.sale_price, quantidade: 1, current_stock: prod.current_stock,
+            valor_unitario: prod.sale_price, precoOriginal: prod.sale_price,
+            quantidade: 1, current_stock: prod.current_stock,
           }]
       syncPagamentoUnico(next)
       return next
@@ -359,12 +361,19 @@ export default function VendaModal({
       <div className="space-y-2">
         {items.map(item => (
           <div key={`${item.tipo}-${item.id}`} className={s.box}>
-            <span className={s.nome}>{item.nome}</span>
+            <div className="flex-1 min-w-0">
+              <span className={`${s.nome} block`}>{item.nome}</span>
+              {item.valor_unitario !== item.precoOriginal && (
+                <span className="text-xs text-slate-400 line-through">{fmt(item.precoOriginal)}</span>
+              )}
+            </div>
             <input
               type="number" step="0.01" min="0"
               value={item.valor_unitario}
               onChange={e => updateValorUnitario(item.tipo, item.id, e.target.value)}
-              className="w-20 text-xs px-2 py-1 border border-slate-200 rounded-md text-right"
+              className={`w-20 text-xs px-2 py-1 rounded-md text-right border ${
+                item.valor_unitario !== item.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold bg-emerald-50' : 'border-slate-200'
+              }`}
             />
             <div className={s.qtdBox}>
               <button type="button" onClick={() => updateQuantidade(item.tipo, item.id, -1)} className={s.btnL}>−</button>
