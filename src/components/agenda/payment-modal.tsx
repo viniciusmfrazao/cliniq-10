@@ -459,6 +459,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   patientId={patientId}
                   patientName={patientName}
                   appointmentId={appointmentId}
+                  apenasProdutos
                   onClose={() => setShowSellProduct(false)}
                   onSuccess={({ itens, total }) => setVendasProduto(prev => [
                     ...prev,
