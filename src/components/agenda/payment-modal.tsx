@@ -69,6 +69,11 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   // Desconto que veio do atendimento so' vira campo editavel se quem cobra pedir.
   // O padrao e' exibir a decisao da profissional, nao convidar a redigitar.
   const [editandoDesconto, setEditandoDesconto] = useState(false)
+  // Campo de desconto por item: string bruta digitada, nao derivada do preco --
+  // se fosse derivada, cada tecla reformataria o input e atrapalharia digitar
+  // decimais. Sincroniza pro preco no onChange, mas guarda o texto puro aqui.
+  const [descontoProcStr, setDescontoProcStr] = useState<Record<number, string>>({})
+  const [descontoProdStr, setDescontoProdStr] = useState<Record<string, string>>({})
   const [showAddProd, setShowAddProd] = useState(false)
   const [allClinicProds, setAllClinicProds] = useState<ProdItem[]>([])
   const [prodSearch, setProdSearch] = useState('')
@@ -429,10 +434,25 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                         <span className="text-sm text-slate-700 truncate block">{p.name}</span>
                         {p.price !== p.precoOriginal && (
                           <span className="text-xs text-emerald-600">
-                            <span className="line-through text-slate-400">{fmt(p.precoOriginal)}</span>
-                            {' '}({p.price < p.precoOriginal ? '-' : '+'}{fmt(Math.abs(p.precoOriginal - p.price))})
+                            tabela {fmt(p.precoOriginal)}
                           </span>
                         )}
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[10px] text-slate-400">desconto R$</span>
+                        <input
+                          type="number" step="0.01" min="0"
+                          placeholder="0"
+                          value={descontoProcStr[idx] ?? ''}
+                          onChange={e => {
+                            const raw = e.target.value
+                            setDescontoProcStr(prev => ({ ...prev, [idx]: raw }))
+                            const desc = parseFloat(raw) || 0
+                            const novoPreco = Math.max(0, Math.round((p.precoOriginal - desc) * 100) / 100)
+                            setProcs(prev => prev.map((x, i) => i === idx ? { ...x, price: novoPreco } : x))
+                          }}
+                          className="w-16 text-xs px-1.5 py-1 rounded-md text-right border border-emerald-200 bg-emerald-50 text-emerald-700"
+                        />
                       </div>
                       <input
                         type="number" step="0.01" min="0"
@@ -440,8 +460,11 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                         onChange={e => {
                           const v = parseFloat(e.target.value) || 0
                           setProcs(prev => prev.map((x, i) => i === idx ? { ...x, price: v } : x))
+                          // Valor final editado direto -- limpa o rascunho de desconto pra nao
+                          // ficar mostrando um numero digitado que nao corresponde mais ao preco.
+                          setDescontoProcStr(prev => { const n = { ...prev }; delete n[idx]; return n })
                         }}
-                        className={`w-24 text-xs px-2 py-1 rounded-md text-right bg-white border ${
+                        className={`w-20 text-xs px-2 py-1 rounded-md text-right bg-white border ${
                           p.price !== p.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold' : 'border-slate-200'
                         }`}
                       />
@@ -553,54 +576,69 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
               )}
 
               {produtos.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-amber-700">Produtos nesta venda</p>
-                    <p className="text-xs text-amber-500">Edite o valor pra dar desconto só neste item</p>
-                  </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-3">
+                  <p className="text-xs font-semibold text-amber-700">Produtos nesta venda</p>
                   {produtos.map(item => (
-                    <div key={item.id} className="flex items-center gap-2">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-xs text-amber-800 font-medium truncate block">{item.name}</span>
-                        {item.sale_price !== item.precoOriginal && (
-                          <span className="text-xs text-emerald-600">
-                            <span className="line-through text-amber-400">{fmt(item.precoOriginal)}</span>
-                            {' '}({item.sale_price < item.precoOriginal ? '-' : '+'}{fmt(Math.abs(item.precoOriginal - item.sale_price))})
-                          </span>
-                        )}
+                    <div key={item.id} className="space-y-1 pb-2 border-b border-amber-100 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs text-amber-800 font-medium truncate block">{item.name}</span>
+                          {item.sale_price !== item.precoOriginal && (
+                            <span className="text-xs text-emerald-600">tabela {fmt(item.precoOriginal)}</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end flex-shrink-0">
+                          <span className="text-[10px] text-amber-500">desconto R$</span>
+                          <input
+                            type="number" step="0.01" min="0"
+                            placeholder="0"
+                            value={descontoProdStr[item.id] ?? ''}
+                            onChange={e => {
+                              const raw = e.target.value
+                              setDescontoProdStr(prev => ({ ...prev, [item.id]: raw }))
+                              const desc = parseFloat(raw) || 0
+                              const novoPreco = Math.max(0, Math.round((item.precoOriginal - desc) * 100) / 100)
+                              setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, sale_price: novoPreco } : x))
+                            }}
+                            className="w-16 text-xs px-1.5 py-1 rounded-md text-right border border-emerald-200 bg-emerald-50 text-emerald-700"
+                          />
+                        </div>
                       </div>
-                      <input
-                        type="number" step="0.01" min="0"
-                        value={item.sale_price}
-                        onChange={e => {
-                          const v = parseFloat(e.target.value) || 0
-                          setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, sale_price: v } : x))
-                        }}
-                        className={`w-20 text-xs px-2 py-1 rounded-md text-right bg-white border ${
-                          item.sale_price !== item.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold' : 'border-amber-200'
-                        }`}
-                      />
-                      <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setProdutos(prev => prev.flatMap(x => {
-                              if (x.id !== item.id) return [x]
-                              return x.quantidade <= 1 ? [] : [{ ...x, quantidade: x.quantidade - 1 }]
-                            }))
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number" step="0.01" min="0"
+                          value={item.sale_price}
+                          onChange={e => {
+                            const v = parseFloat(e.target.value) || 0
+                            setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, sale_price: v } : x))
+                            setDescontoProdStr(prev => { const n = { ...prev }; delete n[item.id]; return n })
                           }}
-                          className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold"
-                        >−</button>
-                        <span className="text-xs font-semibold text-amber-900 w-5 text-center">{item.quantidade}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, quantidade: x.quantidade + 1 } : x))
-                          }}
-                          className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold"
-                        >+</button>
+                          className={`w-20 text-xs px-2 py-1 rounded-md text-right bg-white border ${
+                            item.sale_price !== item.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold' : 'border-amber-200'
+                          }`}
+                        />
+                        <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProdutos(prev => prev.flatMap(x => {
+                                if (x.id !== item.id) return [x]
+                                return x.quantidade <= 1 ? [] : [{ ...x, quantidade: x.quantidade - 1 }]
+                              }))
+                            }}
+                            className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold"
+                          >−</button>
+                          <span className="text-xs font-semibold text-amber-900 w-5 text-center">{item.quantidade}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, quantidade: x.quantidade + 1 } : x))
+                            }}
+                            className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold"
+                          >+</button>
+                        </div>
+                        <span className="text-xs text-amber-700 flex-1 text-right">{fmt(item.sale_price * item.quantidade)}</span>
                       </div>
-                      <span className="text-xs text-amber-700 w-20 text-right">{fmt(item.sale_price * item.quantidade)}</span>
                     </div>
                   ))}
                   {estoqueNegativo.length > 0 && (

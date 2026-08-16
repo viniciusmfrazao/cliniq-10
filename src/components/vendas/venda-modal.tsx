@@ -49,10 +49,11 @@ type Props = {
 }
 
 function PacienteBusca({
-  pacientes, onSelect,
+  pacientes, onSelect, permiteNomeLivre,
 }: {
   pacientes: { id: string; name: string }[]
   onSelect: (id: string, nome: string) => void
+  permiteNomeLivre: boolean
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -66,10 +67,17 @@ function PacienteBusca({
       <input
         type="text"
         value={query}
-        onChange={e => { setQuery(e.target.value); setOpen(true); onSelect('', e.target.value) }}
+        onChange={e => {
+          setQuery(e.target.value)
+          setOpen(true)
+          // Sem a permissão financial_free_name, digitar so' filtra a lista --
+          // so' um clique num paciente real preenche a selecao. Com a permissão,
+          // o texto digitado já vale como nome (venda avulsa, sem paciente).
+          if (permiteNomeLivre) onSelect('', e.target.value)
+        }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Buscar paciente ou digitar o nome..."
+        placeholder={permiteNomeLivre ? 'Buscar paciente ou digitar o nome...' : 'Buscar paciente cadastrado...'}
         className="input text-sm py-2"
       />
       {open && filtered.length > 0 && (
@@ -81,6 +89,13 @@ function PacienteBusca({
               {p.name}
             </button>
           ))}
+        </div>
+      )}
+      {open && query.length > 0 && filtered.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs text-slate-500">
+          {permiteNomeLivre
+            ? 'Nenhum paciente encontrado — vai lançar como venda avulsa com esse nome.'
+            : 'Nenhum paciente encontrado. Cadastre a paciente antes de vender, ou peça pra um admin liberar venda avulsa sem cadastro.'}
         </div>
       )}
     </div>
@@ -108,10 +123,14 @@ export default function VendaModal({
   const [taxasPagamento, setTaxasPagamento] = useState<TaxaPag[]>([])
 
   const [pacientes, setPacientes] = useState<{ id: string; name: string }[]>([])
+  const [permiteNomeLivre, setPermiteNomeLivre] = useState(false)
   const [pacienteIdSel, setPacienteIdSel] = useState<string | null>(patientId)
   const [pacienteNomeSel, setPacienteNomeSel] = useState(patientName)
 
   const [cart, setCart] = useState<CartItem[]>([])
+  // Rascunho do campo de desconto por item (string bruta, nao derivada -- ver
+  // mesmo comentario no payment-modal). Key = `${tipo}-${id}`.
+  const [descontoStr, setDescontoStr] = useState<Record<string, string>>({})
   const [dataVenda, setDataVenda] = useState(todayBR())
   const [profissionalId, setProfissionalId] = useState('')
   const [observacoes, setObservacoes] = useState('')
@@ -150,10 +169,12 @@ export default function VendaModal({
       setTaxasPagamento(taxaRes.data || [])
 
       if (selecionarPaciente) {
-        const { data: pacData } = await supabase
-          .from('patients').select('id, name')
-          .eq('clinic_id', clinicId).order('name')
+        const [{ data: pacData }, { data: permData }] = await Promise.all([
+          supabase.from('patients').select('id, name').eq('clinic_id', clinicId).order('name'),
+          supabase.rpc('fn_has_permission', { p_user_id: userId, p_permission: 'financial_free_name' }),
+        ])
         setPacientes(pacData || [])
+        setPermiteNomeLivre(Boolean(permData))
       }
 
       setLoading(false)
@@ -359,36 +380,59 @@ export default function VendaModal({
     const s = ESTILO[cor]
     return (
       <div className="space-y-2">
-        {items.map(item => (
-          <div key={`${item.tipo}-${item.id}`} className={s.box}>
-            <div className="flex-1 min-w-0">
-              <span className={`${s.nome} block`}>{item.nome}</span>
-              {item.valor_unitario !== item.precoOriginal && (
-                <span className="text-xs text-emerald-600">
-                  <span className="line-through text-slate-400">{fmt(item.precoOriginal)}</span>
-                  {' '}({item.valor_unitario < item.precoOriginal ? '-' : '+'}{fmt(Math.abs(item.precoOriginal - item.valor_unitario))})
-                </span>
-              )}
+        {items.map(item => {
+          const key = `${item.tipo}-${item.id}`
+          return (
+            <div key={key} className={`flex-col ${s.box}`} style={{ alignItems: 'stretch' }}>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className={`${s.nome} block`}>{item.nome}</span>
+                  {item.valor_unitario !== item.precoOriginal && (
+                    <span className="text-xs text-emerald-600">tabela {fmt(item.precoOriginal)}</span>
+                  )}
+                </div>
+                <div className="flex flex-col items-end flex-shrink-0">
+                  <span className="text-[10px] text-slate-400">desconto R$</span>
+                  <input
+                    type="number" step="0.01" min="0"
+                    placeholder="0"
+                    value={descontoStr[key] ?? ''}
+                    onChange={e => {
+                      const raw = e.target.value
+                      setDescontoStr(prev => ({ ...prev, [key]: raw }))
+                      const desc = parseFloat(raw) || 0
+                      const novoValor = Math.max(0, Math.round((item.precoOriginal - desc) * 100) / 100)
+                      updateValorUnitario(item.tipo, item.id, String(novoValor))
+                    }}
+                    className="w-16 text-xs px-1.5 py-1 rounded-md text-right border border-emerald-300 bg-emerald-50 text-emerald-700"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-1.5">
+                <input
+                  type="number" step="0.01" min="0"
+                  value={item.valor_unitario}
+                  onChange={e => {
+                    updateValorUnitario(item.tipo, item.id, e.target.value)
+                    setDescontoStr(prev => { const n = { ...prev }; delete n[key]; return n })
+                  }}
+                  className={`w-20 text-xs px-2 py-1 rounded-md text-right border ${
+                    item.valor_unitario !== item.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold bg-emerald-50' : 'border-slate-200'
+                  }`}
+                />
+                <div className={s.qtdBox}>
+                  <button type="button" onClick={() => updateQuantidade(item.tipo, item.id, -1)} className={s.btnL}>−</button>
+                  <span className={s.qtd}>{item.quantidade}</span>
+                  <button type="button" onClick={() => updateQuantidade(item.tipo, item.id, 1)} className={s.btnR}>+</button>
+                </div>
+                <span className={`${s.total} flex-1`}>{fmt(item.valor_unitario * item.quantidade)}</span>
+                <button type="button" onClick={() => removeItem(item.tipo, item.id)} className={s.trash}>
+                  <Icon name="trash" className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-            <input
-              type="number" step="0.01" min="0"
-              value={item.valor_unitario}
-              onChange={e => updateValorUnitario(item.tipo, item.id, e.target.value)}
-              className={`w-20 text-xs px-2 py-1 rounded-md text-right border ${
-                item.valor_unitario !== item.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold bg-emerald-50' : 'border-slate-200'
-              }`}
-            />
-            <div className={s.qtdBox}>
-              <button type="button" onClick={() => updateQuantidade(item.tipo, item.id, -1)} className={s.btnL}>−</button>
-              <span className={s.qtd}>{item.quantidade}</span>
-              <button type="button" onClick={() => updateQuantidade(item.tipo, item.id, 1)} className={s.btnR}>+</button>
-            </div>
-            <span className={s.total}>{fmt(item.valor_unitario * item.quantidade)}</span>
-            <button type="button" onClick={() => removeItem(item.tipo, item.id)} className={s.trash}>
-              <Icon name="trash" className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
+          )
+        })}
       </div>
     )
   }
@@ -417,6 +461,7 @@ export default function VendaModal({
                 <label className="label">Paciente</label>
                 <PacienteBusca
                   pacientes={pacientes}
+                  permiteNomeLivre={permiteNomeLivre}
                   onSelect={(id, nome) => { setPacienteIdSel(id || null); setPacienteNomeSel(nome) }}
                 />
               </div>
