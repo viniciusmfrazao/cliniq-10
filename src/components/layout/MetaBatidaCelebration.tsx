@@ -21,10 +21,6 @@ export default function MetaBatidaCelebration() {
   const [pendente, setPendente] = useState<{ meta_id: string; tipo: string } | null>(null)
 
   useEffect(() => {
-    // So' comemora em producao. Em staging/preview/local, dados de teste tendem
-    // a bater meta o tempo todo e o confete vira ruido a cada login.
-    if (typeof window !== 'undefined' && window.location.hostname !== 'app.clinike.com.br') return
-
     let cancelled = false
     const supabase = createClient()
 

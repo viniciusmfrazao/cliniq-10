@@ -364,7 +364,10 @@ export default function VendaModal({
             <div className="flex-1 min-w-0">
               <span className={`${s.nome} block`}>{item.nome}</span>
               {item.valor_unitario !== item.precoOriginal && (
-                <span className="text-xs text-slate-400 line-through">{fmt(item.precoOriginal)}</span>
+                <span className="text-xs text-emerald-600">
+                  <span className="line-through text-slate-400">{fmt(item.precoOriginal)}</span>
+                  {' '}({item.valor_unitario < item.precoOriginal ? '-' : '+'}{fmt(Math.abs(item.precoOriginal - item.valor_unitario))})
+                </span>
               )}
             </div>
             <input

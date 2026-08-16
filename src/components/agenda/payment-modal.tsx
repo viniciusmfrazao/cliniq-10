@@ -417,7 +417,10 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
               {/* Procedimentos */}
               <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Procedimentos</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Procedimentos</p>
+                  <p className="text-xs text-slate-400">Edite o valor pra dar desconto só neste item</p>
+                </div>
                 <div className="space-y-1.5">
                   {procs.map((p, idx) => (
                     <div key={`${p.id}-${idx}`} className="flex items-center gap-2">
@@ -425,7 +428,10 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                       <div className="flex-1 min-w-0">
                         <span className="text-sm text-slate-700 truncate block">{p.name}</span>
                         {p.price !== p.precoOriginal && (
-                          <span className="text-xs text-slate-400 line-through">{fmt(p.precoOriginal)}</span>
+                          <span className="text-xs text-emerald-600">
+                            <span className="line-through text-slate-400">{fmt(p.precoOriginal)}</span>
+                            {' '}({p.price < p.precoOriginal ? '-' : '+'}{fmt(Math.abs(p.precoOriginal - p.price))})
+                          </span>
                         )}
                       </div>
                       <input
@@ -548,13 +554,19 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
               {produtos.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-                  <p className="text-xs font-semibold text-amber-700">Produtos nesta venda</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-amber-700">Produtos nesta venda</p>
+                    <p className="text-xs text-amber-500">Edite o valor pra dar desconto só neste item</p>
+                  </div>
                   {produtos.map(item => (
                     <div key={item.id} className="flex items-center gap-2">
                       <div className="flex-1 min-w-0">
                         <span className="text-xs text-amber-800 font-medium truncate block">{item.name}</span>
                         {item.sale_price !== item.precoOriginal && (
-                          <span className="text-xs text-amber-400 line-through">{fmt(item.precoOriginal)}</span>
+                          <span className="text-xs text-emerald-600">
+                            <span className="line-through text-amber-400">{fmt(item.precoOriginal)}</span>
+                            {' '}({item.sale_price < item.precoOriginal ? '-' : '+'}{fmt(Math.abs(item.precoOriginal - item.sale_price))})
+                          </span>
                         )}
                       </div>
                       <input
@@ -654,6 +666,82 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 </div>
               )}
 
+              {/* Desconto — quando veio do atendimento, é decisão da profissional:
+                  mostra pra quem cobra, em vez de campo vazio que convida a
+                  redigitar (o que aplicava desconto sobre desconto). */}
+              {descontoValorInicial != null && !editandoDesconto ? (
+                <div className="bg-violet-50 border border-violet-200 rounded-xl p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
+                        <Icon name="gift" className="w-3.5 h-3.5 flex-shrink-0" />
+                        Desconto aplicado no atendimento
+                      </p>
+                      <p className="text-sm text-violet-900 font-bold mt-1">
+                        {descontoTipo === 'percentual' ? `${descontoNum}%` : fmt(descontoNum)}
+                        <span className="font-normal text-violet-600 text-xs ml-1.5">
+                          por {professionalName || 'profissional'}
+                        </span>
+                      </p>
+                      <p className="text-xs text-violet-600 mt-1">
+                        {fmt(subtotalItens)} <span className="text-violet-400">→</span>{' '}
+                        <span className="font-semibold">{fmt(totalComDesconto)}</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setEditandoDesconto(true)}
+                      className="text-xs text-violet-500 hover:text-violet-700 underline flex-shrink-0"
+                    >
+                      Ajustar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Desconto</p>
+                    {descontoValorInicial != null && (
+                      <button
+                        onClick={() => {
+                          setDescontoTipo(descontoTipoInicial || 'valor')
+                          setDescontoValorStr(String(descontoValorInicial))
+                          setEditandoDesconto(false)
+                        }}
+                        className="text-xs text-slate-400 hover:text-slate-600 underline"
+                      >
+                        Voltar ao do atendimento
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={descontoTipo}
+                      onChange={e => applyDesconto(e.target.value as 'valor' | 'percentual', descontoValorStr)}
+                      className="input text-sm w-20 flex-shrink-0"
+                    >
+                      <option value="valor">R$</option>
+                      <option value="percentual">%</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0"
+                      value={descontoValorStr}
+                      onChange={e => applyDesconto(descontoTipo, e.target.value)}
+                      className="input text-sm flex-1"
+                    />
+                  </div>
+                  {descontoNum > 0 && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      {fmt(subtotalItens)} <span className="text-slate-400">→</span>{' '}
+                      <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+
               {/* Splits */}
               {splits.map((s, idx) => (
                 <div key={s.id} className="bg-slate-50 rounded-xl p-4 space-y-3">
@@ -744,82 +832,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-violet-300 hover:text-violet-500 transition-colors flex items-center justify-center gap-2">
                 <Icon name="plus" className="w-4 h-4" /> Adicionar forma de pagamento
               </button>
-
-              {/* Desconto — quando veio do atendimento, é decisão da profissional:
-                  mostra pra quem cobra, em vez de campo vazio que convida a
-                  redigitar (o que aplicava desconto sobre desconto). */}
-              {descontoValorInicial != null && !editandoDesconto ? (
-                <div className="bg-violet-50 border border-violet-200 rounded-xl p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
-                        <Icon name="gift" className="w-3.5 h-3.5 flex-shrink-0" />
-                        Desconto aplicado no atendimento
-                      </p>
-                      <p className="text-sm text-violet-900 font-bold mt-1">
-                        {descontoTipo === 'percentual' ? `${descontoNum}%` : fmt(descontoNum)}
-                        <span className="font-normal text-violet-600 text-xs ml-1.5">
-                          por {professionalName || 'profissional'}
-                        </span>
-                      </p>
-                      <p className="text-xs text-violet-600 mt-1">
-                        {fmt(subtotalItens)} <span className="text-violet-400">→</span>{' '}
-                        <span className="font-semibold">{fmt(totalComDesconto)}</span>
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setEditandoDesconto(true)}
-                      className="text-xs text-violet-500 hover:text-violet-700 underline flex-shrink-0"
-                    >
-                      Ajustar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-slate-50 rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Desconto</p>
-                    {descontoValorInicial != null && (
-                      <button
-                        onClick={() => {
-                          setDescontoTipo(descontoTipoInicial || 'valor')
-                          setDescontoValorStr(String(descontoValorInicial))
-                          setEditandoDesconto(false)
-                        }}
-                        className="text-xs text-slate-400 hover:text-slate-600 underline"
-                      >
-                        Voltar ao do atendimento
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <select
-                      value={descontoTipo}
-                      onChange={e => applyDesconto(e.target.value as 'valor' | 'percentual', descontoValorStr)}
-                      className="input text-sm w-20 flex-shrink-0"
-                    >
-                      <option value="valor">R$</option>
-                      <option value="percentual">%</option>
-                    </select>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      placeholder="0"
-                      value={descontoValorStr}
-                      onChange={e => applyDesconto(descontoTipo, e.target.value)}
-                      className="input text-sm flex-1"
-                    />
-                  </div>
-                  {descontoNum > 0 && (
-                    <p className="text-xs text-slate-500 mt-2">
-                      {fmt(subtotalItens)} <span className="text-slate-400">→</span>{' '}
-                      <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
-                    </p>
-                  )}
-                </div>
-              )}
-
 
               {/* Resumo */}
               <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">

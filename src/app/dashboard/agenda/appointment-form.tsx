@@ -36,6 +36,9 @@ type Props = {
     end_time: string
     notes: string | null
     status: string
+    valor_cobrado?: number | null
+    desconto_tipo?: 'valor' | 'percentual' | null
+    desconto_valor?: number | null
   }
 }
 
@@ -84,6 +87,19 @@ export default function AppointmentForm({
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Valor cobrado no agendamento -- algumas clinicas ja fecham o desconto aqui
+  // na hora de marcar, nao so' no atendimento. Gravar valor_cobrado/desconto_*
+  // ja' na criacao faz a Previsao de Faturamento refletir de imediato (ela le
+  // valor_cobrado com prioridade sobre o preco de tabela do procedimento).
+  const [valorManualStr, setValorManualStr] = useState(
+    appointment?.valor_cobrado != null ? String(appointment.valor_cobrado) : ''
+  )
+  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>(appointment?.desconto_tipo || 'valor')
+  const [descontoValorStr, setDescontoValorStr] = useState(
+    appointment?.desconto_valor ? String(appointment.desconto_valor) : ''
+  )
+  const [editandoValor, setEditandoValor] = useState(false)
 
   // Pacotes ativos do paciente selecionado
   const [activePackages, setActivePackages] = useState<{ id: string; name: string; total_sessions: number; used_sessions: number }[]>([])
@@ -204,6 +220,13 @@ export default function AppointmentForm({
     return sum + (proc?.price || 0)
   }, 0)
 
+  const valorManualNum = parseFloat(valorManualStr.replace(',', '.'))
+  const baseValor = !isNaN(valorManualNum) ? valorManualNum : totalPrice
+  const descontoNum = parseFloat(descontoValorStr) || 0
+  const valorFinal = descontoNum > 0
+    ? (descontoTipo === 'percentual' ? Math.max(0, baseValor * (1 - descontoNum / 100)) : Math.max(0, baseValor - descontoNum))
+    : baseValor
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -234,6 +257,12 @@ export default function AppointmentForm({
       ? `Procedimentos: ${procedureNames}${form.notes ? '\n' + form.notes : ''}`
       : form.notes
 
+    // So' grava valor_cobrado/desconto se a secretaria de fato mexeu em algum
+    // dos dois campos. Sem isso, toda venda passaria a ter valor_cobrado igual
+    // a soma dos procedimentos -- que ja' e' o fallback natural em todo lugar
+    // que le esse campo (previsao, payment-modal), so' que sem travar o valor.
+    const valorFoiEditado = valorManualStr !== '' || descontoNum > 0
+
     const appointmentData = {
       clinic_id: clinicId,
       patient_id: form.patient_id,
@@ -243,6 +272,11 @@ export default function AppointmentForm({
       end_time: endTime.toISOString(),
       notes: notesWithProcedures || null,
       status: form.status,
+      ...(valorFoiEditado ? {
+        valor_cobrado: selectedProcedures.length > 0 ? valorFinal : null,
+        desconto_tipo: descontoNum > 0 ? descontoTipo : null,
+        desconto_valor: descontoNum > 0 ? descontoNum : null,
+      } : {}),
     }
 
     let result
@@ -440,6 +474,73 @@ export default function AppointmentForm({
               Total: R$ {totalPrice.toFixed(2)}
             </span>
           </div>
+        )}
+
+        {/* Valor cobrado / desconto no agendamento -- reflete direto na Previsao
+            de Faturamento, que prioriza valor_cobrado sobre o preco de tabela. */}
+        {selectedProcedures.length > 0 && (
+          !editandoValor && valorManualStr === '' && descontoNum === 0 ? (
+            <button
+              type="button"
+              onClick={() => setEditandoValor(true)}
+              className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-violet-500 hover:text-violet-700 border border-dashed border-violet-200 hover:border-violet-400 rounded-lg transition-colors"
+            >
+              <Icon name="gift" className="w-3.5 h-3.5" /> Aplicar valor ou desconto no agendamento
+            </button>
+          ) : (
+            <div className="mt-2 p-3 bg-slate-50 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-500">Valor cobrado neste agendamento</p>
+                <button
+                  type="button"
+                  onClick={() => { setValorManualStr(''); setDescontoValorStr(''); setEditandoValor(false) }}
+                  className="text-xs text-slate-400 hover:text-slate-600 underline"
+                >
+                  Usar preço de tabela
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-xs text-slate-400">Valor (R$)</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    placeholder={totalPrice.toFixed(2)}
+                    value={valorManualStr}
+                    onChange={e => setValorManualStr(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                  />
+                </div>
+                <div className="w-20">
+                  <label className="text-xs text-slate-400">Desc.</label>
+                  <select
+                    value={descontoTipo}
+                    onChange={e => setDescontoTipo(e.target.value as 'valor' | 'percentual')}
+                    className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"
+                  >
+                    <option value="valor">R$</option>
+                    <option value="percentual">%</option>
+                  </select>
+                </div>
+                <div className="w-20">
+                  <label className="text-xs text-slate-400">&nbsp;</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    placeholder="0"
+                    value={descontoValorStr}
+                    onChange={e => setDescontoValorStr(e.target.value)}
+                    className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"
+                  />
+                </div>
+              </div>
+              {(valorManualStr !== '' || descontoNum > 0) && (
+                <p className="text-xs text-emerald-600 font-medium">
+                  {baseValor !== totalPrice || descontoNum > 0
+                    ? <>Cobrado: R$ {valorFinal.toFixed(2)} <span className="text-slate-400 font-normal">(tabela: R$ {totalPrice.toFixed(2)})</span></>
+                    : null}
+                </p>
+              )}
+            </div>
+          )
         )}
       </div>
 

@@ -19,6 +19,9 @@ type Props = {
     status: string
     valor_sinal: number | null
     forma_pagamento_sinal: string | null
+    valor_cobrado?: number | null
+    desconto_tipo?: 'valor' | 'percentual' | null
+    desconto_valor?: number | null
   }
   clinicId: string
   patients: { id: string; name: string }[]
