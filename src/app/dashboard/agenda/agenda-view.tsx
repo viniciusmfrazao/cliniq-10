@@ -1501,6 +1501,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
           professionalId={apt.professional_id || null}
           professionalName={apt.professional?.name || ''}
           valorCobrado={apt.valor_cobrado ?? null}
+          descontoTipoInicial={(apt.desconto_tipo as 'valor' | 'percentual' | null) ?? null}
+          descontoValorInicial={apt.desconto_valor ?? null}
           onClose={() => setShowPayment(false)}
           onSuccess={() => { setShowPayment(false) }}
         />

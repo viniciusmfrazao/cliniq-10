@@ -23,6 +23,8 @@ type Props = {
   professionalId: string | null
   professionalName: string
   valorCobrado?: number | null
+  descontoTipoInicial?: 'valor' | 'percentual' | null
+  descontoValorInicial?: number | null
   onClose: () => void
   onSuccess: () => void
 }
@@ -44,7 +46,7 @@ function uid() { return Math.random().toString(36).slice(2) }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 function asProcUuid(id: string) { return UUID_RE.test(id) ? id : null }
 
-export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, onClose, onSuccess }: Props) {
+export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, descontoTipoInicial, descontoValorInicial, onClose, onSuccess }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const [taxas, setTaxas] = useState<Taxa[]>([])
@@ -52,8 +54,11 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [splits, setSplits] = useState<Split[]>([])
   const [debitos, setDebitos] = useState<Debito[]>([])
   const [obs, setObs] = useState('')
-  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>('valor')
-  const [descontoValorStr, setDescontoValorStr] = useState('')
+  // O desconto ja' aplicado no agendamento vem preenchido. Antes o campo abria
+  // vazio enquanto valorCobrado ja' chegava descontado -- quem digitasse desconto
+  // aqui aplicava em cima de valor ja' descontado.
+  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>(descontoTipoInicial || 'valor')
+  const [descontoValorStr, setDescontoValorStr] = useState(descontoValorInicial ? String(descontoValorInicial) : '')
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -187,35 +192,49 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const totalProdutos = produtos.reduce((s, p) => s + p.sale_price * p.quantidade, 0)
   const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valor, 0)
   const estoqueNegativo = produtos.filter(p => p.quantidade > p.current_stock)
-  // Use valor_cobrado set by professional if available, otherwise fall back to procedure price.
-  // Produto vendido no atendimento soma por cima — é item da mesma venda, pago junto.
-  const baseProcs = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : totalProcs
-  const baseTotal = baseProcs + totalProdutos
   const descontoNum = parseFloat(descontoValorStr) || 0
+
+  // Base do desconto = valor CHEIO dos procedimentos. valorCobrado do agendamento
+  // ja' vem descontado quando existe desconto gravado, entao usa-lo como base
+  // aplicaria o desconto duas vezes. Só vale como override manual quando não
+  // ha' desconto registrado.
+  const baseProcs = (valorCobrado !== null && valorCobrado !== undefined && descontoValorInicial == null)
+    ? valorCobrado
+    : totalProcs
+  const subtotalItens = baseProcs + totalProdutos
   const totalComDesconto = descontoTipo === 'percentual'
-    ? Math.max(0, baseTotal * (1 - descontoNum / 100))
-    : Math.max(0, baseTotal - descontoNum)
+    ? Math.max(0, subtotalItens * (1 - descontoNum / 100))
+    : Math.max(0, subtotalItens - descontoNum)
+  // Desconto proporcional so' da parte de procedimento — e' isso que volta pro
+  // appointment.valor_cobrado. Produto e debito nao entram nesse campo.
+  const procsComDesconto = subtotalItens > 0
+    ? Math.round(totalComDesconto * (baseProcs / subtotalItens) * 100) / 100
+    : 0
   const totalDever = totalComDesconto + totalDebitos
   const totalPago = splits.reduce((s, p) => s + p.valor, 0)
   const totalLiquido = splits.reduce((s, p) => s + p.liquido, 0)
   const saldo = Math.max(0, totalDever - totalPago)
 
-  // Com pagamento único (padrão), o valor já vem pré-preenchido com o total —
-  // ajusta automaticamente ao mudar o desconto. Se já houver split(s) extra,
-  // não mexe pra não sobrescrever valores que o usuário já ajustou manualmente.
   function applyDesconto(newTipo: 'valor' | 'percentual', newValorStr: string) {
     setDescontoTipo(newTipo)
     setDescontoValorStr(newValorStr)
-    if (splits.length === 1) {
-      const num = parseFloat(newValorStr) || 0
-      const novoTotal = newTipo === 'percentual'
-        ? Math.max(0, baseTotal * (1 - num / 100))
-        : Math.max(0, baseTotal - num)
-      setSplits(prev => prev.map((s, i) =>
-        i === 0 ? { ...s, valor: novoTotal, liquido: Math.round((novoTotal - calcTaxaValor({ ...s, valor: novoTotal })) * 100) / 100 } : s
-      ))
-    }
   }
+
+  // Com pagamento único (padrão), o valor acompanha o total a pagar — procedimento,
+  // produto, desconto E débito. Antes cada um desses mexia no split por conta
+  // própria (ou nem mexia, no caso do débito), então o valor cobrado divergia do
+  // total. Com split manual dividido, não mexe: o usuário já ajustou na mão.
+  useEffect(() => {
+    if (loading || splits.length !== 1) return
+    setSplits(prev => {
+      const s0 = prev[0]
+      if (Math.abs(s0.valor - totalDever) < 0.01) return prev
+      const atualizado = { ...s0, valor: totalDever }
+      atualizado.liquido = Math.round((totalDever - calcTaxaValor(atualizado)) * 100) / 100
+      return [atualizado]
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalDever, loading])
 
   async function save() {
     if (!userId) { console.error('Sem usuário autenticado'); return }
@@ -330,7 +349,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
           ...(descontoNum > 0 ? {
             desconto_tipo: descontoTipo,
             desconto_valor: descontoNum,
-            valor_cobrado: totalComDesconto,
+            valor_cobrado: procsComDesconto,
           } : {}),
         })
         .eq('id', appointmentId)
@@ -381,13 +400,30 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
               <div className="bg-slate-50 rounded-xl p-3">
                 <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Procedimentos</p>
                 <div className="space-y-1.5">
-                  {procs.map(p => (
-                    <div key={p.id} className="flex items-center gap-2">
+                  {procs.map((p, idx) => (
+                    <div key={`${p.id}-${idx}`} className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
-                      <span className="text-sm text-slate-700">{p.name}</span>
+                      <span className="text-sm text-slate-700 flex-1 truncate">{p.name}</span>
+                      <input
+                        type="number" step="0.01" min="0"
+                        value={p.price}
+                        onChange={e => {
+                          const v = parseFloat(e.target.value) || 0
+                          setProcs(prev => prev.map((x, i) => i === idx ? { ...x, price: v } : x))
+                        }}
+                        className="w-24 text-xs px-2 py-1 border border-slate-200 rounded-md text-right bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProcs(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-300 hover:text-red-500"
+                        title="Remover"
+                      >
+                        <Icon name="trash" className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))}
-                  {(valorCobrado !== null && valorCobrado !== undefined) && (
+                  {(valorCobrado !== null && valorCobrado !== undefined && descontoValorInicial == null) && (
                     <div className="flex justify-between pt-1.5 border-t border-slate-200 mt-1">
                       <span className="text-xs text-slate-500">Valor definido pela profissional</span>
                       <span className="text-sm font-bold text-violet-600">{fmt(valorCobrado)}</span>
@@ -420,7 +456,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 </div>
                 {descontoNum > 0 && (
                   <p className="text-xs text-slate-500 mt-2">
-                    {fmt(baseTotal)} <span className="text-slate-400">→</span> <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
+                    {fmt(subtotalItens)} <span className="text-slate-400">→</span> <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
                   </p>
                 )}
               </div>
@@ -449,11 +485,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                           key={p.id}
                           onClick={() => {
                             setProcs(prev => [...prev, p])
-                            if (valorCobrado === null || valorCobrado === undefined) {
-                              setSplits(prev => prev.map((s, i) =>
-                                i === 0 ? { ...s, valor: s.valor + p.price, liquido: (s.valor + p.price) * (1 - s.taxa / 100) } : s
-                              ))
-                            }
                             setShowAddProc(false)
                             setProcSearch('')
                           }}
@@ -499,11 +530,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                                 ? prev.map(x => x.id === p.id ? { ...x, quantidade: x.quantidade + 1 } : x)
                                 : [...prev, { ...p, quantidade: 1 }]
                             })
-                            setSplits(prev => prev.map((sp, i) =>
-                              i === 0
-                                ? { ...sp, valor: sp.valor + p.sale_price, liquido: Math.round((sp.valor + p.sale_price - calcTaxaValor({ ...sp, valor: sp.valor + p.sale_price })) * 100) / 100 }
-                                : sp
-                            ))
                             setShowAddProd(false)
                             setProdSearch('')
                           }}
@@ -529,6 +555,15 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   {produtos.map(item => (
                     <div key={item.id} className="flex items-center gap-2">
                       <span className="text-xs text-amber-800 font-medium flex-1 truncate">{item.name}</span>
+                      <input
+                        type="number" step="0.01" min="0"
+                        value={item.sale_price}
+                        onChange={e => {
+                          const v = parseFloat(e.target.value) || 0
+                          setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, sale_price: v } : x))
+                        }}
+                        className="w-20 text-xs px-2 py-1 border border-amber-200 rounded-md text-right bg-white"
+                      />
                       <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
                         <button
                           type="button"
@@ -537,11 +572,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                               if (x.id !== item.id) return [x]
                               return x.quantidade <= 1 ? [] : [{ ...x, quantidade: x.quantidade - 1 }]
                             }))
-                            setSplits(prev => prev.map((sp, i) =>
-                              i === 0
-                                ? { ...sp, valor: Math.max(0, sp.valor - item.sale_price), liquido: Math.round(Math.max(0, sp.valor - item.sale_price) * 100) / 100 }
-                                : sp
-                            ))
                           }}
                           className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold"
                         >−</button>
@@ -550,11 +580,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                           type="button"
                           onClick={() => {
                             setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, quantidade: x.quantidade + 1 } : x))
-                            setSplits(prev => prev.map((sp, i) =>
-                              i === 0
-                                ? { ...sp, valor: sp.valor + item.sale_price, liquido: Math.round((sp.valor + item.sale_price) * 100) / 100 }
-                                : sp
-                            ))
                           }}
                           className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold"
                         >+</button>
