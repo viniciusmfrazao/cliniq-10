@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import EntradasList from './entradas-list'
 import { getFinancialAccess } from '@/lib/financial-access'
-import { PROFESSIONAL_ROLES } from '@/lib/constants'
+import { fiscalConfigCompletaNfe } from '@/lib/focus-nfe'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +45,7 @@ export default async function EntradasPage() {
     .from('users')
     .select('id, name')
     .eq('clinic_id', clinicId)
-    .in('role', [...PROFESSIONAL_ROLES, 'admin'])
+    .in('role', ['doctor', 'esthetician', 'admin'])
     .order('name')
 
   const { data: clinic } = await supabase
@@ -57,6 +57,19 @@ export default async function EntradasPage() {
   const comissaoAtiva = !!clinic?.settings?.comissao_ativa
   const comissaoBase: 'bruto' | 'liquido' = clinic?.settings?.comissao_base === 'liquido' ? 'liquido' : 'bruto'
   const nfseAtivo = (clinic?.settings?.active_modules || []).includes('nfse')
+
+  // Opção "Produto (NFe)" só aparece no modal de emissão se a clínica de fato
+  // tem a config de NFe completa -- senão o botão existe mas sempre falha,
+  // confundindo quem for emitir. Mesma checagem que a rota de emissão usa.
+  let nfeAtivo = false
+  if (nfseAtivo) {
+    const { data: fiscalConfig } = await supabase
+      .from('clinic_fiscal_config')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .maybeSingle()
+    nfeAtivo = fiscalConfigCompletaNfe(fiscalConfig as any).ok
+  }
 
   // Mapa de comissão por profissional, independente do filtro de role acima
   // (entradas podem referenciar qualquer papel clínico: dentista, enfermeiro, etc.)
@@ -102,6 +115,7 @@ export default async function EntradasPage() {
         comissaoBase={comissaoBase}
         comissaoConfig={comissaoConfig || []}
         nfseAtivo={nfseAtivo}
+        nfeAtivo={nfeAtivo}
         readOnly={scope !== 'all'}
       />
     </div>

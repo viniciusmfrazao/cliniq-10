@@ -5,14 +5,12 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
-import { gerarVencimentosBoleto } from '@/lib/recebiveis'
-import SellProductModal from '@/components/vendas/sell-product-modal'
 
 type Taxa = { forma: string; bandeira: string | null; taxa_percentual: number; taxa_fixa?: number | null }
-type ProcItem = { id: string; name: string; price: number }
+type ProcItem = { id: string; name: string; price: number; precoOriginal: number }
 type Split = { id: string; forma: string; bandeira: string; valor: number; parcelas: number; taxa: number; taxaFixa: number; liquido: number; vencimento: string }
-type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean }
-type VendaProdutoInfo = { produtoNome: string; quantidade: number; valor: number }
+type Debito = { id: string; descricao: string; valor: number; data_vencimento: string; quitar: boolean; valorPagar: number }
+type ProdItem = { id: string; name: string; sale_price: number; current_stock: number; quantidade: number; precoOriginal: number }
 
 type Props = {
   appointmentId: string
@@ -25,6 +23,8 @@ type Props = {
   professionalId: string | null
   professionalName: string
   valorCobrado?: number | null
+  descontoTipoInicial?: 'valor' | 'percentual' | null
+  descontoValorInicial?: number | null
   onClose: () => void
   onSuccess: () => void
 }
@@ -46,7 +46,7 @@ function uid() { return Math.random().toString(36).slice(2) }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 function asProcUuid(id: string) { return UUID_RE.test(id) ? id : null }
 
-export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, onClose, onSuccess }: Props) {
+export default function PaymentModal({ appointmentId, clinicId, patientId, patientName, procedureName, procedurePrice, procedureId, professionalId, professionalName, valorCobrado, descontoTipoInicial, descontoValorInicial, onClose, onSuccess }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const [taxas, setTaxas] = useState<Taxa[]>([])
@@ -54,8 +54,11 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [splits, setSplits] = useState<Split[]>([])
   const [debitos, setDebitos] = useState<Debito[]>([])
   const [obs, setObs] = useState('')
-  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>('valor')
-  const [descontoValorStr, setDescontoValorStr] = useState('')
+  // O desconto ja' aplicado no agendamento vem preenchido. Antes o campo abria
+  // vazio enquanto valorCobrado ja' chegava descontado -- quem digitasse desconto
+  // aqui aplicava em cima de valor ja' descontado.
+  const [descontoTipo, setDescontoTipo] = useState<'valor' | 'percentual'>(descontoTipoInicial || 'valor')
+  const [descontoValorStr, setDescontoValorStr] = useState(descontoValorInicial ? String(descontoValorInicial) : '')
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -63,8 +66,18 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   const [allClinicProcs, setAllClinicProcs] = useState<ProcItem[]>([])
   const [procSearch, setProcSearch] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
-  const [showSellProduct, setShowSellProduct] = useState(false)
-  const [vendasProduto, setVendasProduto] = useState<VendaProdutoInfo[]>([])
+  // Desconto que veio do atendimento so' vira campo editavel se quem cobra pedir.
+  // O padrao e' exibir a decisao da profissional, nao convidar a redigitar.
+  const [editandoDesconto, setEditandoDesconto] = useState(false)
+  // Campo de desconto por item: string bruta digitada, nao derivada do preco --
+  // se fosse derivada, cada tecla reformataria o input e atrapalharia digitar
+  // decimais. Sincroniza pro preco no onChange, mas guarda o texto puro aqui.
+  const [descontoProcStr, setDescontoProcStr] = useState<Record<number, string>>({})
+  const [descontoProdStr, setDescontoProdStr] = useState<Record<string, string>>({})
+  const [showAddProd, setShowAddProd] = useState(false)
+  const [allClinicProds, setAllClinicProds] = useState<ProdItem[]>([])
+  const [prodSearch, setProdSearch] = useState('')
+  const [produtos, setProdutos] = useState<ProdItem[]>([])
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -90,10 +103,12 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
           id: ap.procedure_id || uid(),
           name: ap.procedure_name,
           price: Number(ap.price) || 0,
+          precoOriginal: Number(ap.price) || 0,
         }))
       } else {
         // Fallback: procedimento principal
-        procList = [{ id: procedureId || uid(), name: procedureName, price: Number(procedurePrice) || 0 }]
+        const p = Number(procedurePrice) || 0
+        procList = [{ id: procedureId || uid(), name: procedureName, price: p, precoOriginal: p }]
       }
       setProcs(procList)
 
@@ -111,6 +126,22 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
         id: p.id,
         name: p.name,
         price: Number(p.price) || 0,
+        precoOriginal: Number(p.price) || 0,
+      })))
+
+      // Produtos da clínica (pra vender junto com o procedimento)
+      const { data: prodData } = await supabase
+        .from('products')
+        .select('id, name, sale_price, current_stock')
+        .eq('clinic_id', clinicId)
+        .eq('is_active', true)
+        .order('name')
+      setAllClinicProds((prodData || []).map((p: any) => ({
+        id: p.id, name: p.name,
+        sale_price: Number(p.sale_price) || 0,
+        current_stock: p.current_stock ?? 0,
+        quantidade: 1,
+        precoOriginal: Number(p.sale_price) || 0,
       })))
 
       // Débitos pendentes
@@ -122,7 +153,7 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
           .eq('paciente_id', patientId)
           .eq('status', 'pendente')
           .order('data_vencimento', { ascending: true })
-        setDebitos((deb || []).map((d: any) => ({ ...d, valor: Number(d.valor), quitar: false })))
+        setDebitos((deb || []).map((d: any) => ({ ...d, valor: Number(d.valor), quitar: false, valorPagar: Number(d.valor) })))
       }
 
       setLoading(false)
@@ -170,124 +201,179 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
   }
 
   const totalProcs = procs.reduce((s, p) => s + p.price, 0)
-  const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valor, 0)
-  // Use valor_cobrado set by professional if available, otherwise fall back to procedure price
-  const baseTotal = (valorCobrado !== null && valorCobrado !== undefined) ? valorCobrado : totalProcs
+  const totalProdutos = produtos.reduce((s, p) => s + p.sale_price * p.quantidade, 0)
+  const totalDebitos = debitos.filter(d => d.quitar).reduce((s, d) => s + d.valorPagar, 0)
+  const estoqueNegativo = produtos.filter(p => p.quantidade > p.current_stock)
   const descontoNum = parseFloat(descontoValorStr) || 0
+
+  // Base do desconto = valor CHEIO dos procedimentos. valorCobrado do agendamento
+  // ja' vem descontado quando existe desconto gravado, entao usa-lo como base
+  // aplicaria o desconto duas vezes. Só vale como override manual quando não
+  // ha' desconto registrado.
+  const baseProcs = (valorCobrado !== null && valorCobrado !== undefined && descontoValorInicial == null)
+    ? valorCobrado
+    : totalProcs
+  const subtotalItens = baseProcs + totalProdutos
   const totalComDesconto = descontoTipo === 'percentual'
-    ? Math.max(0, baseTotal * (1 - descontoNum / 100))
-    : Math.max(0, baseTotal - descontoNum)
+    ? Math.max(0, subtotalItens * (1 - descontoNum / 100))
+    : Math.max(0, subtotalItens - descontoNum)
+  // Desconto proporcional so' da parte de procedimento — e' isso que volta pro
+  // appointment.valor_cobrado. Produto e debito nao entram nesse campo.
+  const procsComDesconto = subtotalItens > 0
+    ? Math.round(totalComDesconto * (baseProcs / subtotalItens) * 100) / 100
+    : 0
   const totalDever = totalComDesconto + totalDebitos
   const totalPago = splits.reduce((s, p) => s + p.valor, 0)
   const totalLiquido = splits.reduce((s, p) => s + p.liquido, 0)
   const saldo = Math.max(0, totalDever - totalPago)
 
-  // Com pagamento único (padrão), o valor já vem pré-preenchido com o total —
-  // ajusta automaticamente ao mudar o desconto. Se já houver split(s) extra,
-  // não mexe pra não sobrescrever valores que o usuário já ajustou manualmente.
   function applyDesconto(newTipo: 'valor' | 'percentual', newValorStr: string) {
     setDescontoTipo(newTipo)
     setDescontoValorStr(newValorStr)
-    if (splits.length === 1) {
-      const num = parseFloat(newValorStr) || 0
-      const novoTotal = newTipo === 'percentual'
-        ? Math.max(0, baseTotal * (1 - num / 100))
-        : Math.max(0, baseTotal - num)
-      setSplits(prev => prev.map((s, i) =>
-        i === 0 ? { ...s, valor: novoTotal, liquido: Math.round((novoTotal - calcTaxaValor({ ...s, valor: novoTotal })) * 100) / 100 } : s
-      ))
-    }
   }
 
+  // Com pagamento único (padrão), o valor acompanha o total a pagar — procedimento,
+  // produto, desconto E débito. Antes cada um desses mexia no split por conta
+  // própria (ou nem mexia, no caso do débito), então o valor cobrado divergia do
+  // total. Com split manual dividido, não mexe: o usuário já ajustou na mão.
+  useEffect(() => {
+    if (loading || splits.length !== 1) return
+    setSplits(prev => {
+      const s0 = prev[0]
+      if (Math.abs(s0.valor - totalDever) < 0.01) return prev
+      const atualizado = { ...s0, valor: totalDever }
+      atualizado.liquido = Math.round((totalDever - calcTaxaValor(atualizado)) * 100) / 100
+      return [atualizado]
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalDever, loading])
+
   async function save() {
+    if (!userId) { console.error('Sem usuário autenticado'); return }
     setSaving(true)
     try {
-      // Data no fuso horário do Brasil (UTC-3) para evitar virada de dia UTC
       const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
         .split('/').reverse().join('-')
 
-      // Uma entrada por forma de pagamento (não mais uma por procedimento).
-      // Quando há mais de um procedimento no mesmo pagamento, o nome vem combinado
-      // ("Botox + Preenchimento") e o detalhe por procedimento fica em entrada_procedimentos
-      // (usado pelos relatórios por procedimento: ranking, contagem em /procedimentos, etc).
-      const procedimentoNomeCombinado = procs.map(p => p.name).join(' + ')
-      for (const s of splits) {
-        if (s.valor <= 0) continue
-        const taxa = calcTaxaValor(s)
-        const liquido = Math.round((s.valor - taxa) * 100) / 100
-        // Grava o % efetivo (inclui a taxa fixa do boleto) pra que
-        // valor_bruto × taxa_percentual continue batendo com valor_taxa.
-        const taxaPctEfetiva = s.valor > 0 ? Math.round((taxa / s.valor) * 1000000) / 10000 : 0
-        const { data: entradaInserida, error: errEntrada } = await supabase.from('entradas').insert({
-          clinic_id: clinicId, data_venda: hoje,
-          paciente_id: patientId, paciente_nome: patientName,
-          procedimento_id: procs.length === 1 ? asProcUuid(procs[0].id) : null,
-          procedimento_nome: procedimentoNomeCombinado,
-          profissional_id: professionalId, profissional_nome: professionalName,
-          forma_pagamento: s.forma, bandeira: s.bandeira || null,
-          valor_bruto: s.valor, taxa_percentual: taxaPctEfetiva,
-          valor_taxa: taxa, valor_liquido: liquido,
-          n_parcelas: s.parcelas, observacoes: obs || null,
-          primeiro_vencimento: s.forma === 'boleto' ? (s.vencimento || null) : null,
-          appointment_id: appointmentId,
-        }).select('id').single()
+      // Procedimentos e produtos vao na MESMA venda: a paciente paga uma vez so'.
+      // A fn_registrar_venda separa em entradas por tipo_receita (servico/produto)
+      // com rateio proporcional, entao o financeiro continua recebendo as linhas
+      // separadas de sempre — DRE, comissao, ranking e nota fiscal sem mudanca.
+      const itens = [
+        ...procs.map(p => ({
+          tipo: 'procedimento' as const,
+          id: asProcUuid(p.id),
+          nome: p.name,
+          quantidade: 1,
+          valor_unitario: p.price,
+        })),
+        ...produtos.map(p => ({
+          tipo: 'produto' as const,
+          id: p.id,
+          nome: p.name,
+          quantidade: p.quantidade,
+          valor_unitario: p.sale_price,
+        })),
+      ].filter(i => i.valor_unitario > 0 || i.tipo === 'procedimento')
 
-        if (errEntrada) { console.error('Erro ao criar entrada:', errEntrada); continue }
+      // Debito quitado nao e' item desta venda — e' divida antiga sendo paga junto.
+      // Fica fora do rateio pra nao inflar a receita de produto/procedimento do dia.
+      const proporcaoItens = totalDever > 0 ? totalComDesconto / totalDever : 1
 
-        // Boleto não vem "aprovado" como o cartão — precisa de baixa manual
-        // depois. Gera uma linha por parcela em boleto_parcelas com o
-        // vencimento real, pra validar em Previsão de Recebimento.
-        if (s.forma === 'boleto' && s.vencimento) {
-          const vencimentos = gerarVencimentosBoleto(s.vencimento, s.parcelas)
-          const valorParcela = Math.round((liquido / s.parcelas) * 100) / 100
-          const somaAteAqui = valorParcela * (s.parcelas - 1)
-          const parcelasBoleto = vencimentos.map((venc, i) => ({
-            clinic_id: clinicId,
-            entrada_id: entradaInserida.id,
-            numero_parcela: i + 1,
-            total_parcelas: s.parcelas,
-            valor_liquido: i === s.parcelas - 1 ? Math.round((liquido - somaAteAqui) * 100) / 100 : valorParcela,
-            vencimento: venc,
-            paciente_nome: patientName,
-            procedimento_nome: procedimentoNomeCombinado,
-          }))
-          const { error: errParcelas } = await supabase.from('boleto_parcelas').insert(parcelasBoleto)
-          if (errParcelas) console.error('Erro ao criar parcelas do boleto:', errParcelas)
-        }
-
-        // Detalhe por procedimento (rateio proporcional ao preço de cada procedimento
-        // dentro do valor deste split de pagamento)
-        const detalhes = procs.map(proc => {
-          const proporcao = totalProcs > 0 ? proc.price / totalProcs : 1 / procs.length
+      const pagamentosItens = splits
+        .filter(sp => sp.valor > 0)
+        .map(sp => {
+          const valorItens = Math.round(sp.valor * proporcaoItens * 100) / 100
+          const taxa = calcTaxaValor({ ...sp, valor: valorItens })
+          const taxaPct = valorItens > 0 ? Math.round((taxa / valorItens) * 1000000) / 10000 : 0
           return {
-            entrada_id: entradaInserida.id,
-            clinic_id: clinicId,
-            procedimento_id: asProcUuid(proc.id),
-            procedimento_nome: proc.name,
-            valor: Math.round(s.valor * proporcao * 100) / 100,
+            forma: sp.forma,
+            bandeira: sp.bandeira || '',
+            valor: valorItens,
+            taxa_percentual: taxaPct,
+            n_parcelas: sp.parcelas,
+            primeiro_vencimento: sp.forma === 'boleto' ? (sp.vencimento || '') : '',
           }
         })
-        const { error: errDetalhe } = await supabase.from('entrada_procedimentos').insert(detalhes)
-        if (errDetalhe) console.error('Erro ao criar detalhe de procedimentos:', errDetalhe)
+        .filter(sp => sp.valor > 0)
+
+      if (itens.length > 0 && pagamentosItens.length > 0) {
+        const { error: errVenda } = await supabase.rpc('fn_registrar_venda', {
+          p_user_id: userId,
+          p_clinic_id: clinicId,
+          p_data_venda: hoje,
+          p_paciente_id: patientId,
+          p_paciente_nome: patientName,
+          p_profissional_id: professionalId,
+          p_profissional_nome: professionalName,
+          p_observacoes: obs || null,
+          p_appointment_id: appointmentId,
+          p_itens: itens,
+          p_pagamentos: pagamentosItens,
+        })
+        if (errVenda) {
+          console.error('Erro ao registrar venda:', errVenda)
+          alert('Erro ao registrar pagamento: ' + errVenda.message)
+          setSaving(false)
+          return
+        }
       }
 
-      // Quitar débitos marcados — com data de pagamento real
-      for (const d of debitos.filter(x => x.quitar)) {
-        const { error } = await supabase.from('debitos').update({
-          status: 'pago',
-          data_pagamento: hoje,
-        }).eq('id', d.id)
-        if (error) console.error('Erro ao quitar débito:', error)
+      // Quitacao de debito: entrada propria, com a descricao do debito, PELO
+      // VALOR PAGO — pode ser parcial. Antes o valor ficava embutido na entrada
+      // do procedimento do dia, escondendo a origem da receita nos relatorios.
+      const debitosQuitar = debitos.filter(d => d.quitar && d.valorPagar > 0)
+      if (debitosQuitar.length > 0) {
+        const formaDebito = splits[0]?.forma || 'pix'
+        const linhasDebito = debitosQuitar.map(d => {
+          const restante = Math.round((d.valor - d.valorPagar) * 100) / 100
+          return {
+            clinic_id: clinicId,
+            data_venda: hoje,
+            paciente_id: patientId,
+            paciente_nome: patientName,
+            procedimento_nome: d.descricao,
+            profissional_id: professionalId,
+            profissional_nome: professionalName,
+            forma_pagamento: formaDebito,
+            valor_bruto: d.valorPagar,
+            taxa_percentual: 0,
+            valor_taxa: 0,
+            valor_liquido: d.valorPagar,
+            n_parcelas: 1,
+            tipo_receita: 'servico',
+            appointment_id: appointmentId,
+            created_by: userId,
+            observacoes: restante > 0
+              ? `Quitação parcial de débito (restante: ${fmt(restante)})`
+              : 'Quitação de débito',
+          }
+        })
+        const { error: errDeb } = await supabase.from('entradas').insert(linhasDebito)
+        if (errDeb) console.error('Erro ao lançar quitação de débito:', errDeb)
+
+        // Pagou tudo -> status pago. Pagou parte -> reduz o valor do débito pro
+        // restante e mantém pendente (mesmo padrão de devedores-list.tsx).
+        for (const d of debitosQuitar) {
+          const restante = Math.round((d.valor - d.valorPagar) * 100) / 100
+          const { error } = await supabase.from('debitos')
+            .update(
+              restante > 0.01
+                ? { valor: restante, observacao_cobranca: `Pagou ${fmt(d.valorPagar)} em ${new Date().toLocaleDateString('pt-BR')}. Restante: ${fmt(restante)}` }
+                : { status: 'pago', data_pagamento: hoje }
+            )
+            .eq('id', d.id)
+          if (error) console.error('Erro ao atualizar débito:', error)
+        }
       }
 
-      // Marcar pagamento (+ desconto aplicado no momento do pagamento, se houver)
       await supabase.from('appointments')
         .update({
           payment_registered_at: new Date().toISOString(),
           ...(descontoNum > 0 ? {
             desconto_tipo: descontoTipo,
             desconto_valor: descontoNum,
-            valor_cobrado: totalComDesconto,
+            valor_cobrado: procsComDesconto,
           } : {}),
         })
         .eq('id', appointmentId)
@@ -336,50 +422,69 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
               {/* Procedimentos */}
               <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Procedimentos</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Procedimentos</p>
+                  <p className="text-xs text-slate-400">Edite o valor pra dar desconto só neste item</p>
+                </div>
                 <div className="space-y-1.5">
-                  {procs.map(p => (
-                    <div key={p.id} className="flex items-center gap-2">
+                  {procs.map((p, idx) => (
+                    <div key={`${p.id}-${idx}`} className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
-                      <span className="text-sm text-slate-700">{p.name}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-slate-700 truncate block">{p.name}</span>
+                        {p.price !== p.precoOriginal && (
+                          <span className="text-xs text-emerald-600">
+                            tabela {fmt(p.precoOriginal)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[10px] text-slate-400">desconto R$</span>
+                        <input
+                          type="number" step="0.01" min="0"
+                          placeholder="0"
+                          value={descontoProcStr[idx] ?? ''}
+                          onChange={e => {
+                            const raw = e.target.value
+                            setDescontoProcStr(prev => ({ ...prev, [idx]: raw }))
+                            const desc = parseFloat(raw) || 0
+                            const novoPreco = Math.max(0, Math.round((p.precoOriginal - desc) * 100) / 100)
+                            setProcs(prev => prev.map((x, i) => i === idx ? { ...x, price: novoPreco } : x))
+                          }}
+                          className="w-16 text-xs px-1.5 py-1 rounded-md text-right border border-emerald-200 bg-emerald-50 text-emerald-700"
+                        />
+                      </div>
+                      <input
+                        type="number" step="0.01" min="0"
+                        value={p.price}
+                        onChange={e => {
+                          const v = parseFloat(e.target.value) || 0
+                          setProcs(prev => prev.map((x, i) => i === idx ? { ...x, price: v } : x))
+                          // Valor final editado direto -- limpa o rascunho de desconto pra nao
+                          // ficar mostrando um numero digitado que nao corresponde mais ao preco.
+                          setDescontoProcStr(prev => { const n = { ...prev }; delete n[idx]; return n })
+                        }}
+                        className={`w-20 text-xs px-2 py-1 rounded-md text-right bg-white border ${
+                          p.price !== p.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold' : 'border-slate-200'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProcs(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-300 hover:text-red-500"
+                        title="Remover"
+                      >
+                        <Icon name="trash" className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))}
-                  {(valorCobrado !== null && valorCobrado !== undefined) && (
+                  {(valorCobrado !== null && valorCobrado !== undefined && descontoValorInicial == null) && (
                     <div className="flex justify-between pt-1.5 border-t border-slate-200 mt-1">
                       <span className="text-xs text-slate-500">Valor definido pela profissional</span>
                       <span className="text-sm font-bold text-violet-600">{fmt(valorCobrado)}</span>
                     </div>
                   )}
                 </div>
-              </div>
-
-              {/* Desconto */}
-              <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Desconto</p>
-                <div className="flex gap-2">
-                  <select
-                    value={descontoTipo}
-                    onChange={e => applyDesconto(e.target.value as 'valor' | 'percentual', descontoValorStr)}
-                    className="input text-sm w-20 flex-shrink-0"
-                  >
-                    <option value="valor">R$</option>
-                    <option value="percentual">%</option>
-                  </select>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0"
-                    value={descontoValorStr}
-                    onChange={e => applyDesconto(descontoTipo, e.target.value)}
-                    className="input text-sm flex-1"
-                  />
-                </div>
-                {descontoNum > 0 && (
-                  <p className="text-xs text-slate-500 mt-2">
-                    {fmt(baseTotal)} <span className="text-slate-400">→</span> <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
-                  </p>
-                )}
               </div>
 
               {/* Adicionar procedimento */}
@@ -406,11 +511,6 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                           key={p.id}
                           onClick={() => {
                             setProcs(prev => [...prev, p])
-                            if (valorCobrado === null || valorCobrado === undefined) {
-                              setSplits(prev => prev.map((s, i) =>
-                                i === 0 ? { ...s, valor: s.valor + p.price, liquido: (s.valor + p.price) * (1 - s.taxa / 100) } : s
-                              ))
-                            }
                             setShowAddProc(false)
                             setProcSearch('')
                           }}
@@ -425,42 +525,128 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                 </div>
               )}
 
-              {/* Vender produto — lançamento separado (tipo_receita='produto'), não entra
-                  no split de pagamento do procedimento acima. Baixa estoque automaticamente.
-                  É uma transação independente: confirma na hora, não espera o
-                  "Confirmar Pagamento" do procedimento lá embaixo. */}
+              {/* Adicionar produto — item da MESMA venda, somado no total a pagar.
+                  Antes era uma venda paralela confirmada na hora, o que fazia a
+                  paciente aparecer com dois pagamentos separados no financeiro. */}
               <button
-                onClick={() => setShowSellProduct(true)}
+                onClick={() => setShowAddProd(v => !v)}
                 className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-amber-600 hover:text-amber-700 border border-dashed border-amber-200 hover:border-amber-400 rounded-xl transition-colors"
               >
-                <span className="text-base leading-none">+</span> Vender produto
+                <span className="text-base leading-none">+</span> Adicionar produto
               </button>
-              {vendasProduto.length > 0 && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-1">
-                  <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
-                    <Icon name="check" className="w-3.5 h-3.5" />
-                    Produto(s) já vendido(s) nesta tela
-                  </p>
-                  {vendasProduto.map((v, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs text-emerald-800">
-                      <span>{v.produtoNome} × {v.quantidade}</span>
-                      <span className="font-medium">{fmt(v.valor)}</span>
-                    </div>
-                  ))}
-                  <p className="text-[11px] text-emerald-600 pt-1">
-                    Já lançado no financeiro — não precisa confirmar de novo. O pagamento abaixo é só do procedimento.
-                  </p>
+              {showAddProd && (
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar produto..."
+                    value={prodSearch}
+                    onChange={e => setProdSearch(e.target.value)}
+                    className="input w-full text-sm"
+                  />
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {allClinicProds
+                      .filter(p => !prodSearch || p.name.toLowerCase().includes(prodSearch.toLowerCase()))
+                      .map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setProdutos(prev => {
+                              const ja = prev.find(x => x.id === p.id)
+                              return ja
+                                ? prev.map(x => x.id === p.id ? { ...x, quantidade: x.quantidade + 1 } : x)
+                                : [...prev, { ...p, quantidade: 1 }]
+                            })
+                            setShowAddProd(false)
+                            setProdSearch('')
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white text-sm text-left transition-colors"
+                        >
+                          <span className="text-slate-700">{p.name}</span>
+                          <span className="text-slate-500 text-xs ml-2">
+                            {fmt(p.sale_price)}
+                            <span className="text-slate-400 ml-1">
+                              {p.current_stock <= 0 ? '(sem estoque)' : `(${p.current_stock})`}
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    }
+                  </div>
                 </div>
               )}
-              {showSellProduct && userId && (
-                <SellProductModal
-                  clinicId={clinicId}
-                  userId={userId}
-                  patientId={patientId}
-                  patientName={patientName}
-                  onClose={() => setShowSellProduct(false)}
-                  onSuccess={(itens) => setVendasProduto(prev => [...prev, ...itens])}
-                />
+
+              {produtos.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-3">
+                  <p className="text-xs font-semibold text-amber-700">Produtos nesta venda</p>
+                  {produtos.map(item => (
+                    <div key={item.id} className="space-y-1 pb-2 border-b border-amber-100 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs text-amber-800 font-medium truncate block">{item.name}</span>
+                          {item.sale_price !== item.precoOriginal && (
+                            <span className="text-xs text-emerald-600">tabela {fmt(item.precoOriginal)}</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end flex-shrink-0">
+                          <span className="text-[10px] text-amber-500">desconto R$</span>
+                          <input
+                            type="number" step="0.01" min="0"
+                            placeholder="0"
+                            value={descontoProdStr[item.id] ?? ''}
+                            onChange={e => {
+                              const raw = e.target.value
+                              setDescontoProdStr(prev => ({ ...prev, [item.id]: raw }))
+                              const desc = parseFloat(raw) || 0
+                              const novoPreco = Math.max(0, Math.round((item.precoOriginal - desc) * 100) / 100)
+                              setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, sale_price: novoPreco } : x))
+                            }}
+                            className="w-16 text-xs px-1.5 py-1 rounded-md text-right border border-emerald-200 bg-emerald-50 text-emerald-700"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number" step="0.01" min="0"
+                          value={item.sale_price}
+                          onChange={e => {
+                            const v = parseFloat(e.target.value) || 0
+                            setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, sale_price: v } : x))
+                            setDescontoProdStr(prev => { const n = { ...prev }; delete n[item.id]; return n })
+                          }}
+                          className={`w-20 text-xs px-2 py-1 rounded-md text-right bg-white border ${
+                            item.sale_price !== item.precoOriginal ? 'border-emerald-300 text-emerald-700 font-semibold' : 'border-amber-200'
+                          }`}
+                        />
+                        <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-md">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProdutos(prev => prev.flatMap(x => {
+                                if (x.id !== item.id) return [x]
+                                return x.quantidade <= 1 ? [] : [{ ...x, quantidade: x.quantidade - 1 }]
+                              }))
+                            }}
+                            className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-l-md text-sm font-bold"
+                          >−</button>
+                          <span className="text-xs font-semibold text-amber-900 w-5 text-center">{item.quantidade}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProdutos(prev => prev.map(x => x.id === item.id ? { ...x, quantidade: x.quantidade + 1 } : x))
+                            }}
+                            className="w-6 h-6 flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-r-md text-sm font-bold"
+                          >+</button>
+                        </div>
+                        <span className="text-xs text-amber-700 flex-1 text-right">{fmt(item.sale_price * item.quantidade)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {estoqueNegativo.length > 0 && (
+                    <p className="text-xs text-rose-600">
+                      {estoqueNegativo.map(i => `${i.name} (estoque: ${i.current_stock})`).join(', ')} — vai ficar negativo. Pode continuar, mas lembra de repor.
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* Débitos pendentes */}
@@ -472,18 +658,41 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   </div>
                   <div className="space-y-2">
                     {debitos.map(d => (
-                      <label key={d.id} className="flex items-center justify-between gap-3 cursor-pointer">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <input type="checkbox" checked={d.quitar}
-                            onChange={e => setDebitos(prev => prev.map(x => x.id === d.id ? { ...x, quitar: e.target.checked } : x))}
-                            className="w-4 h-4 rounded accent-red-500 flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-medium text-red-800 truncate">{d.descricao}</p>
-                            <p className="text-xs text-red-400">Vence: {new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                      <div key={d.id} className="space-y-1.5">
+                        <label className="flex items-center justify-between gap-3 cursor-pointer">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input type="checkbox" checked={d.quitar}
+                              onChange={e => setDebitos(prev => prev.map(x => x.id === d.id ? { ...x, quitar: e.target.checked } : x))}
+                              className="w-4 h-4 rounded accent-red-500 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-red-800 truncate">{d.descricao}</p>
+                              <p className="text-xs text-red-400">Vence: {new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')} · deve {fmt(d.valor)}</p>
+                            </div>
                           </div>
-                        </div>
-                        <span className="text-sm font-bold text-red-600 flex-shrink-0">{fmt(d.valor)}</span>
-                      </label>
+                          {!d.quitar && (
+                            <span className="text-sm font-bold text-red-600 flex-shrink-0">{fmt(d.valor)}</span>
+                          )}
+                        </label>
+                        {d.quitar && (
+                          <div className="flex items-center gap-2 pl-6.5 ml-0.5">
+                            <span className="text-xs text-red-500">Pagar agora</span>
+                            <input
+                              type="number" step="0.01" min="0.01" max={d.valor}
+                              value={d.valorPagar}
+                              onChange={e => {
+                                const v = Math.min(d.valor, Math.max(0, parseFloat(e.target.value) || 0))
+                                setDebitos(prev => prev.map(x => x.id === d.id ? { ...x, valorPagar: v } : x))
+                              }}
+                              className="w-24 text-xs px-2 py-1 border border-red-200 rounded-md text-right bg-white"
+                            />
+                            {d.valorPagar < d.valor && (
+                              <span className="text-xs text-red-400">
+                                restam {fmt(Math.round((d.valor - d.valorPagar) * 100) / 100)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ))}
                     {totalDebitos > 0 && (
                       <div className="flex justify-between pt-1.5 border-t border-red-200">
@@ -494,6 +703,82 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
                   </div>
                 </div>
               )}
+
+              {/* Desconto — quando veio do atendimento, é decisão da profissional:
+                  mostra pra quem cobra, em vez de campo vazio que convida a
+                  redigitar (o que aplicava desconto sobre desconto). */}
+              {descontoValorInicial != null && !editandoDesconto ? (
+                <div className="bg-violet-50 border border-violet-200 rounded-xl p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
+                        <Icon name="gift" className="w-3.5 h-3.5 flex-shrink-0" />
+                        Desconto aplicado no atendimento
+                      </p>
+                      <p className="text-sm text-violet-900 font-bold mt-1">
+                        {descontoTipo === 'percentual' ? `${descontoNum}%` : fmt(descontoNum)}
+                        <span className="font-normal text-violet-600 text-xs ml-1.5">
+                          por {professionalName || 'profissional'}
+                        </span>
+                      </p>
+                      <p className="text-xs text-violet-600 mt-1">
+                        {fmt(subtotalItens)} <span className="text-violet-400">→</span>{' '}
+                        <span className="font-semibold">{fmt(totalComDesconto)}</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setEditandoDesconto(true)}
+                      className="text-xs text-violet-500 hover:text-violet-700 underline flex-shrink-0"
+                    >
+                      Ajustar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Desconto</p>
+                    {descontoValorInicial != null && (
+                      <button
+                        onClick={() => {
+                          setDescontoTipo(descontoTipoInicial || 'valor')
+                          setDescontoValorStr(String(descontoValorInicial))
+                          setEditandoDesconto(false)
+                        }}
+                        className="text-xs text-slate-400 hover:text-slate-600 underline"
+                      >
+                        Voltar ao do atendimento
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={descontoTipo}
+                      onChange={e => applyDesconto(e.target.value as 'valor' | 'percentual', descontoValorStr)}
+                      className="input text-sm w-20 flex-shrink-0"
+                    >
+                      <option value="valor">R$</option>
+                      <option value="percentual">%</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0"
+                      value={descontoValorStr}
+                      onChange={e => applyDesconto(descontoTipo, e.target.value)}
+                      className="input text-sm flex-1"
+                    />
+                  </div>
+                  {descontoNum > 0 && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      {fmt(subtotalItens)} <span className="text-slate-400">→</span>{' '}
+                      <span className="font-semibold text-emerald-600">{fmt(totalComDesconto)}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
 
               {/* Splits */}
               {splits.map((s, idx) => (
@@ -588,8 +873,11 @@ export default function PaymentModal({ appointmentId, clinicId, patientId, patie
 
               {/* Resumo */}
               <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">
-                {(totalDebitos > 0 || descontoNum > 0) && (
-                  <div className="flex justify-between text-sm text-slate-500"><span>Procedimentos</span><span>{fmt(totalProcs)}</span></div>
+                {(totalDebitos > 0 || descontoNum > 0 || totalProdutos > 0) && (
+                  <div className="flex justify-between text-sm text-slate-500"><span>Procedimentos</span><span>{fmt(baseProcs)}</span></div>
+                )}
+                {totalProdutos > 0 && (
+                  <div className="flex justify-between text-sm text-amber-600"><span>Produtos</span><span>{fmt(totalProdutos)}</span></div>
                 )}
                 {descontoNum > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600">

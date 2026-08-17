@@ -17,8 +17,7 @@ import FinanceiroTab from './financeiro-tab'
 import PatientAttachments from '@/components/PatientAttachments'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 import AnamnesePresencialButton from './anamnese-presencial-button'
-import SellProductButton from './sell-product-button'
-import SellProcedureButton from './sell-procedure-button'
+import VendaButton from './venda-button'
 import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 /**
@@ -240,15 +239,7 @@ export default async function PatientCentralPage({
             Editar cadastro
           </Link>
           {canSellProduct && userData?.clinic_id && (
-            <SellProductButton
-              clinicId={userData.clinic_id}
-              userId={user.id}
-              patientId={id}
-              patientName={patient.name}
-            />
-          )}
-          {canSellProduct && userData?.clinic_id && (
-            <SellProcedureButton
+            <VendaButton
               clinicId={userData.clinic_id}
               userId={user.id}
               patientId={id}

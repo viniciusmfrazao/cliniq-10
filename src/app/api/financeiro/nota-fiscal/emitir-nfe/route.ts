@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fiscalConfigCompletaNfe, emitirNfeProduto, extrairErroFocus } from '@/lib/focus-nfe'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,14 +10,14 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { data: userData } = await supabase
-    .from('users').select('clinic_id, role').eq('id', user.id).single()
-
-  if (!['admin', 'super_admin', 'manager', 'financial'].includes(userData?.role || '')) {
+  // Mesma correcao da rota de NFS-e: usa a permissao real (financial_edit),
+  // nao uma lista fixa de roles que ignorava concessoes individuais.
+  const access = await getEffectiveAccess(supabase, user.id)
+  if (!can(access, 'financial_edit')) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
 
-  const clinicId = userData!.clinic_id
+  const clinicId = access.clinicId
   const {
     entrada_id, destinatario_logradouro, destinatario_numero, destinatario_bairro,
     destinatario_municipio, destinatario_uf, destinatario_cep, destinatario_cpf,
@@ -47,9 +48,6 @@ export async function POST(req: NextRequest) {
 
   if (!entrada) return NextResponse.json({ error: 'entrada não encontrada' }, { status: 404 })
 
-  if (entrada.tipo_receita !== 'produto') {
-    return NextResponse.json({ error: 'esta entrada não é de produto — emissão de NFe não se aplica' }, { status: 400 })
-  }
   if (entrada.nota_fiscal_status === 'autorizada') {
     return NextResponse.json({ error: 'esta entrada já tem nota fiscal autorizada' }, { status: 400 })
   }
@@ -101,6 +99,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('entradas').update({
         nota_fiscal_status: 'processando',
         nota_fiscal_ref: ref,
+        nota_fiscal_tipo: 'nfe',
         nota_fiscal_erro: null,
       }).eq('id', entrada.id)
       return NextResponse.json({ success: true, status: 'processando' })
@@ -110,6 +109,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('entradas').update({
         nota_fiscal_status: 'processando',
         nota_fiscal_ref: ref,
+        nota_fiscal_tipo: 'nfe',
         nota_fiscal_erro: null,
       }).eq('id', entrada.id)
       return NextResponse.json({ success: true, status: 'processando' })

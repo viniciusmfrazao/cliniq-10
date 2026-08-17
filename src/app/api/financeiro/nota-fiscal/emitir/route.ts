@@ -1,33 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fiscalConfigCompleta, validarFormatoFiscal, emitirNfseMunicipal, emitirNfseNacional, extrairErroFocus } from '@/lib/focus-nfe'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 export const dynamic = 'force-dynamic'
-
-async function buscarServicoFiscal(supabase: Awaited<ReturnType<typeof createClient>>, clinicId: string, servicoFiscalId: string) {
-  const { data } = await supabase
-    .from('clinic_fiscal_servicos')
-    .select('item_lista_servico, codigo_tributario_municipio, codigo_nbs, ibs_cbs_classificacao_tributaria, ibs_cbs_situacao_tributaria, codigo_indicador_operacao, descricao_servico')
-    .eq('id', servicoFiscalId)
-    .eq('clinic_id', clinicId)
-    .maybeSingle()
-  return data
-}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { data: userData } = await supabase
-    .from('users').select('clinic_id, role').eq('id', user.id).single()
-
-  if (!['admin', 'super_admin', 'manager', 'financial'].includes(userData?.role || '')) {
+  // Antes checava uma lista fixa de roles (admin/manager/financial), o que barrava
+  // qualquer usuario com a permissao financial_edit concedida individualmente ou
+  // via clinic_role_defaults mas com role fora dessa lista -- indo contra o
+  // principio do proprio projeto de nunca fixar checagem de role no codigo.
+  const access = await getEffectiveAccess(supabase, user.id)
+  if (!can(access, 'financial_edit')) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
 
-  const clinicId = userData!.clinic_id
-  const { entrada_id, servico_fiscal_id } = await req.json()
+  const clinicId = access.clinicId
+  const { entrada_id } = await req.json()
   if (!entrada_id) return NextResponse.json({ error: 'entrada_id é obrigatório' }, { status: 400 })
 
   // Módulo precisa estar ativo pra essa clínica
@@ -80,14 +73,6 @@ export async function POST(req: NextRequest) {
     tomadorCpf = paciente?.cpf || null
   }
 
-  // Perfil fiscal de serviço (clinic_fiscal_servicos) — opcional. Se a clínica tem mais
-  // de um serviço cadastrado (ex: fisioterapia + estética), o front manda qual foi
-  // escolhido. Sem isso, cai nos campos legados de clinic_fiscal_config.
-  let servicoOverride = null as Awaited<ReturnType<typeof buscarServicoFiscal>>
-  if (servico_fiscal_id) {
-    servicoOverride = await buscarServicoFiscal(supabase, clinicId, servico_fiscal_id)
-  }
-
   const ref = entrada.id
 
   const emitir = config!.padrao_nfse === 'nacional' ? emitirNfseNacional : emitirNfseMunicipal
@@ -100,7 +85,6 @@ export async function POST(req: NextRequest) {
       dataVenda: entrada.data_venda,
       tomadorCpf,
       tomadorNome: entrada.paciente_nome,
-      servicoOverride,
     })
 
     if (httpStatus === 201 || httpStatus === 202 || data?.status === 'processando_autorizacao') {
