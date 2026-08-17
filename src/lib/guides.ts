@@ -90,8 +90,8 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Receba o pagamento ao final',
         description:
-          'Depois do atendimento, lance a entrada em Financeiro → Nova Entrada. Selecione paciente, procedimento, forma de pagamento. O sistema calcula taxa e líquido sozinho. Vendeu algum produto avulso (sem procedimento)? Use "Vender Produto" na ficha do paciente.',
-        tip: 'Cartão? Informe bandeira e parcelas — a taxa vem automática.',
+          'Depois do atendimento, use "Registrar Pagamento" no popup do agendamento. Adicione procedimento e produto no mesmo carrinho — é um pagamento só, mesmo vendendo um creme junto. Dá pra dar desconto num item específico sem mexer no resto, e quitar débito antigo (mesmo que só parte) na mesma tela. Venda avulsa sem atendimento? Financeiro → Nova Entrada abre o mesmo carrinho.',
+        tip: 'Editar o valor de um item mostra o preço de tabela riscado do lado — fica claro que foi desconto, não erro de digitação.',
         icon: 'dollarSign',
         href: '/dashboard/financeiro/entradas/nova',
         color: 'from-emerald-500 to-green-500',
@@ -293,11 +293,20 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Registre entradas pelo pagamento na agenda',
         description:
-          'A forma correta é pelo botão "Registrar Pagamento" no popup do agendamento. O sistema vincula automaticamente ao paciente e atendimento. Informe apenas a forma de pagamento e o valor. Para corrigir, vá em Financeiro → Entradas, clique no lápis e edite.',
-        tip: 'Entradas lançadas pela agenda vinculam ao atendimento automaticamente — isso alimenta a rentabilidade do paciente.',
+          'A forma correta é pelo botão "Registrar Pagamento" no popup do agendamento. Procedimento e produto entram no mesmo carrinho — a paciente paga uma vez só, mesmo levando um creme junto. Dá pra editar o valor de cada item (desconto pontual), quitar débito parcialmente e dividir em várias formas de pagamento. Pra corrigir depois, vá em Financeiro → Entradas.',
+        tip: 'Venda sem paciente cadastrado (nome livre, tipo "Cliente Avulso") só é permitida com a permissão financial_free_name — por padrão, só admin tem.',
         icon: 'dollar',
         href: '/dashboard/agenda',
         color: 'from-teal-500 to-cyan-500',
+      },
+      {
+        title: 'Emita a nota fiscal',
+        description:
+          'Em Financeiro → Entradas, clique no ícone de nota ao lado do lançamento. Escolha Serviço (NFS-e) ou Produto (NFe) — o toggle de Produto só aparece se a clínica tiver a configuração fiscal de NFe completa. Confira os dados pré-preenchidos do paciente antes de emitir.',
+        tip: 'Qualquer pessoa com permissão de lançamento financeiro pode emitir — não precisa ser admin.',
+        icon: 'file',
+        href: '/dashboard/financeiro/entradas',
+        color: 'from-cyan-500 to-sky-500',
       },
       {
         title: 'Registre as saídas com categoria certa',
@@ -330,7 +339,7 @@ export const GUIDES: GuideRole[] = [
         title: 'Antecipe o quanto vai faturar',
         description:
           'Em Previsão de Faturamento você vê, com base nos agendamentos futuros ainda não concluídos, quanto está previsto pra entrar — separado por procedimento, profissional ou dia. Filtre por período (amanhã, até fim do mês, próximo mês) e por profissional ou categoria.',
-        tip: 'Agendamentos que já têm entrada lançada ou foram concluídos não entram na previsão — só o que ainda pode virar receita.',
+        tip: 'Agendamentos que já têm entrada lançada ou foram concluídos não entram na previsão — só o que ainda pode virar receita. Se a clínica já negocia desconto na hora de marcar, dá pra aplicar direto no agendamento e a previsão já sai correta.',
         icon: 'calendar',
         href: '/dashboard/financeiro/previsao',
         color: 'from-teal-500 to-emerald-500',
