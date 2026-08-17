@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage, sendWhatsappButtons, sendWhatsappAudio } from '@/lib/whatsapp'
 import { logEva } from '@/lib/eva-logger'
 import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl } from '@/lib/calendar-links'
+import { cronsEnabled } from '@/lib/cron-guard'
 
 export const maxDuration = 60
 
@@ -150,6 +151,10 @@ const ROUTE_BUDGET_MS = 40_000
 const MAX_SENDS_PER_RUN = 15
 
 export async function GET(req: NextRequest) {
+  if (!(await cronsEnabled())) {
+    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
+  }
+
   const routeStart = Date.now()
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { gerarPixEMV, pixParaWhatsApp } from '@/lib/pix'
+import { cronsEnabled } from '@/lib/cron-guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,10 @@ const PIX_CIDADE = 'Uberlandia'
 const DIAS_ALERTA = 7 // Cobrar X dias antes do vencimento
 
 export async function GET(req: NextRequest) {
+  if (!(await cronsEnabled())) {
+    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
+  }
+
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get('authorization')
   if (secret && auth !== `Bearer ${secret}`) {

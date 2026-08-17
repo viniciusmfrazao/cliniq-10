@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { cronsEnabled } from '@/lib/cron-guard'
 
 export const maxDuration = 60
 
@@ -153,6 +154,10 @@ function waScore(w: WaRow): number {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  if (!(await cronsEnabled())) {
+    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
+  }
+
   const routeStart = Date.now()
   // Auth
   const auth = req.headers.get('authorization')

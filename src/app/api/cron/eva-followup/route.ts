@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getSettings } from '@/lib/app-settings'
 import { logEva } from '@/lib/eva-logger'
+import { cronsEnabled } from '@/lib/cron-guard'
 
 /**
  * GET /api/cron/eva-followup
@@ -70,6 +71,10 @@ function isWithinSendingWindow(now = new Date()): boolean {
 }
 
 export async function GET(req: NextRequest) {
+  if (!(await cronsEnabled())) {
+    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
+  }
+
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
   if (!secret) {

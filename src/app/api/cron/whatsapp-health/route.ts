@@ -6,6 +6,7 @@ import {
   sendWhatsappRecoveredEmail,
   FOUNDER_ALERT_EMAIL,
 } from '@/lib/email'
+import { cronsEnabled } from '@/lib/cron-guard'
 
 /**
  * GET /api/cron/whatsapp-health
@@ -64,6 +65,10 @@ const CLINIC_ALERT_DELAY_MS = 45 * 60 * 1000
 // quer saber o estado atual olha o banner no painel.
 
 export async function GET(req: NextRequest) {
+  if (!(await cronsEnabled())) {
+    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
+  }
+
   const auth = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
   if (!secret) {
