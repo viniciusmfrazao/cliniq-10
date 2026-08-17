@@ -7,7 +7,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PinUnlock from '@/components/PinUnlock'
 import PinSetup from '@/components/PinSetup'
-import { declinePin, hasPin, shouldOfferPin } from '@/lib/pin-auth'
+import { clearPinIfOtherUser, declinePin, hasPin, pinEmail, shouldOfferPin } from '@/lib/pin-auth'
 
 type LoginMode = 'checking' | 'pin' | 'password' | 'setup'
 
@@ -23,6 +23,10 @@ export default function LoginPage() {
 
   // Só decide depois de montar: o blob do PIN vive no localStorage
   useEffect(() => {
+    // Pré-preenche o email do aparelho: mesmo caindo no fallback de senha,
+    // a pessoa só digita a senha.
+    const stored = pinEmail()
+    if (stored) setEmail(stored)
     setMode(hasPin() ? 'pin' : 'password')
   }, [])
 
@@ -42,6 +46,9 @@ export default function LoginPage() {
 
     // Login normal nunca deve carregar uma impersonação de sessão anterior
     clearImpersonationCookie()
+
+    // Entrou outra conta neste aparelho: o PIN da conta anterior tem que sair
+    clearPinIfOtherUser(email)
 
     // Oferece o PIN antes de seguir (só se ainda não existe e não foi recusado)
     try {

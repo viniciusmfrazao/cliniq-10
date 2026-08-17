@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { clearPin, hasPin, syncStoredToken } from '@/lib/pin-auth'
+import { hasPin, syncStoredToken } from '@/lib/pin-auth'
 
 /**
  * No app iOS (Capacitor/WKWebView), quando o app vai pra background os
@@ -46,6 +46,10 @@ export default function AuthLifecycleProvider() {
         supabase.auth.startAutoRefresh()
         void syncPinToken()
       } else {
+        // Grava a rotação ANTES do app ir dormir. Sem isso, um refresh que
+        // acontece pouco antes de fechar deixa o blob com um token já
+        // consumido e o PIN "some sozinho" na próxima abertura.
+        void syncPinToken()
         supabase.auth.stopAutoRefresh()
       }
     }
@@ -58,8 +62,9 @@ export default function AuthLifecycleProvider() {
       if (event === 'TOKEN_REFRESHED' && session?.refresh_token) {
         void syncStoredToken(session.refresh_token)
       }
-      // Logout revoga o refresh_token — o PIN guardado não abriria mais nada
-      if (event === 'SIGNED_OUT') clearPin()
+      // SIGNED_OUT NÃO apaga o PIN: sair é só encerrar a sessão do aparelho
+      // (signOut local), não descadastrar o dispositivo. Quem quer zerar usa
+      // "Sair e remover o PIN" no menu ou Segurança > remover PIN.
     })
 
     document.addEventListener('visibilitychange', handleVisibilityChange)

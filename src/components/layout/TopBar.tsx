@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
 import { useWhatsappUnread } from '@/contexts/WhatsappUnreadContext'
+import { clearPin, hasPin, signOutScope } from '@/lib/pin-auth'
 
 type Props = { 
   clinicName: string
@@ -33,8 +34,14 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
   const { unreadCount: waUnreadCount } = useWhatsappUnread()
   const cmd = useCommandPalette()
 
-  async function logout() {
-    await supabase.auth.signOut()
+  const [pinSaved, setPinSaved] = useState(false)
+  useEffect(() => { setPinSaved(hasPin()) }, [userMenuOpen])
+
+  async function logout(forgetPin = false) {
+    if (forgetPin) clearPin()
+    // Com PIN cadastrado o scope precisa ser local, senão o refresh_token
+    // guardado é revogado e o PIN para de funcionar.
+    await supabase.auth.signOut({ scope: forgetPin ? 'global' : signOutScope() })
     clearImpersonationCookie()
     router.push('/login')
     router.refresh()
@@ -124,6 +131,15 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                     <Icon name="logout" className="w-4 h-4" />
                     Sair da conta
                   </button>
+                  {pinSaved && (
+                    <button
+                      onClick={() => { setUserMenuOpen(false); logout(true) }}
+                      className="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 w-full text-left"
+                    >
+                      <Icon name="lock" className="w-4 h-4" />
+                      Sair e remover o PIN deste aparelho
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -227,7 +243,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                   <p className="text-xs text-white/60 capitalize">{userRole}</p>
                 </div>
                 <button 
-                  onClick={logout}
+                  onClick={() => logout()}
                   className="p-2.5 text-white/60 hover:text-white active:bg-white/10 rounded-xl transition-colors"
                 >
                   <Icon name="logout" className="w-5 h-5" />

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { clearPin } from '@/lib/pin-auth'
 
 function RedefinirSenhaInner() {
   const router = useRouter()
@@ -92,6 +93,10 @@ function RedefinirSenhaInner() {
       setLoading(false)
       return
     }
+
+    // Trocar a senha revoga os refresh_tokens: o PIN guardado neste aparelho
+    // não abriria mais nada. Some com ele para o usuário cadastrar de novo.
+    clearPin()
 
     setSuccess(true)
     setLoading(false)

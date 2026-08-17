@@ -232,6 +232,26 @@ export async function syncStoredToken(refreshToken: string): Promise<void> {
   } catch {}
 }
 
+/**
+ * Scope do signOut. Com PIN cadastrado precisa ser 'local': o scope global
+ * revoga o refresh_token no servidor e o blob guardado viraria um PIN que
+ * não abre nada. Sair passa a limpar a sessão do aparelho sem matar o PIN.
+ */
+export function signOutScope(): 'local' | 'global' {
+  return hasPin() ? 'local' : 'global'
+}
+
+/**
+ * Aparelho compartilhado: se entrou uma conta diferente da que cadastrou o
+ * PIN, o blob antigo tem que sair — senão o PIN da pessoa anterior continua
+ * pendurado destravando a conta dela.
+ */
+export function clearPinIfOtherUser(email: string): void {
+  const stored = pinEmail()
+  if (!stored || !email) return
+  if (stored.trim().toLowerCase() !== email.trim().toLowerCase()) clearPin()
+}
+
 /** Quantos erros ainda restam antes do bloqueio. */
 export function remainingAttempts(): number {
   const record = readPinRecord()
