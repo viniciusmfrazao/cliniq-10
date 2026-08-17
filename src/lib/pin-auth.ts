@@ -272,9 +272,28 @@ function clearDeclined(): void {
   } catch {}
 }
 
+/**
+ * O PIN só é oferecido em celular/tablet. No desktop o gerenciador de senhas
+ * do navegador já resolve, e o teclado numérico ocupa a tela toda sem ganho.
+ *
+ * Critério: ponteiro grosso (dedo) + touch de verdade. Isso pega celular e
+ * tablet, e deixa de fora notebook com tela sensível ao toque, que tem
+ * ponteiro fino e teclado.
+ */
+export function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false
+    const touch = (navigator.maxTouchPoints ?? 0) > 0
+    return coarse && touch
+  } catch {
+    return false
+  }
+}
+
 /** Só oferece o cadastro se não houver PIN e o usuário não tiver recusado há pouco. */
 export function shouldOfferPin(): boolean {
-  if (!isPinSupported() || hasPin()) return false
+  if (!isPinSupported() || hasPin() || !isMobileDevice()) return false
   try {
     const at = Number(localStorage.getItem(DECLINED_KEY) ?? 0)
     if (!at) return true
