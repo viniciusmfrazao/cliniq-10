@@ -101,6 +101,14 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                     <Icon name="settings" className="w-4 h-4" />
                     Configurações
                   </Link>
+                  <Link
+                    href="/dashboard/seguranca"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <Icon name="lock" className="w-4 h-4" />
+                    PIN de acesso
+                  </Link>
                   <button
                     onClick={() => setMode(mode === 'light' ? 'dark' : 'light')}
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 w-full text-left"
