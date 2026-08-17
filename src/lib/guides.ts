@@ -254,7 +254,7 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Monte suas fichas de anamnese',
         description:
-          'Em Anamnese → Minhas Fichas, crie um ou mais modelos com seções e perguntas (texto, sim/não, múltipla escolha, número, data). Escolha quais dados de identificação pedir — CPF, nascimento, telefone. Só admin e gerente configuram; qualquer um pode enviar.',
+          'Em Configurações → Ficha de Anamnese → Minhas Fichas, crie um ou mais modelos com seções e perguntas (texto, sim/não, múltipla escolha, número, data). Escolha quais dados de identificação pedir — CPF, nascimento, telefone. Só admin e gerente configuram; qualquer um pode enviar.',
         tip: 'Cada procedimento pode ter sua própria ficha — Botox não precisa das mesmas perguntas que um preenchimento.',
         icon: 'clipboard',
         href: '/dashboard/anamnese/modelos',
