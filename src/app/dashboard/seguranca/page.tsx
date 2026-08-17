@@ -7,7 +7,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useToast } from '@/components/ui/Toast'
 import PinSetup from '@/components/PinSetup'
 import { createClient } from '@/lib/supabase/client'
-import { clearPin, isPinSupported, pinDeviceId, readPinRecord } from '@/lib/pin-auth'
+import { clearPin, isMobileDevice, isPinSupported, pinDeviceId, readPinRecord } from '@/lib/pin-auth'
 
 export default function SegurancaPage() {
   const toast = useToast()
@@ -85,7 +85,7 @@ export default function SegurancaPage() {
         </div>
       )}
 
-      {isPinSupported() && editing && (
+      {isPinSupported() && isMobileDevice() && editing && (
         <div className="card p-6">
           <PinSetup
             onDone={handleDone}
@@ -95,7 +95,21 @@ export default function SegurancaPage() {
         </div>
       )}
 
-      {isPinSupported() && !editing && (
+      {isPinSupported() && !isMobileDevice() && (
+        <div className="card p-6">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            O PIN funciona no celular e no tablet. Aqui no computador o acesso continua por email
+            e senha — abra o Clinike no celular para cadastrar.
+          </p>
+          {enabled && (
+            <button type="button" onClick={handleRemove} className="btn btn-primary mt-4">
+              Remover o PIN deste computador
+            </button>
+          )}
+        </div>
+      )}
+
+      {isPinSupported() && isMobileDevice() && !editing && (
         <div className="card p-6">
           <div className="flex items-start gap-4">
             <div
