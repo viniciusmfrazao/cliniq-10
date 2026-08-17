@@ -19,7 +19,6 @@ type Props = {
     status: string
     valor_sinal: number | null
     forma_pagamento_sinal: string | null
-    sinal_devolvido_em?: string | null
     valor_cobrado?: number | null
     desconto_tipo?: 'valor' | 'percentual' | null
     desconto_valor?: number | null
@@ -56,10 +55,6 @@ export default function AppointmentActions({
   const [savingSinal, startSavingSinal] = useTransition()
   const [sinalSalvo, setSinalSalvo] = useState(!!appointment.valor_sinal)
   const [sinalErro, setSinalErro] = useState<string | null>(null)
-  const [showDevolverSinal, setShowDevolverSinal] = useState(false)
-  const [motivoDevolucao, setMotivoDevolucao] = useState('')
-  const [devolvendoSinal, startDevolvendoSinal] = useTransition()
-  const [sinalDevolvidoEm, setSinalDevolvidoEm] = useState(appointment.sinal_devolvido_em || null)
 
   async function saveNotes() {
     startSavingNotes(async () => {
@@ -101,30 +96,6 @@ export default function AppointmentActions({
     })
   }
 
-  async function devolverSinal() {
-    startDevolvendoSinal(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { error } = await supabase.rpc('fn_devolver_sinal', {
-        p_user_id: user.id,
-        p_appointment_id: appointment.id,
-        p_motivo: motivoDevolucao || null,
-      })
-
-      if (error) {
-        setSinalErro(error.message || 'Não foi possível devolver o sinal.')
-        return
-      }
-
-      setSinalSalvo(false)
-      setValorSinal('')
-      setSinalDevolvidoEm(new Date().toISOString())
-      setShowDevolverSinal(false)
-      setMotivoDevolucao('')
-      router.refresh()
-    })
-  }
 
   async function updateStatus(status: string) {
     setLoading(true)
@@ -197,25 +168,20 @@ export default function AppointmentActions({
             <h3 className="text-sm font-semibold text-slate-900">Pagamento antecipado</h3>
             <p className="text-xs text-slate-500">Sinal cobrado no agendamento</p>
           </div>
-          {!showSinal && !sinalSalvo && !sinalDevolvidoEm && (
+          {!showSinal && !sinalSalvo && (
             <button onClick={() => setShowSinal(true)} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-1">
               <Icon name="plus" className="w-3.5 h-3.5" />
               Registrar sinal
             </button>
           )}
-          {sinalSalvo && !showSinal && !sinalDevolvidoEm && (
-            <div className="flex items-center gap-3">
-              <button onClick={() => setShowDevolverSinal(true)} className="text-xs text-slate-500 hover:text-red-600 font-medium">
-                Devolver
-              </button>
-              <button onClick={() => setShowSinal(true)} className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                <Icon name="edit" className="w-3.5 h-3.5" />
-                Editar
-              </button>
-            </div>
+          {sinalSalvo && !showSinal && (
+            <button onClick={() => setShowSinal(true)} className="text-xs text-slate-500 font-medium flex items-center gap-1">
+              <Icon name="edit" className="w-3.5 h-3.5" />
+              Editar
+            </button>
           )}
         </div>
-        {sinalSalvo && !showSinal && !sinalDevolvidoEm && (
+        {sinalSalvo && !showSinal && (
           <div className="flex items-center gap-3 bg-emerald-50 rounded-xl px-4 py-3">
             <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
               <Icon name="check" className="w-4 h-4 text-emerald-600" />
@@ -226,10 +192,7 @@ export default function AppointmentActions({
             </div>
           </div>
         )}
-        {sinalDevolvidoEm && (
-          <p className="text-sm text-slate-500">Sinal devolvido em {new Date(sinalDevolvidoEm).toLocaleDateString('pt-BR')}.</p>
-        )}
-        {!sinalSalvo && !showSinal && !sinalDevolvidoEm && (
+        {!sinalSalvo && !showSinal && (
           <p className="text-sm text-slate-400 italic">Nenhum sinal registrado.</p>
         )}
         {showSinal && (
@@ -256,27 +219,6 @@ export default function AppointmentActions({
             <div className="flex gap-2">
               <button onClick={saveSinal} disabled={savingSinal || !valorSinal} className="btn-primary text-sm py-2 px-4">{savingSinal ? 'Salvando...' : 'Confirmar sinal'}</button>
               <button onClick={() => { setShowSinal(false); setSinalErro(null) }} className="btn-secondary text-sm py-2 px-4">Cancelar</button>
-            </div>
-          </div>
-        )}
-        {showDevolverSinal && (
-          <div className="space-y-3 mt-3 pt-3 border-t border-slate-100">
-            <p className="text-sm font-semibold text-red-700">Devolver sinal de R$ {parseFloat(valorSinal || appointment.valor_sinal?.toString() || '0').toFixed(2).replace('.', ',')}?</p>
-            <input
-              type="text"
-              className="input"
-              placeholder="Motivo (opcional, ex: paciente desistiu)"
-              value={motivoDevolucao}
-              onChange={e => setMotivoDevolucao(e.target.value)}
-            />
-            {sinalErro && (
-              <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{sinalErro}</p>
-            )}
-            <div className="flex gap-2">
-              <button onClick={devolverSinal} disabled={devolvendoSinal} className="text-sm bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 disabled:opacity-50">
-                {devolvendoSinal ? 'Devolvendo...' : 'Confirmar devolução'}
-              </button>
-              <button onClick={() => { setShowDevolverSinal(false); setSinalErro(null) }} className="btn-secondary text-sm py-2 px-4">Cancelar</button>
             </div>
           </div>
         )}

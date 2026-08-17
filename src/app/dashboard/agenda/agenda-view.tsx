@@ -47,7 +47,6 @@ type Appointment = {
   desconto_valor: number | null
   valor_sinal: number | null
   forma_pagamento_sinal: string | null
-  sinal_devolvido_em?: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
   procedures: { name: string; duration_minutes: number; price: number } | null
   professional: { id: string; name: string } | null
@@ -181,10 +180,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
   // insert falhava silenciosamente por RLS -- e' exatamente o bug que gerou os
   // sinais orfaos.
   const [sinalErro, setSinalErro] = useState<string | null>(null)
-  const [devolvendoSinal, setDevolvendoSinal] = useState(false)
-  const [showDevolverSinal, setShowDevolverSinal] = useState(false)
-  const [motivoDevolucao, setMotivoDevolucao] = useState('')
-  const [sinalDevolvidoEm, setSinalDevolvidoEm] = useState(apt.sinal_devolvido_em || null)
   const [cardUserId, setCardUserId] = useState<string | null>(null)
   const [sinalEntradaChecada, setSinalEntradaChecada] = useState(false)
   const [sinalTemEntrada, setSinalTemEntrada] = useState(true)  // otimista ate' checar
@@ -437,32 +432,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
     router.refresh()
   }
 
-  async function devolverSinal() {
-    if (!cardUserId) {
-      toast.error('Não foi possível identificar seu usuário. Recarregue a página.')
-      return
-    }
-    setDevolvendoSinal(true)
-    const { error } = await supabaseCard.rpc('fn_devolver_sinal', {
-      p_user_id: cardUserId,
-      p_appointment_id: apt.id,
-      p_motivo: motivoDevolucao || null,
-    })
-    setDevolvendoSinal(false)
-
-    if (error) {
-      toast.error('Erro ao devolver sinal', { description: error.message })
-      return
-    }
-
-    toast.success('Sinal devolvido', { description: 'Lançado como saída no financeiro.' })
-    setSinalSalvo(false)
-    setValorSinal('')
-    setSinalDevolvidoEm(new Date().toISOString())
-    setShowDevolverSinal(false)
-    setMotivoDevolucao('')
-    router.refresh()
-  }
   
   useEffect(() => {
     return () => {
@@ -647,7 +616,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
                     <Icon name="bell" className="w-2 h-2 text-white" />
                   </span>
                 )}
-                {apt.valor_sinal && apt.valor_sinal > 0 && !apt.sinal_devolvido_em && (
+                {apt.valor_sinal && apt.valor_sinal > 0 && (
                   <span className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center" title={`Sinal: R$ ${Number(apt.valor_sinal).toFixed(2)}`}>
                     <Icon name="dollarSign" className="w-2 h-2 text-white" />
                   </span>
@@ -770,52 +739,17 @@ const AppointmentCard = React.memo(function AppointmentCard({
             )}
 
             {/* Sinal */}
-            {apt.valor_sinal && apt.valor_sinal > 0 && !sinalDevolvidoEm && (
+            {apt.valor_sinal && apt.valor_sinal > 0 && (
               <div className={`p-3 rounded-lg border ${sinalTemEntrada ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200'}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <p className={`text-xs font-semibold ${sinalTemEntrada ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    Sinal: R$ {Number(apt.valor_sinal).toFixed(2)}
-                    {apt.forma_pagamento_sinal ? ` — ${apt.forma_pagamento_sinal}` : ''}
-                  </p>
-                  <button
-                    onClick={e => { e.stopPropagation(); setShowDevolverSinal(true) }}
-                    className="text-[10px] text-slate-500 hover:text-red-600 font-medium flex-shrink-0"
-                  >
-                    Devolver
-                  </button>
-                </div>
+                <p className={`text-xs font-semibold ${sinalTemEntrada ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  Sinal: R$ {Number(apt.valor_sinal).toFixed(2)}
+                  {apt.forma_pagamento_sinal ? ` — ${apt.forma_pagamento_sinal}` : ''}
+                </p>
                 {!sinalTemEntrada && (
                   <p className="text-[10px] text-amber-600 mt-1">
-                    Registrado no agendamento mas sem lançamento no financeiro — confira com o financeiro antes de devolver.
+                    Registrado no agendamento mas sem lançamento no financeiro — confira em Financeiro → Entradas.
                   </p>
                 )}
-              </div>
-            )}
-            {sinalDevolvidoEm && (
-              <div className="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border border-slate-200">
-                <p className="text-xs font-semibold text-slate-500">
-                  Sinal devolvido em {new Date(sinalDevolvidoEm).toLocaleDateString('pt-BR')}
-                </p>
-              </div>
-            )}
-            {showDevolverSinal && (
-              <div className="p-3 bg-red-50 rounded-lg border border-red-200 space-y-2" onClick={e => e.stopPropagation()}>
-                <p className="text-xs font-semibold text-red-700">Devolver sinal de R$ {Number(apt.valor_sinal).toFixed(2)}?</p>
-                <input
-                  type="text"
-                  className="w-full text-xs border border-red-200 rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-red-300"
-                  placeholder="Motivo (opcional, ex: paciente desistiu)"
-                  value={motivoDevolucao}
-                  onChange={e => setMotivoDevolucao(e.target.value)}
-                />
-                <div className="flex gap-1.5">
-                  <button onClick={devolverSinal} disabled={devolvendoSinal} className="flex-1 py-1 text-xs bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 disabled:opacity-50">
-                    {devolvendoSinal ? 'Devolvendo...' : 'Confirmar devolução'}
-                  </button>
-                  <button onClick={() => setShowDevolverSinal(false)} className="flex-1 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200">
-                    Cancelar
-                  </button>
-                </div>
               </div>
             )}
 
@@ -1387,7 +1321,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
             </div>
 
             {/* Sinal / Pagamento antecipado */}
-            {!sinalDevolvidoEm && (
             <div className="pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-slate-500">Sinal:</p>
@@ -1445,7 +1378,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 </div>
               )}
             </div>
-            )}
           </div>
 
           {/* Aviso de débito pendente */}

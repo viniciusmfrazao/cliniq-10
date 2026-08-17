@@ -204,20 +204,12 @@ export default async function AppointmentDetailPage({ params }: { params: { id: 
             </div>
           )}
 
-          {appointment.valor_sinal && !appointment.sinal_devolvido_em && (
+          {appointment.valor_sinal && (
             <div>
               <p className="text-xs text-slate-400 mb-1">Sinal recebido</p>
               <p className="text-sm font-semibold text-emerald-600">
                 R$ {Number(appointment.valor_sinal).toFixed(2).replace('.', ',')}
                 <span className="text-xs font-normal text-slate-500 ml-1 capitalize">({appointment.forma_pagamento_sinal})</span>
-              </p>
-            </div>
-          )}
-          {appointment.sinal_devolvido_em && (
-            <div>
-              <p className="text-xs text-slate-400 mb-1">Sinal</p>
-              <p className="text-sm font-semibold text-slate-500">
-                Devolvido em {new Date(appointment.sinal_devolvido_em).toLocaleDateString('pt-BR')}
               </p>
             </div>
           )}
