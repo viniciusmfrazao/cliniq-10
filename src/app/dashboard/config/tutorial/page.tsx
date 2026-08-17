@@ -212,6 +212,8 @@ function TutorialWhatsApp() {
         <Tutorial title="Painel de conversas" steps={['Vá em WhatsApp no menu lateral','Busque por nome ou número no campo de pesquisa','Filtre por \"Aguardando\" para ver só quem está esperando resposta','Badge verde mostra mensagens não lidas','Clique em \"Agendar\" no header para abrir o modal de agendamento sem sair da conversa']} />
         <Tutorial title="Agendar pelo chat" steps={['Abra qualquer conversa no painel WhatsApp','Clique no botão verde \"Agendar\" no topo direito','Selecione profissional, procedimento e data','Os horários disponíveis aparecem em tempo real — sem slots ocupados','Confirme para criar o agendamento diretamente']} />
         <Tutorial title="Atendimento humano" steps={['Quando a Eva escala, aparece badge \"Atendimento Humano\" no CRM','Responda normalmente pelo painel WhatsApp','A Eva fica em silêncio enquanto você responde','Ao terminar, clique em \"Devolver pra Eva\" para ela retomar']} />
+        <Tutorial title="Automações da clínica" steps={['Vá em Configurações → Automações — cada uma liga/desliga independente','Lembrete de consulta: confirmação ao agendar, no dia anterior e/ou 2h antes','Contato pós-procedimento: sequência de acompanhamento depois de cada atendimento realizado','Pós-venda: mensagens quando um Retorno é concluído','NPS pós-atendimento: pesquisa de satisfação, imediata ou com atraso configurável','Recall de inativos: sequência pra quem não volta há X dias (padrão 150)','Mensagem de aniversário: enviada automaticamente no dia, respeitando opt-in do paciente','Alerta de despesas: avisa a clínica via WhatsApp quando boleto/despesa está vencendo']} />
+        <Tutorial title="Personalizar cada automação" steps={['Abra a automação desejada e defina o horário de disparo','Escreva o texto — ou grave um áudio, disponível na maioria delas como alternativa ao texto','Lembrete de consulta e Recall aceitam sequência de mais de uma mensagem','Contato pós-procedimento pode excluir categorias de procedimento da régua','Veja o histórico de envios dentro de cada automação']} />
       </div>
     </div>
   )
@@ -260,12 +262,13 @@ function TutorialDocumentos() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-slate-900">{'📄'} Documentos e Assinaturas</h2>
-        <p className="text-slate-600 mt-2">Crie termos de consentimento e colete assinaturas digitais.</p>
+        <p className="text-slate-600 mt-2">Crie termos de consentimento, recibos e fichas de anamnese, e colete assinaturas digitais.</p>
       </div>
       <div className="space-y-4">
-        <Tutorial title="Criar template de documento" steps={['Vá em Configurações → Templates de Documentos','Clique em \"Novo Template\"','Dê um nome (ex: Termo de Consentimento Botox)','Escreva o conteúdo do documento','Use variáveis: {nome_paciente}, {data}, {procedimento}','Salve o template']} />
-        <Tutorial title="Enviar para assinatura" steps={['Na ficha do paciente, clique em \"Documentos\"','Selecione o template desejado','O sistema preenche as variáveis automaticamente','Envie por WhatsApp — o paciente assina pelo celular','Documento assinado fica salvo no prontuário']} />
-        <Tutorial title="Anamnese digital" steps={['Configure o formulário em Configurações → Anamnese','Adicione seções e perguntas personalizadas','Envie o link para o paciente antes da consulta','As respostas ficam salvas na ficha do paciente','Na tela de atendimento, o profissional vê as respostas em destaque']} />
+        <Tutorial title="Criar template de documento" steps={['Vá em Documentos → Templates → Novo Template','Dê um nome (ex: Termo de Consentimento Botox) e escolha a cor','Escreva o conteúdo do documento','Use variáveis: {{PACIENTE_NOME}}, {{PACIENTE_CPF}}, {{DATA}}, {{HORA}}, {{CLINICA_NOME}}, {{PROCEDIMENTO}}','Decida se o documento pede assinatura — desligado, ele só é enviado como mensagem, sem coletar assinatura','Salve o template']} />
+        <Tutorial title="Enviar para assinatura" steps={['Em Documentos → Enviar (ou pela ficha do paciente), selecione o paciente e o template','Escolha quem assina: o paciente ou o profissional responsável','O sistema preenche as variáveis automaticamente','Envie por WhatsApp — o link para assinar expira em 7 dias','Documento assinado fica salvo no prontuário']} />
+        <Tutorial title="Montar uma ficha de anamnese" steps={['Vá em Anamnese → Minhas Fichas (só admin e gerente configuram)','Crie um modelo por procedimento, se fizer sentido — Botox e preenchimento não precisam da mesma ficha','Organize em seções e adicione perguntas: texto curto, texto longo, sim/não, escolha única, múltipla escolha, número ou data','Marque quais perguntas são obrigatórias','Escolha quais dados de identificação pedir: nascimento, CPF, telefone, e-mail']} />
+        <Tutorial title="Enviar e consultar a anamnese" steps={['Em Anamnese → Enviar Anamnese, escolha o paciente e o modelo (se houver mais de um)','O paciente responde pelo link, sem precisar de login','As respostas ficam salvas na ficha do paciente, com PDF exportável','Na tela de atendimento, o profissional vê as respostas em destaque antes de começar','Dá pra reenviar ou preencher presencialmente, direto pela ficha do paciente']} />
       </div>
     </div>
   )

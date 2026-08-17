@@ -245,11 +245,29 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Personalize templates de documentos',
         description:
-          'Em Documentos → Templates, crie modelos de termo de consentimento, anamnese e recibo. Use variáveis como {nome_paciente} pra preencher sozinho.',
-        tip: 'Um template bem feito é assinado em segundos pelo WhatsApp.',
+          'Em Documentos → Templates, crie modelos de termo de consentimento e recibo. Use variáveis como {{PACIENTE_NOME}}, {{DATA}} e {{PROCEDIMENTO}} — o sistema preenche sozinho. Escolha se pede assinatura do paciente ou do profissional.',
+        tip: 'Um template bem feito é assinado em segundos pelo WhatsApp — o link expira em 7 dias.',
         icon: 'file',
         href: '/dashboard/documentos/templates',
         color: 'from-purple-500 to-blue-500',
+      },
+      {
+        title: 'Monte suas fichas de anamnese',
+        description:
+          'Em Anamnese → Minhas Fichas, crie um ou mais modelos com seções e perguntas (texto, sim/não, múltipla escolha, número, data). Escolha quais dados de identificação pedir — CPF, nascimento, telefone. Só admin e gerente configuram; qualquer um pode enviar.',
+        tip: 'Cada procedimento pode ter sua própria ficha — Botox não precisa das mesmas perguntas que um preenchimento.',
+        icon: 'clipboard',
+        href: '/dashboard/anamnese/modelos',
+        color: 'from-blue-500 to-violet-500',
+      },
+      {
+        title: 'Ative as automações de WhatsApp',
+        description:
+          'Em Configurações → Automações: lembrete de consulta (confirmação, 2h antes), contato pós-procedimento, pós-venda de retorno, NPS, recall de inativos, aniversário e alerta de despesas. Cada uma liga/desliga e tem horário e texto próprios — várias aceitam áudio no lugar de texto.',
+        tip: 'Comece só com lembrete e aniversário — vá ligando o resto conforme a equipe se acostuma.',
+        icon: 'message',
+        href: '/dashboard/config/automacoes',
+        color: 'from-teal-500 to-emerald-500',
       },
       {
         title: 'Configure a Donna IA',
