@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { hasPin, syncStoredToken } from '@/lib/pin-auth'
 
 /**
  * No app iOS (Capacitor/WKWebView), quando o app vai pra background os
@@ -23,33 +22,10 @@ export default function AuthLifecycleProvider() {
 
     const supabase = createClient()
 
-    /**
-     * O Supabase invalida o refresh_token a cada rotação. Se o blob cifrado
-     * do PIN guardar um token velho, o PIN funciona uma vez e depois quebra.
-     * Aqui re-selamos o token atual sempre que ele muda. A partir da v2 o
-     * blob é assimétrico: a chave pública fica em claro, então isso funciona
-     * mesmo sem o usuário ter digitado o PIN. Sem PIN cadastrado é no-op.
-     *
-     * Rodamos também na visibilidade porque o middleware pode rotacionar o
-     * token no servidor sem disparar TOKEN_REFRESHED no cliente.
-     */
-    const syncPinToken = async () => {
-      if (!hasPin()) return
-      try {
-        const { data } = await supabase.auth.getSession()
-        if (data.session?.refresh_token) await syncStoredToken(data.session.refresh_token)
-      } catch {}
-    }
-
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         supabase.auth.startAutoRefresh()
-        void syncPinToken()
       } else {
-        // Grava a rotação ANTES do app ir dormir. Sem isso, um refresh que
-        // acontece pouco antes de fechar deixa o blob com um token já
-        // consumido e o PIN "some sozinho" na próxima abertura.
-        void syncPinToken()
         supabase.auth.stopAutoRefresh()
       }
     }
@@ -58,27 +34,9 @@ export default function AuthLifecycleProvider() {
     // mas cobre o caso de forma consistente)
     handleVisibilityChange()
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'TOKEN_REFRESHED' && session?.refresh_token) {
-        void syncStoredToken(session.refresh_token)
-      }
-      // SIGNED_OUT NÃO apaga o PIN: sair é só encerrar a sessão do aparelho
-      // (signOut local), não descadastrar o dispositivo. Quem quer zerar usa
-      // "Sair e remover o PIN" no menu ou Segurança > remover PIN.
-    })
-
-    // Rede de segurança: o middleware rotaciona no servidor a cada navegação
-    // e o cliente só percebe ao ler o cookie. Uma varredura periódica mantém
-    // o blob em dia mesmo em sessões longas sem troca de aba.
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') void syncPinToken()
-    }, 60_000)
-
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
-      clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      sub.subscription.unsubscribe()
     }
   }, [])
 

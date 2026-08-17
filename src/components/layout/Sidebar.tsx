@@ -8,7 +8,6 @@ import Icon from '@/components/ui/Icon'
 import NotificationBell from '@/components/ui/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
 import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
-import { signOutScope } from '@/lib/pin-auth'
 import { isRouteEnabled, type ModuleId } from '@/lib/modules'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
 import { useWaLine, type WaLine } from '@/contexts/WaLineContext'
@@ -96,9 +95,7 @@ export default function Sidebar({ clinicName, userName, userRole, trialDaysLeft,
   const { mode, setMode } = useTheme()
 
   async function logout() {
-    // Scope local quando há PIN: sair não pode revogar o refresh_token
-    // guardado, senão o PIN deste aparelho para de funcionar.
-    await supabase.auth.signOut({ scope: signOutScope() })
+    await supabase.auth.signOut()
     clearImpersonationCookie()
     router.push('/login')
     router.refresh()

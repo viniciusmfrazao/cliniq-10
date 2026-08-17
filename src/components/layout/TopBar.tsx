@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
 import { useWhatsappUnread } from '@/contexts/WhatsappUnreadContext'
-import { clearPin, hasPin, signOutScope } from '@/lib/pin-auth'
+import { clearPin, hasPin, pinDeviceId } from '@/lib/pin-auth'
 
 type Props = { 
   clinicName: string
@@ -38,10 +38,18 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
   useEffect(() => { setPinSaved(hasPin()) }, [userMenuOpen])
 
   async function logout(forgetPin = false) {
-    if (forgetPin) clearPin()
-    // Com PIN cadastrado o scope precisa ser local, senão o refresh_token
-    // guardado é revogado e o PIN para de funcionar.
-    await supabase.auth.signOut({ scope: forgetPin ? 'global' : signOutScope() })
+    if (forgetPin) {
+      // Revoga o aparelho no servidor antes de perder a sessão.
+      const deviceId = pinDeviceId()
+      if (deviceId) {
+        try {
+          await supabase.from('pin_devices').delete().eq('id', deviceId)
+        } catch {}
+      }
+      clearPin()
+    }
+    // Sair pode revogar tudo à vontade: o PIN não depende mais da sessão.
+    await supabase.auth.signOut()
     clearImpersonationCookie()
     router.push('/login')
     router.refresh()

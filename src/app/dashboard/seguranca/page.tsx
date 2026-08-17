@@ -7,7 +7,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useToast } from '@/components/ui/Toast'
 import PinSetup from '@/components/PinSetup'
 import { createClient } from '@/lib/supabase/client'
-import { clearPin, hasPin, isPinSupported, readPinRecord } from '@/lib/pin-auth'
+import { clearPin, isPinSupported, pinDeviceId, readPinRecord } from '@/lib/pin-auth'
 
 export default function SegurancaPage() {
   const toast = useToast()
@@ -15,7 +15,7 @@ export default function SegurancaPage() {
   const [enabled, setEnabled] = useState(false)
   const [createdAt, setCreatedAt] = useState<number | null>(null)
   const [editing, setEditing] = useState(false)
-  const [session, setSession] = useState<{ email: string; refreshToken: string } | null>(null)
+
 
   const refresh = useCallback(() => {
     const record = readPinRecord()
@@ -26,22 +26,20 @@ export default function SegurancaPage() {
   useEffect(() => {
     async function load() {
       refresh()
-      try {
-        const supabase = createClient()
-        const { data } = await supabase.auth.getSession()
-        if (data.session?.refresh_token) {
-          setSession({
-            email: data.session.user?.email ?? '',
-            refreshToken: data.session.refresh_token,
-          })
-        }
-      } catch {}
       setLoading(false)
     }
     void load()
   }, [refresh])
 
-  function handleRemove() {
+  async function handleRemove() {
+    // Revoga o aparelho no servidor também: sem isso o segredo continuaria
+    // válido se alguém tivesse copiado o localStorage.
+    const deviceId = pinDeviceId()
+    if (deviceId) {
+      try {
+        await createClient().from('pin_devices').delete().eq('id', deviceId)
+      } catch {}
+    }
     clearPin()
     refresh()
     setEditing(false)
@@ -87,11 +85,9 @@ export default function SegurancaPage() {
         </div>
       )}
 
-      {isPinSupported() && editing && session && (
+      {isPinSupported() && editing && (
         <div className="card p-6">
           <PinSetup
-            email={session.email}
-            refreshToken={session.refreshToken}
             onDone={handleDone}
             onSkip={() => setEditing(false)}
             skipLabel="Cancelar"
@@ -130,7 +126,6 @@ export default function SegurancaPage() {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              disabled={!session}
               className="btn btn-primary"
             >
               {enabled ? 'Trocar PIN' : 'Criar PIN'}

@@ -6,8 +6,6 @@ import PinKeypad from '@/components/PinKeypad'
 import { PIN_LENGTH, setupPin } from '@/lib/pin-auth'
 
 interface PinSetupProps {
-  email: string
-  refreshToken: string
   onDone: () => void
   /** Quando ausente, o botão "Agora não" não aparece (ex.: tela de configurações) */
   onSkip?: () => void
@@ -23,8 +21,6 @@ function isWeak(pin: string): boolean {
 }
 
 export default function PinSetup({
-  email,
-  refreshToken,
   onDone,
   onSkip,
   skipLabel = 'Agora não',
@@ -63,7 +59,7 @@ export default function PinSetup({
     }
 
     setSaving(true)
-    setupPin(pin, email, refreshToken)
+    setupPin(pin)
       .then(onDone)
       .catch(() => {
         setError('Não foi possível salvar o PIN neste aparelho.')
@@ -72,7 +68,7 @@ export default function PinSetup({
         setFirst('')
         setStep('create')
       })
-  }, [pin, step, first, saving, email, refreshToken, onDone])
+  }, [pin, step, first, saving, onDone])
 
   useEffect(() => {
     if (!shake) return

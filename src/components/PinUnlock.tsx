@@ -1,17 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 import PinKeypad from '@/components/PinKeypad'
-import {
-  PIN_LENGTH,
-  PinError,
-  clearPin,
-  pinEmail,
-  syncStoredToken,
-  unlockPin,
-} from '@/lib/pin-auth'
+import { PIN_LENGTH, PinError, clearPin, pinEmail, unlockPin } from '@/lib/pin-auth'
 
 interface PinUnlockProps {
   /** Volta para o login por email/senha. `message` explica o motivo, quando houver. */
@@ -30,22 +22,8 @@ export default function PinUnlock({ onFallback }: PinUnlockProps) {
       setLoading(true)
       setError('')
       try {
-        const { refreshToken } = await unlockPin(value)
-
-        const supabase = createClient()
-        const { data, error: sessionError } = await supabase.auth.refreshSession({
-          refresh_token: refreshToken,
-        })
-
-        if (sessionError || !data.session) {
-          // Token guardado não vale mais (logout em outro lugar, senha trocada,
-          // rotação perdida). Não dá pra recuperar — cai na senha.
-          clearPin()
-          onFallback('Sua sessão expirou. Entre com sua senha e cadastre o PIN de novo.')
-          return
-        }
-
-        await syncStoredToken(data.session.refresh_token)
+        // O servidor valida o segredo do aparelho e cria uma sessão nova.
+        await unlockPin(value)
         window.location.href = '/dashboard'
       } catch (err) {
         const code = err instanceof PinError ? err.code : 'wrong_pin'
@@ -56,6 +34,17 @@ export default function PinUnlock({ onFallback }: PinUnlockProps) {
         }
         if (code === 'no_pin' || code === 'unsupported') {
           onFallback()
+          return
+        }
+        if (code === 'device_rejected') {
+          onFallback('Este aparelho não está mais autorizado. Entre com sua senha.')
+          return
+        }
+        if (code === 'network') {
+          // PIN certo, rede fora: não penaliza tentativas nem apaga o PIN.
+          setError('Sem conexão. Tente de novo.')
+          setPin('')
+          setLoading(false)
           return
         }
 

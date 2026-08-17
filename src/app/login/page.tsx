@@ -19,7 +19,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [mode, setMode] = useState<LoginMode>('checking')
   const [notice, setNotice] = useState('')
-  const [pending, setPending] = useState<{ email: string; refreshToken: string } | null>(null)
+  const [offerSetup, setOfferSetup] = useState(false)
 
   // Só decide depois de montar: o blob do PIN vive no localStorage
   useEffect(() => {
@@ -50,20 +50,13 @@ export default function LoginPage() {
     // Entrou outra conta neste aparelho: o PIN da conta anterior tem que sair
     clearPinIfOtherUser(email)
 
-    // Oferece o PIN antes de seguir (só se ainda não existe e não foi recusado)
-    try {
-      const { data } = await supabase.auth.getSession()
-      if (data.session?.refresh_token && shouldOfferPin()) {
-        setPending({
-          email: data.session.user?.email ?? email,
-          refreshToken: data.session.refresh_token,
-        })
-        setMode('setup')
-        setLoading(false)
-        return
-      }
-    } catch {
-      // Falha ao oferecer o PIN nunca pode impedir o login
+    // Oferece o PIN antes de seguir (só se ainda não existe e não foi recusado).
+    // O cadastro usa a sessão recém-criada via cookie, na rota /api/pin/register.
+    if (shouldOfferPin()) {
+      setOfferSetup(true)
+      setMode('setup')
+      setLoading(false)
+      return
     }
 
     // Reload completo garante que o servidor lê o novo cookie
@@ -90,12 +83,10 @@ export default function LoginPage() {
     )
   }
 
-  if (mode === 'setup' && pending) {
+  if (mode === 'setup' && offerSetup) {
     return (
       <div className="min-h-screen flex items-center justify-center px-8 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
         <PinSetup
-          email={pending.email}
-          refreshToken={pending.refreshToken}
           onDone={goToDashboard}
           onSkip={() => {
             declinePin()
