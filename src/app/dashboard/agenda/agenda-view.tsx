@@ -175,6 +175,21 @@ const AppointmentCard = React.memo(function AppointmentCard({
   const [formaPgSinal, setFormaPgSinal] = useState(apt.forma_pagamento_sinal || 'pix')
   const [savingSinal, setSavingSinal] = useState(false)
   const [sinalSalvo, setSinalSalvo] = useState(!!apt.valor_sinal)
+  // true = confirmado no banco (fn_registrar_sinal deu certo); sinalSalvo por si
+  // so' significa "tem valor no state", que antes ficava true mesmo quando o
+  // insert falhava silenciosamente por RLS -- e' exatamente o bug que gerou os
+  // sinais orfaos.
+  const [sinalErro, setSinalErro] = useState<string | null>(null)
+  const [cardUserId, setCardUserId] = useState<string | null>(null)
+  const [sinalEntradaChecada, setSinalEntradaChecada] = useState(false)
+  const [sinalTemEntrada, setSinalTemEntrada] = useState(true)  // otimista ate' checar
+
+  useEffect(() => {
+    supabaseCard.auth.getUser().then(({ data }) => {
+      if (data.user) setCardUserId(data.user.id)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Procedimento inline
   const [editingProc, setEditingProc] = useState(false)
@@ -383,43 +398,40 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
   async function saveSinal() {
     if (!valorSinal || parseFloat(valorSinal) <= 0) return
+    if (!cardUserId) {
+      setSinalErro('Não foi possível identificar seu usuário. Recarregue a página.')
+      return
+    }
     setSavingSinal(true)
+    setSinalErro(null)
     const valor = parseFloat(valorSinal)
 
-    // 1. Atualizar o agendamento
-    await supabaseCard.from('appointments').update({
-      valor_sinal: valor,
-      forma_pagamento_sinal: formaPgSinal,
-    }).eq('id', apt.id)
-
-    // 2. Registrar no financeiro (idempotente: remove entrada anterior do sinal se houver)
-    const obsIdentifier = `Sinal - ${apt.id}`
-    const dataVenda = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
-    await supabaseCard.from('entradas').delete()
-      .eq('clinic_id', clinicId)
-      .eq('observacoes', obsIdentifier)
-    await supabaseCard.from('entradas').insert({
-      clinic_id: clinicId,
-      data_venda: dataVenda,
-      paciente_id: apt.patients?.id || null,
-      paciente_nome: apt.patients?.name || 'Paciente',
-      procedimento_nome: apt.appointment_procedures?.[0]?.procedure_name || apt.procedures?.name || null,
-      profissional_id: apt.professional_id || null,
-      profissional_nome: apt.professional?.name || null,
-      forma_pagamento: formaPgSinal,
-      valor_bruto: valor,
-      taxa_percentual: 0,
-      valor_taxa: 0,
-      valor_liquido: valor,
-      n_parcelas: 1,
-      observacoes: obsIdentifier,
+    // fn_registrar_sinal roda como SECURITY DEFINER e checa appointments_edit
+    // (nao financial_edit) -- e' por isso que a recepcao, que nao tem acesso
+    // financeiro, consegue registrar sinal. O insert direto de antes dependia
+    // da policy de entradas (financial_edit), falhava pra quem nao tinha, e a
+    // tela nunca checava o erro -- por isso sinais "salvos" que nunca bateram
+    // no caixa. Aqui, se falhar, a tela mostra o motivo e NAO marca como salvo.
+    const { error } = await supabaseCard.rpc('fn_registrar_sinal', {
+      p_user_id: cardUserId,
+      p_appointment_id: apt.id,
+      p_valor: valor,
+      p_forma_pagamento: formaPgSinal,
     })
 
     setSavingSinal(false)
+
+    if (error) {
+      setSinalErro(error.message || 'Não foi possível registrar o sinal.')
+      toast.error('Erro ao registrar sinal', { description: error.message })
+      return
+    }
+
     setSinalSalvo(true)
     setShowSinal(false)
     router.refresh()
   }
+
   
   useEffect(() => {
     return () => {
@@ -482,6 +494,18 @@ const AppointmentCard = React.memo(function AppointmentCard({
         .eq('status', 'pendente')
         .order('data_vencimento', { ascending: true })
         .then(({ data }) => setDebitos(data || []))
+    }
+    // Sinal registrado mas sem entrada no financeiro (sinal orfao) -- so' pode
+    // acontecer em registros antigos, de antes da correcao via fn_registrar_sinal
+    // (que agora garante os dois juntos ou nenhum). So' checa quando ha' sinal.
+    if (!sinalEntradaChecada && apt.valor_sinal && apt.valor_sinal > 0) {
+      setSinalEntradaChecada(true)
+      supabaseCard
+        .from('entradas')
+        .select('id', { count: 'exact', head: true })
+        .eq('appointment_id', apt.id)
+        .eq('origem', 'sinal')
+        .then(({ count }) => setSinalTemEntrada((count || 0) > 0))
     }
   }
   
@@ -590,6 +614,11 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 {isPatientIncomplete && (
                   <span className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center" title="Cadastro pendente">
                     <Icon name="bell" className="w-2 h-2 text-white" />
+                  </span>
+                )}
+                {apt.valor_sinal && apt.valor_sinal > 0 && (
+                  <span className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center" title={`Sinal: R$ ${Number(apt.valor_sinal).toFixed(2)}`}>
+                    <Icon name="dollarSign" className="w-2 h-2 text-white" />
                   </span>
                 )}
                 {onDragStart && (
@@ -711,11 +740,16 @@ const AppointmentCard = React.memo(function AppointmentCard({
 
             {/* Sinal */}
             {apt.valor_sinal && apt.valor_sinal > 0 && (
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200">
-                <p className="text-xs font-semibold text-emerald-700">
+              <div className={`p-3 rounded-lg border ${sinalTemEntrada ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200'}`}>
+                <p className={`text-xs font-semibold ${sinalTemEntrada ? 'text-emerald-700' : 'text-amber-700'}`}>
                   Sinal: R$ {Number(apt.valor_sinal).toFixed(2)}
                   {apt.forma_pagamento_sinal ? ` — ${apt.forma_pagamento_sinal}` : ''}
                 </p>
+                {!sinalTemEntrada && (
+                  <p className="text-[10px] text-amber-600 mt-1">
+                    Registrado no agendamento mas sem lançamento no financeiro — confira em Financeiro → Entradas.
+                  </p>
+                )}
               </div>
             )}
 
@@ -1330,11 +1364,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
                       <option value="debito">Débito</option>
                     </select>
                   </div>
+                  {sinalErro && (
+                    <p className="text-[10px] text-red-600 bg-red-50 rounded-lg px-2 py-1">{sinalErro}</p>
+                  )}
                   <div className="flex gap-1.5">
                     <button onClick={saveSinal} disabled={savingSinal || !valorSinal} className="flex-1 py-1 text-xs bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 disabled:opacity-50">
                       {savingSinal ? 'Salvando...' : 'Confirmar'}
                     </button>
-                    <button onClick={() => setShowSinal(false)} className="flex-1 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200">
+                    <button onClick={() => { setShowSinal(false); setSinalErro(null) }} className="flex-1 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200">
                       Cancelar
                     </button>
                   </div>

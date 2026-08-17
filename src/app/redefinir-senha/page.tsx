@@ -118,6 +118,9 @@ function RedefinirSenhaInner() {
       return
     }
 
+    // Trocar a senha derruba as sessões, mas o PIN sobrevive: ele destrava um
+    // segredo de aparelho, não uma sessão. Nada a limpar aqui.
+
     setSuccess(true)
     setLoading(false)
 

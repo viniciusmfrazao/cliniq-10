@@ -54,6 +54,7 @@ export default function AppointmentActions({
   const [formaPgSinal, setFormaPgSinal] = useState(appointment.forma_pagamento_sinal || 'pix')
   const [savingSinal, startSavingSinal] = useTransition()
   const [sinalSalvo, setSinalSalvo] = useState(!!appointment.valor_sinal)
+  const [sinalErro, setSinalErro] = useState<string | null>(null)
 
   async function saveNotes() {
     startSavingNotes(async () => {
@@ -66,39 +67,35 @@ export default function AppointmentActions({
   async function saveSinal() {
     if (!valorSinal || parseFloat(valorSinal) <= 0) return
     startSavingSinal(async () => {
+      setSinalErro(null)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setSinalErro('Não foi possível identificar seu usuário. Recarregue a página.'); return }
+
       const valor = parseFloat(valorSinal)
 
-      // 1. Atualizar o agendamento
-      await supabase.from('appointments').update({
-        valor_sinal: valor,
-        forma_pagamento_sinal: formaPgSinal,
-      }).eq('id', appointment.id)
-
-      // 2. Registrar no financeiro (idempotente: remove entrada anterior do sinal se houver)
-      const obsIdentifier = `Sinal - ${appointment.id}`
-      const dataVenda = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
-      await supabase.from('entradas').delete()
-        .eq('clinic_id', clinicId)
-        .eq('observacoes', obsIdentifier)
-      await supabase.from('entradas').insert({
-        clinic_id: clinicId,
-        data_venda: dataVenda,
-        paciente_id: appointment.patient_id || null,
-        forma_pagamento: formaPgSinal,
-        valor_bruto: valor,
-        taxa_percentual: 0,
-        valor_taxa: 0,
-        valor_liquido: valor,
-        n_parcelas: 1,
-        observacoes: obsIdentifier,
-        appointment_id: appointment.id,
+      // fn_registrar_sinal roda como SECURITY DEFINER e checa appointments_edit
+      // (nao financial_edit) -- e' o que permite recepcao sem acesso financeiro
+      // registrar sinal. O insert direto de antes dependia da policy de
+      // entradas (financial_edit), falhava silenciosamente pra quem nao tinha,
+      // e a tela nunca checava o erro.
+      const { error } = await supabase.rpc('fn_registrar_sinal', {
+        p_user_id: user.id,
+        p_appointment_id: appointment.id,
+        p_valor: valor,
+        p_forma_pagamento: formaPgSinal,
       })
+
+      if (error) {
+        setSinalErro(error.message || 'Não foi possível registrar o sinal.')
+        return
+      }
 
       setSinalSalvo(true)
       setShowSinal(false)
       router.refresh()
     })
   }
+
 
   async function updateStatus(status: string) {
     setLoading(true)
@@ -216,9 +213,12 @@ export default function AppointmentActions({
                 </select>
               </div>
             </div>
+            {sinalErro && (
+              <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{sinalErro}</p>
+            )}
             <div className="flex gap-2">
               <button onClick={saveSinal} disabled={savingSinal || !valorSinal} className="btn-primary text-sm py-2 px-4">{savingSinal ? 'Salvando...' : 'Confirmar sinal'}</button>
-              <button onClick={() => setShowSinal(false)} className="btn-secondary text-sm py-2 px-4">Cancelar</button>
+              <button onClick={() => { setShowSinal(false); setSinalErro(null) }} className="btn-secondary text-sm py-2 px-4">Cancelar</button>
             </div>
           </div>
         )}

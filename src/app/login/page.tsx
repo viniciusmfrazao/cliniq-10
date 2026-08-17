@@ -1,10 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
+import PinUnlock from '@/components/PinUnlock'
+import PinSetup from '@/components/PinSetup'
+import { clearPinIfOtherUser, declinePin, hasPin, pinEmail, shouldOfferPin } from '@/lib/pin-auth'
+
+type LoginMode = 'checking' | 'pin' | 'password' | 'setup'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -12,6 +17,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [mode, setMode] = useState<LoginMode>('checking')
+  const [notice, setNotice] = useState('')
+  const [offerSetup, setOfferSetup] = useState(false)
+
+  // Só decide depois de montar: o blob do PIN vive no localStorage
+  useEffect(() => {
+    // Pré-preenche o email do aparelho: mesmo caindo no fallback de senha,
+    // a pessoa só digita a senha.
+    const stored = pinEmail()
+    if (stored) setEmail(stored)
+    setMode(hasPin() ? 'pin' : 'password')
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -30,8 +47,54 @@ export default function LoginPage() {
     // Login normal nunca deve carregar uma impersonação de sessão anterior
     clearImpersonationCookie()
 
+    // Entrou outra conta neste aparelho: o PIN da conta anterior tem que sair
+    clearPinIfOtherUser(email)
+
+    // Oferece o PIN antes de seguir (só se ainda não existe e não foi recusado).
+    // O cadastro usa a sessão recém-criada via cookie, na rota /api/pin/register.
+    if (shouldOfferPin()) {
+      setOfferSetup(true)
+      setMode('setup')
+      setLoading(false)
+      return
+    }
+
     // Reload completo garante que o servidor lê o novo cookie
     window.location.href = '/dashboard'
+  }
+
+  function goToDashboard() {
+    window.location.href = '/dashboard'
+  }
+
+  // Evita piscar o formulário de senha antes de saber se há PIN cadastrado
+  if (mode === 'checking') {
+    return <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+  }
+
+  if (mode === 'pin') {
+    return (
+      <PinUnlock
+        onFallback={(message) => {
+          setNotice(message ?? '')
+          setMode('password')
+        }}
+      />
+    )
+  }
+
+  if (mode === 'setup' && offerSetup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-8 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+        <PinSetup
+          onDone={goToDashboard}
+          onSkip={() => {
+            declinePin()
+            goToDashboard()
+          }}
+        />
+      </div>
+    )
   }
 
   return (
@@ -87,6 +150,13 @@ export default function LoginPage() {
               <h2 className="text-2xl font-black text-slate-900">Bem-vindo de volta!</h2>
               <p className="text-slate-500 mt-2">Entre para acessar sua clínica</p>
             </div>
+
+            {notice && (
+              <div className="mb-5 flex items-start gap-3 text-sm text-amber-800 bg-amber-50 border-2 border-amber-100 rounded-2xl px-4 py-3">
+                <Icon name="info" className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <p className="font-medium">{notice}</p>
+              </div>
+            )}
 
             <form onSubmit={handleLogin} className="space-y-5">
               <div>

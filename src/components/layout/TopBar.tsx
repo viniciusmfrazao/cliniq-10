@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { clearImpersonationCookie } from '@/lib/clear-impersonation-cookie'
 import { useCommandPalette } from '@/components/ui/CommandPalette'
 import { useWhatsappUnread } from '@/contexts/WhatsappUnreadContext'
+import { clearPin, hasPin, pinDeviceId } from '@/lib/pin-auth'
 
 type Props = { 
   clinicName: string
@@ -33,7 +34,21 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
   const { unreadCount: waUnreadCount } = useWhatsappUnread()
   const cmd = useCommandPalette()
 
-  async function logout() {
+  const [pinSaved, setPinSaved] = useState(false)
+  useEffect(() => { setPinSaved(hasPin()) }, [userMenuOpen])
+
+  async function logout(forgetPin = false) {
+    if (forgetPin) {
+      // Revoga o aparelho no servidor antes de perder a sessão.
+      const deviceId = pinDeviceId()
+      if (deviceId) {
+        try {
+          await supabase.from('pin_devices').delete().eq('id', deviceId)
+        } catch {}
+      }
+      clearPin()
+    }
+    // Sair pode revogar tudo à vontade: o PIN não depende mais da sessão.
     await supabase.auth.signOut()
     clearImpersonationCookie()
     router.push('/login')
@@ -101,6 +116,14 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                     <Icon name="settings" className="w-4 h-4" />
                     Configurações
                   </Link>
+                  <Link
+                    href="/dashboard/seguranca"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <Icon name="lock" className="w-4 h-4" />
+                    PIN de acesso
+                  </Link>
                   <button
                     onClick={() => setMode(mode === 'light' ? 'dark' : 'light')}
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 w-full text-left"
@@ -116,6 +139,15 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                     <Icon name="logout" className="w-4 h-4" />
                     Sair da conta
                   </button>
+                  {pinSaved && (
+                    <button
+                      onClick={() => { setUserMenuOpen(false); logout(true) }}
+                      className="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 w-full text-left"
+                    >
+                      <Icon name="lock" className="w-4 h-4" />
+                      Sair e remover o PIN deste aparelho
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -219,7 +251,7 @@ export default function TopBar({ clinicName, userName, userRole = 'viewer', tria
                   <p className="text-xs text-white/60 capitalize">{userRole}</p>
                 </div>
                 <button 
-                  onClick={logout}
+                  onClick={() => logout()}
                   className="p-2.5 text-white/60 hover:text-white active:bg-white/10 rounded-xl transition-colors"
                 >
                   <Icon name="logout" className="w-5 h-5" />
