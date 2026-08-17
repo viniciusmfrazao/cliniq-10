@@ -26,9 +26,9 @@ export default function AuthLifecycleProvider() {
     /**
      * O Supabase invalida o refresh_token a cada rotação. Se o blob cifrado
      * do PIN guardar um token velho, o PIN funciona uma vez e depois quebra.
-     * Aqui re-ciframos o token atual sempre que ele muda — usando a chave que
-     * ficou em sessionStorage no desbloqueio. Sem PIN ou sem chave em cache,
-     * `syncStoredToken` é no-op.
+     * Aqui re-selamos o token atual sempre que ele muda. A partir da v2 o
+     * blob é assimétrico: a chave pública fica em claro, então isso funciona
+     * mesmo sem o usuário ter digitado o PIN. Sem PIN cadastrado é no-op.
      *
      * Rodamos também na visibilidade porque o middleware pode rotacionar o
      * token no servidor sem disparar TOKEN_REFRESHED no cliente.
@@ -67,8 +67,16 @@ export default function AuthLifecycleProvider() {
       // "Sair e remover o PIN" no menu ou Segurança > remover PIN.
     })
 
+    // Rede de segurança: o middleware rotaciona no servidor a cada navegação
+    // e o cliente só percebe ao ler o cookie. Uma varredura periódica mantém
+    // o blob em dia mesmo em sessões longas sem troca de aba.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') void syncPinToken()
+    }, 60_000)
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
+      clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       sub.subscription.unsubscribe()
     }
