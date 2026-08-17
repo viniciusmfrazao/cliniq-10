@@ -7,7 +7,14 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import PinUnlock from '@/components/PinUnlock'
 import PinSetup from '@/components/PinSetup'
-import { clearPinIfOtherUser, declinePin, hasPin, pinEmail, shouldOfferPin } from '@/lib/pin-auth'
+import {
+  clearPinIfOtherUser,
+  declinePin,
+  hasPin,
+  isMobileDevice,
+  pinEmail,
+  shouldOfferPin,
+} from '@/lib/pin-auth'
 
 type LoginMode = 'checking' | 'pin' | 'password' | 'setup'
 
@@ -27,7 +34,10 @@ export default function LoginPage() {
     // a pessoa só digita a senha.
     const stored = pinEmail()
     if (stored) setEmail(stored)
-    setMode(hasPin() ? 'pin' : 'password')
+    // No desktop o PIN não aparece em momento nenhum — nem para destravar.
+    // Se o aparelho tiver um blob (criado antes desta regra), ele é ignorado
+    // aqui e o login segue por email e senha.
+    setMode(hasPin() && isMobileDevice() ? 'pin' : 'password')
   }, [])
 
   async function handleLogin(e: React.FormEvent) {

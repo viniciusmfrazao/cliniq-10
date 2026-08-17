@@ -85,7 +85,7 @@ export default function SegurancaPage() {
         </div>
       )}
 
-      {isPinSupported() && editing && (
+      {isPinSupported() && isMobileDevice() && editing && (
         <div className="card p-6">
           <PinSetup
             onDone={handleDone}
@@ -95,16 +95,21 @@ export default function SegurancaPage() {
         </div>
       )}
 
-      {isPinSupported() && !isMobileDevice() && !editing && (
-        <div className="card p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+      {isPinSupported() && !isMobileDevice() && (
+        <div className="card p-6">
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            O PIN foi feito para celular e tablet — no computador o navegador já guarda sua senha.
-            Você ainda pode criar um aqui se quiser.
+            O PIN funciona no celular e no tablet. Aqui no computador o acesso continua por email
+            e senha — abra o Clinike no celular para cadastrar.
           </p>
+          {enabled && (
+            <button type="button" onClick={handleRemove} className="btn btn-primary mt-4">
+              Remover o PIN deste computador
+            </button>
+          )}
         </div>
       )}
 
-      {isPinSupported() && !editing && (
+      {isPinSupported() && isMobileDevice() && !editing && (
         <div className="card p-6">
           <div className="flex items-start gap-4">
             <div
