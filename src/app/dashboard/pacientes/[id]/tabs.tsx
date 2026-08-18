@@ -1,5 +1,8 @@
+'use client'
+
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
+import { useEffect, useRef, useState } from 'react'
 
 export type PatientTab =
   | 'overview'
@@ -30,13 +33,19 @@ export function isValidTab(tab: string | undefined): tab is PatientTab {
 }
 
 /**
- * Tabs server-side. Cada tab é um <Link> que troca o ?tab=... — simples,
- * deep-linkável e prefetchable. Não usa estado client por design.
+ * Contagens pra badges nas tabs vêm de count queries no server e são
+ * passadas via prop.
  */
 export function getVisibleTabs(enabledModules: string[] = []) {
   return TABS.filter(t => !t.module || enabledModules.includes(t.module))
 }
 
+/**
+ * Tabs com scroll horizontal (swipe/drag). Em telas menores nem todas as
+ * tabs cabem — as setas discretas nas bordas são só uma pista visual de
+ * que dá pra rolar; o scroll em si já funciona por gesto/roda do mouse.
+ * Aparecem só quando há conteúdo pra rolar naquela direção.
+ */
 export default function PatientTabs({
   patientId,
   current,
@@ -47,9 +56,70 @@ export default function PatientTabs({
   /** Contagem opcional pra mostrar badge nas tabs (ex: 3 anamneses) */
   counts?: Partial<Record<PatientTab, number>>
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  function updateArrows() {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 2)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
+  }
+
+  useEffect(() => {
+    updateArrows()
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => updateArrows()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    const ro = new ResizeObserver(updateArrows)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      ro.disconnect()
+    }
+  }, [])
+
+  function scrollBy(dir: 'left' | 'right') {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollBy({ left: dir === 'left' ? -160 : 160, behavior: 'smooth' })
+  }
+
   return (
-    <div className="border-b border-slate-200 mb-6 overflow-x-auto overflow-y-hidden scrollbar-hide">
-      <div className="flex gap-1 min-w-max">
+    <div className="relative border-b border-slate-200 mb-6">
+      {canScrollLeft && (
+        <>
+          <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent pointer-events-none z-10" />
+          <button
+            type="button"
+            onClick={() => scrollBy('left')}
+            aria-label="Rolar tabs para a esquerda"
+            className="absolute left-0.5 top-1/2 -translate-y-1/2 z-20 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 hover:text-slate-700 hover:border-slate-300"
+          >
+            <Icon name="chevronLeft" className="w-3.5 h-3.5" />
+          </button>
+        </>
+      )}
+      {canScrollRight && (
+        <>
+          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
+          <button
+            type="button"
+            onClick={() => scrollBy('right')}
+            aria-label="Rolar tabs para a direita"
+            className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 hover:text-slate-700 hover:border-slate-300"
+          >
+            <Icon name="chevronRight" className="w-3.5 h-3.5" />
+          </button>
+        </>
+      )}
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto overflow-y-hidden scrollbar-hide"
+      >
+        <div className="flex gap-1 min-w-max">
         {TABS.map((tab) => {
           const active = tab.id === current
           const href =
@@ -83,6 +153,7 @@ export default function PatientTabs({
             </Link>
           )
         })}
+        </div>
       </div>
     </div>
   )
