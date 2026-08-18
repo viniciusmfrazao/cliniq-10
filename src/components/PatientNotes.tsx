@@ -43,6 +43,7 @@ export default function PatientNotes({
   const router = useRouter()
   const supabase = createClient()
 
+  const [expanded, setExpanded] = useState(false)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -51,6 +52,10 @@ export default function PatientNotes({
 
   const pinned = notes.filter((n) => n.pinned)
   const others = notes.filter((n) => !n.pinned)
+
+  function openToWrite() {
+    setExpanded(true)
+  }
 
   async function handleAdd() {
     const content = draft.trim()
@@ -217,48 +222,87 @@ export default function PatientNotes({
 
   return (
     <div className="card p-5">
-      <h2 className="text-sm font-semibold text-slate-900 mb-3">Anotações</h2>
-
-      <div className="mb-4">
-        <textarea
-          className="input w-full min-h-[70px] text-sm"
-          placeholder="Escrever uma anotação..."
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-        />
-        {draft.trim() && (
-          <div className="flex gap-2 mt-2">
-            <button
-              type="button"
-              onClick={handleAdd}
-              disabled={saving}
-              className="btn-primary px-4 py-1.5 text-xs"
-            >
-              {saving ? 'Salvando...' : 'Salvar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDraft('')}
-              className="btn-secondary px-4 py-1.5 text-xs"
-            >
-              Cancelar
-            </button>
-          </div>
-        )}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">Anotações</h2>
+          {notes.length > 0 && (
+            <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+              {notes.length}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs text-brand-600 font-medium flex items-center gap-1"
+        >
+          {expanded ? 'Recolher' : others.length > 0 ? 'Ver todas' : '+ Nova anotação'}
+          <Icon
+            name={expanded ? 'chevronUp' : 'chevronDown'}
+            className="w-3.5 h-3.5"
+          />
+        </button>
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
-          {error}
-        </p>
+      {/* Fixadas ficam sempre visíveis, mesmo com a seção recolhida —
+          é o mesmo motivo de existir o "Fixar". */}
+      {pinned.length > 0 && (
+        <div className="space-y-2 mb-2">{pinned.map(renderNote)}</div>
       )}
 
-      {notes.length === 0 ? (
-        <p className="text-sm text-slate-400">Nenhuma anotação ainda.</p>
-      ) : (
-        <div className="space-y-2">
-          {[...pinned, ...others].map(renderNote)}
-        </div>
+      {!expanded && pinned.length === 0 && notes.length === 0 && (
+        <button
+          type="button"
+          onClick={openToWrite}
+          className="w-full text-left text-sm text-slate-400 border border-dashed border-slate-200 rounded-xl px-3 py-3 hover:border-slate-300 hover:text-slate-500"
+        >
+          Escrever uma anotação...
+        </button>
+      )}
+
+      {expanded && (
+        <>
+          <div className="mb-4">
+            <textarea
+              className="input w-full min-h-[70px] text-sm"
+              placeholder="Escrever uma anotação..."
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              autoFocus
+            />
+            {draft.trim() && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  disabled={saving}
+                  className="btn-primary px-4 py-1.5 text-xs"
+                >
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraft('')}
+                  className="btn-secondary px-4 py-1.5 text-xs"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
+              {error}
+            </p>
+          )}
+
+          {others.length === 0 && pinned.length === 0 ? (
+            <p className="text-sm text-slate-400">Nenhuma anotação ainda.</p>
+          ) : (
+            <div className="space-y-2">{others.map(renderNote)}</div>
+          )}
+        </>
       )}
     </div>
   )
