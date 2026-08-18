@@ -51,19 +51,116 @@ const ACTOR_SOURCE_CONFIG: Record<string, { label: string; hint: string }> = {
   desconhecido: { label: 'Origem não identificada', hint: 'Não bateu com nenhum padrão conhecido' },
 }
 
+// Chaves batem com TG_TABLE_NAME (nome real da tabela), nao com singular
+// "bonito" -- o valor gravado em entity_type e sempre o nome da tabela.
 const ENTITY_LABELS: Record<string, string> = {
-  patient: 'Paciente',
-  appointment: 'Agendamento',
-  evolution: 'Evolução',
-  product: 'Produto',
-  stock_movement: 'Movimentação',
-  lead: 'Lead',
-  document: 'Documento',
-  user: 'Usuário',
-  procedure: 'Procedimento',
-  medical_record: 'Prontuário',
-  waiting_list: 'Lista de espera',
+  patients: 'Paciente',
+  appointments: 'Agendamento',
+  evolutions: 'Evolução',
+  products: 'Produto',
+  stock_movements: 'Movimentação de estoque',
+  leads: 'Lead',
+  users: 'Usuário',
+  entradas: 'Entrada financeira',
+  saidas: 'Saída financeira',
+  crm_settings: 'Configuração do CRM',
+  clinics: 'Dados da clínica',
 }
+
+// Onde no sistema a acao aconteceu -- o "modulo" que a pessoa reconhece na
+// navegacao, nao o nome tecnico da tabela.
+const MODULE_LABELS: Record<string, string> = {
+  patients: 'Pacientes',
+  appointments: 'Agenda',
+  evolutions: 'Prontuário',
+  products: 'Estoque',
+  stock_movements: 'Estoque',
+  leads: 'CRM',
+  users: 'Equipe',
+  entradas: 'Financeiro',
+  saidas: 'Financeiro',
+  crm_settings: 'Configurações · CRM',
+  clinics: 'Configurações · Clínica',
+}
+
+// Rotulos amigaveis pros campos mais comuns que aparecem no resumo de
+// mudanca -- o resto cai no nome cru do campo, sem tradução.
+const FIELD_LABELS: Record<string, string> = {
+  status: 'status',
+  name: 'nome',
+  phone: 'telefone',
+  email: 'email',
+  notes: 'observações',
+  valor_liquido: 'valor',
+  valor_bruto: 'valor bruto',
+  descricao: 'descrição',
+  forma_pagamento: 'forma de pagamento',
+  data_venda: 'data',
+  data: 'data',
+  procedimento_nome: 'procedimento',
+  paciente_nome: 'paciente',
+  custom_stages: 'colunas do CRM',
+  converted_stage_id: 'estágio de conversão automática',
+  lost_reason: 'motivo de perda',
+  interest: 'interesse',
+  next_contact_at: 'próximo contato',
+}
+
+// Campos que mudam sozinhos o tempo todo (timestamps de "toque") e nunca sao
+// o que importa mostrar num resumo -- ignora na comparacao old/new.
+const NOISY_FIELDS = new Set([
+  'updated_at', 'created_at', 'last_contact_at', 'last_whatsapp_at',
+  'patient_replied_at', 'ai_last_analysis', 'eva_next_followup_at',
+  'human_review_at', 'converted_at',
+])
+
+function formatValue(field: string, value: any): string {
+  if (value === null || value === undefined || value === '') return 'vazio'
+  if (field.startsWith('valor')) {
+    const n = Number(value)
+    if (!Number.isNaN(n)) return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  }
+  if (typeof value === 'object') return '[alterado]'
+  const s = String(value)
+  return s.length > 40 ? s.slice(0, 40) + '…' : s
+}
+
+// Resumo legivel do que mudou numa acao, a partir do details (old/new pra
+// update, ou o registro inteiro pra create/delete). Prioriza os campos mais
+// relevantes por tipo de entidade antes de cair no diff genérico.
+function summarizeChange(log: AuditLog): string | null {
+  const d = log.details
+  if (!d) return null
+
+  if (log.action === 'create' || log.action === 'delete') {
+    const row = log.action === 'delete' ? d : d
+    if (log.entity_type === 'entradas' || log.entity_type === 'saidas') {
+      const valor = formatValue('valor_liquido', row.valor_liquido ?? row.valor)
+      return valor !== 'vazio' ? valor : null
+    }
+    return null
+  }
+
+  if (log.action !== 'update' || !d.old || !d.new) return null
+
+  const changed = Object.keys(d.new).filter(k => {
+    if (NOISY_FIELDS.has(k)) return false
+    return JSON.stringify(d.old[k]) !== JSON.stringify(d.new[k])
+  })
+  if (changed.length === 0) return null
+
+  // status em destaque sozinho quando muda -- e o caso mais comum e o mais
+  // importante de ver de cara (foi exatamente o que confundiu no CRM)
+  if (changed.includes('status')) {
+    return `status: ${formatValue('status', d.old.status)} → ${formatValue('status', d.new.status)}`
+  }
+
+  return changed.slice(0, 3).map(k => {
+    const label = FIELD_LABELS[k] || k
+    return `${label}: ${formatValue(k, d.old[k])} → ${formatValue(k, d.new[k])}`
+  }).join(' · ')
+}
+
 
 export default function AuditList({ logs, users }: Props) {
   const [filters, setFilters] = useState({
@@ -86,7 +183,8 @@ export default function AuditList({ logs, users }: Props) {
       const search = normalizeText(filters.search)
       const matchName = normalizeText(log.entity_name).includes(search)
       const matchUser = normalizeText(log.user?.name).includes(search)
-      if (!matchName && !matchUser) return false
+      const matchChange = normalizeText(summarizeChange(log) || '').includes(search)
+      if (!matchName && !matchUser && !matchChange) return false
     }
     return true
   })
@@ -150,7 +248,7 @@ export default function AuditList({ logs, users }: Props) {
             </select>
           </div>
           <div>
-            <label className="label">Entidade</label>
+            <label className="label">Onde</label>
             <select
               className="input"
               value={filters.entity}
@@ -158,7 +256,7 @@ export default function AuditList({ logs, users }: Props) {
             >
               <option value="">Todas</option>
               {uniqueEntities.map(e => (
-                <option key={e} value={e}>{ENTITY_LABELS[e] || e}</option>
+                <option key={e} value={e}>{MODULE_LABELS[e] || e}</option>
               ))}
             </select>
           </div>
@@ -227,15 +325,16 @@ export default function AuditList({ logs, users }: Props) {
                 <th className="text-left text-xs font-semibold text-slate-600 px-4 py-3">Data/Hora</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-4 py-3">Usuário</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-4 py-3">Ação</th>
-                <th className="text-left text-xs font-semibold text-slate-600 px-4 py-3">Entidade</th>
+                <th className="text-left text-xs font-semibold text-slate-600 px-4 py-3">Onde</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-4 py-3">Registro</th>
+                <th className="text-left text-xs font-semibold text-slate-600 px-4 py-3">O que mudou</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-slate-400">
+                  <td colSpan={7} className="text-center py-8 text-slate-400">
                     Nenhum registro encontrado
                   </td>
                 </tr>
@@ -278,12 +377,16 @@ export default function AuditList({ logs, users }: Props) {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-sm text-slate-600">
-                          {ENTITY_LABELS[log.entity_type] || log.entity_type}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="text-sm text-slate-900">{MODULE_LABELS[log.entity_type] || log.entity_type}</span>
+                          <span className="text-xs text-slate-400">{ENTITY_LABELS[log.entity_type] || log.entity_type}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-slate-900">{log.entity_name || '-'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-600">{summarizeChange(log) || '-'}</span>
                       </td>
                       <td className="px-4 py-3">
                         {log.details && (
