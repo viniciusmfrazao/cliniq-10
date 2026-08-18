@@ -8,13 +8,21 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   trial:     { label: 'Trial', color: 'bg-blue-100 text-blue-700' },
   active:    { label: 'Ativo', color: 'bg-emerald-100 text-emerald-700' },
   overdue:   { label: 'Inadimplente', color: 'bg-red-100 text-red-700' },
+  suspended: { label: '⏸️ Cobrança suspensa', color: 'bg-amber-100 text-amber-800' },
   cancelled: { label: 'Cancelado', color: 'bg-slate-200 text-slate-500' },
   blocked:   { label: 'Bloqueado', color: 'bg-red-200 text-red-800' },
 }
 
-const CARD_CONFIRM_EVENTS = ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAYMENT_ANTICIPATED', 'PAYMENT_DUNNING_RECEIVED']
+/** O embed do PostgREST devolve objeto quando existe unique constraint em
+ * clinic_id (relação 1:1), e array quando não existe. Normaliza os dois —
+ * era por isso que sub sempre vinha undefined com `?.[0]` num objeto. */
+function firstSub(raw: any): any {
+  if (!raw) return null
+  return Array.isArray(raw) ? raw[0] ?? null : raw
+}
 
 const EVENT_LABELS: Record<string, string> = {
+  PAYMENT_CREATED: '📅 Cobrança gerada',
   PAYMENT_CONFIRMED: '✅ Pagamento confirmado',
   PAYMENT_RECEIVED: '✅ Pagamento recebido',
   PAYMENT_ANTICIPATED: '✅ Pagamento antecipado',
@@ -28,6 +36,33 @@ const EVENT_LABELS: Record<string, string> = {
   PAYMENT_AWAITING_CHARGEBACK_REVERSAL: '🔄 Aguardando reversão de chargeback',
   SUBSCRIPTION_INACTIVATED: '🚫 Assinatura inativada',
   SUBSCRIPTION_DELETED: '🚫 Assinatura removida',
+  CHECKOUT_PAID: '💳 Cartão cadastrado',
+  CHECKOUT_EXPIRED: '⌛ Link expirou sem cadastro',
+  CHECKOUT_CANCELED: '❌ Checkout cancelado',
+  PAYMENT_CREDIT_CARD_CAPTURE_REFUSED: '💳❌ Tentativa de captura recusada',
+}
+
+/** Formata 'YYYY-MM-DD' sem passar por UTC (evita voltar um dia no BRT). */
+function fmtDay(d?: string | null) {
+  if (!d) return null
+  const [y, m, day] = d.slice(0, 10).split('-')
+  return `${day}/${m}/${y}`
+}
+function fmtDateTime(d?: string | null) {
+  if (!d) return null
+  return new Date(d).toLocaleDateString('pt-BR')
+}
+function money(v: any) {
+  if (v == null) return null
+  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+function daysUntil(d?: string | null) {
+  if (!d) return null
+  const [y, m, day] = d.slice(0, 10).split('-').map(Number)
+  const target = new Date(y, m - 1, day)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / 86400000)
 }
 
 export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: { clinics: any[]; plans: any[]; eventsByClinic: Record<string, any[]> }) {
@@ -38,8 +73,89 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
   const [result, setResult] = useState<{ url?: string; error?: string } | null>(null)
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [action, setAction] = useState<{
+    type: 'suspend' | 'resume' | 'create'
+    clinicId: string
+    clinicName: string
+    sub: any
+  } | null>(null)
+  const [actionForm, setActionForm] = useState({
+    nextDueDate: '',
+    value: '',
+    cycle: 'MONTHLY',
+    manterAcesso: true,
+    cancelarCobrancasAbertas: true,
+  })
+  const [running, setRunning] = useState(false)
+  const [actionResult, setActionResult] = useState<{ detalhes?: string[]; error?: string } | null>(null)
 
   const filtered = clinics.filter(c => normalizeText(c.name).includes(normalizeText(search)))
+
+  async function syncAsaas() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const r = await fetch('/api/asaas/sync', { method: 'POST' })
+      const data = await r.json()
+      if (data.ok) {
+        const comProblema = (data.report || []).filter((x: any) => x.problemas?.length).length
+        setSyncMsg(`✅ ${data.sincronizadas} clínicas sincronizadas${comProblema ? ` — ${comProblema} com pendência` : ''}. Recarregando...`)
+        setTimeout(() => window.location.reload(), 1200)
+      } else {
+        setSyncMsg(`❌ ${data.error}`)
+      }
+    } catch (e: any) {
+      setSyncMsg(`❌ ${e.message}`)
+    }
+    setSyncing(false)
+  }
+
+  function openAction(type: 'suspend' | 'resume' | 'create', clinic: any, sub: any) {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    setActionForm({
+      nextDueDate: d.toISOString().slice(0, 10),
+      value: sub?.plan_price?.toString() || '',
+      cycle: sub?.billing_cycle || 'MONTHLY',
+      manterAcesso: true,
+      cancelarCobrancasAbertas: true,
+    })
+    setActionResult(null)
+    setAction({ type, clinicId: clinic.id, clinicName: clinic.name, sub })
+  }
+
+  async function runAction() {
+    if (!action) return
+    setRunning(true)
+    setActionResult(null)
+    try {
+      const r = await fetch('/api/asaas/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clinicId: action.clinicId,
+          action: action.type,
+          nextDueDate: actionForm.nextDueDate,
+          value: parseFloat(actionForm.value) || undefined,
+          cycle: actionForm.cycle,
+          manterAcesso: actionForm.manterAcesso,
+          cancelarCobrancasAbertas: actionForm.cancelarCobrancasAbertas,
+        }),
+      })
+      const data = await r.json()
+      if (data.ok) {
+        setActionResult({ detalhes: data.detalhes || [] })
+        setTimeout(() => window.location.reload(), 2500)
+      } else {
+        setActionResult({ error: data.error })
+      }
+    } catch (e: any) {
+      setActionResult({ error: e.message })
+    }
+    setRunning(false)
+  }
 
   async function sendLink() {
     if (!modal) return
@@ -79,15 +195,23 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
           <p className="text-slate-500 text-sm mt-1">Gerencie os planos e cobranças das clínicas</p>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={syncAsaas} disabled={syncing}
+            className="text-xs px-3 py-1.5 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium disabled:opacity-50">
+            {syncing ? '⏳ Sincronizando...' : '🔄 Sincronizar Asaas'}
+          </button>
           <a href="/admin/subscriptions/relatorio"
             className="text-xs px-3 py-1.5 border border-violet-200 text-violet-700 rounded-lg hover:bg-violet-50 font-medium">
             📊 Relatório de cobranças
           </a>
           <div className="text-xs text-slate-500">
-            {clinics.filter(c => c.clinic_subscriptions?.[0]?.status === 'active').length} ativas /  {clinics.length} total
+            {clinics.filter(c => firstSub(c.clinic_subscriptions)?.status === 'active').length} ativas /  {clinics.length} total
           </div>
         </div>
       </div>
+
+      {syncMsg && (
+        <div className="px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-700">{syncMsg}</div>
+      )}
 
       {/* Busca */}
       <input type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -97,12 +221,18 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
       {/* Lista */}
       <div className="space-y-3">
         {filtered.map(clinic => {
-          const sub = clinic.clinic_subscriptions?.[0]
+          const sub = firstSub(clinic.clinic_subscriptions)
           const status = sub?.status || 'pending'
           const { label, color } = STATUS_LABELS[status] || STATUS_LABELS.pending
           const events = eventsByClinic[clinic.id] || []
-          const cardConfirmed = events.some(e => CARD_CONFIRM_EVENTS.includes(e.event))
           const isExpanded = expanded === clinic.id
+          const cardOk = !!sub?.card_registered_at
+          const dias = daysUntil(sub?.next_charge_at)
+          const cobrancaPaga = sub?.next_charge_status === 'PAID' || (!!sub?.last_payment_at && dias != null && dias > 0)
+          // Captura recusada ainda em aberto: a Asaas recusou o cartão e não
+          // entrou pagamento depois disso.
+          const capturaRecusada = !!sub?.last_capture_refused_at &&
+            (!sub?.last_payment_at || sub.last_capture_refused_at > sub.last_payment_at)
 
           return (
             <div key={clinic.id} className="bg-white rounded-2xl border border-slate-200 p-5">
@@ -116,9 +246,19 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
                     <p className="font-semibold text-slate-800 truncate">{clinic.name}</p>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>{label}</span>
                     {sub?.checkout_sent_at && (
-                      cardConfirmed
-                        ? <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">💳 Cartão cadastrado</span>
-                        : <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">⏳ Aguardando cadastro do cartão</span>
+                      cardOk
+                        ? <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+                            💳 Cartão cadastrado{sub.card_last4 ? ` ····${sub.card_last4}` : ''}
+                          </span>
+                        : sub?.checkout_status === 'EXPIRED'
+                          ? <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">⌛ Link expirou sem cadastro</span>
+                          : <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">⏳ Aguardando cadastro do cartão</span>
+                    )}
+                    {capturaRecusada && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700"
+                        title="A Asaas tentou capturar no cartão e foi recusado. Ela ainda vai retentar até 2 dias após o vencimento.">
+                        💳❌ Captura recusada {fmtDateTime(sub.last_capture_refused_at)}
+                      </span>
                     )}
                     {!hasCnpj(clinic) && (
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700" title="Sem CNPJ/CPF cadastrado — não é possível gerar link de cobrança">
@@ -126,22 +266,65 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
                       </span>
                     )}
                   </div>
+
                   <div className="flex items-center gap-4 mt-1 flex-wrap">
                     {sub?.plan_name && (
                       <p className="text-xs text-slate-500">
-                        📦 {sub.plan_name} — R$ {sub.plan_price}/mês{sub?.payment_method && ` · ${sub.payment_method === 'PIX' ? 'Pix' : 'Cartão'}`}
+                        📦 {sub.plan_name} — {money(sub.plan_price)}/mês{sub?.payment_method && ` · ${sub.payment_method === 'PIX' ? 'Pix' : 'Cartão'}`}
                       </p>
                     )}
-                    {sub?.last_payment_at && (
-                      <p className="text-xs text-slate-500">💰 Último pagamento: {new Date(sub.last_payment_at).toLocaleDateString('pt-BR')}</p>
-                    )}
-                    {sub?.trial_ends_at && (
-                      <p className="text-xs text-blue-500">⏳ Trial até {new Date(sub.trial_ends_at).toLocaleDateString('pt-BR')}</p>
+                    {sub?.trial_ends_at && !sub?.last_payment_at && (
+                      <p className="text-xs text-blue-500">⏳ Trial até {fmtDateTime(sub.trial_ends_at)}</p>
                     )}
                     {sub?.checkout_sent_at && (
-                      <p className="text-xs text-slate-400">📤 Link enviado em {new Date(sub.checkout_sent_at).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-xs text-slate-400">📤 Link enviado em {fmtDateTime(sub.checkout_sent_at)}</p>
+                    )}
+                    {sub?.last_sync_at && (
+                      <p className="text-xs text-slate-300">🔄 Sync {new Date(sub.last_sync_at).toLocaleString('pt-BR')}</p>
                     )}
                   </div>
+
+                  {/* Linha do dinheiro — próxima e última cobrança */}
+                  {(sub?.next_charge_at || sub?.last_payment_at) && (
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {sub?.next_charge_at && (
+                        <span className={`text-xs px-2.5 py-1 rounded-lg font-medium ${
+                          sub.next_charge_status === 'OVERDUE'
+                            ? 'bg-red-50 text-red-700 border border-red-200'
+                            : dias != null && dias <= 3
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-slate-50 text-slate-700 border border-slate-200'
+                        }`}>
+                          📅 Próxima cobrança: {fmtDay(sub.next_charge_at)}
+                          {sub.next_charge_value != null && ` — ${money(sub.next_charge_value)}`}
+                          {dias != null && (dias === 0 ? ' · hoje' : dias > 0 ? ` · em ${dias}d` : ` · ${Math.abs(dias)}d atrasada`)}
+                        </span>
+                      )}
+                      {sub?.last_payment_at && (
+                        <span className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 font-medium">
+                          ✅ Última paga: {fmtDateTime(sub.last_payment_at)}
+                          {sub.last_payment_value != null && ` — ${money(sub.last_payment_value)}`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Alertas de inconsistência */}
+                  {status === 'suspended' && (
+                    <p className="text-xs text-amber-700 mt-2 font-medium">
+                      ⏸️ Cobrança suspensa{sub?.suspended_at ? ` em ${fmtDateTime(sub.suspended_at)}` : ''} — a Asaas não vai cobrar até a reativação. O sync não altera esta clínica.
+                    </p>
+                  )}
+                  {status !== 'suspended' && cardOk && !sub?.next_charge_at && (
+                    <p className="text-xs text-red-600 mt-2 font-medium">
+                      ⚠️ Cartão cadastrado mas sem recorrência ativa na Asaas — a clínica está usando sem ser cobrada. Use &quot;Criar recorrência&quot; para cobrar no cartão que já está salvo.
+                    </p>
+                  )}
+                  {!cardOk && sub?.checkout_sent_at && !cobrancaPaga && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      Link enviado em {fmtDateTime(sub.checkout_sent_at)} e o cartão ainda não foi cadastrado.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -158,6 +341,31 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
                       🔗 Ver link
                     </a>
                   )}
+
+                  {status === 'suspended' ? (
+                    <button
+                      onClick={() => openAction('resume', clinic, sub)}
+                      className="text-xs px-3 py-1.5 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium">
+                      ▶️ Reativar cobrança
+                    </button>
+                  ) : (
+                    <>
+                      {cardOk && !sub?.next_charge_at && (
+                        <button
+                          onClick={() => openAction('create', clinic, sub)}
+                          className="text-xs px-3 py-1.5 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 font-medium">
+                          🔁 Criar recorrência
+                        </button>
+                      )}
+                      {sub?.asaas_customer_id && (
+                        <button
+                          onClick={() => openAction('suspend', clinic, sub)}
+                          className="text-xs px-3 py-1.5 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-50 font-medium">
+                          ⏸️ Suspender
+                        </button>
+                      )}
+                    </>
+                  )}
                   <button
                     onClick={() => { setModal({ clinicId: clinic.id, clinicName: clinic.name }); setResult(null) }}
                     disabled={!hasCnpj(clinic)}
@@ -171,13 +379,14 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
 
               {isExpanded && events.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-slate-100">
-                  <p className="text-xs font-semibold text-slate-500 mb-2">Histórico de pagamentos</p>
+                  <p className="text-xs font-semibold text-slate-500 mb-2">Histórico de cobranças</p>
                   <div className="space-y-1.5">
                     {events.map((ev, i) => (
                       <div key={i} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
                         <span>{EVENT_LABELS[ev.event] || ev.event}</span>
                         <div className="flex items-center gap-3">
-                          {ev.value != null && <span className="text-slate-500">R$ {Number(ev.value).toFixed(2)}</span>}
+                          {ev.value != null && <span className="text-slate-500">{money(ev.value)}</span>}
+                          {ev.due_date && <span className="text-slate-400">venc. {fmtDay(ev.due_date)}</span>}
                           {ev.billing_type && <span className="text-slate-400">{ev.billing_type === 'PIX' ? 'Pix' : 'Cartão'}</span>}
                           <span className="text-slate-400">{new Date(ev.occurred_at).toLocaleString('pt-BR')}</span>
                         </div>
@@ -190,6 +399,107 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
           )
         })}
       </div>
+
+      {/* Modal de suspender / reativar / criar recorrência */}
+      {action && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-slate-800 mb-1">
+              {action.type === 'suspend' && '⏸️ Suspender cobrança'}
+              {action.type === 'resume' && '▶️ Reativar cobrança'}
+              {action.type === 'create' && '🔁 Criar recorrência'}
+            </h2>
+            <p className="text-sm text-slate-500 mb-5">{action.clinicName}</p>
+
+            {action.type === 'suspend' ? (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  A assinatura é inativada na Asaas e a clínica para de ser cobrada. Nada é
+                  cancelado no acesso dela por padrão.
+                </p>
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={actionForm.cancelarCobrancasAbertas} className="mt-0.5"
+                    onChange={e => setActionForm({ ...actionForm, cancelarCobrancasAbertas: e.target.checked })} />
+                  <span>
+                    Cancelar cobranças já geradas em aberto
+                    <span className="block text-xs text-slate-400">
+                      Sem isso a Asaas ainda captura no cartão a cobrança que já existe.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={actionForm.manterAcesso} className="mt-0.5"
+                    onChange={e => setActionForm({ ...actionForm, manterAcesso: e.target.checked })} />
+                  <span>
+                    Manter o acesso da clínica liberado
+                    <span className="block text-xs text-slate-400">
+                      Desmarcado, ela é bloqueada no app quando o prazo atual vencer.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  {action.type === 'create'
+                    ? 'Cria a recorrência usando o cartão que a clínica já cadastrou na Asaas — nenhum link novo é enviado pra ela.'
+                    : 'Reativa a assinatura na Asaas a partir da data abaixo. Se a assinatura tiver sido removida, ela é recriada com o cartão salvo.'}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">1ª cobrança em</label>
+                    <input type="date" value={actionForm.nextDueDate}
+                      onChange={e => setActionForm({ ...actionForm, nextDueDate: e.target.value })}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
+                    <input type="number" step="0.01" min="0" value={actionForm.value}
+                      onChange={e => setActionForm({ ...actionForm, value: e.target.value })}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Ciclo</label>
+                  <select value={actionForm.cycle}
+                    onChange={e => setActionForm({ ...actionForm, cycle: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm">
+                    <option value="MONTHLY">Mensal</option>
+                    <option value="YEARLY">Anual</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {actionResult?.detalhes && (
+              <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                <p className="text-xs font-semibold text-emerald-700 mb-1">✅ Feito. Recarregando...</p>
+                {actionResult.detalhes.map((d, i) => (
+                  <p key={i} className="text-xs text-emerald-600">• {d}</p>
+                ))}
+              </div>
+            )}
+            {actionResult?.error && (
+              <div className="mt-4 p-3 bg-red-50 rounded-xl border border-red-100 text-xs text-red-700">
+                ❌ {actionResult.error}
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => { setAction(null); setActionResult(null) }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">
+                Fechar
+              </button>
+              <button onClick={runAction} disabled={running || (action.type !== 'suspend' && !actionForm.nextDueDate)}
+                className={`flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:bg-slate-200 disabled:text-slate-400 ${
+                  action.type === 'suspend' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}>
+                {running ? 'Processando...' : action.type === 'suspend' ? 'Suspender' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de envio */}
       {modal && (
@@ -304,5 +614,3 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
     </div>
   )
 }
-
-
