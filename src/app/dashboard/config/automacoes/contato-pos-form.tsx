@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/ui/Icon'
 import AudioModeField, { EnvioMode } from '@/components/ui/AudioModeField'
+import ProcedurePicker, { type ProcedureOption } from './procedure-picker'
 
 const DEFAULT_TEMPLATE = `Oi {{primeiro_nome}}! 💜
 
@@ -32,6 +33,8 @@ interface SeqItem {
   audioUrl?: string | null
 }
 
+type ProcModo = 'todos' | 'apenas' | 'exceto'
+
 interface Initial {
   enabled: boolean
   hora: number
@@ -40,15 +43,19 @@ interface Initial {
   seq: SeqItem[]
   modo: EnvioMode
   audioUrl: string | null
+  // filtro opcional por procedimento (ago/2026)
+  procModo: ProcModo
+  procIds: string[]
 }
 
 interface Props {
   clinicId: string
   clinicName: string
   initial: Initial
+  procedures: ProcedureOption[]
 }
 
-export default function ContatoPosForm({ clinicId, clinicName, initial }: Props) {
+export default function ContatoPosForm({ clinicId, clinicName, initial, procedures }: Props) {
   const supabase = createClient()
   const [enabled, setEnabled] = useState(initial.enabled)
   const [hora, setHora] = useState(initial.hora)
@@ -56,6 +63,8 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
   const [modo, setModo] = useState<EnvioMode>(initial.modo)
   const [audioUrl, setAudioUrl] = useState<string | null>(initial.audioUrl)
   const [excluirCat, setExcluirCat] = useState(initial.excluirCategorias.join(', '))
+  const [procModo, setProcModo] = useState<ProcModo>(initial.procModo || 'todos')
+  const [procIds, setProcIds] = useState<string[]>(initial.procIds || [])
   const [seq, setSeq] = useState<SeqItem[]>(
     initial.seq?.length > 0 ? initial.seq : []
   )
@@ -156,6 +165,10 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
       audio_contato_pos: audioUrl,
       contato_pos_excluir_categorias: cats,
       contato_pos_seq: seq,
+      contato_pos_proc_modo: procModo,
+      // No modo 'todos' a lista não é usada — grava vazia pra não deixar
+      // seleção fantasma esperando alguém religar o filtro sem perceber.
+      contato_pos_proc_ids: procModo === 'todos' ? [] : procIds,
     }, { onConflict: 'clinic_id' })
     setSaving(false)
     setSaved(true)
@@ -200,12 +213,67 @@ export default function ContatoPosForm({ clinicId, clinicName, initial }: Props)
             <p className="text-xs text-slate-400 mt-1">Horário de Brasília</p>
           </div>
 
+          {/* ── Filtro por procedimento ─────────────────────────────── */}
+          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-medium text-slate-700">Enviar para quais procedimentos?</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Por padrão vale para todos. Use as outras opções se a clínica só quer o
+                pós-atendimento em alguns casos.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {([
+                ['todos', 'Todos os procedimentos', 'Mantém o comportamento atual.'],
+                ['apenas', 'Apenas os selecionados', 'Só quem fez esses procedimentos recebe.'],
+                ['exceto', 'Todos, exceto os selecionados', 'Procedimento novo cadastrado depois entra automaticamente.'],
+              ] as const).map(([valor, titulo, ajuda]) => (
+                <label key={valor} className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="contato-pos-proc-modo"
+                    checked={procModo === valor}
+                    onChange={() => setProcModo(valor)}
+                    className="mt-0.5 w-4 h-4 border-slate-300 text-violet-600 focus:ring-violet-500/30"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm text-slate-700">{titulo}</span>
+                    <span className="block text-xs text-slate-400">{ajuda}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {procModo !== 'todos' && (
+              <div className="pt-1 space-y-2">
+                <ProcedurePicker
+                  procedures={procedures}
+                  selected={procIds}
+                  onChange={setProcIds}
+                />
+                {procIds.length === 0 && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                    Nenhum procedimento marcado — enquanto ficar assim, o filtro não tem
+                    efeito e a mensagem continua indo para todos.
+                  </p>
+                )}
+                {procModo === 'apenas' && procIds.length > 0 && (
+                  <p className="text-xs text-slate-500">
+                    Agendamento lançado sem procedimento definido <strong>não</strong> recebe.
+                    No modo &quot;exceto&quot;, recebe.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Categorias excluir */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Categorias de procedimento a excluir</label>
             <input type="text" value={excluirCat} onChange={e => setExcluirCat(e.target.value)}
               className="input w-full" placeholder="Ex: Avaliação, Consulta, Retorno" />
-            <p className="text-xs text-slate-400 mt-1">Separe por vírgula. Avaliação, Retorno e Consulta já são excluídos automaticamente pelo nome.</p>
+            <p className="text-xs text-slate-400 mt-1">Separe por vírgula. Avaliação, Retorno e Consulta já são excluídos automaticamente pelo nome. Vale junto com o filtro acima.</p>
           </div>
 
           {/* Mensagem principal */}

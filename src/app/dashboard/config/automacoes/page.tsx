@@ -36,6 +36,23 @@ export default async function AutomacoesPage() {
       .order('name', { ascending: true }),
   ])
 
+  // Cobertura de procedimento na base de pacientes. `appointments.procedure_id`
+  // só passou a ser preenchido em mai/2026 — quem sumiu antes disso não tem
+  // procedimento identificado e só é alcançado pelas etapas gerais do recall.
+  // A tela mostra o número real da clínica em vez de deixar o usuário
+  // descobrir sozinho que a regra não pegou ninguém.
+  const [{ count: totalPacientes }, { count: comProcedimento }] = await Promise.all([
+    supabase
+      .from('patient_last_completed')
+      .select('patient_id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId),
+    supabase
+      .from('patient_last_completed')
+      .select('patient_id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .not('procedure_id', 'is', null),
+  ])
+
   return (
     <AutomacoesClient
       clinicId={clinicId}
@@ -43,6 +60,10 @@ export default async function AutomacoesPage() {
       auto={automation}
       whatsappConnected={(whatsapp ?? []).some((w: { status: string }) => w.status === 'connected')}
       procedures={procedures ?? []}
+      procStats={{
+        total: totalPacientes ?? 0,
+        comProcedimento: comProcedimento ?? 0,
+      }}
     />
   )
 }

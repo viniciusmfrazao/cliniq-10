@@ -52,6 +52,9 @@ type AutomationRow = {
   recall_dias?: number | null
   template_recall?: string | null
   recall_seq?: any[] | null
+  recall_hora?: number | null
+  contato_pos_proc_modo?: 'todos' | 'apenas' | 'exceto' | null
+  contato_pos_proc_ids?: string[] | null
   nps_pos_atendimento?: boolean | null
   template_nps?: string | null
   nps_imediato?: boolean | null
@@ -87,6 +90,7 @@ interface Props {
   auto: AutomationRow | null
   whatsappConnected: boolean
   procedures: ProcedureOption[]
+  procStats: { total: number; comProcedimento: number }
 }
 
 // ─── Accordion item ───────────────────────────────────────────────────────────
@@ -284,6 +288,7 @@ export default function AutomacoesClient({
   auto,
   whatsappConnected,
   procedures,
+  procStats,
 }: Props) {
   // Controla qual accordion está aberto (null = todos fechados)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -408,7 +413,10 @@ export default function AutomacoesClient({
             seq: auto?.contato_pos_seq ?? [],
             modo: auto?.modo_contato_pos ?? 'texto',
             audioUrl: auto?.audio_contato_pos ?? null,
+            procModo: auto?.contato_pos_proc_modo ?? 'todos',
+            procIds: auto?.contato_pos_proc_ids ?? [],
           }}
+          procedures={procedures}
         />
       </AccordionItem>
 
@@ -481,7 +489,9 @@ export default function AutomacoesClient({
             diasInativo: auto?.recall_dias ?? 150,
             template: auto?.template_recall || '',
             seq: auto?.recall_seq ?? [],
+            hora: auto?.recall_hora ?? 10,
           }}
+          procStats={procStats}
         />
         <RecallHistory clinicId={clinicId} />
       </AccordionItem>

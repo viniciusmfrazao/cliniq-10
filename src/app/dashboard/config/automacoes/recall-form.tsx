@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { parseSupabaseError } from '@/lib/error-messages'
+import ProcedurePicker from './procedure-picker'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -13,6 +14,12 @@ interface RecallStep {
   ativo: boolean
   template: string
   label?: string
+  /**
+   * Filtro OPCIONAL por procedimento. Vazio/ausente = etapa GERAL (vale pra
+   * todo mundo, que é o comportamento de sempre). Preenchido = a etapa só
+   * vale pra quem fez um desses procedimentos na última visita.
+   */
+  procedimentos?: string[] | null
 }
 
 interface Initial {
@@ -22,6 +29,8 @@ interface Initial {
   template: string
   // novo multi-etapa
   seq: RecallStep[]
+  // hora BRT a partir da qual o recall pode disparar (padrão 10)
+  hora: number
 }
 
 interface ProcedureOption {
@@ -36,6 +45,14 @@ interface Props {
   clinicName: string
   initial: Initial
   procedures: ProcedureOption[]
+  /**
+   * Quantos pacientes da clínica têm procedimento identificado na última
+   * visita. `appointments.procedure_id` só passou a ser preenchido em
+   * mai/2026, então boa parte da base antiga não tem — e essas pacientes só
+   * são alcançadas pelas etapas gerais. A tela mostra o número real pra
+   * ninguém ligar a regra achando que pega todo mundo.
+   */
+  procStats: { total: number; comProcedimento: number }
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -140,6 +157,8 @@ function StepCard({
   onRemove,
   onMoveUp,
   onMoveDown,
+  procedures,
+  semProcedimento,
 }: {
   step: RecallStep
   index: number
@@ -149,6 +168,8 @@ function StepCard({
   onRemove: () => void
   onMoveUp: () => void
   onMoveDown: () => void
+  procedures: ProcedureOption[]
+  semProcedimento: number
 }) {
   const [showPreview, setShowPreview] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -159,6 +180,11 @@ function StepCard({
   )
 
   const suggestionsForStep = TEMPLATES_SUGERIDOS[Math.min(index + 1, 3)] ?? []
+
+  // `procedimentos` null/undefined = etapa geral. Array (mesmo vazio) = a
+  // clínica abriu o filtro. Array vazio ainda se comporta como geral no cron,
+  // o que é intencional: não deixa a etapa virar buraco negro sem aviso.
+  const procFiltro = Array.isArray(step.procedimentos)
 
   function insertPlaceholder(tag: string) {
     onChange({ template: step.template + tag })
@@ -271,6 +297,54 @@ function StepCard({
           </p>
         )}
 
+        {/* ── Filtro opcional por procedimento ────────────────────────── */}
+        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={procFiltro}
+              onChange={(e) =>
+                onChange({ procedimentos: e.target.checked ? [] : null })
+              }
+              className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500/30"
+            />
+            <span className="text-sm font-medium text-slate-700">
+              Enviar só para quem fez procedimentos específicos
+            </span>
+          </label>
+
+          {!procFiltro ? (
+            <p className="text-xs text-slate-500 pl-6.5">
+              Desmarcado, esta mensagem vale para <strong>todos</strong> os pacientes
+              inativos — inclusive os sem procedimento registrado.
+            </p>
+          ) : (
+            <div className="pl-6.5 space-y-2">
+              <ProcedurePicker
+                procedures={procedures}
+                selected={step.procedimentos ?? []}
+                onChange={(ids) => onChange({ procedimentos: ids })}
+              />
+              {(step.procedimentos ?? []).length === 0 ? (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  Nenhum procedimento marcado — enquanto ficar assim, esta etapa
+                  continua valendo para todos.
+                </p>
+              ) : (
+                semProcedimento > 0 && (
+                  <p className="text-xs text-slate-500">
+                    {semProcedimento} paciente{semProcedimento > 1 ? 's' : ''} da sua base
+                    não {semProcedimento > 1 ? 'têm' : 'tem'} procedimento registrado na
+                    última visita e não {semProcedimento > 1 ? 'serão alcançados' : 'será alcançado'} por
+                    esta etapa. {semProcedimento > 1 ? 'Eles recebem' : 'Ele recebe'} as
+                    etapas gerais.
+                  </p>
+                )
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Sugestões */}
         {suggestionsForStep.length > 0 && (
           <div>
@@ -359,7 +433,7 @@ function StepCard({
 
 // ─── Form principal ────────────────────────────────────────────────────────────
 
-export default function RecallForm({ clinicId, clinicName, initial, procedures }: Props) {
+export default function RecallForm({ clinicId, clinicName, initial, procedures, procStats }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -394,6 +468,11 @@ export default function RecallForm({ clinicId, clinicName, initial, procedures }
   }
 
   const [enabled, setEnabled] = useState(initial.enabled)
+  const [hora, setHora] = useState(initial.hora ?? 10)
+
+  // Pacientes sem procedimento identificado na última visita — só as etapas
+  // gerais alcançam essa turma.
+  const semProcedimento = Math.max(0, procStats.total - procStats.comProcedimento)
   // Inicializa seq: se já tem dados no novo formato, usa; caso contrário,
   // verifica se havia configuração legada e converte para o primeiro step.
   const [seq, setSeq] = useState<RecallStep[]>(() => {
@@ -493,6 +572,7 @@ export default function RecallForm({ clinicId, clinicName, initial, procedures }
         .update({
           recall_inativos: enabled,
           recall_seq: seq,
+          recall_hora: hora,
           // Mantém legado sincronizado com a 1ª etapa ativa (fallback)
           recall_dias: firstActiveStep?.dias ?? 150,
           template_recall: firstActiveStep?.template ?? '',
@@ -565,14 +645,36 @@ export default function RecallForm({ clinicId, clinicName, initial, procedures }
         <div className="flex-1">
           <p className="font-semibold text-slate-900">Ativar recall automático</p>
           <p className="text-sm text-slate-500">
-            Todo dia às 10h o sistema verifica pacientes inativos e envia as mensagens
-            configuradas abaixo de acordo com o tempo sem visita. Cada etapa é enviada uma única
-            vez por paciente.
+            Todo dia, a partir do horário escolhido, o sistema verifica pacientes inativos e
+            envia as mensagens configuradas abaixo de acordo com o tempo sem visita. Cada etapa
+            é enviada uma única vez por paciente.
           </p>
         </div>
       </label>
 
       <div className={enabled ? '' : 'opacity-50 pointer-events-none'}>
+
+        {/* Horário de disparo */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Enviar a partir das
+          </label>
+          <select
+            value={hora}
+            onChange={(e) => setHora(Number(e.target.value))}
+            className="input w-40"
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 8).map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-400 mt-1">
+            Horário de Brasília. As mensagens saem aos poucos a partir desse horário, ao
+            longo do dia.
+          </p>
+        </div>
 
         {/* Explicação da lógica */}
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 mb-4">
@@ -639,6 +741,8 @@ export default function RecallForm({ clinicId, clinicName, initial, procedures }
                   onRemove={() => removeStep(idx)}
                   onMoveUp={() => moveStep(idx, 'up')}
                   onMoveDown={() => moveStep(idx, 'down')}
+                  procedures={procedures}
+                  semProcedimento={semProcedimento}
                 />
               ))}
             </div>
