@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendAutomationContent } from '@/lib/whatsapp'
-import { cronsEnabled } from '@/lib/cron-guard'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -36,10 +35,6 @@ function getBRTDayBoundsISO(offsetDays: number): { startISO: string; endISO: str
 }
 
 export async function GET(request: Request) {
-  if (!(await cronsEnabled())) {
-    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
-  }
-
   const routeStart = Date.now()
   const { searchParams } = new URL(request.url)
   const force = searchParams.get('force') === '1'
@@ -59,7 +54,9 @@ export async function GET(request: Request) {
       modo_contato_pos,
       audio_contato_pos,
       contato_pos_excluir_categorias,
-      contato_pos_seq
+      contato_pos_seq,
+      contato_pos_proc_modo,
+      contato_pos_proc_ids
     `)
     .eq('contato_pos_procedimento', true)
 
@@ -105,6 +102,21 @@ export async function GET(request: Request) {
     const excluirCats: string[] = auto.contato_pos_excluir_categorias || []
     const EXCLUIR_NOMES = ['avalia', 'retorno', 'consulta', ...excluirCats.map((c: string) => c.toLowerCase())]
 
+    // ── Filtro OPCIONAL por procedimento ───────────────────────────────
+    // modo 'todos' (padrão) = comportamento legado, nada muda.
+    // 'apenas' = whitelist  |  'exceto' = blacklist.
+    // Agendamento sem procedure_id: fica de fora no 'apenas', entra no
+    // 'exceto' (documentado no manual — é a regra que mais confunde).
+    const procModo: string = auto.contato_pos_proc_modo || 'todos'
+    const procIds: string[] = auto.contato_pos_proc_ids || []
+    const filtroProcAtivo = procModo !== 'todos' && procIds.length > 0
+
+    const procedimentoPermitido = (procedureId: string | null): boolean => {
+      if (!filtroProcAtivo) return true
+      if (procModo === 'apenas') return !!procedureId && procIds.includes(procedureId)
+      return !procedureId || !procIds.includes(procedureId)
+    }
+
     // ── MENSAGEM 1: atendimentos concluídos ONTEM (dia civil BRT) ───────
     // A janela larga (lookback de 3 dias até "agora") pegava atendimento de
     // HOJE também, mas o template pressupõe "ontem" — paciente que fez
@@ -114,7 +126,7 @@ export async function GET(request: Request) {
     const { startISO: ontemStart, endISO: ontemEnd } = getBRTDayBoundsISO(-1)
     const { data: aptsOntem } = await svc
       .from('appointments')
-      .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
+      .select('id, patient_id, procedure_id, patients(name, phone), procedures(name), users(name)')
       .eq('clinic_id', auto.clinic_id)
       .eq('status', 'completed')
       .gte('start_time', ontemStart)
@@ -129,6 +141,7 @@ export async function GET(request: Request) {
 
       const procName = (apt.procedures as any)?.name || ''
       if (EXCLUIR_NOMES.some(e => procName.toLowerCase().includes(e))) continue
+      if (!procedimentoPermitido((apt as any).procedure_id ?? null)) continue
 
       const patient = apt.patients as any
       if (!patient?.phone) continue
@@ -189,7 +202,7 @@ export async function GET(request: Request) {
       const { startISO: diaAlvoStart, endISO: diaAlvoEnd } = getBRTDayBoundsISO(-seqItem.dias)
       const { data: aptsSeq } = await svc
         .from('appointments')
-        .select('id, patient_id, patients(name, phone), procedures(name), users(name)')
+        .select('id, patient_id, procedure_id, patients(name, phone), procedures(name), users(name)')
         .eq('clinic_id', auto.clinic_id)
         .eq('status', 'completed')
         .gte('start_time', diaAlvoStart)
@@ -203,6 +216,7 @@ export async function GET(request: Request) {
 
         const procName = (apt.procedures as any)?.name || ''
         if (EXCLUIR_NOMES.some(e => procName.toLowerCase().includes(e))) continue
+        if (!procedimentoPermitido((apt as any).procedure_id ?? null)) continue
 
         const patient = apt.patients as any
         if (!patient?.phone) continue

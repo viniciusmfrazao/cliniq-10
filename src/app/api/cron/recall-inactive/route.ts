@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
-import { cronsEnabled } from '@/lib/cron-guard'
 
 export const maxDuration = 60
 
@@ -42,6 +41,48 @@ const ROUTE_BUDGET_MS = 40_000
 // voltou E sumiu de novo (controlado pela last_completed_at, não por cooldown fixo)
 const LEGACY_COOLDOWN_DAYS = 90
 
+// Número máximo de tentativas por paciente+etapa antes de desistir.
+// Sem isso, um número inválido (Evolution 400 "exists:false") era reenviado a
+// cada ciclo do cron indefinidamente — observado 400+ tentativas no mesmo
+// paciente —, queimando o slot de pacing da instância e o budget de envio,
+// além de ser sinal de risco de ban. Logs com status 'error' (falha real) e
+// 'skipped' (lock órfão de invocação que morreu no timeout) contam como
+// tentativa.
+const MAX_RECALL_ATTEMPTS = 3
+
+// ─── Seleção de etapas por procedimento (opcional) ────────────────────────────
+//
+// Regra: se a clínica NÃO configurou nenhuma etapa específica, devolve a lista
+// inteira — o caminho legado não é sequer tocado.
+//
+// Se configurou, a paciente cai em UM dos dois grupos, nunca nos dois:
+//   - último procedimento casa com alguma etapa específica → só as específicas
+//   - não casa, ou não há procedimento registrado          → só as GERAIS
+//
+// As etapas gerais são a rede de proteção: `appointments.procedure_id` só passou
+// a ser preenchido em mai/2026, então boa parte da base inativa não tem
+// procedimento identificado e depende delas pra continuar recebendo recall.
+//
+// stepNumber NÃO é alterado aqui — o dedupe (patient_id + step, dentro do ciclo)
+// segue exatamente o mesmo, que é o que impede reenvio em massa.
+function pickStepsForPatient<T extends { procedimentos?: string[] | null }>(
+  steps: T[],
+  procedureId: string | null,
+): T[] {
+  const especificas = steps.filter(
+    (s) => Array.isArray(s.procedimentos) && s.procedimentos.length > 0,
+  )
+  if (especificas.length === 0) return steps
+
+  const gerais = steps.filter(
+    (s) => !Array.isArray(s.procedimentos) || s.procedimentos.length === 0,
+  )
+  if (!procedureId) return gerais
+
+  const casadas = especificas.filter((s) => s.procedimentos!.includes(procedureId))
+  return casadas.length > 0 ? casadas : gerais
+}
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 interface RecallStep {
@@ -49,6 +90,13 @@ interface RecallStep {
   ativo: boolean
   template: string
   label?: string
+  /**
+   * Filtro OPCIONAL por procedimento (ago/2026).
+   * Ausente / vazio = etapa GERAL, vale pra todo mundo (comportamento legado).
+   * Preenchido = etapa específica, só vale pra quem fez um desses procedimentos
+   * na última visita. Ver pickStepsForPatient().
+   */
+  procedimentos?: string[] | null
 }
 
 interface AutomationRow {
@@ -92,6 +140,7 @@ interface LogRow {
   step: number
   sent_at: string
   last_visit_at: string | null
+  status: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -154,10 +203,6 @@ function waScore(w: WaRow): number {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  if (!(await cronsEnabled())) {
-    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
-  }
-
   const routeStart = Date.now()
   // Auth
   const auth = req.headers.get('authorization')
@@ -235,6 +280,7 @@ export async function GET(req: NextRequest) {
     skippedNoPhone: 0,
     skippedAllStepsDone: 0,
     skippedNoStepReady: 0,
+    skippedMaxAttempts: 0,
     stoppedEarly: false,
     errors: [] as Array<{ clinic_id: string; patient_id?: string; error: string }>,
     detail: [] as Array<{
@@ -313,6 +359,7 @@ async function processMultiStep({
     skippedNoPhone: number
     skippedAllStepsDone: number
     skippedNoStepReady: number
+    skippedMaxAttempts: number
     errors: Array<{ clinic_id: string; patient_id?: string; error: string }>
     detail: Array<{
       clinic_id: string
@@ -375,26 +422,50 @@ async function processMultiStep({
   // Isso garante que se o paciente voltou e sumiu de novo, as etapas reiniciam
   const { data: existingLogs } = await svc
     .from('recall_messages_log')
-    .select('patient_id, step, sent_at, last_visit_at')
+    .select('patient_id, step, sent_at, last_visit_at, status')
     .eq('clinic_id', auto.clinic_id)
     .in('patient_id', Array.from(patientById.keys()))
     .eq('status', 'sent')
     .order('sent_at', { ascending: false })
 
+  // Tentativas falhas vêm numa query separada de propósito: um paciente com
+  // número inválido acumula centenas de linhas 'error', e se as duas viessem
+  // juntas essas linhas (mais recentes) empurrariam as linhas 'sent' pra fora
+  // do teto de linhas do PostgREST — fazendo o cron reenviar etapa já enviada.
+  const { data: failedLogs } = await svc
+    .from('recall_messages_log')
+    .select('patient_id, step, sent_at, last_visit_at, status')
+    .eq('clinic_id', auto.clinic_id)
+    .in('patient_id', Array.from(patientById.keys()))
+    .in('status', ['error', 'skipped'])
+    .order('sent_at', { ascending: false })
+
   // Agrupa logs por patient_id: { patient_id -> Set<step> } para o ciclo atual
   const sentStepsByPatient = new Map<string, Set<number>>()
+  // Tentativas que falharam, por "patient_id:step", no ciclo atual
+  const failedAttempts = new Map<string, number>()
   const visitByPatient = new Map<string, string>()
   for (const v of visits) visitByPatient.set(v.patient_id, v.last_completed_at)
 
-  for (const log of (existingLogs as LogRow[] | null) ?? []) {
+  // Só conta o log se foi registrado DEPOIS da última visita (mesmo ciclo):
+  // se o paciente voltou e sumiu de novo, etapas e tentativas reiniciam.
+  const isSameCycle = (log: LogRow) => {
     const lastVisit = visitByPatient.get(log.patient_id)
-    // Só conta o log se foi enviado DEPOIS da última visita (mesmo ciclo)
-    if (lastVisit && log.sent_at > lastVisit) {
-      if (!sentStepsByPatient.has(log.patient_id)) {
-        sentStepsByPatient.set(log.patient_id, new Set())
-      }
-      sentStepsByPatient.get(log.patient_id)!.add(log.step)
+    return !!lastVisit && log.sent_at > lastVisit
+  }
+
+  for (const log of (existingLogs as LogRow[] | null) ?? []) {
+    if (!isSameCycle(log)) continue
+    if (!sentStepsByPatient.has(log.patient_id)) {
+      sentStepsByPatient.set(log.patient_id, new Set())
     }
+    sentStepsByPatient.get(log.patient_id)!.add(log.step)
+  }
+
+  for (const log of (failedLogs as LogRow[] | null) ?? []) {
+    if (!isSameCycle(log)) continue
+    const key = `${log.patient_id}:${log.step}`
+    failedAttempts.set(key, (failedAttempts.get(key) ?? 0) + 1)
   }
 
   let sentForThisClinic = 0
@@ -414,13 +485,19 @@ async function processMultiStep({
     // - Dias atingidos (days_since_last >= step.dias)
     // - Ainda não enviada neste ciclo
     // O índice do step na sequência original (não filtrada) é usado como número da etapa
-    const allActiveSteps = (auto.recall_seq ?? [])
-      .map((s, originalIdx) => ({ ...s, stepNumber: originalIdx + 1 }))
-      .filter((s) => s.ativo && s.template?.trim())
-      .sort((a, b) => a.dias - b.dias)
+    const allActiveSteps = pickStepsForPatient(
+      (auto.recall_seq ?? [])
+        .map((s, originalIdx) => ({ ...s, stepNumber: originalIdx + 1 }))
+        .filter((s) => s.ativo && s.template?.trim())
+        .sort((a, b) => a.dias - b.dias),
+      v.procedure_id,
+    )
 
     const nextStep = allActiveSteps.find(
-      (s) => v.days_since_last >= s.dias && !sentSteps.has(s.stepNumber),
+      (s) =>
+        v.days_since_last >= s.dias &&
+        !sentSteps.has(s.stepNumber) &&
+        (failedAttempts.get(`${v.patient_id}:${s.stepNumber}`) ?? 0) < MAX_RECALL_ATTEMPTS,
     )
 
     if (!nextStep) {
@@ -428,7 +505,18 @@ async function processMultiStep({
       const eligibleSent = allActiveSteps.filter(
         (s) => v.days_since_last >= s.dias && sentSteps.has(s.stepNumber),
       )
-      if (eligibleSent.length > 0) {
+      // Etapa elegível que estourou o teto de tentativas: não é "sem etapa
+      // pronta", é desistência deliberada. Separado no summary pra ficar
+      // visível no retorno do cron.
+      const eligibleExhausted = allActiveSteps.filter(
+        (s) =>
+          v.days_since_last >= s.dias &&
+          !sentSteps.has(s.stepNumber) &&
+          (failedAttempts.get(`${v.patient_id}:${s.stepNumber}`) ?? 0) >= MAX_RECALL_ATTEMPTS,
+      )
+      if (eligibleExhausted.length > 0) {
+        summary.skippedMaxAttempts++
+      } else if (eligibleSent.length > 0) {
         summary.skippedAllStepsDone++
       } else {
         summary.skippedNoStepReady++
@@ -593,17 +681,38 @@ async function processLegacy({
   }
   if (patientById.size === 0) return
 
-  const { data: recentLogs } = await svc
-    .from('recall_messages_log')
-    .select('patient_id')
-    .eq('clinic_id', auto.clinic_id)
-    .in('patient_id', Array.from(patientById.keys()))
-    .gte('sent_at', cooldownCutoff)
-    .eq('status', 'sent')
+  // Duas queries pelo mesmo motivo do caminho por sequência: o volume de
+  // linhas 'error' de um número inválido não pode empurrar as linhas 'sent'
+  // pra fora do resultado e furar o cooldown.
+  const [{ data: recentLogs }, { data: recentFailures }] = await Promise.all([
+    svc
+      .from('recall_messages_log')
+      .select('patient_id')
+      .eq('clinic_id', auto.clinic_id)
+      .in('patient_id', Array.from(patientById.keys()))
+      .gte('sent_at', cooldownCutoff)
+      .eq('status', 'sent'),
+    svc
+      .from('recall_messages_log')
+      .select('patient_id')
+      .eq('clinic_id', auto.clinic_id)
+      .in('patient_id', Array.from(patientById.keys()))
+      .gte('sent_at', cooldownCutoff)
+      .in('status', ['error', 'skipped']),
+  ])
 
+  // 'sent' bloqueia pelo cooldown normal. 'error'/'skipped' não bloqueavam
+  // nada antes (o filtro era .eq('status','sent')), então número inválido
+  // voltava pra fila a cada ciclo — mesmo bug do caminho por sequência.
   const recentlyContacted = new Set<string>()
   for (const r of (recentLogs as { patient_id: string }[] | null) ?? []) {
     recentlyContacted.add(r.patient_id)
+  }
+  const legacyFailures = new Map<string, number>()
+  for (const r of (recentFailures as { patient_id: string }[] | null) ?? []) {
+    const n = (legacyFailures.get(r.patient_id) ?? 0) + 1
+    legacyFailures.set(r.patient_id, n)
+    if (n >= MAX_RECALL_ATTEMPTS) recentlyContacted.add(r.patient_id)
   }
 
   let sentForThisClinic = 0
@@ -704,3 +813,4 @@ async function processLegacy({
     }
   }
 }
+
