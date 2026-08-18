@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, Fragment } from 'react'
+import { ENTITY_LABELS, MODULE_LABELS, ACTOR_SOURCE_CONFIG, summarizeChange } from '@/lib/audit-log-format'
 
 type LogEntry = {
   id: string
@@ -15,6 +16,9 @@ type LogEntry = {
   details: Record<string, unknown> | null
   ip_address: string | null
   created_at: string
+  actor_source: string | null
+  db_user: string | null
+  app_name: string | null
 }
 
 export default function LogsPage() {
@@ -215,19 +219,24 @@ export default function LogsPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Tipo</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Onde</label>
             <select
               value={filters.entity_type}
               onChange={e => setFilters(prev => ({ ...prev, entity_type: e.target.value }))}
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
             >
               <option value="">Todos</option>
-              <option value="appointment">Agendamento</option>
-              <option value="patient">Paciente</option>
-              <option value="user">Usuário</option>
-              <option value="clinic">Clínica</option>
-              <option value="procedure">Procedimento</option>
-              <option value="lead">Lead</option>
+              <option value="appointments">Agenda</option>
+              <option value="patients">Pacientes</option>
+              <option value="evolutions">Prontuário</option>
+              <option value="leads">CRM</option>
+              <option value="users">Equipe</option>
+              <option value="products">Estoque</option>
+              <option value="stock_movements">Estoque (movimentação)</option>
+              <option value="entradas">Financeiro (entrada)</option>
+              <option value="saidas">Financeiro (saída)</option>
+              <option value="crm_settings">Config. CRM</option>
+              <option value="clinics">Config. Clínica</option>
             </select>
           </div>
           <div>
@@ -238,8 +247,12 @@ export default function LogsPage() {
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
             >
               <option value="">Todas</option>
-              <option value="user">👤 Usuários</option>
-              <option value="system">🤖 Sistema</option>
+              <option value="user">👤 Usuários (app)</option>
+              <option value="mcp_ia">⚡ IA (Supabase MCP)</option>
+              <option value="service_role">⚙️ Automação (backend)</option>
+              <option value="pg_cron">⏱️ Automação (agendada)</option>
+              <option value="sql_direto_ou_dashboard">🛠️ SQL direto / Dashboard</option>
+              <option value="desconhecido">❓ Não identificada</option>
             </select>
           </div>
           <div>
@@ -331,10 +344,13 @@ export default function LogsPage() {
                     Ação
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase">
-                    Tipo
+                    Onde
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase">
-                    Entidade
+                    Registro
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase">
+                    O que mudou
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase">
                     IP
@@ -368,8 +384,11 @@ export default function LogsPage() {
                           {log.user_name ? (
                             <span>👤 {log.user_name}</span>
                           ) : (
-                            <span className="text-xs px-2 py-1 rounded-full font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
-                              🤖 Sistema
+                            <span
+                              className="text-xs px-2 py-1 rounded-full font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                              title={log.actor_source ? ACTOR_SOURCE_CONFIG[log.actor_source]?.hint : undefined}
+                            >
+                              {log.actor_source ? (ACTOR_SOURCE_CONFIG[log.actor_source]?.label || log.actor_source) : 'Sistema (sem detalhe)'}
                             </span>
                           )}
                         </td>
@@ -384,10 +403,16 @@ export default function LogsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                          {log.entity_type}
+                          <div className="flex flex-col">
+                            <span>{MODULE_LABELS[log.entity_type] || log.entity_type}</span>
+                            <span className="text-xs text-slate-400">{ENTITY_LABELS[log.entity_type] || log.entity_type}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">
                           {log.entity_name || log.entity_id?.slice(0, 8) || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                          {summarizeChange(log) || '-'}
                         </td>
                         <td className="px-4 py-3 text-xs text-slate-500 font-mono">
                           {log.ip_address || '-'}
@@ -400,15 +425,16 @@ export default function LogsPage() {
                           </td>
                           <td className="px-4 py-2" />
                           <td className="px-4 py-2 text-xs text-slate-500">
-                            {sub.user_name ? `👤 ${sub.user_name}` : '🤖 Sistema'}
+                            {sub.user_name ? `👤 ${sub.user_name}` : (sub.actor_source ? ACTOR_SOURCE_CONFIG[sub.actor_source]?.label || sub.actor_source : 'Sistema')}
                           </td>
                           <td className="px-4 py-2">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getActionColor(sub.action)}`}>
                               {sub.action}
                             </span>
                           </td>
-                          <td className="px-4 py-2 text-xs text-slate-500">{sub.entity_type}</td>
+                          <td className="px-4 py-2 text-xs text-slate-500">{MODULE_LABELS[sub.entity_type] || sub.entity_type}</td>
                           <td className="px-4 py-2 text-xs text-slate-600">{sub.entity_name || '-'}</td>
+                          <td className="px-4 py-2 text-xs text-slate-500">{summarizeChange(sub) || '-'}</td>
                           <td className="px-4 py-2" />
                         </tr>
                       ))}

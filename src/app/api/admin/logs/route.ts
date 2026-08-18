@@ -41,6 +41,10 @@ export async function GET(request: NextRequest) {
       query = query.is('user_id', null)
     } else if (origin === 'user') {
       query = query.not('user_id', 'is', null)
+    } else if (origin) {
+      // valores de actor_source (mcp_ia, service_role, pg_cron,
+      // sql_direto_ou_dashboard, desconhecido) -- ver log_audit() no banco
+      query = query.eq('actor_source', origin)
     }
 
     // Sanitiza tudo que vai pra .ilike()/.or() do PostgREST. Sem isso,
