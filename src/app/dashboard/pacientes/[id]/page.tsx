@@ -5,7 +5,8 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { Suspense } from 'react'
 import DeletePatientButton from './delete-button'
-import PatientTabs, { type PatientTab, isValidTab } from './tabs'
+import PatientTabs from './tabs'
+import { type PatientTab, isValidTab } from './tabs-shared'
 import MedicalInfo from './medical-info'
 import EvolutionTimeline from './evolution-timeline'
 import NewEvolutionButton from './new-evolution-button'
@@ -492,9 +493,9 @@ async function EvolucoesTab({
   canEditRecords: boolean
 }) {
   const supabase = await createClient()
-  // Evoluções e anamneses em paralelo — vão pro mesmo timeline e ficam
-  // misturadas por data no client.
-  const [{ data: evolutions }, { data: anamneses }] = await Promise.all([
+  // Evoluções, anamneses e anotações em paralelo — vão pro mesmo
+  // timeline e ficam misturadas por data no client.
+  const [{ data: evolutions }, { data: anamneses }, { data: notes }] = await Promise.all([
     supabase
       .from('evolutions')
       .select('*, users:evolutions_professional_id_fkey(name)')
@@ -503,6 +504,11 @@ async function EvolucoesTab({
     supabase
       .from('anamneses')
       .select('id, status, responses, completed_at, created_at')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('patient_notes')
+      .select('id, content, pinned, created_at, updated_at, author_id, users(name)')
       .eq('patient_id', patientId)
       .order('created_at', { ascending: false }),
   ])
@@ -539,6 +545,7 @@ async function EvolucoesTab({
       <EvolutionTimeline
         evolutions={evolutions || []}
         anamneses={anamneses || []}
+        notes={(notes || []) as unknown as Parameters<typeof EvolutionTimeline>[0]['notes']}
         photoUrls={photoUrls}
         patientId={patientId}
         canEdit={canEditRecords}
