@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendAutomationContent } from '@/lib/whatsapp'
+import { cronsEnabled } from '@/lib/cron-guard'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -35,6 +36,10 @@ function getBRTDayBoundsISO(offsetDays: number): { startISO: string; endISO: str
 }
 
 export async function GET(request: Request) {
+  if (!(await cronsEnabled())) {
+    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
+  }
+
   const routeStart = Date.now()
   const { searchParams } = new URL(request.url)
   const force = searchParams.get('force') === '1'

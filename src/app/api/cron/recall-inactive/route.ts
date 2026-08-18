@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWhatsappMessage } from '@/lib/whatsapp'
+import { cronsEnabled } from '@/lib/cron-guard'
 
 export const maxDuration = 60
 
 /**
  * GET /api/cron/recall-inactive
  *
- * Cron de recall de inativos — roda 1x por dia às 10h BRT (13h UTC).
+ * Cron de recall de inativos — roda a cada 10min das 06h as 20h50 BRT.
+ * Cada clinica so comeca a disparar a partir de `recall_hora` (padrao 10h BRT).
  *
  * LÓGICA MULTI-ETAPA (recall_seq):
  *   Cada clínica pode configurar N etapas, cada uma com {dias, ativo, template}.
@@ -29,6 +31,11 @@ export const maxDuration = 60
  */
 
 const TZ_BR = 'America/Sao_Paulo'
+
+/** Hora atual (0-23) no fuso de Brasília. Mesmo helper usado no contato-pos. */
+function currentHourBR(): number {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: TZ_BR })).getHours()
+}
 // Era 50/clínica — com o gap de 15-35s do whatsapp_pace_send isso sozinho já
 // estourava os 60s da function bem antes de chegar nas outras clínicas
 // (efeito colateral: recall é anti-ban de alto risco de rajada, então o
@@ -105,6 +112,7 @@ interface AutomationRow {
   recall_dias: number | null
   template_recall: string | null
   recall_seq: RecallStep[] | null
+  recall_hora: number | null
 }
 
 interface WaRow {
@@ -203,6 +211,10 @@ function waScore(w: WaRow): number {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  if (!(await cronsEnabled())) {
+    return NextResponse.json({ disabled: true, reason: 'crons_enabled=false in app_settings' }, { status: 200 })
+  }
+
   const routeStart = Date.now()
   // Auth
   const auth = req.headers.get('authorization')
@@ -227,7 +239,7 @@ export async function GET(req: NextRequest) {
   // 1) Clínicas com recall ligado
   const { data: automations, error: errAuto } = await svc
     .from('clinic_automations')
-    .select('clinic_id, recall_inativos, recall_dias, template_recall, recall_seq')
+    .select('clinic_id, recall_inativos, recall_dias, template_recall, recall_seq, recall_hora')
     .eq('recall_inativos', true)
 
   if (errAuto) {
@@ -237,8 +249,18 @@ export async function GET(req: NextRequest) {
     )
   }
 
+  // Trava de horário (ago/2026). O cron roda */10 das 9h as 23h UTC = 06h as
+  // 20h50 BRT e nunca teve guarda de hora — foram observados recalls saindo as
+  // 7h da manha. Mesmo padrao do contato-pos: dispara A PARTIR da hora
+  // configurada e segue tentando o resto do dia (a idempotencia por
+  // patient+step garante que nao duplica). `?force=1` ignora, pra teste.
+  const force = url.searchParams.get('force') === '1'
+  const currentHour = currentHourBR()
+
   // Filtra clínicas com ao menos uma etapa ativa OU configuração legada
   const enabledClinics = ((automations as AutomationRow[] | null) ?? []).filter((a) => {
+    const targetHour = Number(a.recall_hora ?? 10)
+    if (!force && currentHour < targetHour) return false
     const hasSeq =
       Array.isArray(a.recall_seq) &&
       a.recall_seq.length > 0 &&
