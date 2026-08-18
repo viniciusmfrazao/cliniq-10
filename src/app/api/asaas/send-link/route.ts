@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { isSuperAdmin } from '@/lib/super-admin'
+
+export const dynamic = 'force-dynamic'
 
 const ASAAS_API_KEY = process.env.ASAAS_API_KEY!
 const ASAAS_BASE = 'https://api.asaas.com/v3'
@@ -21,6 +24,11 @@ function sleep(ms: number) {
 }
 
 export async function POST(req: Request) {
+  // Gera cobrança na Asaas — só super admin. Ficou sem guard desde a criação
+  // da rota; qualquer usuário logado conseguia disparar.
+  if (!(await isSuperAdmin())) {
+    return NextResponse.json({ ok: false, error: 'Não autorizado' }, { status: 403 })
+  }
   try {
     const {
       clinicId,

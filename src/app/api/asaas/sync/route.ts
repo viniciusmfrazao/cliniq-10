@@ -32,7 +32,7 @@ async function syncAll() {
 
   const { data: subs, error } = await svc
     .from('clinic_subscriptions')
-    .select('clinic_id, asaas_customer_id, asaas_checkout_id, asaas_subscription_id, payment_method, plan_price, last_capture_refused_at, clinics(name)')
+    .select('clinic_id, asaas_customer_id, asaas_checkout_id, asaas_subscription_id, payment_method, plan_price, last_capture_refused_at, status, suspended_at, clinics(name)')
     .not('asaas_customer_id', 'is', null)
 
   if (error) throw new Error(`Erro ao ler clinic_subscriptions: ${error.message}`)
@@ -42,6 +42,16 @@ async function syncAll() {
   for (const row of subs || []) {
     const clinicName = (row as any).clinics?.name || row.clinic_id
     const item: any = { clinic: clinicName, clinic_id: row.clinic_id, problemas: [] as string[] }
+
+    // Cobrança suspensa manualmente pelo super admin: o sync recalcularia o
+    // status pelos pagamentos antigos ('active') e reescreveria plan_expires_at,
+    // desfazendo a suspensão sozinho. Fica de fora até ser reativada.
+    if (row.status === 'suspended' || row.suspended_at) {
+      item.status_novo = 'suspended'
+      item.problemas.push('cobrança suspensa pelo admin — sync ignorado')
+      report.push(item)
+      continue
+    }
 
     try {
       // 1. Status do checkout — responde "a clínica chegou a cadastrar o cartão?"
@@ -146,7 +156,11 @@ async function syncAll() {
         last_sync_at: now,
         updated_at: now,
       }
+      // Assinatura sumiu da Asaas (deletada no painel): limpa o ID fantasma,
+      // senão o banco continua apontando pra uma assinatura que não existe e
+      // o admin não consegue distinguir "sem recorrência" de "tem recorrência".
       if (sub?.id) patch.asaas_subscription_id = sub.id
+      else if (row.asaas_subscription_id) patch.asaas_subscription_id = null
       if (cardRegistered) {
         patch.card_registered_at = sub?.dateCreated
           ? new Date(sub.dateCreated).toISOString()

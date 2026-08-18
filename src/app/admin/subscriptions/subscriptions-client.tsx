@@ -8,6 +8,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   trial:     { label: 'Trial', color: 'bg-blue-100 text-blue-700' },
   active:    { label: 'Ativo', color: 'bg-emerald-100 text-emerald-700' },
   overdue:   { label: 'Inadimplente', color: 'bg-red-100 text-red-700' },
+  suspended: { label: '⏸️ Cobrança suspensa', color: 'bg-amber-100 text-amber-800' },
   cancelled: { label: 'Cancelado', color: 'bg-slate-200 text-slate-500' },
   blocked:   { label: 'Bloqueado', color: 'bg-red-200 text-red-800' },
 }
@@ -74,6 +75,21 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [action, setAction] = useState<{
+    type: 'suspend' | 'resume' | 'create'
+    clinicId: string
+    clinicName: string
+    sub: any
+  } | null>(null)
+  const [actionForm, setActionForm] = useState({
+    nextDueDate: '',
+    value: '',
+    cycle: 'MONTHLY',
+    manterAcesso: true,
+    cancelarCobrancasAbertas: true,
+  })
+  const [running, setRunning] = useState(false)
+  const [actionResult, setActionResult] = useState<{ detalhes?: string[]; error?: string } | null>(null)
 
   const filtered = clinics.filter(c => normalizeText(c.name).includes(normalizeText(search)))
 
@@ -94,6 +110,51 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
       setSyncMsg(`❌ ${e.message}`)
     }
     setSyncing(false)
+  }
+
+  function openAction(type: 'suspend' | 'resume' | 'create', clinic: any, sub: any) {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    setActionForm({
+      nextDueDate: d.toISOString().slice(0, 10),
+      value: sub?.plan_price?.toString() || '',
+      cycle: sub?.billing_cycle || 'MONTHLY',
+      manterAcesso: true,
+      cancelarCobrancasAbertas: true,
+    })
+    setActionResult(null)
+    setAction({ type, clinicId: clinic.id, clinicName: clinic.name, sub })
+  }
+
+  async function runAction() {
+    if (!action) return
+    setRunning(true)
+    setActionResult(null)
+    try {
+      const r = await fetch('/api/asaas/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clinicId: action.clinicId,
+          action: action.type,
+          nextDueDate: actionForm.nextDueDate,
+          value: parseFloat(actionForm.value) || undefined,
+          cycle: actionForm.cycle,
+          manterAcesso: actionForm.manterAcesso,
+          cancelarCobrancasAbertas: actionForm.cancelarCobrancasAbertas,
+        }),
+      })
+      const data = await r.json()
+      if (data.ok) {
+        setActionResult({ detalhes: data.detalhes || [] })
+        setTimeout(() => window.location.reload(), 2500)
+      } else {
+        setActionResult({ error: data.error })
+      }
+    } catch (e: any) {
+      setActionResult({ error: e.message })
+    }
+    setRunning(false)
   }
 
   async function sendLink() {
@@ -249,9 +310,14 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
                   )}
 
                   {/* Alertas de inconsistência */}
-                  {cardOk && !sub?.next_charge_at && (
+                  {status === 'suspended' && (
+                    <p className="text-xs text-amber-700 mt-2 font-medium">
+                      ⏸️ Cobrança suspensa{sub?.suspended_at ? ` em ${fmtDateTime(sub.suspended_at)}` : ''} — a Asaas não vai cobrar até a reativação. O sync não altera esta clínica.
+                    </p>
+                  )}
+                  {status !== 'suspended' && cardOk && !sub?.next_charge_at && (
                     <p className="text-xs text-red-600 mt-2 font-medium">
-                      ⚠️ Cartão cadastrado mas sem cobrança agendada na Asaas — rode o sync ou confira a assinatura.
+                      ⚠️ Cartão cadastrado mas sem recorrência ativa na Asaas — a clínica está usando sem ser cobrada. Use &quot;Criar recorrência&quot; para cobrar no cartão que já está salvo.
                     </p>
                   )}
                   {!cardOk && sub?.checkout_sent_at && !cobrancaPaga && (
@@ -274,6 +340,31 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
                       className="text-xs px-3 py-1.5 border border-violet-200 text-violet-700 rounded-lg hover:bg-violet-50">
                       🔗 Ver link
                     </a>
+                  )}
+
+                  {status === 'suspended' ? (
+                    <button
+                      onClick={() => openAction('resume', clinic, sub)}
+                      className="text-xs px-3 py-1.5 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium">
+                      ▶️ Reativar cobrança
+                    </button>
+                  ) : (
+                    <>
+                      {cardOk && !sub?.next_charge_at && (
+                        <button
+                          onClick={() => openAction('create', clinic, sub)}
+                          className="text-xs px-3 py-1.5 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 font-medium">
+                          🔁 Criar recorrência
+                        </button>
+                      )}
+                      {sub?.asaas_customer_id && (
+                        <button
+                          onClick={() => openAction('suspend', clinic, sub)}
+                          className="text-xs px-3 py-1.5 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-50 font-medium">
+                          ⏸️ Suspender
+                        </button>
+                      )}
+                    </>
                   )}
                   <button
                     onClick={() => { setModal({ clinicId: clinic.id, clinicName: clinic.name }); setResult(null) }}
@@ -308,6 +399,107 @@ export default function SubscriptionsClient({ clinics, plans, eventsByClinic }: 
           )
         })}
       </div>
+
+      {/* Modal de suspender / reativar / criar recorrência */}
+      {action && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-slate-800 mb-1">
+              {action.type === 'suspend' && '⏸️ Suspender cobrança'}
+              {action.type === 'resume' && '▶️ Reativar cobrança'}
+              {action.type === 'create' && '🔁 Criar recorrência'}
+            </h2>
+            <p className="text-sm text-slate-500 mb-5">{action.clinicName}</p>
+
+            {action.type === 'suspend' ? (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  A assinatura é inativada na Asaas e a clínica para de ser cobrada. Nada é
+                  cancelado no acesso dela por padrão.
+                </p>
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={actionForm.cancelarCobrancasAbertas} className="mt-0.5"
+                    onChange={e => setActionForm({ ...actionForm, cancelarCobrancasAbertas: e.target.checked })} />
+                  <span>
+                    Cancelar cobranças já geradas em aberto
+                    <span className="block text-xs text-slate-400">
+                      Sem isso a Asaas ainda captura no cartão a cobrança que já existe.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={actionForm.manterAcesso} className="mt-0.5"
+                    onChange={e => setActionForm({ ...actionForm, manterAcesso: e.target.checked })} />
+                  <span>
+                    Manter o acesso da clínica liberado
+                    <span className="block text-xs text-slate-400">
+                      Desmarcado, ela é bloqueada no app quando o prazo atual vencer.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  {action.type === 'create'
+                    ? 'Cria a recorrência usando o cartão que a clínica já cadastrou na Asaas — nenhum link novo é enviado pra ela.'
+                    : 'Reativa a assinatura na Asaas a partir da data abaixo. Se a assinatura tiver sido removida, ela é recriada com o cartão salvo.'}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">1ª cobrança em</label>
+                    <input type="date" value={actionForm.nextDueDate}
+                      onChange={e => setActionForm({ ...actionForm, nextDueDate: e.target.value })}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
+                    <input type="number" step="0.01" min="0" value={actionForm.value}
+                      onChange={e => setActionForm({ ...actionForm, value: e.target.value })}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Ciclo</label>
+                  <select value={actionForm.cycle}
+                    onChange={e => setActionForm({ ...actionForm, cycle: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm">
+                    <option value="MONTHLY">Mensal</option>
+                    <option value="YEARLY">Anual</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {actionResult?.detalhes && (
+              <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                <p className="text-xs font-semibold text-emerald-700 mb-1">✅ Feito. Recarregando...</p>
+                {actionResult.detalhes.map((d, i) => (
+                  <p key={i} className="text-xs text-emerald-600">• {d}</p>
+                ))}
+              </div>
+            )}
+            {actionResult?.error && (
+              <div className="mt-4 p-3 bg-red-50 rounded-xl border border-red-100 text-xs text-red-700">
+                ❌ {actionResult.error}
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => { setAction(null); setActionResult(null) }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">
+                Fechar
+              </button>
+              <button onClick={runAction} disabled={running || (action.type !== 'suspend' && !actionForm.nextDueDate)}
+                className={`flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:bg-slate-200 disabled:text-slate-400 ${
+                  action.type === 'suspend' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}>
+                {running ? 'Processando...' : action.type === 'suspend' ? 'Suspender' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de envio */}
       {modal && (

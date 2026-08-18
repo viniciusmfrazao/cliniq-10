@@ -20,7 +20,7 @@ export default async function SubscriptionsPage() {
         last_payment_at, last_payment_value, asaas_checkout_url, asaas_subscription_id, payment_method,
         trial_ends_at, card_registered_at, card_brand, card_last4,
         next_charge_at, next_charge_value, next_charge_status, last_sync_at,
-        last_capture_refused_at
+        last_capture_refused_at, suspended_at, asaas_customer_id
       )
     `)
     .order('created_at', { ascending: false })
@@ -49,3 +49,4 @@ export default async function SubscriptionsPage() {
 
   return <SubscriptionsClient clinics={clinics || []} plans={plans || []} eventsByClinic={eventsByClinic} />
 }
+
