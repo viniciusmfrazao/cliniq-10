@@ -15,6 +15,7 @@ import OdontogramTab from './odontogram-tab'
 import DocumentosTab from './documentos-tab'
 import FinanceiroTab from './financeiro-tab'
 import PatientAttachments from '@/components/PatientAttachments'
+import PatientNotes from '@/components/PatientNotes'
 import RealtimeWatcher from '@/components/RealtimeWatcher'
 import AnamnesePresencialButton from './anamnese-presencial-button'
 import VendaButton from './venda-button'
@@ -66,6 +67,7 @@ export default async function PatientCentralPage({
     documentsCountResult,
     attachmentsCountResult,
     entradasCountResult,
+    patientNotesResult,
   ] = await Promise.all([
     supabase.from('patients').select('*').eq('id', id).maybeSingle(),
     supabase.from('medical_records').select('*').eq('patient_id', id).maybeSingle(),
@@ -111,6 +113,12 @@ export default async function PatientCentralPage({
       .from('entradas')
       .select('id', { count: 'exact', head: true })
       .eq('paciente_id', id),
+    supabase
+      .from('patient_notes')
+      .select('id, content, pinned, created_at, updated_at, author_id, users(name)')
+      .eq('patient_id', id)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false }),
   ])
 
   const activeAppointment = activeAppointmentResult.data
@@ -255,6 +263,7 @@ export default async function PatientCentralPage({
       <RealtimeWatcher table="evolutions" column="patient_id" value={id} />
       <RealtimeWatcher table="appointments" column="patient_id" value={id} />
       <RealtimeWatcher table="patient_packages" column="patient_id" value={id} />
+      <RealtimeWatcher table="patient_notes" column="patient_id" value={id} />
 
       {/* Tabs */}
       <PatientTabs patientId={id} current={currentTab} counts={counts} />
@@ -263,6 +272,16 @@ export default async function PatientCentralPage({
       {currentTab === 'overview' && (
         <>
           <OverviewTab patient={patient} medicalRecord={medicalRecord} patientId={id} />
+          {userData?.clinic_id && (
+            <div className="mt-6">
+              <PatientNotes
+                notes={(patientNotesResult.data || []) as unknown as Parameters<typeof PatientNotes>[0]['notes']}
+                patientId={id}
+                clinicId={userData.clinic_id}
+                userId={user.id}
+              />
+            </div>
+          )}
           <div className="mt-6">
             <Suspense fallback={<TabSkeleton />}>
               {userData?.clinic_id && patient && (
