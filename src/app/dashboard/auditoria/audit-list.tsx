@@ -16,6 +16,9 @@ type AuditLog = {
   user_agent: string | null
   created_at: string
   user: { name: string; email: string } | null
+  actor_source: string | null
+  db_user: string | null
+  app_name: string | null
 }
 
 type Props = {
@@ -34,6 +37,18 @@ const ACTION_CONFIG: Record<string, { label: string; icon: string; color: string
   send: { label: 'Enviou', icon: 'send', color: 'bg-cyan-100 text-cyan-700' },
   check_in: { label: 'Check-in', icon: 'userCheck', color: 'bg-emerald-100 text-emerald-700' },
   status_change: { label: 'Alterou status', icon: 'refresh', color: 'bg-amber-100 text-amber-700' },
+}
+
+// Rotulo pra escritas que nao vieram de um usuario logado no app (auth.uid()
+// null). Sem isso a tela mostrava "Sistema" pra tudo igual -- trigger
+// automatico, cron, edge function ou alguem rodando SQL direto no banco
+// ficavam indistinguiveis. Ver log_audit() no banco pra origem de cada valor.
+const ACTOR_SOURCE_CONFIG: Record<string, { label: string; hint: string }> = {
+  mcp_ia: { label: 'IA (Supabase MCP)', hint: 'Escrita feita por um assistente de IA conectado direto ao banco via MCP' },
+  service_role: { label: 'Automação (backend)', hint: 'Edge Function ou processo de servidor usando a service key' },
+  pg_cron: { label: 'Automação (agendada)', hint: 'Job agendado (pg_cron) rodando no banco' },
+  sql_direto_ou_dashboard: { label: 'SQL direto / Dashboard', hint: 'Alguem rodou SQL direto ou editou pelo Table Editor do Supabase' },
+  desconhecido: { label: 'Origem não identificada', hint: 'Não bateu com nenhum padrão conhecido' },
 }
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -233,14 +248,28 @@ export default function AuditList({ logs, users }: Props) {
                         <span className="text-sm text-slate-600">{formatDate(log.created_at)}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center">
-                            <span className="text-xs font-semibold text-violet-700">
-                              {log.user?.name?.charAt(0) || '?'}
+                        {log.user?.name ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center">
+                              <span className="text-xs font-semibold text-violet-700">
+                                {log.user.name.charAt(0)}
+                              </span>
+                            </div>
+                            <span className="text-sm text-slate-900">{log.user.name}</span>
+                          </div>
+                        ) : (
+                          <div
+                            className="flex items-center gap-2"
+                            title={log.actor_source ? ACTOR_SOURCE_CONFIG[log.actor_source]?.hint : undefined}
+                          >
+                            <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+                              <Icon name={log.actor_source === 'mcp_ia' ? 'zap' : 'settings'} className="w-3.5 h-3.5 text-slate-500" />
+                            </div>
+                            <span className="text-sm text-slate-700">
+                              {log.actor_source ? (ACTOR_SOURCE_CONFIG[log.actor_source]?.label || log.actor_source) : 'Sistema (sem detalhe)'}
                             </span>
                           </div>
-                          <span className="text-sm text-slate-900">{log.user?.name || 'Sistema'}</span>
-                        </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
