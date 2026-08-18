@@ -28,6 +28,16 @@ type AnamneseTimelineItem = {
   signature_data?: string | null
 }
 
+type PatientNoteItem = {
+  id: string
+  content: string
+  pinned: boolean
+  created_at: string
+  updated_at: string
+  author_id: string | null
+  users: { name: string } | null
+}
+
 const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
   consultation: { icon: '🩺', color: 'bg-blue-100 text-blue-700', label: 'Atendimento' },
   procedure: { icon: '💉', color: 'bg-purple-100 text-purple-700', label: 'Procedimento' },
@@ -46,6 +56,12 @@ type Props = {
    * created_at). Opcional pra manter compat com chamadas antigas.
    */
   anamneses?: AnamneseTimelineItem[]
+  /**
+   * Anotações rápidas do paciente (mesma tabela patient_notes exibida na
+   * aba Visão geral) — mescladas na timeline como itens tipo "Anotação",
+   * com as mesmas ações de fixar/editar/excluir disponíveis aqui.
+   */
+  notes?: PatientNoteItem[]
   /**
    * Map de path -> signed URL pras fotos. Geramos no server pra evitar
    * que o componente client chame storage.createSignedUrl. Se um path
@@ -78,6 +94,7 @@ const FILTERS: Array<{ id: string; label: string }> = [
 type TimelineItem =
   | { kind: 'evolution'; sortDate: string; data: Evolution }
   | { kind: 'anamnese'; sortDate: string; data: AnamneseTimelineItem }
+  | { kind: 'note'; sortDate: string; data: PatientNoteItem }
 
 /**
  * Quantas thumbs a gente mostra no card recolhido. O resto vira um badge
@@ -89,6 +106,7 @@ export default function EvolutionTimeline({
   evolutions,
   patientId,
   anamneses = [],
+  notes = [],
   photoUrls = {},
   canEdit = false,
   currentUserId,
@@ -103,6 +121,65 @@ export default function EvolutionTimeline({
   const [draftTitle, setDraftTitle] = useState('')
   const [draftContent, setDraftContent] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Anotações (patient_notes) — mesmas ações de fixar/editar/excluir do
+  // card "Anotações" da Visão geral, disponíveis aqui também.
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+
+  function startEditNote(note: PatientNoteItem, e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingNoteId(note.id)
+    setNoteDraft(note.content)
+  }
+
+  function cancelEditNote(e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingNoteId(null)
+  }
+
+  async function saveEditNote(noteId: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    const content = noteDraft.trim()
+    if (!content) return
+    setSavingNote(true)
+    const { error } = await supabase
+      .from('patient_notes')
+      .update({ content, updated_at: new Date().toISOString() })
+      .eq('id', noteId)
+    setSavingNote(false)
+    if (error) {
+      alert(`Erro ao editar anotação: ${error.message}`)
+      return
+    }
+    setEditingNoteId(null)
+    router.refresh()
+  }
+
+  async function toggleNotePin(note: PatientNoteItem, e: React.MouseEvent) {
+    e.stopPropagation()
+    const { error } = await supabase
+      .from('patient_notes')
+      .update({ pinned: !note.pinned, updated_at: new Date().toISOString() })
+      .eq('id', note.id)
+    if (error) {
+      alert(`Erro ao fixar anotação: ${error.message}`)
+      return
+    }
+    router.refresh()
+  }
+
+  async function deleteNote(noteId: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm('Excluir esta anotação?')) return
+    const { error } = await supabase.from('patient_notes').delete().eq('id', noteId)
+    if (error) {
+      alert(`Erro ao excluir anotação: ${error.message}`)
+      return
+    }
+    router.refresh()
+  }
 
   function startEdit(evo: Evolution, e: React.MouseEvent) {
     e.stopPropagation()
@@ -154,14 +231,23 @@ export default function EvolutionTimeline({
       sortDate: a.completed_at || a.created_at,
       data: a,
     }))
-    return [...evoItems, ...anamItems].sort((a, b) =>
+    const noteItems: TimelineItem[] = notes.map((n) => ({
+      kind: 'note',
+      sortDate: n.created_at,
+      data: n,
+    }))
+    return [...evoItems, ...anamItems, ...noteItems].sort((a, b) =>
       a.sortDate < b.sortDate ? 1 : a.sortDate > b.sortDate ? -1 : 0,
     )
-  }, [evolutions, anamneses])
+  }, [evolutions, anamneses, notes])
 
   const filtered = useMemo(() => {
     if (filter === 'all') return items
     if (filter === 'anamnese') return items.filter((i) => i.kind === 'anamnese')
+    if (filter === 'note')
+      return items.filter(
+        (i) => i.kind === 'note' || (i.kind === 'evolution' && i.data.type === 'note'),
+      )
     return items.filter((i) => i.kind === 'evolution' && i.data.type === filter)
   }, [filter, items])
 
@@ -198,6 +284,8 @@ export default function EvolutionTimeline({
           let count: number
           if (f.id === 'all') count = items.length
           else if (f.id === 'anamnese') count = anamneses.length
+          else if (f.id === 'note')
+            count = evolutions.filter((e) => e.type === 'note').length + notes.length
           else count = evolutions.filter((e) => e.type === f.id).length
           if (f.id !== 'all' && count === 0) return null
           return (
@@ -245,6 +333,114 @@ export default function EvolutionTimeline({
                     variant="compact"
                     returnUrl={patientId ? `/dashboard/pacientes/${patientId}` : '/dashboard/anamnese'}
                   />
+                </div>
+              )
+            }
+
+            if (item.kind === 'note') {
+              const note = item.data
+              const cfg = TYPE_CONFIG.note
+              const isEditingNote = editingNoteId === note.id
+              return (
+                <div key={`note-${note.id}`} className="relative pl-10">
+                  <div
+                    className={`absolute left-0 w-8 h-8 rounded-full flex items-center justify-center text-sm ${cfg.color}`}
+                  >
+                    {cfg.icon}
+                  </div>
+                  <div
+                    className={`p-4 rounded-xl border ${
+                      note.pinned ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-1 gap-2">
+                      <div className="min-w-0">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.color}`}>
+                          {cfg.label}
+                        </span>
+                        {note.pinned && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 ml-1">
+                            Fixada
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <p className="text-xs text-slate-400 mr-1">
+                          {new Date(note.created_at).toLocaleDateString('pt-BR')}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={(e) => toggleNotePin(note, e)}
+                          title={note.pinned ? 'Desafixar' : 'Fixar'}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                            note.pinned
+                              ? 'bg-amber-200 text-amber-800'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                          }`}
+                        >
+                          <Icon name="pin" className="w-3.5 h-3.5" />
+                        </button>
+                        {!isEditingNote && (
+                          <button
+                            type="button"
+                            onClick={(e) => startEditNote(note, e)}
+                            title="Editar"
+                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
+                          >
+                            <Icon name="edit" className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => deleteNote(note.id, e)}
+                          title="Excluir"
+                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-100 flex items-center justify-center text-slate-600 hover:text-red-600"
+                        >
+                          <Icon name="trash" className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {note.users?.name && (
+                      <p className="text-xs text-slate-500 mb-2">
+                        por {note.users.name}
+                        {note.updated_at !== note.created_at && (
+                          <span className="text-slate-400">{' · editado'}</span>
+                        )}
+                      </p>
+                    )}
+
+                    {isEditingNote ? (
+                      <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <textarea
+                          value={noteDraft}
+                          onChange={(e) => setNoteDraft(e.target.value)}
+                          className="input w-full text-sm min-h-[80px]"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => saveEditNote(note.id, e)}
+                            disabled={savingNote}
+                            className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60"
+                          >
+                            {savingNote ? 'Salvando...' : 'Salvar edição'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditNote}
+                            disabled={savingNote}
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-600 whitespace-pre-wrap">{note.content}</p>
+                    )}
+                  </div>
                 </div>
               )
             }

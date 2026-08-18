@@ -35,6 +35,30 @@ export default function NewEvolutionButton({
     setLoading(true)
     setError('')
 
+    // "Anotação" grava na mesma tabela patient_notes usada na Visão geral
+    // (única fonte de dados pras anotações — fixar/editar/excluir ficam
+    // disponíveis nos dois lugares). Os demais tipos continuam em evolutions.
+    if (form.type === 'note') {
+      const { error: insertError } = await supabase.from('patient_notes').insert({
+        clinic_id: clinicId,
+        patient_id: patientId,
+        author_id: professionalId,
+        content: form.content || form.title || '',
+      })
+
+      if (insertError) {
+        setError(`Erro ao salvar: ${insertError.message}`)
+        setLoading(false)
+        return
+      }
+
+      setForm({ type: 'consultation', title: '', content: '', procedure_name: '' })
+      setOpen(false)
+      setLoading(false)
+      router.refresh()
+      return
+    }
+
     const { error: insertError } = await supabase.from('evolutions').insert({
       clinic_id: clinicId,
       patient_id: patientId,
