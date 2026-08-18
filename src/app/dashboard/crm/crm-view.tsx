@@ -1637,6 +1637,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
     status: lead.status,
     source: lead.source || 'whatsapp',
     interest: lead.interest || '',
+    campaign_name: lead.campaign_name || '',
     next_contact_at: lead.next_contact_at?.split('T')[0] || '',
     lost_reason: lead.lost_reason || ''
   })
@@ -1655,6 +1656,7 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
       status: form.status,
       source: form.source || null,
       interest: form.interest || null,
+      campaign_name: form.campaign_name.trim() || null,
       next_contact_at: form.next_contact_at ? `${form.next_contact_at}T09:00:00` : null,
     }
     
@@ -1938,6 +1940,18 @@ function LeadDetailModal({ lead, procedures, users, sources, stages, onClose, on
                   value={form.interest}
                   onChange={e => setForm(prev => ({ ...prev, interest: e.target.value }))}
                   placeholder="Procedimento de interesse"
+                />
+              </div>
+
+              {/* Campanha */}
+              <div>
+                <label className="label">Campanha</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={form.campaign_name}
+                  onChange={e => setForm(prev => ({ ...prev, campaign_name: e.target.value }))}
+                  placeholder="Ex: black-friday-2026"
                 />
               </div>
 
