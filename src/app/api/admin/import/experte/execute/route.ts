@@ -1,27 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { isSuperAdmin } from '@/lib/super-admin'
-import { parseExperteZip, experteGender, experteStatusToAppointmentStatus, splitProcedimentos } from '@/lib/import/experte'
-import { cleanText, parseNumber, parseDateOnly, parseDateTime, normalizePhone, normalizeCpf, normKey } from '@/lib/import/transforms'
+import { expertePreset } from '@/lib/import/presets/experte'
+import { parseWorkbooks, fileByKey } from '@/lib/import/engine'
+import { analyzeExperte, splitProceduresComma } from '@/lib/import/experte-engine'
+import {
+  cleanText, parseNumber, parseDateOnly, parseDateTime,
+  parseGender, normalizePhone, normalizeCpf, normKey,
+} from '@/lib/import/transforms'
+import type { EntityKey, EntityStat, Reconciliation, RawRow } from '@/lib/import/types'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 const CHUNK = 100
 
-interface ExecuteOptions {
+interface ExperteOptions {
   clinicId: string
-  label?: string
-  importProcedures: boolean
-  importPatients: boolean
-  importAppointments: boolean
-  professionalMap: Record<string, string> // nome na Experte -> users.id do Clinike (ou '' = não vincular)
+  reconciliation: Reconciliation
+  entities: string[]
+  includeRescheduled: boolean
   defaultProcedurePrice: number
+  label?: string
 }
 
-interface Stat { entity: string; read: number; created: number; skipped: number; reasons: Record<string, number> }
-function stat(entity: string): Stat { return { entity, read: 0, created: 0, skipped: 0, reasons: {} } }
-function skip(s: Stat, reason: string) { s.skipped++; s.reasons[reason] = (s.reasons[reason] || 0) + 1 }
+function stat(entity: EntityKey): EntityStat {
+  return { entity, read: 0, created: 0, skipped: 0, reasons: {} }
+}
+function skip(s: EntityStat, reason: string) {
+  s.skipped++
+  s.reasons[reason] = (s.reasons[reason] || 0) + 1
+}
 
 export async function POST(req: NextRequest) {
   const errors: string[] = []
@@ -38,27 +47,34 @@ export async function POST(req: NextRequest) {
     const currentUserId = auth?.user?.id ?? null
 
     const form = await req.formData()
-    const options = JSON.parse(String(form.get('options') || '{}')) as ExecuteOptions
-    const { clinicId, professionalMap, defaultProcedurePrice } = options
-    const file = form.get('file') as File | null
+    const optionsRaw = String(form.get('options') || '{}')
+    const options = JSON.parse(optionsRaw) as ExperteOptions
+    const { clinicId, reconciliation, entities, includeRescheduled, defaultProcedurePrice } = options
 
     if (!clinicId) return NextResponse.json({ error: 'clinicId obrigatório' }, { status: 400 })
-    if (!file) return NextResponse.json({ error: 'Envie o .zip exportado da Experte' }, { status: 400 })
 
-    const { data: clinic } = await admin.from('clinics').select('id, name').eq('id', clinicId).maybeSingle()
+    const files = form.getAll('files') as File[]
+    if (!files.length) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
+
+    const { data: clinic } = await admin
+      .from('clinics').select('id, name').eq('id', clinicId).maybeSingle()
     if (!clinic) return NextResponse.json({ error: 'Clínica não encontrada' }, { status: 400 })
 
-    const buffer = await file.arrayBuffer()
-    const files = await parseExperteZip(buffer)
+    const buffers = await Promise.all(
+      files.map(async f => ({ name: f.name, buffer: await f.arrayBuffer() }))
+    )
+    const parsed = parseWorkbooks(buffers, expertePreset)
+    const analysis = analyzeExperte(parsed)
 
+    // ---- Abre o lote ----
     const { data: batch, error: batchErr } = await admin
       .from('import_batches')
       .insert({
         clinic_id: clinicId,
         source: 'experte',
         status: 'running',
-        label: options.label || `Experte — ${new Date().toLocaleDateString('pt-BR')}`,
-        mapping: { professionalMap },
+        label: options.label || 'Importação Experte',
+        mapping: { reconciliation, entities },
         created_by: currentUserId,
       })
       .select('id')
@@ -69,43 +85,45 @@ export async function POST(req: NextRequest) {
     }
     batchId = batch.id
 
-    const stats: Record<string, Stat> = {}
+    const wants = (e: string) => entities.includes(e)
+    const stats: Record<string, EntityStat> = {}
 
     // =====================================================================
-    // 1. PROCEDIMENTOS (consultation_types.csv)
+    // 1. PROCEDIMENTOS
     // =====================================================================
     const procIdByKey = new Map<string, string>()
-    const procPriceByKey = new Map<string, number>()
+
     {
       const s = stat('procedures')
-      const { data: existing } = await admin.from('procedures').select('id, name').eq('clinic_id', clinicId)
+      const { data: existing } = await admin
+        .from('procedures').select('id, name').eq('clinic_id', clinicId)
       for (const e of existing || []) procIdByKey.set(normKey(e.name), e.id)
 
       const toCreate: Record<string, unknown>[] = []
-      for (const r of files.consultationTypes) {
+      for (const p of analysis.procedures) {
         s.read++
-        const name = cleanText(r['Nome'])
-        if (!name) { skip(s, 'sem nome'); continue }
-        const key = normKey(name)
-        const price = parseNumber(r['Valor'])
-        if (price !== null && price > 0) procPriceByKey.set(key, price)
+        const decision = reconciliation.procedures?.[p.name] ?? 'new'
+        const key = normKey(p.name)
 
+        if (decision === 'skip') { skip(s, 'ignorado pelo operador'); continue }
+        if (decision !== 'new') { procIdByKey.set(key, decision); skip(s, 'vinculado a existente'); continue }
         if (procIdByKey.has(key)) { skip(s, 'já existia na clínica'); continue }
-        const duration = parseNumber(r['Duração (minutos)'])
+
         toCreate.push({
           clinic_id: clinicId,
-          name,
-          price: price ?? defaultProcedurePrice ?? 0,
-          duration_minutes: duration && duration > 0 ? Math.round(duration) : 30,
-          active: cleanText(r['Status']) !== 'Inativo',
-          category: 'Importado (Experte)',
+          name: p.name,
+          price: p.price ?? defaultProcedurePrice ?? 0,
+          duration_minutes: p.durationMinutes ?? 60,
+          active: p.active,
+          category: 'Importado',
           import_batch_id: batchId,
         })
       }
 
-      if (options.importProcedures) {
+      if (wants('procedures')) {
         for (let i = 0; i < toCreate.length; i += CHUNK) {
-          const { data, error } = await admin.from('procedures').insert(toCreate.slice(i, i + CHUNK)).select('id, name')
+          const { data, error } = await admin
+            .from('procedures').insert(toCreate.slice(i, i + CHUNK)).select('id, name')
           if (error) errors.push(`Procedimentos: ${error.message.slice(0, 180)}`)
           else for (const d of data || []) { procIdByKey.set(normKey(d.name), d.id); s.created++ }
         }
@@ -114,77 +132,84 @@ export async function POST(req: NextRequest) {
     }
 
     // =====================================================================
-    // 2. PACIENTES (patients.csv)
+    // 2. PACIENTES (sem id na origem — vínculo por nome)
     // =====================================================================
-    const patientIdByName = new Map<string, string>() // primeiro cadastro encontrado com aquele nome
+    const patientIdByName = new Map<string, string>()
     const patientIdByPhone = new Map<string, string>()
+
     {
       const s = stat('patients')
-      const { data: existing } = await admin.from('patients').select('id, name, phone, phone_original').eq('clinic_id', clinicId)
+      const pf = fileByKey(parsed, 'Patients')
+
+      const { data: existing } = await admin
+        .from('patients').select('id, name, phone, phone_original').eq('clinic_id', clinicId)
       for (const p of existing || []) {
-        const nk = normKey(p.name)
-        if (!patientIdByName.has(nk)) patientIdByName.set(nk, p.id)
         const a = normalizePhone(p.phone), b = normalizePhone(p.phone_original)
         if (a) patientIdByPhone.set(a, p.id)
         if (b) patientIdByPhone.set(b, p.id)
+        patientIdByName.set(normKey(p.name), p.id)
       }
 
-      const pending: { name: string; phone: string | null; payload: Record<string, unknown> }[] = []
-      for (const r of files.patients) {
+      const pending: { nameKey: string; payload: Record<string, unknown>; phone: string | null }[] = []
+
+      for (const r of pf?.rows || []) {
         s.read++
         const name = cleanText(r['Nome'])
         if (!name) { skip(s, 'sem nome'); continue }
-        const nk = normKey(name)
+        const nameKey = normKey(name)
 
         const phone = normalizePhone(r['Contato Celular']) || normalizePhone(r['Contato Telefone'])
-        if (phone && patientIdByPhone.has(phone)) { skip(s, 'já existia (telefone)'); continue }
-        if (!phone && patientIdByName.has(nk)) { skip(s, 'já existia (nome)'); continue }
+        if (phone && patientIdByPhone.has(phone)) {
+          patientIdByName.set(nameKey, patientIdByPhone.get(phone)!)
+          skip(s, 'já existia (telefone)')
+          continue
+        }
 
-        const tags = cleanText(r['Status']) === 'Inativo' ? ['experte-inativo'] : []
-        const notes = [
-          cleanText(r['Observação']),
-          cleanText(r['Notas']),
-          cleanText(r['Origem']) && `Origem: ${cleanText(r['Origem'])}`,
+        const extras = [
           cleanText(r['Profissão']) && `Profissão: ${cleanText(r['Profissão'])}`,
-          'Importado da Experte',
-        ].filter(Boolean).join(' | ').slice(0, 1000)
+          cleanText(r['Estado Civil']) && `Estado civil: ${cleanText(r['Estado Civil'])}`,
+          cleanText(r['Origem']) && `Origem: ${cleanText(r['Origem'])}`,
+          cleanText(r['Documento RG']) && `RG: ${cleanText(r['Documento RG'])}`,
+          cleanText(r['Observação']),
+          (cleanText(r['Status']) || '').toLowerCase() === 'inativo' ? 'Status na origem: Inativo' : null,
+        ].filter(Boolean).join(' | ')
 
         pending.push({
-          name,
+          nameKey,
           phone,
           payload: {
             clinic_id: clinicId,
             name,
-            gender: experteGender(r['Sexo']),
-            birth_date: parseDateOnly(r['Data de Nascimento']),
-            cpf: normalizeCpf(r['Documento CPF']),
             phone,
-            phone_original: cleanText(r['Contato Celular']) || cleanText(r['Contato Telefone']),
+            phone_original: cleanText(r['Contato Celular']),
             email: cleanText(r['Contato E-mail']),
+            cpf: normalizeCpf(r['Documento CPF']),
+            birth_date: parseDateOnly(r['Data de Nascimento']),
+            gender: parseGender(r['Sexo']),
             address: cleanText(r['Endereço Rua']),
             address_number: cleanText(r['Endereço Número']),
             neighborhood: cleanText(r['Endereço Bairro']),
             city: cleanText(r['Endereço Cidade']),
             state: cleanText(r['Endereço Estado']),
             zip_code: cleanText(r['Endereço CEP']),
-            notes,
-            tags,
             whatsapp_opt_in: false,
+            notes: [extras, 'Importado do Experte'].filter(Boolean).join(' | ').slice(0, 1000),
             import_batch_id: batchId,
           },
         })
       }
 
-      if (options.importPatients) {
+      if (wants('patients')) {
         for (let i = 0; i < pending.length; i += CHUNK) {
           const slice = pending.slice(i, i + CHUNK)
-          const { data, error } = await admin.from('patients').insert(slice.map(x => x.payload)).select('id, name, phone')
+          const { data, error } = await admin
+            .from('patients').insert(slice.map(x => x.payload)).select('id, phone')
           if (error) {
             errors.push(`Pacientes lote ${i}: ${error.message.slice(0, 180)}`)
           } else {
-            (data || []).forEach(d => {
-              const nk = normKey(d.name)
-              if (!patientIdByName.has(nk)) patientIdByName.set(nk, d.id)
+            ;(data || []).forEach((d, idx) => {
+              const src = slice[idx]
+              if (src) patientIdByName.set(src.nameKey, d.id)
               if (d.phone) patientIdByPhone.set(d.phone, d.id)
               s.created++
             })
@@ -195,22 +220,32 @@ export async function POST(req: NextRequest) {
     }
 
     // =====================================================================
-    // 3. AGENDAMENTOS (consultations.csv)
+    // 3. AGENDAMENTOS
     // =====================================================================
-    if (options.importAppointments) {
+    if (wants('appointments')) {
       const s = stat('appointments')
+      const af = fileByKey(parsed, 'Consultations')
+
       const { data: existingAppts } = await admin
         .from('appointments').select('patient_id, start_time').eq('clinic_id', clinicId)
       const seen = new Set((existingAppts || []).map(a => `${a.patient_id}|${a.start_time}`))
 
-      const now = new Date()
       const batchRows: Record<string, unknown>[] = []
+      const now = new Date()
 
-      for (const r of files.consultations) {
+      for (const r of af?.rows || []) {
         s.read++
+        const srcStatus = cleanText(r['Status']) || ''
+
+        if (srcStatus === 'Remarcado' && !includeRescheduled) { skip(s, 'remarcado (ignorado)'); continue }
+
         const patientName = cleanText(r['Nome Paciente'])
         const patientId = patientName ? patientIdByName.get(normKey(patientName)) : undefined
         if (!patientId) { skip(s, 'paciente não encontrado'); continue }
+
+        const professionalName = cleanText(r['Nome Profissional']) || ''
+        const professionalId = reconciliation.professionals?.[professionalName] || ''
+        if (!professionalId) { skip(s, 'profissional não vinculado'); continue }
 
         const start = parseDateTime(r['Data'], r['Horário início'])
         if (!start) { skip(s, 'sem data válida'); continue }
@@ -220,23 +255,21 @@ export async function POST(req: NextRequest) {
         if (seen.has(key)) { skip(s, 'duplicado'); continue }
         seen.add(key)
 
-        const procNames = splitProcedimentos(r['Procedimentos'])
-        const firstProc = procNames[0] || null
-        const procedureId = firstProc ? procIdByKey.get(normKey(firstProc)) ?? null : null
-        const price = firstProc ? procPriceByKey.get(normKey(firstProc)) ?? null : null
+        const procNames = splitProceduresComma(r['Procedimentos'])
+        const procedureId = procNames.length ? procIdByKey.get(normKey(procNames[0])) ?? null : null
 
-        const profName = cleanText(r['Nome Profissional'])
-        const professionalId = (profName && professionalMap[profName]) || null
-
-        const status = experteStatusToAppointmentStatus(cleanText(r['Status']), start, now)
+        let status: string
+        if (srcStatus === 'Concluído') status = 'completed'
+        else if (srcStatus === 'Confirmado') status = 'confirmed'
+        else if (srcStatus === 'Cancelado') status = 'cancelled'
+        else if (srcStatus === 'Não compareceu') status = 'no_show'
+        else if (srcStatus === 'Remarcado') status = 'rescheduling'
+        else status = new Date(start) < now ? 'completed' : 'scheduled'
 
         const notes = [
-          procNames.length > 1 ? `Procedimentos: ${procNames.join(', ')}` : null,
           cleanText(r['Observações']),
+          procNames.length > 1 ? `Também: ${procNames.slice(1).join(', ')}` : null,
           cleanText(r['Convênio']) && `Convênio: ${cleanText(r['Convênio'])}`,
-          cleanText(r['Salas']) && `Sala: ${cleanText(r['Salas'])}`,
-          profName && !professionalId ? `Profissional (Experte, não vinculado): ${profName}` : null,
-          'Importado da Experte',
         ].filter(Boolean).join(' | ').slice(0, 1000)
 
         batchRows.push({
@@ -247,9 +280,7 @@ export async function POST(req: NextRequest) {
           start_time: start,
           end_time: end,
           status,
-          price,
-          valor_cobrado: status === 'completed' ? price : null,
-          notes,
+          notes: notes || 'Importado do Experte',
           import_batch_id: batchId,
         })
       }
@@ -262,6 +293,66 @@ export async function POST(req: NextRequest) {
       stats.appointments = s
     }
 
+    // =====================================================================
+    // 4. ENTRADAS (financeiro)
+    // =====================================================================
+    if (wants('entradas')) {
+      const s = stat('entradas')
+      const pcf = fileByKey(parsed, 'FinancialParcels')
+      const rows: Record<string, unknown>[] = []
+
+      for (const r of (pcf?.rows || []) as RawRow[]) {
+        s.read++
+        const categoria = cleanText(r['Categoria']) || ''
+        if (categoria.toLowerCase() === 'transferências') { skip(s, 'saldo inicial / transferência'); continue }
+
+        const valorBruto = parseNumber(r['Valor bruto']) || 0
+        if (valorBruto <= 0) { skip(s, 'valor zero'); continue }
+
+        const dataVenda = parseDateOnly(r['Vencimento']) || parseDateOnly(r['Execução']) || parseDateOnly(r['Compensação'])
+        if (!dataVenda) { skip(s, 'sem data'); continue }
+
+        const contato = cleanText(r['Contato'])
+        const patientId = contato ? patientIdByName.get(normKey(contato)) ?? null : null
+
+        const rawForm = cleanText(r['Método de pagamento']) || 'DESCONHECIDO'
+        const forma = reconciliation.paymentForms?.[rawForm] || expertePreset.valueMaps.paymentForm[rawForm] || 'outro'
+
+        const parcelaStr = cleanText(r['Número da parcela']) || '1/1'
+        const totalParcelas = Number(parcelaStr.split('/')[1]) || 1
+
+        const valorLiquido = parseNumber(r['Valor líquido']) ?? valorBruto
+        const tipoReceita = categoria.toLowerCase().includes('produto') ? 'produto' : 'servico'
+
+        rows.push({
+          clinic_id: clinicId,
+          data_venda: dataVenda,
+          paciente_id: patientId,
+          paciente_nome: contato,
+          forma_pagamento: forma,
+          valor_bruto: valorBruto,
+          taxa_percentual: 0,
+          valor_taxa: 0,
+          valor_liquido: valorLiquido,
+          n_parcelas: Math.max(1, totalParcelas),
+          tipo_receita: tipoReceita,
+          observacoes: [
+            cleanText(r['Descrição Título']),
+            'Importado do Experte',
+          ].filter(Boolean).join(' | ').slice(0, 1000),
+          import_batch_id: batchId,
+        })
+      }
+
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await admin.from('entradas').insert(rows.slice(i, i + CHUNK))
+        if (error) errors.push(`Entradas lote ${i}: ${error.message.slice(0, 180)}`)
+        else s.created += Math.min(CHUNK, rows.length - i)
+      }
+      stats.entradas = s
+    }
+
+    // ---- Fecha o lote ----
     await admin.from('import_batches').update({
       status: 'completed',
       stats,

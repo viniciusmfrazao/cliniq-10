@@ -7,15 +7,18 @@ import { useToast } from '@/components/ui/Toast'
 type Clinic = { id: string; name: string }
 
 type Analysis = {
-  files: { fileName: string; specKey: string | null; label: string; rows: number; columns: number; pending: boolean; pendingReason?: string; note?: string }[]
-  duplicateFiles: string[]
-  professionals: { key: string; name: string; appointments: number }[]
-  procedures: { name: string; price: number | null; appointments: number; budgets: number }[]
+  files: { fileName: string; specKey: string | null; label: string; rows: number; columns: number }[]
+  professionals: { name: string; appointments: number }[]
+  procedures: { name: string; price: number | null; durationMinutes: number | null; active: boolean; appointments: number }[]
   paymentForms: { raw: string; count: number; suggested: string }[]
   counts: {
-    patients: number; appointments: number; appointmentsDeleted: number
-    orcamentos: number; orcamentoItens: number; entradas: number; entradasTotal: number
+    patients: number
+    appointments: number
+    appointmentsByStatus: Record<string, number>
+    entradas: number
+    entradasTotal: number
   }
+  duplicatePatientNames: string[]
   warnings: string[]
 }
 
@@ -33,7 +36,6 @@ const ENTITIES = [
   { key: 'procedures', label: 'Procedimentos' },
   { key: 'patients', label: 'Pacientes' },
   { key: 'appointments', label: 'Agendamentos' },
-  { key: 'orcamentos', label: 'Orçamentos' },
   { key: 'entradas', label: 'Financeiro (entradas)' },
 ] as const
 
@@ -42,7 +44,7 @@ const PAYMENT_OPTIONS = ['pix', 'credito', 'debito', 'dinheiro', 'boleto', 'outr
 const money = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
+export default function ImportarExperteClient({ clinics }: { clinics: Clinic[] }) {
   const toast = useToast()
 
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -54,14 +56,12 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
   const [target, setTarget] = useState<Target | null>(null)
   const [result, setResult] = useState<ExecResult | null>(null)
 
-  // de-para
   const [profMap, setProfMap] = useState<Record<string, string>>({})
   const [procMap, setProcMap] = useState<Record<string, string>>({})
   const [formMap, setFormMap] = useState<Record<string, string>>({})
 
-  // opções
   const [entities, setEntities] = useState<string[]>(ENTITIES.map(e => e.key))
-  const [skipDeleted, setSkipDeleted] = useState(true)
+  const [includeRescheduled, setIncludeRescheduled] = useState(false)
   const [defaultPrice, setDefaultPrice] = useState(0)
   const [label, setLabel] = useState('')
 
@@ -74,27 +74,25 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
     try {
       const fd = new FormData()
       fd.append('clinicId', clinicId)
-      fd.append('presetId', 'clinicorp')
       files.forEach(f => fd.append('files', f))
 
-      const res = await fetch('/api/admin/import/analyze', { method: 'POST', body: fd })
+      const res = await fetch('/api/admin/import/experte/analyze', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Falha na análise')
 
       setAnalysis(data.analysis)
       setTarget(data.target)
 
-      // pré-preenche o de-para
       const a = data.analysis as Analysis
       const t = data.target as Target
       const soleProfessional = t.users.length === 1 ? t.users[0].id : ''
-      setProfMap(Object.fromEntries(a.professionals.map(p => [p.key, soleProfessional])))
+      setProfMap(Object.fromEntries(a.professionals.map(p => [p.name, soleProfessional])))
       setProcMap(Object.fromEntries(a.procedures.map(p => {
         const hit = t.procedures.find(x => x.name.toLowerCase().trim() === p.name.toLowerCase().trim())
         return [p.name, hit ? hit.id : 'new']
       })))
       setFormMap(Object.fromEntries(a.paymentForms.map(f => [f.raw, f.suggested])))
-      setLabel(`Clinicorp — ${new Date().toLocaleDateString('pt-BR')}`)
+      setLabel(`Experte — ${new Date().toLocaleDateString('pt-BR')}`)
       setStep(2)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Erro')
@@ -104,7 +102,7 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
   }
 
   async function handleExecute() {
-    const unmapped = analysis?.professionals.filter(p => p.appointments > 0 && !profMap[p.key]) || []
+    const unmapped = analysis?.professionals.filter(p => p.appointments > 0 && !profMap[p.name]) || []
     if (unmapped.length && entities.includes('appointments')) {
       toast.error(`Vincule os profissionais: ${unmapped.map(u => u.name).join(', ')}`)
       return
@@ -114,17 +112,15 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
       const fd = new FormData()
       fd.append('options', JSON.stringify({
         clinicId,
-        presetId: 'clinicorp',
-        columnOverrides: {},
         reconciliation: { professionals: profMap, procedures: procMap, paymentForms: formMap },
         entities,
-        skipDeleted,
+        includeRescheduled,
         defaultProcedurePrice: defaultPrice,
         label,
       }))
       files.forEach(f => fd.append('files', f))
 
-      const res = await fetch('/api/admin/import/execute', { method: 'POST', body: fd })
+      const res = await fetch('/api/admin/import/experte/execute', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Falha na importação')
 
@@ -166,7 +162,12 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
 
   return (
     <div className="space-y-5">
-      {/* Passos */}
+      <p className="text-sm text-gray-500">
+        Export do Experte (CSVs em português: pacientes, profissionais, tipos de consulta,
+        agendamentos e financeiro). Não há id próprio de paciente — o vínculo com agendamentos
+        é feito pelo nome.
+      </p>
+
       <div className="flex items-center gap-2 text-xs">
         {['Arquivos', 'Revisão', 'Resultado'].map((s, i) => (
           <div key={s} className={`px-3 py-1 rounded-full ${step === i + 1 ? 'bg-blue-600 text-white' : step > i + 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -181,32 +182,25 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
           <div>
             <label className="label">Clínica de destino</label>
             <select className="input" value={clinicId} onChange={e => setClinicId(e.target.value)}>
-              <option value="">Selecione…</option>
+              <option value="">Selecione...</option>
               {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="label">Sistema de origem</label>
-            <select className="input" defaultValue="clinicorp">
-              <option value="clinicorp">Clinicorp</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="label">Planilhas (.xlsx)</label>
+            <label className="label">Arquivos (patients.csv, professionals.csv, consultation_types.csv, consultations.csv, financial_parcels.csv)</label>
             <input
               type="file"
               multiple
-              accept=".xlsx,.xls,.csv"
+              accept=".csv,.xlsx,.xls"
               className="input"
               onChange={e => setFiles(Array.from(e.target.files || []))}
             />
             {files.length > 0 && (
-              <p className="text-xs text-gray-500 mt-1">{files.length} arquivo(s) selecionado(s)</p>
+              <ul className="text-xs text-gray-500 mt-2 space-y-0.5">
+                {files.map(f => <li key={f.name}>{f.name}</li>)}
+              </ul>
             )}
           </div>
-
           <button className="btn btn-primary" onClick={handleAnalyze} disabled={loading}>
             {loading ? <LoadingSpinner size="sm" inline /> : 'Analisar'}
           </button>
@@ -215,76 +209,38 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
 
       {/* ============ PASSO 2 ============ */}
       {step === 2 && analysis && target && (
-        <div className="space-y-5">
-          {/* Arquivos detectados */}
+        <div className="space-y-4">
           <div className="card p-4">
-            <h2 className="font-medium mb-3">Arquivos detectados</h2>
-            <div className="space-y-1 text-sm">
+            <h2 className="font-medium mb-3">Resumo dos arquivos</h2>
+            <div className="space-y-1 text-sm mb-4">
               {analysis.files.map(f => (
-                <div key={f.fileName} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-0">
-                  <div className="min-w-0">
-                    <span className="font-mono text-xs text-gray-500">{f.fileName}</span>
-                    <span className="ml-2">{f.label}</span>
-                    {f.pending && <span className="badge badge-warning ml-2">pendente</span>}
-                    {f.note && <span className="text-xs text-gray-400 ml-2">{f.note}</span>}
-                  </div>
-                  <span className="text-xs text-gray-500 shrink-0">{f.rows} linhas · {f.columns} col.</span>
+                <div key={f.fileName} className="flex justify-between text-xs">
+                  <span className="text-gray-600">{f.fileName} ({f.label})</span>
+                  <span className="text-gray-500">{f.rows} linhas</span>
                 </div>
               ))}
             </div>
-            {analysis.duplicateFiles.map(d => (
-              <p key={d} className="text-xs text-amber-600 mt-2">⚠ {d}</p>
-            ))}
-          </div>
 
-          {/* Avisos */}
-          {analysis.warnings.length > 0 && (
-            <div className="card p-4 bg-amber-50 border-amber-200">
-              <h2 className="font-medium mb-2 text-amber-800">Avisos</h2>
-              <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
-                {analysis.warnings.map((w, i) => <li key={i}>{w}</li>)}
-              </ul>
-            </div>
-          )}
+            {analysis.warnings.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-2 mb-4 text-xs text-amber-800 space-y-1">
+                {analysis.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+              </div>
+            )}
 
-          {/* Base de destino */}
-          {(target.existingPatients > 0 || target.existingAppointments > 0) && (
-            <div className="card p-4 bg-blue-50 border-blue-200 text-sm text-blue-900">
-              Esta clínica já tem <strong>{target.existingPatients}</strong> pacientes e{' '}
-              <strong>{target.existingAppointments}</strong> agendamentos. Pacientes com telefone
-              coincidente serão reaproveitados, não duplicados.
-            </div>
-          )}
-
-          {/* O que importar */}
-          <div className="card p-4">
-            <h2 className="font-medium mb-3">O que importar</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-              {ENTITIES.map(e => (
-                <label key={e.key} className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={entities.includes(e.key)} onChange={() => toggleEntity(e.key)} />
-                  {e.label}
-                </label>
-              ))}
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-3 mt-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
               <div className="p-2 bg-gray-50 rounded">
                 <div className="text-gray-500 text-xs">Pacientes</div>
                 <div className="font-medium">{analysis.counts.patients}</div>
               </div>
               <div className="p-2 bg-gray-50 rounded">
-                <div className="text-gray-500 text-xs">Agendamentos</div>
-                <div className="font-medium">
-                  {analysis.counts.appointments}
-                  {analysis.counts.appointmentsDeleted > 0 && (
-                    <span className="text-xs text-gray-500 font-normal"> ({analysis.counts.appointmentsDeleted} excluídos)</span>
-                  )}
-                </div>
+                <div className="text-gray-500 text-xs">Procedimentos</div>
+                <div className="font-medium">{analysis.procedures.length}</div>
               </div>
-              <div className="p-2 bg-gray-50 rounded">
-                <div className="text-gray-500 text-xs">Orçamentos</div>
-                <div className="font-medium">{analysis.counts.orcamentos} <span className="text-xs font-normal text-gray-500">({analysis.counts.orcamentoItens} itens)</span></div>
+              <div className="p-2 bg-gray-50 rounded md:col-span-2">
+                <div className="text-gray-500 text-xs">Agendamentos ({analysis.counts.appointments})</div>
+                <div className="font-medium text-xs">
+                  {Object.entries(analysis.counts.appointmentsByStatus).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                </div>
               </div>
               <div className="p-2 bg-gray-50 rounded md:col-span-2">
                 <div className="text-gray-500 text-xs">Entradas financeiras</div>
@@ -294,8 +250,8 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
 
             <div className="flex flex-wrap items-center gap-4 mt-4 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={skipDeleted} onChange={e => setSkipDeleted(e.target.checked)} />
-                Pular agendamentos marcados como excluídos
+                <input type="checkbox" checked={includeRescheduled} onChange={e => setIncludeRescheduled(e.target.checked)} />
+                Incluir agendamentos marcados como &quot;Remarcado&quot;
               </label>
               <div className="flex items-center gap-2">
                 <span>Preço padrão sem valor:</span>
@@ -318,15 +274,15 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
             </p>
             <div className="space-y-2">
               {analysis.professionals.map(p => (
-                <div key={p.key} className="flex flex-col md:flex-row md:items-center gap-2">
+                <div key={p.name} className="flex flex-col md:flex-row md:items-center gap-2">
                   <div className="flex-1 text-sm">
                     {p.name}
                     <span className="text-xs text-gray-500 ml-2">{p.appointments} agend.</span>
                   </div>
                   <select
                     className="input md:w-72"
-                    value={profMap[p.key] || ''}
-                    onChange={e => setProfMap({ ...profMap, [p.key]: e.target.value })}
+                    value={profMap[p.name] || ''}
+                    onChange={e => setProfMap({ ...profMap, [p.name]: e.target.value })}
                   >
                     <option value="">Ignorar</option>
                     {target.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -340,7 +296,7 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
           <div className="card p-4">
             <h2 className="font-medium mb-1">Procedimentos ({analysis.procedures.length})</h2>
             <p className="text-xs text-gray-500 mb-3">
-              Nomes compostos foram separados. Preço vem dos orçamentos quando disponível.
+              Vindos de consultation_types.csv, mais variações encontradas nos agendamentos.
             </p>
             <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
               {analysis.procedures.map(p => (
@@ -348,7 +304,8 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
                   <div className="flex-1 text-sm min-w-0">
                     <span className="truncate">{p.name}</span>
                     <span className="text-xs text-gray-500 ml-2">
-                      {p.price !== null ? money(p.price) : 'sem preço'} · {p.appointments + p.budgets}×
+                      {p.price !== null ? money(p.price) : 'sem preço'} · {p.appointments}×
+                      {!p.active && ' · inativo na origem'}
                     </span>
                   </div>
                   <select
@@ -387,6 +344,19 @@ export default function ImportarClient({ clinics }: { clinics: Clinic[] }) {
               </div>
             </div>
           )}
+
+          {/* Entidades a importar */}
+          <div className="card p-4">
+            <h2 className="font-medium mb-3">O que importar</h2>
+            <div className="flex flex-wrap gap-3">
+              {ENTITIES.map(e => (
+                <label key={e.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={entities.includes(e.key)} onChange={() => toggleEntity(e.key)} />
+                  {e.label}
+                </label>
+              ))}
+            </div>
+          </div>
 
           <div className="card p-4">
             <label className="label">Nome do lote</label>

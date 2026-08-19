@@ -1,7 +1,7 @@
 import { isSuperAdmin } from '@/lib/super-admin'
 import { createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import ImportarClient from './importar-client'
+import ImportSourceTabs from './import-source-tabs'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,5 +16,5 @@ export default async function ImportarPage() {
     .is('deleted_at', null)
     .order('name')
 
-  return <ImportarClient clinics={clinics || []} />
+  return <ImportSourceTabs clinics={clinics || []} />
 }
