@@ -1,11 +1,27 @@
 import type { TransformId, RawRow, FieldMap } from './types'
 
-/** Telefone: guarda só dígitos, últimos 11. Aceita "+5514998362509" e "(14) 99654-4998". */
+/**
+ * Telefone: precisa bater EXATAMENTE com o formato que a trigger do banco
+ * (normalize_phone_br(), BEFORE INSERT em patients.phone) grava — senão o
+ * valor que a gente calcula aqui em memória nunca corresponde ao que fica
+ * salvo depois do insert, e qualquer de-dup ou vínculo por telefone quebra
+ * silenciosamente (foi exatamente isso que aconteceu na importação Experte:
+ * pacientes criados certos, mas o mapa nome->paciente ficou quase vazio
+ * porque o telefone "calculado" não batia com o telefone "salvo").
+ *
+ * Regra do banco: se começa com "+", mantém todos os dígitos como estão
+ * (assume DDI explícito). Senão, garante prefixo "55" (Brasil) na frente.
+ * Nunca trunca pra 11 dígitos — essa era a causa do bug.
+ */
 export function normalizePhone(raw: unknown): string | null {
   if (raw === null || raw === undefined || raw === '') return null
-  const digits = String(raw).replace(/\D/g, '')
+  const s = String(raw).trim()
+  if (!s) return null
+  const isIntl = s.startsWith('+')
+  const digits = s.replace(/\D/g, '')
   if (!digits) return null
-  return digits.length >= 11 ? digits.slice(-11) : digits
+  if (isIntl) return digits
+  return digits.startsWith('55') ? digits : `55${digits}`
 }
 
 /**
