@@ -10,7 +10,11 @@ export function parseWorkbooks(
   const out: ParsedFile[] = []
 
   for (const f of files) {
-    const wb = XLSX.read(f.buffer, { type: 'array' })
+    // codepage 65001 (UTF-8) é obrigatório aqui: sem ele, o parser de CSV do
+    // SheetJS detecta a codificação errado e acentos viram mojibake (ex.:
+    // "Araújo" -> "AraÃºjo"). Arquivos .xlsx carregam a própria codificação
+    // e não são afetados por essa opção.
+    const wb = XLSX.read(f.buffer, { type: 'array', codepage: 65001 })
     const ws = wb.Sheets[wb.SheetNames[0]]
     const rows = (ws ? XLSX.utils.sheet_to_json(ws, { defval: null }) : []) as RawRow[]
     const headers = ws
