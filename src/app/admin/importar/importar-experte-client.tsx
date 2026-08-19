@@ -85,8 +85,7 @@ export default function ImportarExperteClient({ clinics }: { clinics: Clinic[] }
 
       const a = data.analysis as Analysis
       const t = data.target as Target
-      const soleProfessional = t.users.length === 1 ? t.users[0].id : ''
-      setProfMap(Object.fromEntries(a.professionals.map(p => [p.name, soleProfessional])))
+      setProfMap(Object.fromEntries(a.professionals.map(p => [p.name, ''])))
       setProcMap(Object.fromEntries(a.procedures.map(p => {
         const hit = t.procedures.find(x => x.name.toLowerCase().trim() === p.name.toLowerCase().trim())
         return [p.name, hit ? hit.id : 'new']
