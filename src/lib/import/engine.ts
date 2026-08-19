@@ -14,11 +14,27 @@ export function parseWorkbooks(
     // SheetJS detecta a codificação errado e acentos viram mojibake (ex.:
     // "Araújo" -> "AraÃºjo"). Arquivos .xlsx carregam a própria codificação
     // e não são afetados por essa opção.
-    const wb = XLSX.read(f.buffer, { type: 'array', codepage: 65001 })
+    //
+    // isCsv + raw:true (só para CSV): sem isso, o parser de CSV do SheetJS
+    // tenta "adivinhar" o tipo de cada célula e comete dois erros sérios com
+    // dados em pt-BR:
+    //   1) "2025-09-17" vira um serial de data do Excel (45917) em vez de
+    //      continuar string — toda função de data do transforms.ts para de
+    //      reconhecer o valor.
+    //   2) "100,00" (R$100, com vírgula decimal) vira o número 10000 — a
+    //      vírgula é lida como separador de milhar e a casa decimal some.
+    //      Isso infla qualquer valor financeiro em 100x silenciosamente.
+    // raw:true desliga esse sniffing e mantém tudo como texto, que é o que
+    // parseDateOnly/parseNumber já sabem interpretar corretamente (ISO/BR).
+    // Restrito a .csv de propósito: arquivos .xlsx/.xls continuam exatamente
+    // como antes, sem risco pro fluxo Clinicorp já validado em produção.
+    const isCsv = /\.csv$/i.test(f.name)
+    const wb = XLSX.read(f.buffer, { type: 'array', codepage: 65001, ...(isCsv ? { raw: true } : {}) })
     const ws = wb.Sheets[wb.SheetNames[0]]
-    const rows = (ws ? XLSX.utils.sheet_to_json(ws, { defval: null }) : []) as RawRow[]
+    const jsonOpts = { defval: null, ...(isCsv ? { raw: false } : {}) }
+    const rows = (ws ? XLSX.utils.sheet_to_json(ws, jsonOpts) : []) as RawRow[]
     const headers = ws
-      ? ((XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })[0] as unknown[]) || [])
+      ? ((XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, ...(isCsv ? { raw: false } : {}) })[0] as unknown[]) || [])
           .map(h => String(h ?? '').trim())
           .filter(Boolean)
       : []
