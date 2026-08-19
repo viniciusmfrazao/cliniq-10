@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 const CHUNK = 100
+type Admin = ReturnType<typeof createServiceClient>
 
 interface ExperteOptions {
   clinicId: string
@@ -30,6 +31,60 @@ function stat(entity: EntityKey): EntityStat {
 function skip(s: EntityStat, reason: string) {
   s.skipped++
   s.reasons[reason] = (s.reasons[reason] || 0) + 1
+}
+
+/** Reduz a mensagem crua do Postgres a um motivo curto e legivel pro card de resultado. */
+function summarizeDbError(msg: string): string {
+  if (/uq_patients_phone_clinic/i.test(msg)) return 'telefone ja usado por outro paciente'
+  if (/duplicate key value violates unique constraint/i.test(msg)) return 'registro duplicado (conflito de dados)'
+  if (/violates foreign key constraint/i.test(msg)) return 'referencia invalida (fk)'
+  if (/violates check constraint/i.test(msg)) return 'valor fora do permitido'
+  if (/violates not-null constraint/i.test(msg)) return 'campo obrigatorio ausente'
+  return msg.slice(0, 100)
+}
+
+/**
+ * Insere em lotes de CHUNK, mas com rede de seguranca: uma unica linha
+ * problematica num INSERT multi-linha aborta a instrucao inteira no Postgres
+ * (nao so a linha ruim). Se o lote falhar, tenta de novo linha a linha pra
+ * nao perder as validas junto com a problematica.
+ */
+async function insertResilient(
+  admin: Admin,
+  table: string,
+  rows: Record<string, unknown>[],
+  s: EntityStat,
+  errors: string[],
+  select?: string
+): Promise<Record<string, unknown>[]> {
+  const created: Record<string, unknown>[] = []
+
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const slice = rows.slice(i, i + CHUNK)
+    const query = admin.from(table).insert(slice)
+    const { data, error } = select ? await query.select(select) : await query
+
+    if (!error) {
+      s.created += slice.length
+      if (data) created.push(...(data as unknown as Record<string, unknown>[]))
+      continue
+    }
+
+    // Lote falhou - tenta linha a linha para isolar so a(s) problematica(s).
+    for (const row of slice) {
+      const q2 = admin.from(table).insert(row)
+      const { data: d2, error: e2 } = select ? await q2.select(select) : await q2
+      if (e2) {
+        skip(s, summarizeDbError(e2.message))
+        if (errors.length < 30) errors.push(`${table}: ${e2.message.slice(0, 180)}`)
+      } else {
+        s.created++
+        if (d2) created.push(...(Array.isArray(d2) ? (d2 as unknown as Record<string, unknown>[]) : [d2 as unknown as Record<string, unknown>]))
+      }
+    }
+  }
+
+  return created
 }
 
 export async function POST(req: NextRequest) {
@@ -51,14 +106,14 @@ export async function POST(req: NextRequest) {
     const options = JSON.parse(optionsRaw) as ExperteOptions
     const { clinicId, reconciliation, entities, includeRescheduled, defaultProcedurePrice } = options
 
-    if (!clinicId) return NextResponse.json({ error: 'clinicId obrigatório' }, { status: 400 })
+    if (!clinicId) return NextResponse.json({ error: 'clinicId obrigatorio' }, { status: 400 })
 
     const files = form.getAll('files') as File[]
     if (!files.length) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
     const { data: clinic } = await admin
       .from('clinics').select('id, name').eq('id', clinicId).maybeSingle()
-    if (!clinic) return NextResponse.json({ error: 'Clínica não encontrada' }, { status: 400 })
+    if (!clinic) return NextResponse.json({ error: 'Clinica nao encontrada' }, { status: 400 })
 
     const buffers = await Promise.all(
       files.map(async f => ({ name: f.name, buffer: await f.arrayBuffer() }))
@@ -107,7 +162,7 @@ export async function POST(req: NextRequest) {
 
         if (decision === 'skip') { skip(s, 'ignorado pelo operador'); continue }
         if (decision !== 'new') { procIdByKey.set(key, decision); skip(s, 'vinculado a existente'); continue }
-        if (procIdByKey.has(key)) { skip(s, 'já existia na clínica'); continue }
+        if (procIdByKey.has(key)) { skip(s, 'ja existia na clinica'); continue }
 
         toCreate.push({
           clinic_id: clinicId,
@@ -121,18 +176,14 @@ export async function POST(req: NextRequest) {
       }
 
       if (wants('procedures')) {
-        for (let i = 0; i < toCreate.length; i += CHUNK) {
-          const { data, error } = await admin
-            .from('procedures').insert(toCreate.slice(i, i + CHUNK)).select('id, name')
-          if (error) errors.push(`Procedimentos: ${error.message.slice(0, 180)}`)
-          else for (const d of data || []) { procIdByKey.set(normKey(d.name), d.id); s.created++ }
-        }
+        const created = await insertResilient(admin, 'procedures', toCreate, s, errors, 'id, name')
+        for (const d of created) procIdByKey.set(normKey(d.name as string), d.id as string)
       }
       stats.procedures = s
     }
 
     // =====================================================================
-    // 2. PACIENTES (sem id na origem — vínculo por nome)
+    // 2. PACIENTES (sem id na origem - vinculo por nome)
     // =====================================================================
     const patientIdByName = new Map<string, string>()
     const patientIdByPhone = new Map<string, string>()
@@ -151,6 +202,11 @@ export async function POST(req: NextRequest) {
       }
 
       const pending: { nameKey: string; payload: Record<string, unknown>; phone: string | null }[] = []
+      // Telefones ja reservados nesta propria leva (ainda sem id, entao nao
+      // estao em patientIdByPhone) - evita que duas linhas do MESMO arquivo
+      // com o mesmo telefone caiam no mesmo INSERT multi-linha e derrubem o
+      // lote inteiro por violacao de uq_patients_phone_clinic.
+      const phonesInThisFile = new Set<string>()
 
       for (const r of pf?.rows || []) {
         s.read++
@@ -159,11 +215,22 @@ export async function POST(req: NextRequest) {
         const nameKey = normKey(name)
 
         const phone = normalizePhone(r['Contato Celular']) || normalizePhone(r['Contato Telefone'])
+
         if (phone && patientIdByPhone.has(phone)) {
           patientIdByName.set(nameKey, patientIdByPhone.get(phone)!)
-          skip(s, 'já existia (telefone)')
+          skip(s, 'ja existia (telefone)')
           continue
         }
+        if (phone && phonesInThisFile.has(phone)) {
+          // Provavelmente duas pessoas dividindo o mesmo celular (comum:
+          // familiares) - mantem a primeira, a segunda fica sem patient_id
+          // e seus agendamentos aparecem como "paciente nao encontrado"
+          // (visivel e corrigivel manualmente, em vez de mesclar duas
+          // pessoas reais sob um unico cadastro).
+          skip(s, 'telefone duplicado no arquivo (outra pessoa)')
+          continue
+        }
+        if (phone) phonesInThisFile.add(phone)
 
         const extras = [
           cleanText(r['Profissão']) && `Profissão: ${cleanText(r['Profissão'])}`,
@@ -200,19 +267,34 @@ export async function POST(req: NextRequest) {
       }
 
       if (wants('patients')) {
-        for (let i = 0; i < pending.length; i += CHUNK) {
-          const slice = pending.slice(i, i + CHUNK)
-          const { data, error } = await admin
-            .from('patients').insert(slice.map(x => x.payload)).select('id, phone')
+        // insertResilient nao devolve o nameKey de origem no retry linha a
+        // linha (o select so traz colunas da tabela) - mapeia por telefone
+        // quando existir, e faz fallback linha a linha proprio quando nao
+        // (paciente sem telefone) pra nunca perder o vinculo nome -> id.
+        const withPhone = pending.filter(p => p.phone)
+        const withoutPhone = pending.filter(p => !p.phone)
+
+        const createdWithPhone = await insertResilient(
+          admin, 'patients', withPhone.map(x => x.payload), s, errors, 'id, name, phone'
+        )
+        const byPhone = new Map(withPhone.map(x => [x.phone as string, x.nameKey]))
+        for (const d of createdWithPhone) {
+          const phone = d.phone as string | null
+          const nameKey = phone ? byPhone.get(phone) : undefined
+          if (nameKey) patientIdByName.set(nameKey, d.id as string)
+          if (phone) patientIdByPhone.set(phone, d.id as string)
+        }
+
+        // Sem telefone: nada pra usar como chave de correlacao segura no
+        // retry linha a linha, entao insere realmente uma linha por vez.
+        for (const x of withoutPhone) {
+          const { data, error } = await admin.from('patients').insert(x.payload).select('id').single()
           if (error) {
-            errors.push(`Pacientes lote ${i}: ${error.message.slice(0, 180)}`)
+            skip(s, summarizeDbError(error.message))
+            if (errors.length < 30) errors.push(`patients: ${error.message.slice(0, 180)}`)
           } else {
-            ;(data || []).forEach((d, idx) => {
-              const src = slice[idx]
-              if (src) patientIdByName.set(src.nameKey, d.id)
-              if (d.phone) patientIdByPhone.set(d.phone, d.id)
-              s.created++
-            })
+            s.created++
+            patientIdByName.set(x.nameKey, data.id)
           }
         }
       }
@@ -241,14 +323,14 @@ export async function POST(req: NextRequest) {
 
         const patientName = cleanText(r['Nome Paciente'])
         const patientId = patientName ? patientIdByName.get(normKey(patientName)) : undefined
-        if (!patientId) { skip(s, 'paciente não encontrado'); continue }
+        if (!patientId) { skip(s, 'paciente nao encontrado'); continue }
 
         const professionalName = cleanText(r['Nome Profissional']) || ''
         const professionalId = reconciliation.professionals?.[professionalName] || ''
-        if (!professionalId) { skip(s, 'profissional não vinculado'); continue }
+        if (!professionalId) { skip(s, 'profissional nao vinculado'); continue }
 
         const start = parseDateTime(r['Data'], r['Horário início'])
-        if (!start) { skip(s, 'sem data válida'); continue }
+        if (!start) { skip(s, 'sem data valida'); continue }
         const end = parseDateTime(r['Data'], r['Horário fim']) || start
 
         const key = `${patientId}|${start}`
@@ -285,11 +367,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      for (let i = 0; i < batchRows.length; i += CHUNK) {
-        const { error } = await admin.from('appointments').insert(batchRows.slice(i, i + CHUNK))
-        if (error) errors.push(`Agendamentos lote ${i}: ${error.message.slice(0, 180)}`)
-        else s.created += Math.min(CHUNK, batchRows.length - i)
-      }
+      await insertResilient(admin, 'appointments', batchRows, s, errors)
       stats.appointments = s
     }
 
@@ -304,7 +382,7 @@ export async function POST(req: NextRequest) {
       for (const r of (pcf?.rows || []) as RawRow[]) {
         s.read++
         const categoria = cleanText(r['Categoria']) || ''
-        if (categoria.toLowerCase() === 'transferências') { skip(s, 'saldo inicial / transferência'); continue }
+        if (categoria.toLowerCase() === 'transferências') { skip(s, 'saldo inicial / transferencia'); continue }
 
         const valorBruto = parseNumber(r['Valor bruto']) || 0
         if (valorBruto <= 0) { skip(s, 'valor zero'); continue }
@@ -344,11 +422,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        const { error } = await admin.from('entradas').insert(rows.slice(i, i + CHUNK))
-        if (error) errors.push(`Entradas lote ${i}: ${error.message.slice(0, 180)}`)
-        else s.created += Math.min(CHUNK, rows.length - i)
-      }
+      await insertResilient(admin, 'entradas', rows, s, errors)
       stats.entradas = s
     }
 
