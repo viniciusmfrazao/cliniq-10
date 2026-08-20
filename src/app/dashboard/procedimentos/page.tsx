@@ -23,7 +23,7 @@ export default async function ProcedimentosPage() {
 
   if (!userData?.clinic_id) redirect('/login')
 
-  const [proceduresResult, professionalsResult, clinicResult] = await Promise.all([
+  const [proceduresResult, professionalsResult, clinicResult, categoryColorsResult] = await Promise.all([
     supabase
       .from('procedures')
       .select('*')
@@ -40,9 +40,17 @@ export default async function ProcedimentosPage() {
       .select('settings')
       .eq('id', userData.clinic_id)
       .single(),
+    supabase
+      .from('procedure_category_colors')
+      .select('category, color')
+      .eq('clinic_id', userData.clinic_id),
   ])
 
   const procedures = proceduresResult.data || []
+  const categoryColors = categoryColorsResult.data || []
+  const existingCategories = Array.from(
+    new Set((procedures as any[]).map(p => p.category).filter(Boolean) as string[])
+  ).sort()
   const professionals = (professionalsResult.data || []).filter(
     (u: any) => (PROFESSIONAL_ROLES.includes(u.role) || PROFESSIONAL_ROLES.includes(u.professional_role)) && u.active !== false
   )
@@ -79,7 +87,12 @@ export default async function ProcedimentosPage() {
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
             Adicionar procedimento
           </h2>
-          <ProcedureForm clinicId={userData.clinic_id} professionals={professionals} hasCustoRateavel={hasCustoRateavel} />
+          <ProcedureForm
+            clinicId={userData.clinic_id}
+            professionals={professionals}
+            hasCustoRateavel={hasCustoRateavel}
+            existingCategories={existingCategories}
+          />
         </div>
       )}
 
@@ -94,6 +107,7 @@ export default async function ProcedimentosPage() {
           isAdmin={isAdmin}
           hasEva={hasEva}
           hasCustoRateavel={hasCustoRateavel}
+          categoryColors={categoryColors as any}
         />
       </div>
     </div>

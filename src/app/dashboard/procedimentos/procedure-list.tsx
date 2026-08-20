@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import ProcedureForm from './procedure-form'
 import ResultadosEvaTab from './ResultadosEvaTab'
+import ColorPicker from '@/components/ui/ColorPicker'
+import { normalizeCategory, type CategoryColorRow } from '@/lib/agenda-colors'
 
 type Professional = { id: string; name: string; role?: string }
 
@@ -22,6 +24,7 @@ type Procedure = {
   return_days: number | null
   custo_fixo_rateavel?: number | null
   is_consulta?: boolean | null
+  color?: string | null
 }
 
 type Props = {
@@ -31,9 +34,10 @@ type Props = {
   isAdmin: boolean
   hasEva?: boolean
   hasCustoRateavel?: boolean
+  categoryColors?: CategoryColorRow[]
 }
 
-export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva: hasEvaProp = false, hasCustoRateavel: hasCustoRateavelProp = false }: Props) {
+export default function ProcedureList({ procedures, professionals, clinicId, isAdmin, hasEva: hasEvaProp = false, hasCustoRateavel: hasCustoRateavelProp = false, categoryColors = [] }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -41,6 +45,52 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
   const [activeTab, setActiveTab] = useState<'dados' | 'resultados'>('dados')
   const [hasEva, setHasEva] = useState(hasEvaProp)
   const [hasCustoRateavel, setHasCustoRateavel] = useState(hasCustoRateavelProp)
+  const [catColors, setCatColors] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {}
+    for (const row of categoryColors) {
+      const k = normalizeCategory(row.category)
+      if (k && row.color) m[k] = row.color
+    }
+    return m
+  })
+
+  // Grava a cor da categoria. A tabela tem unique em (clinic_id, fn_normalize_category(category)),
+  // entao "Injetaveis" e "Injetáveis" caem na mesma linha.
+  async function handleCategoryColor(category: string, color: string | null) {
+    const key = normalizeCategory(category)
+    if (!key) return
+
+    setCatColors(prev => {
+      const next = { ...prev }
+      if (color) next[key] = color
+      else delete next[key]
+      return next
+    })
+
+    if (color) {
+      const { data: existing } = await supabase
+        .from('procedure_category_colors')
+        .select('id, category')
+        .eq('clinic_id', clinicId)
+
+      const match = (existing || []).find((r: any) => normalizeCategory(r.category) === key)
+
+      if (match) {
+        await supabase.from('procedure_category_colors').update({ color, updated_at: new Date().toISOString() }).eq('id', match.id)
+      } else {
+        await supabase.from('procedure_category_colors').insert({ clinic_id: clinicId, category, color })
+      }
+    } else {
+      const { data: existing } = await supabase
+        .from('procedure_category_colors')
+        .select('id, category')
+        .eq('clinic_id', clinicId)
+      const match = (existing || []).find((r: any) => normalizeCategory(r.category) === key)
+      if (match) await supabase.from('procedure_category_colors').delete().eq('id', match.id)
+    }
+
+    router.refresh()
+  }
 
   // Busca módulos no client para garantir valor correto mesmo se server não autenticou
   useEffect(() => {
@@ -135,9 +185,19 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
       <div className="space-y-6">
         {Object.entries(grouped).map(([category, procs]) => (
           <div key={category}>
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-              {category}
-            </h3>
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                {category}
+              </h3>
+              {isAdmin && category !== 'Sem categoria' && (
+                <ColorPicker
+                  value={catColors[normalizeCategory(category)] || null}
+                  onChange={c => handleCategoryColor(category, c)}
+                  title={`Cor da categoria ${category} na agenda`}
+                  size="sm"
+                />
+              )}
+            </div>
             <div className="space-y-2">
               {procs.map(proc => {
                 const profIds = proc.professional_ids || []
@@ -278,6 +338,7 @@ export default function ProcedureList({ procedures, professionals, clinicId, isA
                   professionals={professionals}
                   procedure={editing}
                   hasCustoRateavel={hasCustoRateavel}
+                  existingCategories={Array.from(new Set(procedures.map(p => p.category).filter(Boolean) as string[])).sort()}
                   onSaved={() => { setEditing(null); setActiveTab('dados') }}
                   onCancel={() => { setEditing(null); setActiveTab('dados') }}
                 />

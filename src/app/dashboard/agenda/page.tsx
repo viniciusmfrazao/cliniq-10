@@ -79,7 +79,7 @@ export default async function AgendaPage({
   const PROFESSIONAL_ROLES = ['doctor', 'esthetician', 'biomedic', 'nurse', 'physiotherapist', 'nutritionist', 'psychologist', 'dentist']
 
   // EXECUTAR QUERIES EM PARALELO (muito mais rápido!)
-  const [allUsersResult, appointmentsResult, todayAppointmentsResult, blocksResult] = await Promise.all([
+  const [allUsersResult, appointmentsResult, todayAppointmentsResult, blocksResult, categoryColorsResult] = await Promise.all([
     // Query 1: TODOS os usuários da clínica (filtraremos no código)
     supabase
       .from('users')
@@ -93,7 +93,7 @@ export default async function AgendaPage({
       .select(`
         *,
         patients(id, name, phone, photo_url, cpf, birth_date),
-        procedures(name, duration_minutes, price),
+        procedures(name, duration_minutes, price, category, color),
         professional:users!appointments_professional_id_fkey(id, name),
         appointment_procedures(id, procedure_id, procedure_name, duration_minutes, price)
       `)
@@ -118,6 +118,12 @@ export default async function AgendaPage({
       .gte('start_time', startDate)
       .lte('start_time', endDate)
       .order('start_time'),
+
+    // Query 5: Cores por categoria de procedimento (vazio = agenda usa cor de status)
+    supabase
+      .from('procedure_category_colors')
+      .select('category, color')
+      .eq('clinic_id', clinicId),
   ])
 
   // Filtrar profissionais no código (evita problemas com enum)
@@ -236,6 +242,7 @@ export default async function AgendaPage({
         selectedProfessional={safeSelectedProfessional}
         clinicId={clinicId}
         clinicName={clinicName}
+        categoryColors={(categoryColorsResult.data || []) as any}
       />
     </div>
   )

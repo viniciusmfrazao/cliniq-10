@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -18,6 +18,7 @@ import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl 
 import PaymentModal from '@/components/agenda/payment-modal'
 import ProceduresConfirmModal from '@/components/agenda/procedures-confirm-modal'
 import { parseSupabaseError } from '@/lib/error-messages'
+import { resolveAppointmentColor, buildCategoryColorMap, type CategoryColorRow } from '@/lib/agenda-colors'
 
 
 type Block = {
@@ -48,7 +49,8 @@ type Appointment = {
   valor_sinal: number | null
   forma_pagamento_sinal: string | null
   patients: { id: string; name: string; phone: string | null; photo_url: string | null; cpf: string | null; birth_date: string | null } | null
-  procedures: { name: string; duration_minutes: number; price: number } | null
+  color: string | null
+  procedures: { name: string; duration_minutes: number; price: number; category?: string | null; color?: string | null } | null
   professional: { id: string; name: string } | null
   appointment_procedures?: { id: string; procedure_id: string | null; procedure_name: string; duration_minutes: number; price: number }[]
 }
@@ -68,20 +70,10 @@ type Props = {
   selectedProfessional: string
   clinicId: string
   clinicName?: string
+  categoryColors?: CategoryColorRow[]
 }
 
 const HOUR_SLOTS = Array.from({ length: 14 }, (_, i) => i + 7)
-
-const STATUS_CONFIG: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', label: 'Agendado' },
-  pending_confirmation: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', label: 'Aguard. confirmação' },
-  confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', label: 'Confirmado' },
-  in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300', label: 'Em atendimento' },
-  completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', label: 'Realizado' },
-  cancelled: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Cancelado' },
-  no_show: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Não compareceu' },
-  rescheduling: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', label: 'Reagendamento' },
-}
 
 const PROFESSIONAL_COLORS = [
   'from-violet-500 to-purple-500',
@@ -103,7 +95,8 @@ const AppointmentCard = React.memo(function AppointmentCard({
   isRightColumn = false,
   columnIndex = 0,
   totalColumns = 1,
-  heightPx
+  heightPx,
+  categoryColorMap
 }: { 
   apt: Appointment
   clinicId: string
@@ -116,6 +109,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
   columnIndex?: number
   totalColumns?: number
   canDrag?: boolean
+  categoryColorMap?: Record<string, string>
   // Altura real renderizada em px (só na grade proporcional do dia) — usada
   // pra decidir o layout ultra-compacto de agendamentos curtos (ex: 15min)
   heightPx?: number
@@ -161,7 +155,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
   }, [showPreview, popupPos?.x])
   const isMobile = useIsMobile()
   const [useSheet, setUseSheet] = useState(false)
-  const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+  // Fundo pela cor configurada (agendamento > procedimento > categoria), borda/dot pelo status
+  const status = resolveAppointmentColor({
+    status: apt.status,
+    appointmentColor: apt.color,
+    procedureColor: apt.procedures?.color,
+    category: apt.procedures?.category,
+    categoryColorMap,
+  })
   const router = useRouter()
 
   // Observações inline
@@ -1555,7 +1556,7 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body)
 }
 
-export default function AgendaView({ appointments: allAppointments, blocks: allBlocks, viewMode, selectedDate, professionals, selectedProfessional, clinicId, clinicName }: Props) {
+export default function AgendaView({ appointments: allAppointments, blocks: allBlocks, viewMode, selectedDate, professionals, selectedProfessional, clinicId, clinicName, categoryColors = [] }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
@@ -1600,6 +1601,8 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
   const blocks = selectedProfIds.length === 0
     ? allBlocks
     : allBlocks.filter(b => selectedProfIds.includes(b.professional_id))
+
+  const categoryColorMap = useMemo(() => buildCategoryColorMap(categoryColors), [categoryColors])
 
   const COLOR_BLOCK: Record<string, { bg: string; text: string; border: string }> = {
     slate:  { bg: 'bg-slate-200',  text: 'text-slate-700',  border: 'border-slate-400' },
@@ -2068,6 +2071,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                                 totalColumns={displayProfessionals.length}
                                 canDrag={true}
                                 heightPx={height - 4}
+                                categoryColorMap={categoryColorMap}
                               />
                             </div>
                           )
@@ -2211,6 +2215,7 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                                   onDragStart={handleDragStart}
                                   compact
                                   isRightColumn={idx >= 5}
+                                  categoryColorMap={categoryColorMap}
                                 />
                               ))}
                               {hourApts.length > 3 && (
@@ -2344,7 +2349,13 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
               {dayAppointments.length > 0 ? (
                 <div className="space-y-0.5">
                   {dayAppointments.slice(0, 3).map(apt => {
-                    const status = STATUS_CONFIG[apt.status] || STATUS_CONFIG.scheduled
+                    const status = resolveAppointmentColor({
+                      status: apt.status,
+                      appointmentColor: apt.color,
+                      procedureColor: apt.procedures?.color,
+                      category: apt.procedures?.category,
+                      categoryColorMap,
+                    })
                     return (
                       <div
                         key={apt.id}
