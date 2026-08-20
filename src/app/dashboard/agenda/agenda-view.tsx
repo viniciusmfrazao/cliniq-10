@@ -18,7 +18,7 @@ import { buildAppointmentCalendarEvent, generateCalendarLinks, getPublicBaseUrl 
 import PaymentModal from '@/components/agenda/payment-modal'
 import ProceduresConfirmModal from '@/components/agenda/procedures-confirm-modal'
 import { parseSupabaseError } from '@/lib/error-messages'
-import { resolveAppointmentColor, buildCategoryColorMap, type CategoryColorRow } from '@/lib/agenda-colors'
+import { resolveAppointmentColor, buildCategoryColorMap, getStatusStyle, type CategoryColorRow } from '@/lib/agenda-colors'
 
 
 type Block = {
@@ -163,6 +163,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
     category: apt.procedures?.category,
     categoryColorMap,
   })
+  // Chips que escrevem o nome do status usam o estilo PURO do status —
+  // senao ficariam com o fundo da cor do procedimento e o rotulo do status.
+  const statusChip = getStatusStyle(apt.status)
   const router = useRouter()
 
   // Observações inline
@@ -520,11 +523,14 @@ const AppointmentCard = React.memo(function AppointmentCard({
     ? Math.round((new Date(apt.end_time).getTime() - new Date(apt.start_time).getTime()) / 60000)
     : (apt.appointment_procedures?.reduce((s, p) => s + (p.duration_minutes || 30), 0) || apt.procedures?.duration_minutes || 30)
   const isPatientIncomplete = apt.patients && (!apt.patients.cpf || !apt.patients.phone)
-  const isConfirmed = apt.status === 'confirmed'
   const isCancelled = apt.status === 'cancelled' || apt.status === 'no_show'
   // Agendamentos curtos (ex: 15min) renderizam num card muito baixo na grade
   // proporcional do dia — sem espaço pra 2-3 linhas, então usa layout de 1 linha só
   const isTiny = typeof heightPx === 'number' && heightPx < 44
+  // Faixa lateral: 20px no card normal, 14px no compacto/curto
+  const ribbonWidth = (compact || isTiny) ? 'w-3.5' : 'w-5'
+  const ribbonPad = (compact || isTiny) ? 'pl-[19px] pr-1.5 py-1' : 'pl-[26px] pr-2 py-2'
+  const ribbonIcon = (compact || isTiny) ? 'w-2.5 h-2.5' : 'w-3 h-3'
   const canCheckIn = ['scheduled', 'confirmed', 'pending_confirmation'].includes(apt.status) && !apt.checked_in_at
   const isCheckedIn = !!apt.checked_in_at
   const checkedInTime = apt.checked_in_at 
@@ -568,8 +574,16 @@ const AppointmentCard = React.memo(function AppointmentCard({
             handleMouseEnter()
           }
         }}
-        className={`block ${isTiny ? 'p-1' : 'p-2'} rounded-lg h-full overflow-hidden ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all border-l-4 ${status.border} ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-40' : ''}`}
+        className={`block relative ${ribbonPad} rounded-lg h-full overflow-hidden ${status.bg} hover:ring-2 hover:ring-violet-300 transition-all ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} ${isCheckedIn ? 'ring-2 ring-emerald-400' : ''} ${isCancelled ? 'opacity-40' : ''}`}
       >
+        {/* Faixa de status: o fundo do card e o procedimento, entao o status mora aqui */}
+        <span
+          className={`absolute left-0 top-0 bottom-0 ${ribbonWidth} ${status.solid} flex justify-center ${isTiny || compact ? 'items-center' : 'items-start pt-2'}`}
+          title={status.label}
+          aria-label={status.label}
+        >
+          <Icon name={status.icon} className={`${ribbonIcon} text-white`} />
+        </span>
         {/* Botão rápido de agendar no mesmo slot — só para cancelados */}
         {isCancelled && (
           <Link
@@ -590,9 +604,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
             {isCheckedIn && (
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0" title={`Chegou às ${checkedInTime}`} />
             )}
-            {isConfirmed && !isCheckedIn && (
-              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" title="Confirmado" />
-            )}
             {isPatientIncomplete && (
               <span className="w-1.5 h-1.5 bg-amber-400 rounded-full flex-shrink-0" title="Cadastro pendente" />
             )}
@@ -602,11 +613,6 @@ const AppointmentCard = React.memo(function AppointmentCard({
             <div className="flex items-center justify-between gap-1">
               <span className="text-xs font-bold text-slate-700">{aptTime}</span>
               <div className="flex items-center gap-1">
-                {isConfirmed && !isCheckedIn && (
-                  <span className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center" title="Confirmado">
-                    <Icon name="check" className="w-2 h-2 text-white" />
-                  </span>
-                )}
                 {isCheckedIn && (
                   <span className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center" title={`Chegou às ${checkedInTime}`}>
                     <Icon name="check" className="w-2 h-2 text-white" />
@@ -659,7 +665,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
                 <p className="font-semibold text-slate-900 dark:text-white">{apt.patients?.name}</p>
                 <p className="text-xs text-slate-500">{apt.patients?.phone || 'Sem telefone'}</p>
               </div>
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${status.bg} ${status.text}`}>{status.label}</span>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusChip.bg} ${statusChip.text}`}>{statusChip.label}</span>
               <div className="relative flex-shrink-0">
                 <button
                   onClick={() => setShowActionsMenu(v => !v)}
@@ -1283,7 +1289,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Status:</span>
-              <span className={`font-medium ${status.text}`}>{status.label}</span>
+              <span className={`font-medium ${statusChip.text}`}>{statusChip.label}</span>
             </div>
             {/* Observações editáveis */}
             <div className="pt-2 border-t border-slate-100">
@@ -2359,7 +2365,8 @@ export default function AgendaView({ appointments: allAppointments, blocks: allB
                     return (
                       <div
                         key={apt.id}
-                        className={`px-1.5 py-0.5 rounded text-xs truncate ${status.bg} ${status.text}`}
+                        className={`px-1.5 py-0.5 rounded text-xs truncate border-l-[3px] ${status.solidBorder} ${status.bg} ${status.text}`}
+                        title={status.label}
                       >
                         {new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })} {apt.patients?.name?.split(' ')[0]}
                       </div>

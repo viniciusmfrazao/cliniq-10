@@ -52,18 +52,30 @@ export const AGENDA_PALETTE: Record<string, ColorStyle> = {
 /** Ordem de exibição no seletor de cor. */
 export const AGENDA_PALETTE_KEYS = Object.keys(AGENDA_PALETTE)
 
-export type StatusStyle = ColorStyle
+export type StatusStyle = ColorStyle & {
+  /** fundo saturado da faixa lateral — precisa de contraste pra ícone branco */
+  solid: string
+  /** mesma cor da faixa, como borda (visão de mês, onde não cabe faixa) */
+  solidBorder: string
+  /** nome do ícone em Icon.tsx */
+  icon: string
+}
 
-/** Status do agendamento. Mantém exatamente as classes que já estavam em agenda-view. */
+/** Status do agendamento. bg/text/border mantêm exatamente as classes que já estavam em agenda-view. */
 export const STATUS_CONFIG: Record<string, StatusStyle> = {
-  scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', dot: 'bg-slate-400', label: 'Agendado' },
-  pending_confirmation: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', dot: 'bg-yellow-400', label: 'Aguard. confirmação' },
-  confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', dot: 'bg-blue-500', label: 'Confirmado' },
-  in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300', dot: 'bg-amber-500', label: 'Em atendimento' },
-  completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', dot: 'bg-emerald-500', label: 'Realizado' },
-  cancelled: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-500', label: 'Cancelado' },
-  no_show: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-500', label: 'Não compareceu' },
-  rescheduling: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', dot: 'bg-orange-500', label: 'Reagendamento' },
+  scheduled: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', dot: 'bg-slate-400', solid: 'bg-slate-500', solidBorder: 'border-slate-500', icon: 'calendar', label: 'Agendado' },
+  pending_confirmation: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', dot: 'bg-yellow-400', solid: 'bg-yellow-600', solidBorder: 'border-yellow-600', icon: 'clock', label: 'Aguard. confirmação' },
+  confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', dot: 'bg-blue-500', solid: 'bg-blue-500', solidBorder: 'border-blue-500', icon: 'userCheck', label: 'Confirmado' },
+  in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300', dot: 'bg-amber-500', solid: 'bg-amber-600', solidBorder: 'border-amber-600', icon: 'play', label: 'Em atendimento' },
+  completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', dot: 'bg-emerald-500', solid: 'bg-emerald-600', solidBorder: 'border-emerald-600', icon: 'check', label: 'Realizado' },
+  cancelled: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-500', solid: 'bg-red-500', solidBorder: 'border-red-500', icon: 'x', label: 'Cancelado' },
+  no_show: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-500', solid: 'bg-red-600', solidBorder: 'border-red-600', icon: 'alertCircle', label: 'Não compareceu' },
+  rescheduling: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', dot: 'bg-orange-500', solid: 'bg-orange-500', solidBorder: 'border-orange-500', icon: 'refresh', label: 'Reagendamento' },
+}
+
+/** Estilo puro do status, sem a cor de procedimento por cima. Use em chips que rotulam o status. */
+export function getStatusStyle(status?: string | null): StatusStyle {
+  return STATUS_CONFIG[status || 'scheduled'] || STATUS_CONFIG.scheduled
 }
 
 /**
@@ -104,6 +116,10 @@ export type ResolveColorInput = {
 }
 
 export type ResolvedAppointmentColor = ColorStyle & {
+  /** faixa lateral: sempre o status, nunca a cor do procedimento */
+  solid: string
+  solidBorder: string
+  icon: string
   /** de onde veio o fundo — útil pra debug e pra legendas */
   source: 'appointment' | 'procedure' | 'category' | 'status'
 }
@@ -113,7 +129,7 @@ export type ResolvedAppointmentColor = ColorStyle & {
  * Chave de cor inválida (paleta mudou, dado sujo) é ignorada e cai no próximo nível.
  */
 export function resolveAppointmentColor(input: ResolveColorInput): ResolvedAppointmentColor {
-  const status = STATUS_CONFIG[input.status || 'scheduled'] || STATUS_CONFIG.scheduled
+  const status = getStatusStyle(input.status)
 
   const categoryKey = normalizeCategory(input.category)
   const categoryColor = categoryKey ? input.categoryColorMap?.[categoryKey] : undefined
@@ -131,9 +147,12 @@ export function resolveAppointmentColor(input: ResolveColorInput): ResolvedAppoi
     return {
       bg: palette.bg,
       text: palette.text,
-      // borda e dot seguem o STATUS — é assim que o status continua legível
+      // borda, dot, faixa e ícone seguem o STATUS — é assim que o status continua legível
       border: status.border,
       dot: status.dot,
+      solid: status.solid,
+      solidBorder: status.solidBorder,
+      icon: status.icon,
       label: status.label,
       source,
     }
