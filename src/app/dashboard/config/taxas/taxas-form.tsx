@@ -100,6 +100,7 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
   // Modal
   const [modalForma, setModalForma] = useState<string | null>(null)
   const [draft, setDraft] = useState<Config>({ taxa: 0, taxaFixa: 0, dias: 30, modo: 'parcelado' })
+  const [taxaInput, setTaxaInput] = useState('0')
 
   function getConfig(formaKey: string): Config {
     const proprio = configs[`${formaKey}__${bandeira}`]
@@ -113,7 +114,9 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
 
   function openModal(formaKey: string) {
     setModalForma(formaKey)
-    setDraft(getConfig(formaKey))
+    const cfg = getConfig(formaKey)
+    setDraft(cfg)
+    setTaxaInput(String(cfg.taxa).replace('.', ','))
   }
 
   async function persist(formaKey: string, cfg: Config) {
@@ -154,9 +157,11 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
     if (!proximo) { setModalForma(null); return }
     // Mantém taxa/dias/modo como sugestão de partida pra próxima parcela
     setModalForma(proximo.key)
-    setDraft(getConfig(proximo.key).taxa > 0 || getConfig(proximo.key).dias !== defaultConfig(proximo.key).dias
+    const proximoCfg = getConfig(proximo.key).taxa > 0 || getConfig(proximo.key).dias !== defaultConfig(proximo.key).dias
       ? getConfig(proximo.key)
-      : draft)
+      : draft
+    setDraft(proximoCfg)
+    setTaxaInput(String(proximoCfg.taxa).replace('.', ','))
   }
 
   const modalFormaObj = FORMAS.find(f => f.key === modalForma)
@@ -365,9 +370,19 @@ export default function TaxasForm({ clinicId, initialTaxas }: { clinicId: string
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Taxa (%)</label>
                 <div className="flex items-center gap-2">
                   <input
-                    type="number" min={0} max={100} step={0.01}
-                    value={draft.taxa}
-                    onChange={e => setDraft(d => ({ ...d, taxa: parseFloat(e.target.value) || 0 }))}
+                    type="text" inputMode="decimal"
+                    value={taxaInput}
+                    onChange={e => {
+                      let v = e.target.value.replace(/[^0-9,]/g, '')
+                      const firstComma = v.indexOf(',')
+                      if (firstComma !== -1) {
+                        v = v.slice(0, firstComma + 1) + v.slice(firstComma + 1).replace(/,/g, '')
+                      }
+                      setTaxaInput(v)
+                      const n = parseFloat(v.replace(',', '.'))
+                      setDraft(d => ({ ...d, taxa: v === '' || v === ',' || isNaN(n) ? 0 : Math.min(100, Math.max(0, n)) }))
+                    }}
+                    onBlur={() => setTaxaInput(String(draft.taxa).replace('.', ','))}
                     className="input w-28 text-center"
                   />
                   <span className="text-sm text-slate-500">%</span>
