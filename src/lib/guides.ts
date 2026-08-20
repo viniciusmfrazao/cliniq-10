@@ -121,7 +121,7 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Veja sua agenda do dia',
         description:
-          'Comece em Agenda filtrando por você. Cada bloco mostra paciente, procedimento e status. Ícones coloridos indicam quem já chegou.',
+          'Comece em Agenda filtrando por você. Cada bloco mostra paciente, procedimento e status. A faixa colorida na lateral esquerda do card indica o status, com um ícone dentro dela; contorno verde significa que o paciente já fez check-in.',
         tip: 'No mobile, deslize lateralmente entre os dias.',
         icon: 'calendar',
         href: '/dashboard/agenda',
@@ -241,6 +241,33 @@ export const GUIDES: GuideRole[] = [
         icon: 'clipboard',
         href: '/dashboard/procedimentos',
         color: 'from-violet-500 to-purple-500',
+      },
+      {
+        title: 'Colora a agenda por procedimento',
+        description:
+          'Ainda em Procedimentos, cada categoria tem uma bolinha ao lado do nome — clique e escolha a cor. Os cards da agenda passam a mostrar o procedimento pela cor de fundo, enquanto o status continua na faixa lateral com ícone. Um procedimento específico pode ter cor própria pelo campo "Cor na agenda".',
+        tip: 'Não configurou nada? A agenda continua exatamente como era, colorida por status. É opcional.',
+        icon: 'calendar',
+        href: '/dashboard/procedimentos',
+        color: 'from-pink-500 to-rose-500',
+      },
+      {
+        title: 'Defina as comissões',
+        description:
+          'Em Configurações → Comissões, ligue a comissão da clínica, escolha a base de cálculo (valor bruto ou líquido, já sem a taxa do cartão) e o percentual de cada profissional. Cada um acompanha o que tem a receber em "Minhas Comissões", vendo só o próprio.',
+        tip: 'Base líquida é mais justa quando a clínica vende muito no cartão parcelado — a taxa não sai só do seu lado.',
+        icon: 'dollarSign',
+        href: '/dashboard/config/comissoes',
+        color: 'from-emerald-500 to-teal-500',
+      },
+      {
+        title: 'Ajuste o que cada função enxerga',
+        description:
+          'Em Configurações → Permissões, defina por função o que aparece em cada módulo. No financeiro a escolha mais importante é entre "ver todo o financeiro" e "ver apenas o próprio" — são excludentes. Dá pra ajustar uma pessoa específica em Equipe sem mexer na função toda.',
+        tip: 'Cada pessoa com o próprio login. Senha compartilhada joga tudo pro nome de uma pessoa só e a auditoria perde o valor.',
+        icon: 'lock',
+        href: '/dashboard/config/permissoes',
+        color: 'from-slate-500 to-slate-600',
       },
       {
         title: 'Personalize templates de documentos',
@@ -388,6 +415,33 @@ export const GUIDES: GuideRole[] = [
         icon: 'trendingUp',
         href: '/dashboard/pacientes',
         color: 'from-violet-500 to-purple-500',
+      },
+      {
+        title: 'Separe o que foi vendido do que já entrou',
+        description:
+          'Previsão de Recebimento mostra o dinheiro vendido que ainda não caiu na conta: cartão na data prevista de repasse (já sem a taxa) e boleto na data de vencimento. É diferente do faturamento, que conta a venda no dia em que ela aconteceu.',
+        tip: 'Mês de faturamento alto com caixa apertado quase sempre é parcelamento no cartão — é aqui que dá pra enxergar.',
+        icon: 'calendar',
+        href: '/dashboard/financeiro/previsao-recebimento',
+        color: 'from-cyan-500 to-blue-500',
+      },
+      {
+        title: 'Receba por boleto',
+        description:
+          'No Registrar Pagamento, escolha Boleto e informe as parcelas com seus vencimentos. Cada parcela fica pendente até você confirmar o pagamento — só aí vira dinheiro em caixa. O que vencer sem confirmação aparece em Devedores.',
+        tip: 'Confirme a parcela no dia em que o dinheiro cair de verdade, não na emissão — senão o caixa fica otimista.',
+        icon: 'file',
+        href: '/dashboard/financeiro/devedores',
+        color: 'from-amber-500 to-orange-500',
+      },
+      {
+        title: 'Feche a comissão do mês',
+        description:
+          'Se a clínica trabalha com comissão, o cálculo sai dos atendimentos realizados no período, na base que o admin definiu (bruto ou líquido). Cada profissional vê só a própria em "Minhas Comissões"; quem tem acesso total ao financeiro vê todas.',
+        tip: 'Atendimento não finalizado não entra na comissão — vale conferir a agenda antes de fechar o mês.',
+        icon: 'dollarSign',
+        href: '/dashboard/config/comissoes',
+        color: 'from-emerald-500 to-green-500',
       },
     ],
   },
