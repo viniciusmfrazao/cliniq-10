@@ -4,16 +4,16 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
-const STORAGE_KEY = 'clinike_novidade_v5_ago2026'
+const STORAGE_KEY = 'clinike_novidade_v6_ago2026'
 const EXPIRA_EM_DIAS = 7
 
 const NOVIDADES = [
-  { emoji: '🛍️', texto: 'Venda de produto avulso: venda sem precisar de agendamento, direto na ficha do paciente' },
-  { emoji: '📋', texto: 'Anamnese personalizada: monte seu próprio formulário, estilo Google Forms' },
-  { emoji: '🧍', texto: 'Mapa Corporal: registre aplicações de harmonização corporal, igual ao mapa facial' },
-  { emoji: '📎', texto: 'Anexos do paciente: envie exames, laudos e arquivos direto na ficha' },
-  { emoji: '⏰', texto: 'Lembrete Personalizado: crie um lembrete extra com texto e horário próprios' },
-  { emoji: '🎙️', texto: 'Áudio nas automações: lembrete, confirmação e pós-venda podem sair por áudio' },
+  { emoji: '🎨', texto: 'Agenda colorida: escolha uma cor por categoria de procedimento em Procedimentos — o status continua visível na faixa lateral' },
+  { emoji: '🏷️', texto: 'Status com ícone: cada card mostra na faixa lateral se está agendado, confirmado, em atendimento, realizado ou faltou' },
+  { emoji: '💸', texto: 'Previsão de Recebimento: veja o que já foi vendido mas ainda não caiu na conta, com data de repasse do cartão' },
+  { emoji: '🧾', texto: 'Boleto: cobre em parcelas com vencimento próprio e confirme cada uma quando o dinheiro entrar' },
+  { emoji: '📊', texto: 'Comissões: defina o percentual por profissional e cada um acompanha o que tem a receber' },
+  { emoji: '🔎', texto: 'Auditoria: veja quem alterou o quê, quando e por onde — inclusive automações' },
 ]
 
 export default function NovidadeBanner() {

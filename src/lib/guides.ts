@@ -90,8 +90,8 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Receba o pagamento ao final',
         description:
-          'Depois do atendimento, lance a entrada em Financeiro → Nova Entrada. Selecione paciente, procedimento, forma de pagamento. O sistema calcula taxa e líquido sozinho. Vendeu algum produto avulso (sem procedimento)? Use "Vender Produto" na ficha do paciente.',
-        tip: 'Cartão? Informe bandeira e parcelas — a taxa vem automática.',
+          'Depois do atendimento, use "Registrar Pagamento" no popup do agendamento. Adicione procedimento e produto no mesmo carrinho — é um pagamento só, mesmo vendendo um creme junto. Dá pra dar desconto num item específico sem mexer no resto, e quitar débito antigo (mesmo que só parte) na mesma tela. Venda avulsa sem atendimento? Financeiro → Nova Entrada abre o mesmo carrinho.',
+        tip: 'Editar o valor de um item mostra o preço de tabela riscado do lado — fica claro que foi desconto, não erro de digitação.',
         icon: 'dollarSign',
         href: '/dashboard/financeiro/entradas/nova',
         color: 'from-emerald-500 to-green-500',
@@ -121,7 +121,7 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Veja sua agenda do dia',
         description:
-          'Comece em Agenda filtrando por você. Cada bloco mostra paciente, procedimento e status. Ícones coloridos indicam quem já chegou.',
+          'Comece em Agenda filtrando por você. Cada bloco mostra paciente, procedimento e status. A faixa colorida na lateral esquerda do card indica o status, com um ícone dentro dela; contorno verde significa que o paciente já fez check-in.',
         tip: 'No mobile, deslize lateralmente entre os dias.',
         icon: 'calendar',
         href: '/dashboard/agenda',
@@ -243,13 +243,58 @@ export const GUIDES: GuideRole[] = [
         color: 'from-violet-500 to-purple-500',
       },
       {
+        title: 'Colora a agenda por procedimento',
+        description:
+          'Ainda em Procedimentos, cada categoria tem uma bolinha ao lado do nome — clique e escolha a cor. Os cards da agenda passam a mostrar o procedimento pela cor de fundo, enquanto o status continua na faixa lateral com ícone. Um procedimento específico pode ter cor própria pelo campo "Cor na agenda".',
+        tip: 'Não configurou nada? A agenda continua exatamente como era, colorida por status. É opcional.',
+        icon: 'calendar',
+        href: '/dashboard/procedimentos',
+        color: 'from-pink-500 to-rose-500',
+      },
+      {
+        title: 'Defina as comissões',
+        description:
+          'Em Configurações → Comissões, ligue a comissão da clínica, escolha a base de cálculo (valor bruto ou líquido, já sem a taxa do cartão) e o percentual de cada profissional. Cada um acompanha o que tem a receber em "Minhas Comissões", vendo só o próprio.',
+        tip: 'Base líquida é mais justa quando a clínica vende muito no cartão parcelado — a taxa não sai só do seu lado.',
+        icon: 'dollarSign',
+        href: '/dashboard/config/comissoes',
+        color: 'from-emerald-500 to-teal-500',
+      },
+      {
+        title: 'Ajuste o que cada função enxerga',
+        description:
+          'Em Configurações → Permissões, defina por função o que aparece em cada módulo. No financeiro a escolha mais importante é entre "ver todo o financeiro" e "ver apenas o próprio" — são excludentes. Dá pra ajustar uma pessoa específica em Equipe sem mexer na função toda.',
+        tip: 'Cada pessoa com o próprio login. Senha compartilhada joga tudo pro nome de uma pessoa só e a auditoria perde o valor.',
+        icon: 'lock',
+        href: '/dashboard/config/permissoes',
+        color: 'from-slate-500 to-slate-600',
+      },
+      {
         title: 'Personalize templates de documentos',
         description:
-          'Em Documentos → Templates, crie modelos de termo de consentimento, anamnese e recibo. Use variáveis como {nome_paciente} pra preencher sozinho.',
-        tip: 'Um template bem feito é assinado em segundos pelo WhatsApp.',
+          'Em Documentos → Templates, crie modelos de termo de consentimento e recibo. Use variáveis como {{PACIENTE_NOME}}, {{DATA}} e {{PROCEDIMENTO}} — o sistema preenche sozinho. Escolha se pede assinatura do paciente ou do profissional.',
+        tip: 'Um template bem feito é assinado em segundos pelo WhatsApp — o link expira em 7 dias.',
         icon: 'file',
         href: '/dashboard/documentos/templates',
         color: 'from-purple-500 to-blue-500',
+      },
+      {
+        title: 'Monte suas fichas de anamnese',
+        description:
+          'Em Configurações → Ficha de Anamnese → Minhas Fichas, crie um ou mais modelos com seções e perguntas (texto, sim/não, múltipla escolha, número, data). Escolha quais dados de identificação pedir — CPF, nascimento, telefone. Só admin e gerente configuram; qualquer um pode enviar.',
+        tip: 'Cada procedimento pode ter sua própria ficha — Botox não precisa das mesmas perguntas que um preenchimento.',
+        icon: 'clipboard',
+        href: '/dashboard/anamnese/modelos',
+        color: 'from-blue-500 to-violet-500',
+      },
+      {
+        title: 'Ative as automações de WhatsApp',
+        description:
+          'Em Configurações → Automações: lembrete de consulta (confirmação, 2h antes), contato pós-procedimento, pós-venda de retorno, NPS, recall de inativos, aniversário e alerta de despesas. Cada uma liga/desliga e tem horário e texto próprios — várias aceitam áudio no lugar de texto.',
+        tip: 'Comece só com lembrete e aniversário — vá ligando o resto conforme a equipe se acostuma.',
+        icon: 'message',
+        href: '/dashboard/config/automacoes',
+        color: 'from-teal-500 to-emerald-500',
       },
       {
         title: 'Configure a Donna IA',
@@ -293,11 +338,20 @@ export const GUIDES: GuideRole[] = [
       {
         title: 'Registre entradas pelo pagamento na agenda',
         description:
-          'A forma correta é pelo botão "Registrar Pagamento" no popup do agendamento. O sistema vincula automaticamente ao paciente e atendimento. Informe apenas a forma de pagamento e o valor. Para corrigir, vá em Financeiro → Entradas, clique no lápis e edite.',
-        tip: 'Entradas lançadas pela agenda vinculam ao atendimento automaticamente — isso alimenta a rentabilidade do paciente.',
+          'A forma correta é pelo botão "Registrar Pagamento" no popup do agendamento. Procedimento e produto entram no mesmo carrinho — a paciente paga uma vez só, mesmo levando um creme junto. Dá pra editar o valor de cada item (desconto pontual), quitar débito parcialmente e dividir em várias formas de pagamento. Pra corrigir depois, vá em Financeiro → Entradas.',
+        tip: 'Venda sem paciente cadastrado (nome livre, tipo "Cliente Avulso") só é permitida com a permissão financial_free_name — por padrão, só admin tem.',
         icon: 'dollar',
         href: '/dashboard/agenda',
         color: 'from-teal-500 to-cyan-500',
+      },
+      {
+        title: 'Emita a nota fiscal',
+        description:
+          'Em Financeiro → Entradas, clique no ícone de nota ao lado do lançamento. Escolha Serviço (NFS-e) ou Produto (NFe) — o toggle de Produto só aparece se a clínica tiver a configuração fiscal de NFe completa. Confira os dados pré-preenchidos do paciente antes de emitir.',
+        tip: 'Qualquer pessoa com permissão de lançamento financeiro pode emitir — não precisa ser admin.',
+        icon: 'file',
+        href: '/dashboard/financeiro/entradas',
+        color: 'from-cyan-500 to-sky-500',
       },
       {
         title: 'Registre as saídas com categoria certa',
@@ -330,7 +384,7 @@ export const GUIDES: GuideRole[] = [
         title: 'Antecipe o quanto vai faturar',
         description:
           'Em Previsão de Faturamento você vê, com base nos agendamentos futuros ainda não concluídos, quanto está previsto pra entrar — separado por procedimento, profissional ou dia. Filtre por período (amanhã, até fim do mês, próximo mês) e por profissional ou categoria.',
-        tip: 'Agendamentos que já têm entrada lançada ou foram concluídos não entram na previsão — só o que ainda pode virar receita.',
+        tip: 'Agendamentos que já têm entrada lançada ou foram concluídos não entram na previsão — só o que ainda pode virar receita. Se a clínica já negocia desconto na hora de marcar, dá pra aplicar direto no agendamento e a previsão já sai correta.',
         icon: 'calendar',
         href: '/dashboard/financeiro/previsao',
         color: 'from-teal-500 to-emerald-500',
@@ -361,6 +415,33 @@ export const GUIDES: GuideRole[] = [
         icon: 'trendingUp',
         href: '/dashboard/pacientes',
         color: 'from-violet-500 to-purple-500',
+      },
+      {
+        title: 'Separe o que foi vendido do que já entrou',
+        description:
+          'Previsão de Recebimento mostra o dinheiro vendido que ainda não caiu na conta: cartão na data prevista de repasse (já sem a taxa) e boleto na data de vencimento. É diferente do faturamento, que conta a venda no dia em que ela aconteceu.',
+        tip: 'Mês de faturamento alto com caixa apertado quase sempre é parcelamento no cartão — é aqui que dá pra enxergar.',
+        icon: 'calendar',
+        href: '/dashboard/financeiro/previsao-recebimento',
+        color: 'from-cyan-500 to-blue-500',
+      },
+      {
+        title: 'Receba por boleto',
+        description:
+          'No Registrar Pagamento, escolha Boleto e informe as parcelas com seus vencimentos. Cada parcela fica pendente até você confirmar o pagamento — só aí vira dinheiro em caixa. O que vencer sem confirmação aparece em Devedores.',
+        tip: 'Confirme a parcela no dia em que o dinheiro cair de verdade, não na emissão — senão o caixa fica otimista.',
+        icon: 'file',
+        href: '/dashboard/financeiro/devedores',
+        color: 'from-amber-500 to-orange-500',
+      },
+      {
+        title: 'Feche a comissão do mês',
+        description:
+          'Se a clínica trabalha com comissão, o cálculo sai dos atendimentos realizados no período, na base que o admin definiu (bruto ou líquido). Cada profissional vê só a própria em "Minhas Comissões"; quem tem acesso total ao financeiro vê todas.',
+        tip: 'Atendimento não finalizado não entra na comissão — vale conferir a agenda antes de fechar o mês.',
+        icon: 'dollarSign',
+        href: '/dashboard/config/comissoes',
+        color: 'from-emerald-500 to-green-500',
       },
     ],
   },
