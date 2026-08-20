@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { parseSupabaseError } from '@/lib/error-messages'
+import ColorPicker from '@/components/ui/ColorPicker'
 
 
 type Professional = { id: string; name: string; role?: string }
@@ -19,6 +20,7 @@ type Procedure = {
   professional_ids?: string[] | null
   active?: boolean
   custo_fixo_rateavel?: number | null
+  color?: string | null
 }
 
 type Props = {
@@ -29,9 +31,11 @@ type Props = {
   onCancel?: () => void
   compact?: boolean
   hasCustoRateavel?: boolean
+  /** categorias ja usadas na clinica, pra sugerir no datalist */
+  existingCategories?: string[]
 }
 
-export default function ProcedureForm({ clinicId, professionals, procedure, onSaved, onCancel, compact = false, hasCustoRateavel = false }: Props) {
+export default function ProcedureForm({ clinicId, professionals, procedure, onSaved, onCancel, compact = false, hasCustoRateavel = false, existingCategories = [] }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const isEditing = !!procedure?.id
@@ -44,6 +48,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
     category: procedure?.category || '',
     professional_ids: (procedure?.professional_ids || []) as string[],
     custo_fixo_rateavel: procedure?.custo_fixo_rateavel != null ? String(procedure.custo_fixo_rateavel) : '',
+    color: (procedure?.color ?? null) as string | null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -73,6 +78,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
       price: parseFloat(form.price) || 0,
       category: form.category || null,
       professional_ids: form.professional_ids,
+      color: form.color,
       ...(hasCustoRateavel
         ? { custo_fixo_rateavel: form.custo_fixo_rateavel !== '' ? parseFloat(form.custo_fixo_rateavel) : null }
         : {}),
@@ -97,6 +103,7 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
         category: '',
         professional_ids: [],
         custo_fixo_rateavel: '',
+        color: null,
       })
     }
     setLoading(false)
@@ -164,10 +171,34 @@ export default function ProcedureForm({ clinicId, professionals, procedure, onSa
           <input
             className="input"
             type="text"
+            list="procedure-categories"
             placeholder="Ex: Injetáveis, Facial, Corporal..."
             value={form.category}
             onChange={e => update('category', e.target.value)}
           />
+          {existingCategories.length > 0 && (
+            <datalist id="procedure-categories">
+              {existingCategories.map(c => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          )}
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="label">Cor na agenda</label>
+          <div className="flex items-center gap-2">
+            <ColorPicker
+              value={form.color}
+              onChange={c => update('color', c)}
+              title="Cor deste procedimento"
+            />
+            <span className="text-xs text-slate-500">
+              {form.color
+                ? 'Cor específica deste procedimento — sobrepõe a cor da categoria.'
+                : 'Sem cor própria: usa a cor da categoria, ou a cor do status se a categoria também não tiver.'}
+            </span>
+          </div>
         </div>
 
         <div className="md:col-span-2">
