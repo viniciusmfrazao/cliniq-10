@@ -12,15 +12,16 @@ export type PermissionId =
   | 'stock_view' | 'stock_edit'
   | 'financial_view_all' | 'financial_view_own' | 'financial_edit'
   | 'crm_view' | 'crm_edit'
+  | 'procedures_view' | 'procedures_edit'
   | 'team_manage' | 'reports_view' | 'settings'
 
 export type PermissionGroupId =
   | 'agenda' | 'pacientes' | 'prontuario' | 'estoque'
-  | 'financeiro' | 'crm' | 'sistema'
+  | 'financeiro' | 'crm' | 'procedimentos' | 'sistema'
 
 export type IconName =
   | 'calendar' | 'users' | 'file' | 'box'
-  | 'dollarSign' | 'target' | 'settings'
+  | 'dollarSign' | 'target' | 'settings' | 'clipboard'
 
 export type PermissionGroup = {
   id: PermissionGroupId
@@ -106,6 +107,17 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { id: 'crm_view', label: 'Ver leads', description: 'Visualizar pipeline e conversas com leads' },
       { id: 'crm_edit', label: 'Gerenciar leads', description: 'Mover etapa, atribuir responsáveis e responder conversas' },
+    ],
+  },
+  {
+    id: 'procedimentos',
+    label: 'Procedimentos',
+    description: 'Catálogo de procedimentos da clínica',
+    icon: 'clipboard',
+    color: 'amber',
+    permissions: [
+      { id: 'procedures_view', label: 'Ver procedimentos', description: 'Consultar o catálogo de procedimentos e quem realiza cada um' },
+      { id: 'procedures_edit', label: 'Cadastrar/editar procedimentos', description: 'Criar, editar, ativar/desativar e excluir procedimentos' },
     ],
   },
   {
