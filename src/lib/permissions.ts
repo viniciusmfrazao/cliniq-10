@@ -13,15 +13,23 @@ export type PermissionId =
   | 'financial_view_all' | 'financial_view_own' | 'financial_edit'
   | 'crm_view' | 'crm_edit'
   | 'procedures_view' | 'procedures_edit'
+  | 'recepcao_access'
+  | 'waitlist_access'
+  | 'documents_access'
+  | 'whatsapp_access'
+  | 'eva_access'
   | 'team_manage' | 'reports_view' | 'settings'
 
 export type PermissionGroupId =
   | 'agenda' | 'pacientes' | 'prontuario' | 'estoque'
-  | 'financeiro' | 'crm' | 'procedimentos' | 'sistema'
+  | 'financeiro' | 'crm' | 'procedimentos'
+  | 'recepcao' | 'lista_espera' | 'documentos' | 'whatsapp' | 'eva'
+  | 'sistema'
 
 export type IconName =
   | 'calendar' | 'users' | 'file' | 'box'
   | 'dollarSign' | 'target' | 'settings' | 'clipboard'
+  | 'userCheck' | 'clock' | 'message' | 'sparkles'
 
 export type PermissionGroup = {
   id: PermissionGroupId
@@ -121,6 +129,56 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    id: 'recepcao',
+    label: 'Recepção',
+    description: 'Check-in e fluxo do dia na recepção',
+    icon: 'userCheck',
+    color: 'blue',
+    permissions: [
+      { id: 'recepcao_access', label: 'Acessar recepção', description: 'Ver e dar entrada nos pacientes do dia' },
+    ],
+  },
+  {
+    id: 'lista_espera',
+    label: 'Lista de Espera',
+    description: 'Fila de pacientes aguardando encaixe',
+    icon: 'clock',
+    color: 'amber',
+    permissions: [
+      { id: 'waitlist_access', label: 'Acessar lista de espera', description: 'Ver e gerenciar pacientes na lista de espera' },
+    ],
+  },
+  {
+    id: 'documentos',
+    label: 'Documentos',
+    description: 'Modelos e documentos da clínica',
+    icon: 'file',
+    color: 'slate',
+    permissions: [
+      { id: 'documents_access', label: 'Acessar documentos', description: 'Ver, gerar e gerenciar documentos e modelos' },
+    ],
+  },
+  {
+    id: 'whatsapp',
+    label: 'WhatsApp',
+    description: 'Conversas e disparos pelo WhatsApp',
+    icon: 'message',
+    color: 'emerald',
+    permissions: [
+      { id: 'whatsapp_access', label: 'Acessar WhatsApp', description: 'Ver e responder conversas no WhatsApp da clínica' },
+    ],
+  },
+  {
+    id: 'eva',
+    label: 'Eva IA',
+    description: 'Recepcionista virtual por IA',
+    icon: 'sparkles',
+    color: 'violet',
+    permissions: [
+      { id: 'eva_access', label: 'Acessar Eva IA', description: 'Ver conversas, métricas e configurações da Eva' },
+    ],
+  },
+  {
     id: 'sistema',
     label: 'Sistema',
     description: 'Equipe, relatórios e configurações',
@@ -176,19 +234,19 @@ export const EDITABLE_ROLES: string[] = [
 
 /** Permissoes padrao "de fabrica" por papel — usado como fallback. */
 export const FACTORY_DEFAULTS: Record<string, PermissionId[]> = {
-  doctor: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
-  dentist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
-  biomedic: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
-  nurse: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view'],
-  esthetician: ['agenda_view', 'agenda_edit', 'patients_view', 'records_view', 'records_edit', 'stock_view'],
-  physiotherapist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
-  nutritionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
-  psychologist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit'],
-  receptionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'crm_view', 'crm_edit'],
+  doctor: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view', 'procedures_view', 'documents_access'],
+  dentist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view', 'procedures_view', 'documents_access'],
+  biomedic: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view', 'procedures_view', 'documents_access'],
+  nurse: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'stock_view', 'procedures_view', 'documents_access'],
+  esthetician: ['agenda_view', 'agenda_edit', 'patients_view', 'records_view', 'records_edit', 'stock_view', 'procedures_view', 'documents_access'],
+  physiotherapist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'procedures_view', 'documents_access'],
+  nutritionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'procedures_view', 'documents_access'],
+  psychologist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'records_view', 'records_edit', 'procedures_view', 'documents_access'],
+  receptionist: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'crm_view', 'crm_edit', 'recepcao_access', 'waitlist_access', 'documents_access', 'whatsapp_access', 'eva_access'],
   financial: ['agenda_view', 'patients_view', 'financial_view_all', 'financial_edit', 'reports_view'],
-  manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view_all', 'reports_view', 'crm_view', 'crm_edit'],
-  comercial: ['crm_view', 'crm_edit', 'patients_view', 'agenda_view'],
-  assistant: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit'],
+  manager: ['agenda_view', 'agenda_edit', 'patients_view', 'stock_view', 'stock_edit', 'financial_view_all', 'reports_view', 'crm_view', 'crm_edit', 'procedures_view', 'procedures_edit', 'recepcao_access', 'waitlist_access', 'documents_access', 'whatsapp_access', 'eva_access'],
+  comercial: ['crm_view', 'crm_edit', 'patients_view', 'agenda_view', 'whatsapp_access'],
+  assistant: ['agenda_view', 'agenda_edit', 'patients_view', 'patients_edit', 'recepcao_access', 'waitlist_access'],
   viewer: ['agenda_view', 'patients_view'],
 }
 

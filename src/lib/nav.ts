@@ -21,23 +21,23 @@ const ADMIN_ONLY = ['admin', 'super_admin']
 export const NAV_ITEMS: NavItem[] = [
   // ── Operacional diário ──────────────────────────────────────────────────
   { label: 'Início',          href: '/dashboard',               icon: 'home',      roles: ALL_STAFF },
-  { label: 'Agenda',          href: '/dashboard/agenda',        icon: 'calendar',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'] },
-  { label: 'Recepção',        href: '/dashboard/recepcao',      icon: 'userCheck', roles: [...MANAGEMENT, ...RECEPTION] },
-  { label: 'Lista de Espera', href: '/dashboard/lista-espera',  icon: 'clock',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
-  { label: 'Pacientes',       href: '/dashboard/pacientes',     icon: 'users',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
+  { label: 'Agenda',          href: '/dashboard/agenda',        icon: 'calendar',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'], anyPermissions: ['agenda_view', 'agenda_edit', 'all'] },
+  { label: 'Recepção',        href: '/dashboard/recepcao',      icon: 'userCheck', roles: [...MANAGEMENT, ...RECEPTION], anyPermissions: ['recepcao_access', 'all'] },
+  { label: 'Lista de Espera', href: '/dashboard/lista-espera',  icon: 'clock',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION], anyPermissions: ['waitlist_access', 'all'] },
+  { label: 'Pacientes',       href: '/dashboard/pacientes',     icon: 'users',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'], anyPermissions: ['patients_view', 'patients_edit', 'all'] },
 
   // ── Clínico ─────────────────────────────────────────────────────────────
   { label: 'Procedimentos',   href: '/dashboard/procedimentos', icon: 'clipboard', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS], anyPermissions: ['procedures_view', 'procedures_edit', 'all'] },
-  { label: 'Injetaveis',      href: '/dashboard/injetaveis',    icon: 'syringe',   roles: [...MANAGEMENT, 'doctor', 'dentist', 'biomedic', 'nurse', 'esthetician'] },
-  { label: 'Documentos',      href: '/dashboard/documentos',    icon: 'file',      roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
+  { label: 'Injetaveis',      href: '/dashboard/injetaveis',    icon: 'syringe',   roles: [...MANAGEMENT, 'doctor', 'dentist', 'biomedic', 'nurse', 'esthetician'], anyPermissions: ['records_edit', 'stock_edit', 'all'] },
+  { label: 'Documentos',      href: '/dashboard/documentos',    icon: 'file',      roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION], anyPermissions: ['documents_access', 'all'] },
 
   // ── Comercial / IA ──────────────────────────────────────────────────────
-  { label: 'WhatsApp',        href: '/dashboard/whatsapp',      icon: 'message',   roles: [...MANAGEMENT, ...RECEPTION, 'comercial'] },
-  { label: 'Eva IA',          href: '/dashboard/eva',           icon: 'sparkles',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
-  { label: 'CRM',             href: '/dashboard/crm',           icon: 'target',    roles: [...MANAGEMENT, ...RECEPTION, 'comercial'] },
+  { label: 'WhatsApp',        href: '/dashboard/whatsapp',      icon: 'message',   roles: [...MANAGEMENT, ...RECEPTION, 'comercial'], anyPermissions: ['whatsapp_access', 'all'] },
+  { label: 'Eva IA',          href: '/dashboard/eva',           icon: 'sparkles',  roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION], anyPermissions: ['eva_access', 'all'] },
+  { label: 'CRM',             href: '/dashboard/crm',           icon: 'target',    roles: [...MANAGEMENT, ...RECEPTION, 'comercial'], anyPermissions: ['crm_view', 'crm_edit', 'all'] },
 
   // ── Gestão ──────────────────────────────────────────────────────────────
-  { label: 'Estoque',         href: '/dashboard/estoque',       icon: 'box',       roles: [...MANAGEMENT, ...ALL_PROFESSIONALS] },
+  { label: 'Estoque',         href: '/dashboard/estoque',       icon: 'box',       roles: [...MANAGEMENT, ...ALL_PROFESSIONALS], anyPermissions: ['stock_view', 'stock_edit', 'all'] },
   {
     label: 'Financeiro',
     href: '/dashboard/financeiro',
@@ -59,8 +59,8 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const BOTTOM_NAV: NavItem[] = [
   { label: 'Início',    href: '/dashboard',             icon: 'home',     roles: ALL_STAFF },
-  { label: 'Agenda',    href: '/dashboard/agenda',      icon: 'calendar', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'] },
-  { label: 'Pacientes', href: '/dashboard/pacientes',   icon: 'users',    roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
-  { label: 'Recepção',  href: '/dashboard/recepcao',    icon: 'inbox',    roles: [...MANAGEMENT, ...RECEPTION] },
+  { label: 'Agenda',    href: '/dashboard/agenda',      icon: 'calendar', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer', 'comercial'], anyPermissions: ['agenda_view', 'agenda_edit', 'all'] },
+  { label: 'Pacientes', href: '/dashboard/pacientes',   icon: 'users',    roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'], anyPermissions: ['patients_view', 'patients_edit', 'all'] },
+  { label: 'Recepção',  href: '/dashboard/recepcao',    icon: 'inbox',    roles: [...MANAGEMENT, ...RECEPTION], anyPermissions: ['recepcao_access', 'all'] },
   { label: 'Financeiro',href: '/dashboard/financeiro',  icon: 'dollar',   roles: FINANCIAL, anyPermissions: ['financial_view_all', 'financial_view_own', 'all'] },
 ]
