@@ -2,6 +2,7 @@ import { createClient, getCachedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ProcedureList from './procedure-list'
 import ProcedureForm from './procedure-form'
+import { getEffectiveAccess, can } from '@/lib/effective-permissions'
 
 export const metadata = {
   title: 'Procedimentos | Clinike',
@@ -56,6 +57,8 @@ export default async function ProcedimentosPage() {
   )
 
   const isAdmin = userData.role === 'admin' || userData.role === 'super_admin'
+  const access = await getEffectiveAccess(supabase, user.id)
+  const canEdit = isAdmin || can(access, 'procedures_edit')
   const activeModules: string[] = clinicResult.data?.settings?.active_modules || []
   const hasEva = activeModules.includes('eva_ia')
   const hasCustoRateavel = activeModules.includes('custo_rateavel')
@@ -82,7 +85,7 @@ export default async function ProcedimentosPage() {
         )}
       </div>
 
-      {isAdmin && (
+      {canEdit && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 mb-6">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
             Adicionar procedimento
@@ -104,7 +107,7 @@ export default async function ProcedimentosPage() {
           procedures={procedures as any}
           professionals={professionals}
           clinicId={userData.clinic_id}
-          isAdmin={isAdmin}
+          isAdmin={canEdit}
           hasEva={hasEva}
           hasCustoRateavel={hasCustoRateavel}
           categoryColors={categoryColors as any}

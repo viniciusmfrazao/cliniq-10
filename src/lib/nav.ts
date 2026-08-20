@@ -27,7 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Pacientes',       href: '/dashboard/pacientes',     icon: 'users',     roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION, 'financial', 'viewer'] },
 
   // ── Clínico ─────────────────────────────────────────────────────────────
-  { label: 'Procedimentos',   href: '/dashboard/procedimentos', icon: 'clipboard', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS] },
+  { label: 'Procedimentos',   href: '/dashboard/procedimentos', icon: 'clipboard', roles: [...MANAGEMENT, ...ALL_PROFESSIONALS], anyPermissions: ['procedures_view', 'procedures_edit', 'all'] },
   { label: 'Injetaveis',      href: '/dashboard/injetaveis',    icon: 'syringe',   roles: [...MANAGEMENT, 'doctor', 'dentist', 'biomedic', 'nurse', 'esthetician'] },
   { label: 'Documentos',      href: '/dashboard/documentos',    icon: 'file',      roles: [...MANAGEMENT, ...ALL_PROFESSIONALS, ...RECEPTION] },
 
