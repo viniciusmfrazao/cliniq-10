@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import PatientSearch from '@/components/ui/PatientSearch'
 import QuickPatientModal from '@/components/ui/QuickPatientModal'
+import PackageSessionScheduler, { type ScheduledSessionRow } from '@/components/packages/PackageSessionScheduler'
 import { todayBR } from '@/lib/datetime'
 import { parseSupabaseError } from '@/lib/error-messages'
 
@@ -113,9 +114,24 @@ export default function AppointmentForm({
       .then(({ data }) => setActivePackages(data || []))
   }, [form.patient_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Estado do pacote a criar no agendamento
-  const [isPackage, setIsPackage] = useState(false)
+  // Modo de pacote: nenhum, vincular a um pacote ativo existente, ou criar um novo
+  const [packageMode, setPackageMode] = useState<'none' | 'existing' | 'new'>('none')
+  const isPackage = packageMode === 'new' // mantém nome usado mais abaixo pro pré-preenchimento de nome
+  const [linkedPackageId, setLinkedPackageId] = useState('')
   const [packageForm, setPackageForm] = useState({ name: '', total_sessions: '3', price_total: '' })
+
+  // Sessões seguintes agendadas em lote (semanal/quinzenal/manual, cada uma editável)
+  const [extraSessionRows, setExtraSessionRows] = useState<ScheduledSessionRow[]>([])
+
+  const linkedPackage = activePackages.find(p => p.id === linkedPackageId) || null
+  const remainingOnLinkedPackage = linkedPackage ? linkedPackage.total_sessions - linkedPackage.used_sessions : 0
+
+  // Quantas sessões futuras (além desta) devem ser pré-agendadas
+  const extraSessionsCount = packageMode === 'new'
+    ? Math.max((parseInt(packageForm.total_sessions, 10) || 1) - 1, 0)
+    : packageMode === 'existing'
+      ? Math.max(remainingOnLinkedPackage - 1, 0)
+      : 0
 
   // Pré-preenche nome do pacote com o procedimento selecionado
   useEffect(() => {
@@ -263,6 +279,9 @@ export default function AppointmentForm({
     // que le esse campo (previsao, payment-modal), so' que sem travar o valor.
     const valorFoiEditado = valorManualStr !== '' || descontoNum > 0
 
+    // package_id desta sessão: pacote vinculado existente, ou o pacote novo (setado depois de criá-lo)
+    const linkedForThisAppointment = packageMode === 'existing' ? linkedPackageId || null : null
+
     const appointmentData = {
       clinic_id: clinicId,
       patient_id: form.patient_id,
@@ -272,6 +291,7 @@ export default function AppointmentForm({
       end_time: endTime.toISOString(),
       notes: notesWithProcedures || null,
       status: form.status,
+      package_id: linkedForThisAppointment,
       ...(valorFoiEditado ? {
         valor_cobrado: selectedProcedures.length > 0 ? valorFinal : null,
         desconto_tipo: descontoNum > 0 ? descontoTipo : null,
@@ -323,8 +343,10 @@ export default function AppointmentForm({
       await supabase.from('appointment_procedures').insert(apRows)
     }
 
-    // Se é pacote, criar o pacote e registrar a 1ª sessão
-    if (isPackage && packageForm.name.trim() && appointmentId) {
+    // Pacote novo: cria o pacote e vincula este agendamento a ele como 1ª sessão
+    // (a sessão só é de fato consumida quando o status virar "Realizado" — via trigger no banco)
+    let packageIdForBatch: string | null = null
+    if (packageMode === 'new' && packageForm.name.trim() && appointmentId) {
       const { data: newPkg } = await supabase
         .from('patient_packages')
         .insert({
@@ -341,13 +363,36 @@ export default function AppointmentForm({
         .single()
 
       if (newPkg) {
-        await supabase.from('patient_package_sessions').insert({
+        packageIdForBatch = newPkg.id
+        await supabase.from('appointments').update({ package_id: newPkg.id }).eq('id', appointmentId)
+      }
+    } else if (packageMode === 'existing' && linkedPackageId) {
+      packageIdForBatch = linkedPackageId
+    }
+
+    // Sessões seguintes pré-agendadas (semanal/quinzenal/manual) — cada uma vira
+    // um agendamento independente vinculado ao mesmo pacote, sem consumir sessão até ser concluído
+    if (packageIdForBatch && extraSessionRows.length > 0) {
+      const extraRows = extraSessionRows.map(row => {
+        const start = new Date(`${row.date}T${row.time}:00`)
+        const end = new Date(start.getTime() + parseInt(form.duration) * 60000)
+        return {
           clinic_id: clinicId,
-          package_id: newPkg.id,
-          appointment_id: appointmentId,
-          performed_at: form.date,
-          notes: '1ª sessão — agendada junto com a criação do pacote',
-        })
+          patient_id: form.patient_id,
+          professional_id: form.professional_id,
+          procedure_id: selectedProcedures[0] || null,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          notes: notesWithProcedures || null,
+          status: 'scheduled',
+          package_id: packageIdForBatch,
+          valor_cobrado: 0,
+        }
+      })
+      const { error: batchError } = await supabase.from('appointments').insert(extraRows)
+      if (batchError) {
+        // Não bloqueia o fluxo — o agendamento principal já foi salvo; só avisa
+        console.error('Erro ao agendar sessões seguintes do pacote:', batchError)
       }
     }
 
@@ -711,20 +756,72 @@ export default function AppointmentForm({
       {/* Pacote de sessões — só aparece quando há paciente selecionado */}
       {form.patient_id && (
         <div className="border border-slate-200 rounded-2xl overflow-hidden">
-          <label className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
-            <input
-              type="checkbox"
-              checked={isPackage}
-              onChange={e => setIsPackage(e.target.checked)}
-              className="w-4 h-4 text-violet-600 rounded border-slate-300 focus:ring-violet-500"
-            />
-            <div>
-              <p className="text-sm font-medium text-slate-800">Agendar como pacote de sessões</p>
-              <p className="text-xs text-slate-400">Clube do Botox, Lavieen, Microvasos...</p>
-            </div>
-          </label>
+          <div className="px-4 py-3 space-y-2">
+            {activePackages.length > 0 && (
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="packageMode"
+                  checked={packageMode === 'existing'}
+                  onChange={() => {
+                    setPackageMode('existing')
+                    if (!linkedPackageId) setLinkedPackageId(activePackages[0].id)
+                  }}
+                  className="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800">Vincular a um pacote ativo</p>
+                  <p className="text-xs text-slate-400">Descontar sessão de um pacote já existente do paciente</p>
+                </div>
+              </label>
+            )}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="radio"
+                name="packageMode"
+                checked={packageMode === 'new'}
+                onChange={() => setPackageMode('new')}
+                className="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500"
+              />
+              <div>
+                <p className="text-sm font-medium text-slate-800">Criar novo pacote de sessões</p>
+                <p className="text-xs text-slate-400">Clube do Botox, Lavieen, Microvasos...</p>
+              </div>
+            </label>
+            {packageMode !== 'none' && (
+              <button
+                type="button"
+                onClick={() => { setPackageMode('none'); setLinkedPackageId(''); setExtraSessionRows([]) }}
+                className="text-xs text-slate-400 hover:text-slate-600 underline"
+              >
+                Não é pacote, cancelar
+              </button>
+            )}
+          </div>
 
-          {isPackage && (
+          {packageMode === 'existing' && (
+            <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-3 bg-violet-50/40">
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Pacote</label>
+                <select
+                  className="input"
+                  value={linkedPackageId}
+                  onChange={e => setLinkedPackageId(e.target.value)}
+                >
+                  {activePackages.map(pkg => (
+                    <option key={pkg.id} value={pkg.id}>
+                      {pkg.name} — {pkg.total_sessions - pkg.used_sessions} sessão(ões) restante(s)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-[11px] text-violet-600 bg-violet-100 rounded-xl px-3 py-2">
+                Esta sessão só é descontada do pacote quando o atendimento for marcado como Realizado.
+              </p>
+            </div>
+          )}
+
+          {packageMode === 'new' && (
             <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-3 bg-violet-50/40">
               <div>
                 <label className="text-xs font-medium text-slate-600 mb-1 block">Nome do pacote *</label>
@@ -766,9 +863,19 @@ export default function AppointmentForm({
                 </div>
               </div>
               <p className="text-[11px] text-violet-600 bg-violet-100 rounded-xl px-3 py-2">
-                Este agendamento será contado como a 1ª sessão do pacote.
+                Este agendamento será a 1ª sessão do pacote (descontada só quando concluído).
               </p>
             </div>
+          )}
+
+          {packageMode !== 'none' && (
+            <PackageSessionScheduler
+              count={extraSessionsCount}
+              firstDate={form.date}
+              firstTime={form.start_time}
+              rows={extraSessionRows}
+              onChange={setExtraSessionRows}
+            />
           )}
         </div>
       )}
