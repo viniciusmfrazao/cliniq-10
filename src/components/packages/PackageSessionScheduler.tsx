@@ -10,11 +10,32 @@ export type ScheduledSessionRow = {
   time: string
 }
 
-type Frequency = 'weekly' | 'biweekly' | 'manual'
+type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'manual'
 
-const FREQUENCY_DAYS: Record<Exclude<Frequency, 'manual'>, number> = {
+const FREQUENCY_DAYS: Partial<Record<Frequency, number>> = {
   weekly: 7,
   biweekly: 14,
+}
+
+/**
+ * Soma N meses a uma data YYYY-MM-DD, sem passar por `Date`/UTC (evita o
+ * mesmo problema de fuso descrito em lib/datetime.ts). Ajusta o dia se o
+ * mês de destino for mais curto (ex: 31/01 + 1 mês -> 28 ou 29/02).
+ */
+function addMonthsBR(dateStr: string, months: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const totalMonths = (m - 1) + months
+  const targetYear = y + Math.floor(totalMonths / 12)
+  const targetMonth = ((totalMonths % 12) + 12) % 12 // 0-indexed
+  const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
+  const targetDay = Math.min(d, daysInTargetMonth)
+  return `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`
+}
+
+function nextSessionDate(firstDate: string, frequency: Frequency, index: number): string {
+  if (frequency === 'manual') return firstDate
+  if (frequency === 'monthly') return addMonthsBR(firstDate, index + 1)
+  return addDaysBR(firstDate, (FREQUENCY_DAYS[frequency] || 0) * (index + 1))
 }
 
 /**
@@ -43,11 +64,10 @@ export default function PackageSessionScheduler({
       if (rows.length > 0) onChange([])
       return
     }
-    const base = frequency === 'manual' ? 0 : FREQUENCY_DAYS[frequency]
     const next: ScheduledSessionRow[] = Array.from({ length: count }).map((_, i) => {
       const existing = rows[i]
       if (existing) return existing
-      const date = frequency === 'manual' ? firstDate : addDaysBR(firstDate, base * (i + 1))
+      const date = nextSessionDate(firstDate, frequency, i)
       return { key: Math.random().toString(36).slice(2), date, time: firstTime }
     })
     onChange(next)
@@ -62,11 +82,10 @@ export default function PackageSessionScheduler({
 
   function applyFrequency(freq: Frequency) {
     setFrequency(freq)
-    const base = freq === 'manual' ? 0 : FREQUENCY_DAYS[freq as Exclude<Frequency, 'manual'>]
     onChange(
       rows.map((r, i) => ({
         ...r,
-        date: freq === 'manual' ? r.date : addDaysBR(firstDate, base * (i + 1)),
+        date: freq === 'manual' ? r.date : nextSessionDate(firstDate, freq, i),
       }))
     )
   }
@@ -84,6 +103,7 @@ export default function PackageSessionScheduler({
         >
           <option value="weekly">Semanal</option>
           <option value="biweekly">Quinzenal</option>
+          <option value="monthly">Mensal</option>
           <option value="manual">Datas manuais</option>
         </select>
       </div>
