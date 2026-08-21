@@ -69,8 +69,8 @@ export default function PermissionsForm({ member, activeModules = [] }: Props) {
   function toggleGroupAll(group: PermissionGroup) {
     if (hasAll) return
     // Nos pares mutuamente exclusivos, "marcar todas" so marca a 1a opcao (mais ampla)
-    const exclusiveToSkip = new Set(MUTUALLY_EXCLUSIVE.map((pair) => pair[1]))
-    const allIds = group.permissions.map((p) => p.id).filter((id) => !exclusiveToSkip.has(id))
+    const exclusiveToSkip = new Set<string>(MUTUALLY_EXCLUSIVE.map((pair) => pair[1]))
+    const allIds: string[] = group.permissions.map((p) => p.id as string).filter((id) => !exclusiveToSkip.has(id))
     const allSelected = allIds.every((id) => permissions.includes(id))
     setPermissions((prev) => {
       if (allSelected) return prev.filter((p) => !allIds.includes(p) && !exclusiveToSkip.has(p))
