@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 
-const STORAGE_KEY = 'clinike_novidade_v6_ago2026'
+const STORAGE_KEY = 'clinike_novidade_v7_ago2026'
 const EXPIRA_EM_DIAS = 7
 
 const NOVIDADES = [
+  { emoji: '✅', texto: 'A sessão só é descontada do pacote quando o atendimento é marcado como Realizado — não mais na hora de agendar' },
   { emoji: '🎨', texto: 'Agenda colorida: escolha uma cor por categoria de procedimento em Procedimentos — o status continua visível na faixa lateral' },
-  { emoji: '🏷️', texto: 'Status com ícone: cada card mostra na faixa lateral se está agendado, confirmado, em atendimento, realizado ou faltou' },
   { emoji: '💸', texto: 'Previsão de Recebimento: veja o que já foi vendido mas ainda não caiu na conta, com data de repasse do cartão' },
   { emoji: '🧾', texto: 'Boleto: cobre em parcelas com vencimento próprio e confirme cada uma quando o dinheiro entrar' },
   { emoji: '📊', texto: 'Comissões: defina o percentual por profissional e cada um acompanha o que tem a receber' },
@@ -57,10 +57,10 @@ export default function NovidadeBanner() {
           </div>
 
           <p className="font-bold text-base md:text-lg leading-tight">
-            Chegou a venda de produto avulso! 🛍️
+            Agendar pacote de sessões ficou muito mais fácil! 📦
           </p>
           <p className="text-white/80 text-xs md:text-sm mt-1 leading-relaxed">
-            Agora dá pra vender um produto sem precisar de agendamento, direto na ficha do paciente. E ainda vieram mais novidades:
+            Agora dá pra vincular o agendamento a um pacote já existente do paciente, e as próximas sessões já saem pré-marcadas — semanal, quinzenal ou mensal, cada uma editável. Nada mais fica esquecido. E ainda vieram mais novidades:
           </p>
 
           {/* Lista de novidades */}
@@ -84,11 +84,11 @@ export default function NovidadeBanner() {
 
           <div className="flex items-center gap-3 mt-4 flex-wrap">
             <Link
-              href="/dashboard/pacientes"
+              href="/dashboard/agenda"
               onClick={fechar}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-violet-600 rounded-xl text-sm font-bold hover:bg-violet-50 transition-colors shadow-sm"
             >
-              Ver pacientes
+              Ir para a Agenda
               <Icon name="chevronRight" className="w-4 h-4" />
             </Link>
             <button
