@@ -3,7 +3,7 @@ import { createClient, getCachedUser } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
-import { todayBR, startOfMonthBR, endOfMonthBR, parseDateBR } from '@/lib/datetime'
+import { todayBR, parseDateBR } from '@/lib/datetime'
 import { getFinancialAccess } from '@/lib/financial-access'
 import RentabilidadeFiltro from './RentabilidadeFiltro'
 import RentabilidadeTendenciaChart from './RentabilidadeTendenciaChart'
@@ -38,8 +38,25 @@ export default async function FinanceiroPage({
   const isOwnScope = scope === 'own'
 
   const todayStr = todayBR()
-  const startOfMonth = startOfMonthBR().slice(0, 10)
-  const endOfMonth = endOfMonthBR().slice(0, 10)
+
+  // --- Período selecionado (mesmo filtro usado pelos cards do topo e pela Rentabilidade) ---
+  const mesAtualStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  const isCustomPeriodo = !!(sp.ini && sp.fim)
+  const mesFiltro = isCustomPeriodo ? '' : (sp.mes || mesAtualStr)
+  let rentIni: string
+  let rentFim: string
+  if (isCustomPeriodo) {
+    rentIni = sp.ini!
+    rentFim = sp.fim!
+  } else {
+    const [ry, rm] = mesFiltro.split('-').map(Number)
+    rentIni = `${mesFiltro}-01`
+    rentFim = `${mesFiltro}-${new Date(ry, rm, 0).getDate()}`
+  }
+  // Saídas "pagas até hoje": no mês atual não conta saídas agendadas pro
+  // resto do mês; em meses passados/período customizado, o fim do período
+  // já é menor que hoje, então isso não corta nada.
+  const saidasFimStr = rentFim < todayStr ? rentFim : todayStr
 
   const { data: entradasHoje } = await supabase
     .from('entradas')
@@ -51,8 +68,8 @@ export default async function FinanceiroPage({
     .from('entradas')
     .select('id, valor_bruto, valor_liquido, forma_pagamento')
     .eq('clinic_id', clinicId)
-    .gte('data_venda', startOfMonth)
-    .lte('data_venda', endOfMonth)
+    .gte('data_venda', rentIni)
+    .lte('data_venda', rentFim)
 
   // "Resultado (caixa)" precisa ser dinheiro de verdade, não venda registrada.
   // Cartão/pix/dinheiro continuam contados no dia da venda (como sempre foi —
@@ -67,8 +84,8 @@ export default async function FinanceiroPage({
         .select('valor_liquido')
         .eq('clinic_id', clinicId)
         .eq('status', 'pago')
-        .gte('data_pagamento', startOfMonth)
-        .lte('data_pagamento', endOfMonth)
+        .gte('data_pagamento', rentIni)
+        .lte('data_pagamento', rentFim)
 
   // Quanto dos boletos vendidos este mês ainda falta confirmar — mostrado
   // como nota no card, pra não parecer que o valor "sumiu" do resultado.
@@ -95,8 +112,8 @@ export default async function FinanceiroPage({
         .select('valor')
         .eq('clinic_id', clinicId)
         .eq('pago', true)
-        .gte('data', startOfMonth)
-        .lte('data', todayStr)
+        .gte('data', rentIni)
+        .lte('data', saidasFimStr)
 
   const { data: ultimasEntradas } = await supabase
     .from('entradas')
@@ -129,22 +146,12 @@ export default async function FinanceiroPage({
   const resultadoMes  = liquidoMesCaixa - despesasMes
   const ticketMedio   = entradasMes?.length ? liquidoMes / entradasMes.length : 0
 
-  const mesLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const mesLabel = isCustomPeriodo
+    ? `${parseDateBR(rentIni)} até ${parseDateBR(rentFim)}`
+    : new Date(Number(mesFiltro.split('-')[0]), Number(mesFiltro.split('-')[1]) - 1, 1)
+        .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
   // --- Rentabilidade (receita − estoque consumido, sem depender de vínculo com atendimento) ---
-  const mesAtualStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
-  const mesFiltro = sp.ini && sp.fim ? '' : (sp.mes || mesAtualStr)
-  let rentIni: string
-  let rentFim: string
-  if (sp.ini && sp.fim) {
-    rentIni = sp.ini
-    rentFim = sp.fim
-  } else {
-    const [ry, rm] = mesFiltro.split('-').map(Number)
-    rentIni = `${mesFiltro}-01`
-    rentFim = `${mesFiltro}-${new Date(ry, rm, 0).getDate()}`
-  }
-
   const { data: rentData } = isOwnScope
     ? { data: null }
     : await supabase
@@ -172,7 +179,11 @@ export default async function FinanceiroPage({
             <p className="text-xs text-violet-600 font-medium mt-1">Mostrando apenas os seus atendimentos</p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col md:items-end gap-2">
+          {!isOwnScope && (
+            <RentabilidadeFiltro mesAtual={mesFiltro || mesAtualStr} iniAtual={sp.ini} fimAtual={sp.fim} />
+          )}
+          <div className="flex gap-2">
           <Link
             href="/dashboard/financeiro/entradas/nova"
             className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition"
@@ -189,6 +200,7 @@ export default async function FinanceiroPage({
               Nova Saída
             </Link>
           )}
+          </div>
         </div>
       </div>
 
@@ -290,7 +302,6 @@ export default async function FinanceiroPage({
               </p>
             </div>
           </div>
-          <RentabilidadeFiltro mesAtual={mesFiltro || mesAtualStr} iniAtual={sp.ini} fimAtual={sp.fim} />
         </div>
 
         {rent.receita > 0 && rent.cmv === 0 && (
