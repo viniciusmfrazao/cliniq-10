@@ -224,6 +224,56 @@ export type ConnectionState = {
  * trg_prevent_connected_without_phone reverte o status pra 'disconnected'
  * silenciosamente (nao da erro, so nao aplica a mudanca).
  */
+export type EvolutionInstanceSummary = {
+  instanceName: string
+  state: EvolutionRawState | 'unknown'
+}
+
+/**
+ * Lista TODAS as instances existentes na Evolution.
+ *
+ * A resposta muda de formato entre versoes:
+ *   v1.x: [{ instance: { instanceName, state } }]
+ *   v2.x: [{ name, connectionStatus }]  (as vezes 'id' no lugar de 'name')
+ * Normalizamos pros dois.
+ */
+export async function listInstances(): Promise<
+  FetchResult<EvolutionInstanceSummary[]>
+> {
+  const r = await evolutionFetch<unknown>('/instance/fetchInstances', {
+    method: 'GET',
+  })
+  if (!r.ok) return r
+
+  const arr = Array.isArray(r.data) ? r.data : [r.data]
+  const out: EvolutionInstanceSummary[] = []
+
+  for (const raw of arr) {
+    const obj = raw as Record<string, unknown> | undefined
+    if (!obj) continue
+    const nested = (obj.instance as Record<string, unknown> | undefined) ?? obj
+
+    const name = [nested?.instanceName, nested?.name, obj?.instanceName, obj?.name].find(
+      (v) => typeof v === 'string' && v.length > 0,
+    ) as string | undefined
+    if (!name) continue
+
+    const state = [
+      nested?.state,
+      nested?.connectionStatus,
+      nested?.status,
+      obj?.connectionStatus,
+    ].find((v) => typeof v === 'string' && v.length > 0) as string | undefined
+
+    out.push({
+      instanceName: name,
+      state: (state as EvolutionRawState) ?? 'unknown',
+    })
+  }
+
+  return { ok: true, data: out }
+}
+
 export async function fetchInstanceOwnerPhone(
   instanceName: string
 ): Promise<FetchResult<{ phoneNumber: string | null }>> {
