@@ -5,6 +5,7 @@ import {
   buildWebhookUrl,
   createInstance,
   deleteInstance,
+  generateInstanceName,
   getConnectionState,
   getQRCode,
   setInstanceWebhook,
@@ -156,51 +157,75 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // --- Tentativa 3: auto-cura (recria a instance com o mesmo nome) -------
+  // --- Tentativa 3: auto-cura -------------------------------------------
+  // Recria a instance. Primeiro com o MESMO nome (preserva historico e
+  // webhook). Se a Evolution recusar — tipicamente 403 'name already in
+  // use' porque o delete nao conseguiu liberar o nome — cai pra um nome
+  // NOVO e migra a row. O importante e a clinica voltar a funcionar; a
+  // instance orfa que sobrar na Evolution e lixo, nao bloqueio.
   if (!base64) {
     healed = true
-    const webhookToken = row.webhook_token ?? crypto.randomUUID().replace(/-/g, '')
-    const webhookUrl = buildWebhookUrl(row.instance_name, webhookToken)
 
-    // Apaga o que existir la (pode ja nao existir — erro e irrelevante aqui,
-    // porque o objetivo e justamente chegar num estado limpo).
     await deleteInstance(row.instance_name).catch(() => null)
     await sleep(800)
 
-    const created = await createInstance({
-      instanceName: row.instance_name,
-      webhookUrl,
-    })
+    const attempts: string[] = [
+      row.instance_name,
+      `${generateInstanceName(ctx.clinicId)}-${Date.now().toString(36)}`,
+    ]
 
-    if (!created.ok) {
+    let activeName: string | null = null
+    let activeToken: string | null = null
+    let createError: { error: string; status?: number } | null = null
+
+    for (const candidate of attempts) {
+      const isSameName = candidate === row.instance_name
+      const token = isSameName
+        ? row.webhook_token ?? crypto.randomUUID().replace(/-/g, '')
+        : crypto.randomUUID().replace(/-/g, '')
+      const webhookUrl = buildWebhookUrl(candidate, token)
+
+      const created = await createInstance({ instanceName: candidate, webhookUrl })
+      if (!created.ok) {
+        createError = { error: created.error, status: created.status }
+        console.warn('[whatsapp/connect] create falhou, tentando proximo nome:', {
+          candidate,
+          status: created.status,
+          error: created.error,
+        })
+        continue
+      }
+
+      activeName = candidate
+      activeToken = token
+      // O /instance/create e a fonte mais confiavel do QR nessa versao da
+      // Evolution — o connect as vezes volta 200 vazio.
+      base64 = created.data?.qrcode?.base64 ?? null
+
+      const wh = await setInstanceWebhook({ instanceName: candidate, webhookUrl })
+      if (!wh.ok) {
+        console.warn('[whatsapp/connect] setInstanceWebhook falhou na auto-cura:', wh.error)
+      }
+      break
+    }
+
+    if (!activeName || !activeToken) {
       await svc
         .from('clinic_whatsapp')
         .update({ status: 'error', last_event_at: new Date().toISOString() })
         .eq('id', row.id)
       return NextResponse.json(
         {
-          error: `Não foi possível recriar a instância na Evolution: ${created.error}`,
-          evolution_status: created.status,
+          error: `Não foi possível recriar a instância na Evolution: ${createError?.error ?? 'erro desconhecido'}`,
+          evolution_status: createError?.status,
         },
         { status: 502 },
       )
     }
 
-    // O /instance/create e a fonte mais confiavel do QR nessa versao da
-    // Evolution — o connect as vezes volta 200 vazio.
-    base64 = created.data?.qrcode?.base64 ?? null
-
-    const wh = await setInstanceWebhook({
-      instanceName: row.instance_name,
-      webhookUrl,
-    })
-    if (!wh.ok) {
-      console.warn('[whatsapp/connect] setInstanceWebhook falhou na auto-cura:', wh.error)
-    }
-
     if (!base64) {
       await sleep(1_200)
-      const r3 = await getQRCode(row.instance_name)
+      const r3 = await getQRCode(activeName)
       if (r3.ok) {
         base64 = r3.data.base64 ?? null
         pairingCode = r3.data.pairingCode ?? null
@@ -209,12 +234,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Persiste o token novo caso a row nao tivesse um
-    if (!row.webhook_token) {
+    // Se trocamos de nome, a row passa a apontar pra instance nova.
+    // Preserva id/is_default/roles/label — so muda nome e token.
+    if (activeName !== row.instance_name || activeToken !== row.webhook_token) {
       await svc
         .from('clinic_whatsapp')
-        .update({ webhook_token: webhookToken })
+        .update({ instance_name: activeName, webhook_token: activeToken })
         .eq('id', row.id)
+      row.instance_name = activeName
+      row.webhook_token = activeToken
     }
   }
 

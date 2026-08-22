@@ -307,14 +307,36 @@ export async function restartInstance(
   })
 }
 
+/**
+ * Apaga a instance na Evolution.
+ *
+ * A Evolution so aceita apagar instance que esteja em estado 'close' — se
+ * estiver em 'connecting' ou 'open' ela responde 400. O logout nem sempre
+ * derruba o socket na hora, entao uma unica tentativa falhava e a instance
+ * ficava presa pra sempre: delete devolvia 400 e create devolvia 403 (nome
+ * ja em uso). Era o unico jeito de sair disso apagar na mao no painel da
+ * Evolution (incidente Dra Mariana Farah, 22/ago/2026).
+ *
+ * Agora: logout -> espera -> delete, com ate 3 tentativas. Se depois disso
+ * ainda falhar, o caller deve seguir com um nome NOVO em vez de travar.
+ */
 export async function deleteInstance(
   instanceName: string
 ): Promise<FetchResult<unknown>> {
-  // Evolution exige logout antes do delete em algumas versões; ignoramos erro.
-  await logoutInstance(instanceName).catch(() => null)
-  return evolutionFetch(`/instance/delete/${encodeURIComponent(instanceName)}`, {
-    method: 'DELETE',
-  })
+  let last: FetchResult<unknown> = { ok: false, error: 'delete não tentado' }
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await logoutInstance(instanceName).catch(() => null)
+    await new Promise((r) => setTimeout(r, attempt === 0 ? 400 : 1_200))
+
+    last = await evolutionFetch(
+      `/instance/delete/${encodeURIComponent(instanceName)}`,
+      { method: 'DELETE' },
+    )
+    if (last.ok || last.status === 404) return last
+  }
+
+  return last
 }
 
 /**
