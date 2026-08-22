@@ -5,7 +5,7 @@ import Icon from '@/components/ui/Icon'
 import { formatBRL, formatBRLCompact } from '@/lib/format'
 import { todayBR, parseDateBR } from '@/lib/datetime'
 import { getFinancialAccess } from '@/lib/financial-access'
-import RentabilidadeFiltro from './RentabilidadeFiltro'
+import FinanceiroHeaderControls from './FinanceiroHeaderControls'
 import RentabilidadeTendenciaChart from './RentabilidadeTendenciaChart'
 import KpiCard from './KpiCard'
 import RentCard from './RentCard'
@@ -179,37 +179,12 @@ export default async function FinanceiroPage({
             <p className="text-xs text-violet-600 font-medium mt-1">Mostrando apenas os seus atendimentos</p>
           )}
         </div>
-        <div className="table">
-          {!isOwnScope && (
-            <div className="table-row">
-              <div className="table-cell pb-2">
-                <RentabilidadeFiltro mesAtual={mesFiltro || mesAtualStr} iniAtual={sp.ini} fimAtual={sp.fim} />
-              </div>
-            </div>
-          )}
-          <div className="table-row">
-            <div className="table-cell">
-              <div className="flex gap-2">
-                <Link
-                  href="/dashboard/financeiro/entradas/nova"
-                  className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition"
-                >
-                  <Icon name="plus" className="w-5 h-5" />
-                  Nova Entrada
-                </Link>
-                {!isOwnScope && (
-                  <Link
-                    href="/dashboard/financeiro/saidas/nova"
-                    className="inline-flex items-center gap-2 bg-rose-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-rose-700 transition"
-                  >
-                    <Icon name="minus" className="w-5 h-5" />
-                    Nova Saída
-                  </Link>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <FinanceiroHeaderControls
+          mesAtual={mesFiltro || mesAtualStr}
+          iniAtual={sp.ini}
+          fimAtual={sp.fim}
+          isOwnScope={isOwnScope}
+        />
       </div>
 
       {/* KPIs */}
