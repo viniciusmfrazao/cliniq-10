@@ -179,27 +179,35 @@ export default async function FinanceiroPage({
             <p className="text-xs text-violet-600 font-medium mt-1">Mostrando apenas os seus atendimentos</p>
           )}
         </div>
-        <div className="flex flex-col items-stretch gap-2">
+        <div className="table">
           {!isOwnScope && (
-            <RentabilidadeFiltro mesAtual={mesFiltro || mesAtualStr} iniAtual={sp.ini} fimAtual={sp.fim} />
+            <div className="table-row">
+              <div className="table-cell pb-2">
+                <RentabilidadeFiltro mesAtual={mesFiltro || mesAtualStr} iniAtual={sp.ini} fimAtual={sp.fim} />
+              </div>
+            </div>
           )}
-          <div className="flex gap-2">
-          <Link
-            href="/dashboard/financeiro/entradas/nova"
-            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition"
-          >
-            <Icon name="plus" className="w-5 h-5" />
-            Nova Entrada
-          </Link>
-          {!isOwnScope && (
-            <Link
-              href="/dashboard/financeiro/saidas/nova"
-              className="inline-flex items-center gap-2 bg-rose-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-rose-700 transition"
-            >
-              <Icon name="minus" className="w-5 h-5" />
-              Nova Saída
-            </Link>
-          )}
+          <div className="table-row">
+            <div className="table-cell">
+              <div className="flex gap-2">
+                <Link
+                  href="/dashboard/financeiro/entradas/nova"
+                  className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition"
+                >
+                  <Icon name="plus" className="w-5 h-5" />
+                  Nova Entrada
+                </Link>
+                {!isOwnScope && (
+                  <Link
+                    href="/dashboard/financeiro/saidas/nova"
+                    className="inline-flex items-center gap-2 bg-rose-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-rose-700 transition"
+                  >
+                    <Icon name="minus" className="w-5 h-5" />
+                    Nova Saída
+                  </Link>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
