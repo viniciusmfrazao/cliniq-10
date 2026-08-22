@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSuperAdmin } from '@/lib/super-admin'
 import { createServiceClient } from '@/lib/supabase/server'
+import { buildWebhookUrl, setInstanceWebhook } from '@/lib/evolution'
+import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
+
+// Clinica dedicada a instancias WhatsApp do super admin (cobranca + avisos
+// de desconexao) — nunca aparece pra clientes, existe so pra clinic_whatsapp
+// ter um clinic_id valido (coluna NOT NULL).
+const ADMIN_CLINIC_NAME = 'Clinike (Sistema)'
 
 export async function POST(req: NextRequest) {
   const ok = await isSuperAdmin()
@@ -66,32 +73,58 @@ export async function POST(req: NextRequest) {
     // segue sem QR — front mostra aviso pra tentar de novo
   }
 
-  // Salvar no banco como instância do Clinike (sem clinic_id específico — usar a clínica teste)
-  const { data: clinicTeste } = await svc
+  // Garante a clinica dedicada a instancias admin (cria se ainda nao existir)
+  let { data: adminClinic } = await svc
     .from('clinics')
     .select('id')
-    .eq('name', 'Clinica Clinike Teste')
+    .eq('name', ADMIN_CLINIC_NAME)
     .maybeSingle()
 
-  if (clinicTeste) {
-    const { data: existing } = await svc
-      .from('clinic_whatsapp')
+  if (!adminClinic) {
+    const { data: created, error: createErr } = await svc
+      .from('clinics')
+      .insert({ name: ADMIN_CLINIC_NAME, slug: 'clinike-sistema' })
       .select('id')
-      .eq('instance_name', instanceName)
-      .maybeSingle()
-
-    if (!existing) {
-      await svc.from('clinic_whatsapp').insert({
-        clinic_id: clinicTeste.id,
-        instance_name: instanceName,
-        status: 'qr_pending',
-        phone_number: phoneClean,
-        is_default: false,
-        auto_reply_enabled: false,
-        role_inbound: false,
-        role_outbound_automation: false,
-      })
+      .single()
+    if (createErr) {
+      return NextResponse.json(
+        { error: `Instância criada na Evolution, mas falhou ao salvar no banco: ${createErr.message}` },
+        { status: 500 },
+      )
     }
+    adminClinic = created
+  }
+
+  // Configura o webhook pra essa instancia entrar no fluxo normal de
+  // health-check / eventos (sem isso o cron nunca detecta drift nem queda
+  // via webhook, so via polling direto).
+  const webhookToken = crypto.randomUUID().replace(/-/g, '')
+  const webhookUrl = buildWebhookUrl(instanceName, webhookToken)
+  const wh = await setInstanceWebhook({ instanceName, webhookUrl })
+  if (!wh.ok) {
+    console.warn('[admin/create-instance] setInstanceWebhook falhou:', wh.error)
+  }
+
+  const { data: existing } = await svc
+    .from('clinic_whatsapp')
+    .select('id')
+    .eq('instance_name', instanceName)
+    .maybeSingle()
+
+  if (!existing) {
+    await svc.from('clinic_whatsapp').insert({
+      clinic_id: adminClinic.id,
+      instance_name: instanceName,
+      webhook_token: webhookToken,
+      status: 'qr_pending',
+      phone_number: phoneClean,
+      is_default: false,
+      auto_reply_enabled: false,
+      role_inbound: false,
+      role_outbound_automation: true,
+      role_outbound_manual: true,
+      label: 'Instância admin (cobrança + avisos)',
+    })
   }
 
   return NextResponse.json({
