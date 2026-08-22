@@ -68,9 +68,9 @@ export default function RentabilidadeFiltro({
   const podeAvancar = mesAtual < meses[0].value
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2 w-full">
       {!showCustom && (
-        <div className="inline-flex items-center h-11 bg-white border border-slate-200 rounded-full shadow-sm">
+        <div className="flex-1 min-w-0 flex items-center h-11 bg-white border border-slate-200 rounded-full shadow-sm">
           <button
             type="button"
             onClick={() => applyMonth(somaMes(mesAtual, -1))}
@@ -80,12 +80,12 @@ export default function RentabilidadeFiltro({
             <Icon name="chevronLeft" className="w-4 h-4" />
           </button>
 
-          <div className="relative flex items-center gap-1.5 px-1">
+          <div className="relative flex-1 min-w-0 flex items-center justify-center gap-1.5 px-1">
             <Icon name="calendar" className="w-4 h-4 text-violet-400 pointer-events-none flex-shrink-0" />
             <select
               value={mesAtual}
               onChange={(e) => applyMonth(e.target.value)}
-              className="appearance-none bg-transparent text-sm font-semibold text-slate-700 pr-1 focus:outline-none cursor-pointer capitalize"
+              className="appearance-none bg-transparent text-sm font-semibold text-slate-700 focus:outline-none cursor-pointer capitalize truncate"
             >
               {meses.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
@@ -106,24 +106,24 @@ export default function RentabilidadeFiltro({
       )}
 
       {showCustom && (
-        <div className="inline-flex flex-wrap items-center h-11 gap-2 bg-white border border-slate-200 rounded-full shadow-sm px-4">
+        <div className="flex-1 min-w-0 flex flex-wrap items-center h-11 gap-2 bg-white border border-slate-200 rounded-full shadow-sm px-4">
           <Icon name="calendar" className="w-4 h-4 text-violet-400 flex-shrink-0" />
           <input
             type="date"
             value={ini}
             onChange={(e) => setIni(e.target.value)}
-            className="text-sm text-slate-700 bg-transparent focus:outline-none"
+            className="text-sm text-slate-700 bg-transparent focus:outline-none min-w-0"
           />
           <span className="text-slate-300 text-sm">→</span>
           <input
             type="date"
             value={fim}
             onChange={(e) => setFim(e.target.value)}
-            className="text-sm text-slate-700 bg-transparent focus:outline-none"
+            className="text-sm text-slate-700 bg-transparent focus:outline-none min-w-0"
           />
           <button
             onClick={applyCustom}
-            className="text-xs bg-violet-600 text-white px-3 py-1.5 rounded-full font-semibold hover:bg-violet-700 transition"
+            className="text-xs bg-violet-600 text-white px-3 py-1.5 rounded-full font-semibold hover:bg-violet-700 transition flex-shrink-0"
           >
             Aplicar
           </button>
@@ -132,7 +132,7 @@ export default function RentabilidadeFiltro({
 
       <button
         onClick={() => setShowCustom(!showCustom)}
-        className="text-xs text-violet-600 font-medium hover:underline whitespace-nowrap"
+        className="flex-shrink-0 text-xs text-violet-600 font-medium hover:underline whitespace-nowrap"
       >
         {showCustom ? `Voltar pra ${mesLabelCurto(mesAtual)}` : 'Período personalizado'}
       </button>
