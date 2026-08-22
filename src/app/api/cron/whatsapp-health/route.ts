@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { ensureWebhookHealthy, getConnectionState, fetchInstanceOwnerPhone } from '@/lib/evolution'
+import {
+  ensureWebhookHealthy,
+  getConnectionState,
+  fetchInstanceOwnerPhone,
+  listInstances,
+  deleteInstance,
+} from '@/lib/evolution'
 
 /**
  * GET /api/cron/whatsapp-health
@@ -36,6 +42,21 @@ type Row = {
 type PendingWhatsappAlert = {
   clinicId: string
 }
+
+// --- Limpeza de instances orfas ---------------------------------------
+// Orfa = existe na Evolution mas nao tem row em clinic_whatsapp. Acontece
+// quando a reconexao precisa criar a instance com nome novo (o nome antigo
+// fica preso na Evolution) ou quando um row e removido sem apagar la.
+//
+// Apagar orfa e destrutivo e ja mordeu: a instance 'Clinike Admin' ficou
+// orfa por bug e estava CONECTADA e atendendo. Por isso, tres travas:
+//   1. Nunca apaga instance em estado 'open' — orfa conectada e sinal de
+//      row perdido, nao de lixo. Vira alerta, nao delecao.
+//   2. Carencia de 24h como orfa confirmada em execucoes consecutivas.
+//   3. So mexe em nomes que a aplicacao gera (cliniq-/clinike-), nunca em
+//      instance criada direto no painel da Evolution.
+const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000
+const ORPHAN_NAME_PREFIXES = ['cliniq-', 'clinike-']
 
 const STALE_HOURS = 24
 const STALE_MS = STALE_HOURS * 60 * 60 * 1000
@@ -77,6 +98,11 @@ export async function GET(req: NextRequest) {
     skipped: 0,
     whatsapp_alerts_sent: 0,
     whatsapp_alerts_failed: 0,
+    orphans_seen: 0,
+    orphans_connected_skipped: 0,
+    orphans_deleted: 0,
+    orphans_delete_failed: 0,
+    orphans_waiting_grace: 0,
     errors: [] as Array<{ clinic_id: string; error: string }>,
   }
 
@@ -370,6 +396,123 @@ export async function GET(req: NextRequest) {
       console.error('[cron/whatsapp-health] bloco de avisos WhatsApp falhou:', e)
       summary.whatsapp_alerts_failed += pendingWhatsappAlerts.length
     }
+  }
+
+  // -------------------------------------------------------------------
+  // Etapa final: limpeza de instances orfas na Evolution
+  // -------------------------------------------------------------------
+  try {
+    const evo = await listInstances()
+    if (!evo.ok) {
+      console.warn('[cron/whatsapp-health] listInstances falhou:', evo.error)
+    } else {
+      // Nomes conhecidos: TODAS as rows, sem filtro de status — um row
+      // 'pending' tambem protege a instance dele.
+      const { data: allRows } = await svc
+        .from('clinic_whatsapp')
+        .select('instance_name')
+        .not('instance_name', 'is', null)
+
+      const known = new Set(
+        ((allRows as Array<{ instance_name: string }> | null) ?? []).map(
+          (x) => x.instance_name,
+        ),
+      )
+
+      const nowIso = new Date().toISOString()
+      const liveOrphans: string[] = []
+
+      for (const inst of evo.data) {
+        if (known.has(inst.instanceName)) {
+          // Deixou de ser orfa (row voltou): limpa o rastreio.
+          await svc
+            .from('evolution_orphan_instances')
+            .delete()
+            .eq('instance_name', inst.instanceName)
+          continue
+        }
+
+        const ours = ORPHAN_NAME_PREFIXES.some((p) =>
+          inst.instanceName.startsWith(p),
+        )
+        if (!ours) continue
+
+        summary.orphans_seen++
+        liveOrphans.push(inst.instanceName)
+
+        await svc.from('evolution_orphan_instances').upsert(
+          {
+            instance_name: inst.instanceName,
+            last_seen_at: nowIso,
+            last_state: inst.state,
+          },
+          { onConflict: 'instance_name', ignoreDuplicates: false },
+        )
+      }
+
+      const { data: tracked } = await svc
+        .from('evolution_orphan_instances')
+        .select('instance_name, first_seen_at, last_state, deleted_at')
+        .is('deleted_at', null)
+
+      const cutoff = Date.now() - ORPHAN_GRACE_MS
+
+      for (const t of (tracked as Array<{
+        instance_name: string
+        first_seen_at: string
+        last_state: string | null
+      }> | null) ?? []) {
+        // Sumiu da Evolution: rastreio nao serve mais.
+        if (!liveOrphans.includes(t.instance_name)) {
+          await svc
+            .from('evolution_orphan_instances')
+            .delete()
+            .eq('instance_name', t.instance_name)
+          continue
+        }
+
+        // Trava 1: orfa CONECTADA nunca e apagada. Isso e row perdido,
+        // nao lixo — apagar derrubaria um cliente em producao.
+        if (t.last_state === 'open') {
+          summary.orphans_connected_skipped++
+          console.error(
+            '[cron/whatsapp-health] ORFA CONECTADA — instance ativa sem row em clinic_whatsapp, NAO apagada:',
+            t.instance_name,
+          )
+          continue
+        }
+
+        // Trava 2: carencia de 24h como orfa confirmada.
+        if (new Date(t.first_seen_at).getTime() > cutoff) {
+          summary.orphans_waiting_grace++
+          continue
+        }
+
+        const del = await deleteInstance(t.instance_name).catch(
+          (e): { ok: false; error: string; status?: number } => ({
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        )
+
+        const gone = del.ok || (!del.ok && del.status === 404)
+        if (gone) {
+          summary.orphans_deleted++
+          await svc
+            .from('evolution_orphan_instances')
+            .update({ deleted_at: nowIso, delete_error: null })
+            .eq('instance_name', t.instance_name)
+        } else {
+          summary.orphans_delete_failed++
+          await svc
+            .from('evolution_orphan_instances')
+            .update({ delete_error: del.ok ? null : del.error })
+            .eq('instance_name', t.instance_name)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[cron/whatsapp-health] limpeza de orfas falhou:', e)
   }
 
   return NextResponse.json({ ok: true, ...summary })
