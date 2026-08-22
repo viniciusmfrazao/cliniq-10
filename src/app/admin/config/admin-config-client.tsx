@@ -33,6 +33,8 @@ export default function AdminConfigClient({ config, instances }: Props) {
   const [creatingInstance, setCreatingInstance] = useState(false)
   const [instanceMsg, setInstanceMsg] = useState<string | null>(null)
   const [showNewInstance, setShowNewInstance] = useState(false)
+  const [qrCode, setQrCode] = useState<string | null>(null)
+  const [qrInstanceName, setQrInstanceName] = useState<string | null>(null)
 
   async function handleSave() {
     setSaving(true)
@@ -56,6 +58,7 @@ export default function AdminConfigClient({ config, instances }: Props) {
     if (!newInstance.phone) { setInstanceMsg('❌ Informe o número'); return }
     setCreatingInstance(true)
     setInstanceMsg(null)
+    setQrCode(null)
     try {
       const resp = await fetch('/api/admin/whatsapp/create-instance', {
         method: 'POST',
@@ -64,10 +67,14 @@ export default function AdminConfigClient({ config, instances }: Props) {
       })
       const data = await resp.json()
       if (data.ok) {
-        setInstanceMsg(`✅ Instância criada! Escaneie o QR Code para conectar.`)
         setNewInstance({ phone: '', name: '' })
-        setShowNewInstance(false)
-        setTimeout(() => window.location.reload(), 2000)
+        if (data.qrcode) {
+          setQrCode(data.qrcode)
+          setQrInstanceName(data.instanceName)
+          setInstanceMsg(null)
+        } else {
+          setInstanceMsg(`⚠️ Instância ${data.instanceName} criada, mas a Evolution não retornou QR Code agora. Abra a tela de WhatsApp da clínica vinculada pra gerar o QR.`)
+        }
       } else {
         setInstanceMsg(`❌ ${data.error}`)
       }
@@ -203,6 +210,24 @@ export default function AdminConfigClient({ config, instances }: Props) {
                 <p className={`text-sm ${instanceMsg.startsWith('✅') ? 'text-emerald-600' : 'text-red-600'}`}>
                   {instanceMsg}
                 </p>
+              )}
+              {qrCode && (
+                <div className="flex flex-col items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Escaneie com o WhatsApp de {qrInstanceName}
+                  </p>
+                  <img
+                    src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+                    alt="QR Code do WhatsApp"
+                    className="w-56 h-56 rounded-lg border border-slate-200"
+                  />
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="text-sm font-medium text-violet-600 hover:text-violet-700"
+                  >
+                    ✅ Já conectei, atualizar página
+                  </button>
+                </div>
               )}
               <p className="text-xs text-slate-400">
                 Após criar, escaneie o QR Code na tela de WhatsApp da clínica vinculada para conectar.
