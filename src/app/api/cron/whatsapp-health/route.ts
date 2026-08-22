@@ -251,7 +251,10 @@ export async function GET(req: NextRequest) {
     if (nextStatus === 'disconnected') {
       if (!r.disconnect_whatsapp_sent_at) {
         pendingWhatsappAlerts.push({ clinicId: r.clinic_id })
-        nextWhatsappSentAt = new Date(nowMs).toISOString()
+        // nao marca sent_at aqui ainda -- so depois de confirmar que a
+        // mensagem realmente saiu (Etapa 4). Marcar antes fazia com que
+        // falha de envio (instance de saida caida, telefone ausente etc)
+        // travasse o reenvio pra sempre.
       }
     } else if (nextStatus === 'connected' && r.disconnect_whatsapp_sent_at) {
       nextWhatsappSentAt = null
@@ -314,9 +317,13 @@ export async function GET(req: NextRequest) {
         console.error('[cron/whatsapp-health] clinike_billing_instance nao configurada, pulando avisos WhatsApp')
       } else {
         const clinics = (clinicRows as Array<{ id: string; name: string; clinic_phone: string | null }> | null) ?? []
+        const sentClinicIds: string[] = []
 
         const jobs = clinics.map(async (c) => {
-          if (!c.clinic_phone) return
+          if (!c.clinic_phone) {
+            console.error(`[cron/whatsapp-health] clinica ${c.id} sem clinic_phone, pulando aviso WhatsApp`)
+            return
+          }
           const phone = String(c.clinic_phone).replace(/\D/g, '')
           const phoneFmt = phone.startsWith('55') ? phone : `55${phone}`
           const texto =
@@ -332,6 +339,7 @@ export async function GET(req: NextRequest) {
             const err = await resp.text()
             throw new Error(`Evolution API: ${err.slice(0, 200)}`)
           }
+          sentClinicIds.push(c.id)
         })
 
         const results = await Promise.allSettled(jobs)
@@ -341,6 +349,20 @@ export async function GET(req: NextRequest) {
           } else {
             summary.whatsapp_alerts_failed++
             console.error('[cron/whatsapp-health] falha ao enviar aviso WhatsApp:', res.reason)
+          }
+        }
+
+        // So marca disconnect_whatsapp_sent_at pra quem realmente recebeu a
+        // mensagem -- clinica sem telefone ou com falha de envio continua
+        // sem trava, e entra de novo no proximo ciclo (retry automatico).
+        if (sentClinicIds.length > 0) {
+          const { error: sentErr } = await svc
+            .from('clinic_whatsapp')
+            .update({ disconnect_whatsapp_sent_at: new Date(nowMs).toISOString() })
+            .in('clinic_id', sentClinicIds)
+            .eq('status', 'disconnected')
+          if (sentErr) {
+            console.error('[cron/whatsapp-health] falha ao gravar disconnect_whatsapp_sent_at:', sentErr.message)
           }
         }
       }
