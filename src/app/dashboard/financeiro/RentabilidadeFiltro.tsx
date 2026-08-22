@@ -70,22 +70,22 @@ export default function RentabilidadeFiltro({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {!showCustom && (
-        <div className="inline-flex items-center bg-white border border-slate-200 rounded-full shadow-sm pr-1">
+        <div className="inline-flex items-center h-11 bg-white border border-slate-200 rounded-full shadow-sm">
           <button
             type="button"
             onClick={() => applyMonth(somaMes(mesAtual, -1))}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition"
+            className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition"
             aria-label="Mês anterior"
           >
             <Icon name="chevronLeft" className="w-4 h-4" />
           </button>
 
           <div className="relative flex items-center gap-1.5 px-1">
-            <Icon name="calendar" className="w-3.5 h-3.5 text-violet-400 pointer-events-none" />
+            <Icon name="calendar" className="w-4 h-4 text-violet-400 pointer-events-none flex-shrink-0" />
             <select
               value={mesAtual}
               onChange={(e) => applyMonth(e.target.value)}
-              className="appearance-none bg-transparent text-sm font-semibold text-slate-700 py-2 pr-1 focus:outline-none cursor-pointer capitalize"
+              className="appearance-none bg-transparent text-sm font-semibold text-slate-700 pr-1 focus:outline-none cursor-pointer capitalize"
             >
               {meses.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
@@ -97,7 +97,7 @@ export default function RentabilidadeFiltro({
             type="button"
             onClick={() => podeAvancar && applyMonth(somaMes(mesAtual, 1))}
             disabled={!podeAvancar}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-violet-600 hover:bg-violet-50 disabled:opacity-0 disabled:pointer-events-none transition"
+            className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full text-slate-400 hover:text-violet-600 hover:bg-violet-50 disabled:opacity-0 disabled:pointer-events-none transition"
             aria-label="Próximo mês"
           >
             <Icon name="chevronRight" className="w-4 h-4" />
@@ -106,8 +106,8 @@ export default function RentabilidadeFiltro({
       )}
 
       {showCustom && (
-        <div className="inline-flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-full shadow-sm px-3 py-1.5">
-          <Icon name="calendar" className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+        <div className="inline-flex flex-wrap items-center h-11 gap-2 bg-white border border-slate-200 rounded-full shadow-sm px-4">
+          <Icon name="calendar" className="w-4 h-4 text-violet-400 flex-shrink-0" />
           <input
             type="date"
             value={ini}
@@ -123,7 +123,7 @@ export default function RentabilidadeFiltro({
           />
           <button
             onClick={applyCustom}
-            className="text-xs bg-violet-600 text-white px-2.5 py-1 rounded-full font-semibold hover:bg-violet-700 transition"
+            className="text-xs bg-violet-600 text-white px-3 py-1.5 rounded-full font-semibold hover:bg-violet-700 transition"
           >
             Aplicar
           </button>
