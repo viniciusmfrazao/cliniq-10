@@ -8,6 +8,7 @@ import {
   ensureWebhookHealthy,
   generateInstanceName,
   getQRCode,
+  probeInstance,
   setInstanceWebhook,
 } from '@/lib/evolution'
 import { resolveClinicInstanceForApi } from '@/lib/whatsapp-route-helpers'
@@ -58,19 +59,37 @@ export async function POST(req: NextRequest) {
       }),
     )
 
-    const deletedOrAlreadyGone = deleteResult.ok || deleteResult.status === 404
+    const deleteStatus = deleteResult.ok ? undefined : deleteResult.status
+    const deleteError = deleteResult.ok ? undefined : deleteResult.error
+    let deletedOrAlreadyGone = deleteResult.ok || deleteStatus === 404
 
+    // O status code do DELETE nao e confiavel: algumas versoes da Evolution
+    // cospem 400 mesmo tendo apagado (ou quando a instance ja nao existia).
+    // Confiar nele travava o reset e obrigava a apagar a instance na mao no
+    // painel da Evolution (incidente 22/ago/2026). Em vez disso verificamos
+    // o estado REAL com probeInstance: so abortamos se a instance ainda
+    // existir de fato — unico cenario que o guard de 02/jul quis proteger.
     if (!deletedOrAlreadyGone) {
-      console.error('[force-reset] deleteInstance não confirmado, abortando:', deleteResult)
-      return NextResponse.json(
-        {
-          error:
-            'Não foi possível confirmar a exclusão da instância antiga na Evolution. Reset abortado para evitar perda da conexão existente. Tente novamente em instantes.',
-          evolution_status: deleteResult.status,
-          evolution_error: deleteResult.error,
-        },
-        { status: 502 },
-      )
+      await new Promise((r) => setTimeout(r, 500))
+      const probe = await probeInstance(existing.instance_name)
+      if (probe.ok && !probe.data.exists) {
+        deletedOrAlreadyGone = true
+      } else {
+        console.error('[force-reset] instance ainda existe apos delete, abortando:', {
+          deleteStatus,
+          deleteError,
+          probe,
+        })
+        return NextResponse.json(
+          {
+            error:
+              'A instância antiga ainda existe na Evolution após a tentativa de exclusão. Reset abortado para evitar perda da conexão existente. Tente novamente em instantes.',
+            evolution_status: deleteStatus,
+            evolution_error: deleteError,
+          },
+          { status: 502 },
+        )
+      }
     }
 
     await new Promise((r) => setTimeout(r, 500))
@@ -151,13 +170,20 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 6) Busca QR (mesma janela de pareamento — ~50s pra escanear)
-  const qr = await getQRCode(newInstanceName)
-  if (qr.ok && qr.data?.base64) {
+  // 6) QR (mesma janela de pareamento — ~50s pra escanear).
+  //    Prioriza o base64 que o proprio /instance/create devolveu; o
+  //    GET /instance/connect as vezes responde 200 sem QR nenhum.
+  let qrBase64 = created.data?.qrcode?.base64 ?? null
+  if (!qrBase64) {
+    const qr = await getQRCode(newInstanceName)
+    if (qr.ok) qrBase64 = qr.data?.base64 ?? null
+  }
+
+  if (qrBase64) {
     await svc
       .from('clinic_whatsapp')
       .update({
-        qr_code: qr.data.base64,
+        qr_code: qrBase64,
         qr_expires_at: new Date(Date.now() + 50_000).toISOString(),
       })
       .eq('id', newRow.id)
@@ -166,7 +192,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     instance_name: newInstanceName,
-    qr_code: qr.ok && qr.data?.base64 ? qr.data.base64 : null,
-    message: 'Reset feito. Escaneie o novo QR code agora.',
+    qr_code: qrBase64,
+    message: qrBase64
+      ? 'Reset feito. Escaneie o novo QR code agora.'
+      : 'Instância recriada, mas a Evolution não devolveu o QR agora. Clique em "Gerar novo QR" em alguns segundos.',
   })
 }

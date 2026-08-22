@@ -123,6 +123,9 @@ export async function POST(req: NextRequest) {
   }
 
   let liveState: 'open' | 'connecting' | 'close' | 'unknown' = 'unknown'
+  // QR devolvido pelo proprio /instance/create — fonte mais confiavel que o
+  // GET /instance/connect, que as vezes responde 200 sem base64 (ago/2026).
+  let createdQr: string | null = null
 
   if (probe.data.exists) {
     // 2a) Existe -> só (re)setar webhook
@@ -145,6 +148,7 @@ export async function POST(req: NextRequest) {
         { status: 502 },
       )
     }
+    createdQr = created.data?.qrcode?.base64 ?? null
     // Configurar webhook na instância recém-criada
     const wh = await setInstanceWebhook({ instanceName, webhookUrl })
     if (!wh.ok) {
@@ -167,6 +171,10 @@ export async function POST(req: NextRequest) {
       instance_name: instanceName,
       webhook_token: webhookToken,
       status,
+      qr_code: createdQr,
+      qr_expires_at: createdQr
+        ? new Date(Date.now() + 50_000).toISOString()
+        : null,
       is_default: isFirst,
       label,
       assigned_to: assignedTo,
@@ -182,12 +190,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
   } else {
+    const updates: Record<string, unknown> = {
+      status,
+      last_event_at: new Date().toISOString(),
+    }
+    if (createdQr) {
+      updates.qr_code = createdQr
+      updates.qr_expires_at = new Date(Date.now() + 50_000).toISOString()
+    }
     await svc
       .from('clinic_whatsapp')
-      .update({
-        status,
-        last_event_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq('clinic_id', ctx.clinicId)
       .eq('instance_name', instanceName)
   }
@@ -196,6 +209,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     instance_name: instanceName,
     status,
+    qr_code: createdQr,
   })
 }
 
