@@ -179,7 +179,7 @@ export default async function FinanceiroPage({
             <p className="text-xs text-violet-600 font-medium mt-1">Mostrando apenas os seus atendimentos</p>
           )}
         </div>
-        <div className="flex flex-col md:items-end gap-2">
+        <div className="flex flex-col items-stretch gap-2">
           {!isOwnScope && (
             <RentabilidadeFiltro mesAtual={mesFiltro || mesAtualStr} iniAtual={sp.ini} fimAtual={sp.fim} />
           )}
