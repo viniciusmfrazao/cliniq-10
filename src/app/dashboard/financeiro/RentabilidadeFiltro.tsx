@@ -2,6 +2,9 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useState } from 'react'
+import Icon from '@/components/ui/Icon'
+
+const MESES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
 function ultimosMeses(n: number) {
   const out: { value: string; label: string }[] = []
@@ -13,6 +16,18 @@ function ultimosMeses(n: number) {
     out.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) })
   }
   return out
+}
+
+function mesLabelCurto(mes: string) {
+  const [y, m] = mes.split('-').map(Number)
+  if (!y || !m) return mes
+  return `${MESES_CURTO[m - 1]}/${y}`
+}
+
+function somaMes(mes: string, delta: number) {
+  const [y, m] = mes.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 export default function RentabilidadeFiltro({
@@ -50,47 +65,76 @@ export default function RentabilidadeFiltro({
     router.push(`${pathname}?${params.toString()}`)
   }
 
+  const podeAvancar = mesAtual < meses[0].value
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2 w-full">
       {!showCustom && (
-        <select
-          value={mesAtual}
-          onChange={(e) => applyMonth(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white font-medium text-slate-700"
-        >
-          {meses.map((m) => (
-            <option key={m.value} value={m.value}>{m.label}</option>
-          ))}
-        </select>
+        <div className="flex-1 min-w-0 flex items-center h-11 bg-white border border-slate-200 rounded-full shadow-sm">
+          <button
+            type="button"
+            onClick={() => applyMonth(somaMes(mesAtual, -1))}
+            className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition"
+            aria-label="Mês anterior"
+          >
+            <Icon name="chevronLeft" className="w-4 h-4" />
+          </button>
+
+          <div className="relative flex-1 min-w-0 flex items-center justify-center gap-1.5 px-1">
+            <Icon name="calendar" className="w-4 h-4 text-violet-400 pointer-events-none flex-shrink-0" />
+            <select
+              value={mesAtual}
+              onChange={(e) => applyMonth(e.target.value)}
+              className="appearance-none bg-transparent text-sm font-semibold text-slate-700 focus:outline-none cursor-pointer capitalize truncate"
+            >
+              {meses.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => podeAvancar && applyMonth(somaMes(mesAtual, 1))}
+            disabled={!podeAvancar}
+            className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full text-slate-400 hover:text-violet-600 hover:bg-violet-50 disabled:opacity-0 disabled:pointer-events-none transition"
+            aria-label="Próximo mês"
+          >
+            <Icon name="chevronRight" className="w-4 h-4" />
+          </button>
+        </div>
       )}
+
       {showCustom && (
-        <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex flex-wrap items-center h-11 gap-2 bg-white border border-slate-200 rounded-full shadow-sm px-4">
+          <Icon name="calendar" className="w-4 h-4 text-violet-400 flex-shrink-0" />
           <input
             type="date"
             value={ini}
             onChange={(e) => setIni(e.target.value)}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white"
+            className="text-sm text-slate-700 bg-transparent focus:outline-none min-w-0"
           />
-          <span className="text-slate-400 text-sm">até</span>
+          <span className="text-slate-300 text-sm">→</span>
           <input
             type="date"
             value={fim}
             onChange={(e) => setFim(e.target.value)}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white"
+            className="text-sm text-slate-700 bg-transparent focus:outline-none min-w-0"
           />
           <button
             onClick={applyCustom}
-            className="text-sm bg-violet-600 text-white px-3 py-2 rounded-lg font-semibold hover:bg-violet-700 transition"
+            className="text-xs bg-violet-600 text-white px-3 py-1.5 rounded-full font-semibold hover:bg-violet-700 transition flex-shrink-0"
           >
             Aplicar
           </button>
         </div>
       )}
+
       <button
         onClick={() => setShowCustom(!showCustom)}
-        className="text-sm text-violet-600 font-medium hover:underline"
+        className="flex-shrink-0 text-xs text-violet-600 font-medium hover:underline whitespace-nowrap"
       >
-        {showCustom ? 'Usar filtro de mês' : 'Período personalizado'}
+        {showCustom ? `Voltar pra ${mesLabelCurto(mesAtual)}` : 'Período personalizado'}
       </button>
     </div>
   )
