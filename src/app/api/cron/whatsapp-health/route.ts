@@ -30,6 +30,11 @@ type Row = {
   health_reason: string | null
   role_inbound: boolean | null
   role_outbound_automation: boolean | null
+  disconnect_whatsapp_sent_at: string | null
+}
+
+type PendingWhatsappAlert = {
+  clinicId: string
 }
 
 const STALE_HOURS = 24
@@ -51,7 +56,7 @@ export async function GET(req: NextRequest) {
   // So checa quem ja foi configurado (status diferente de pending e tem instance_name)
   const { data: rows, error } = await svc
     .from('clinic_whatsapp')
-    .select('id, clinic_id, instance_name, webhook_token, status, phone_number, last_event_at, health_warning, health_reason, role_inbound, role_outbound_automation')
+    .select('id, clinic_id, instance_name, webhook_token, status, phone_number, last_event_at, health_warning, health_reason, role_inbound, role_outbound_automation, disconnect_whatsapp_sent_at')
     .not('instance_name', 'is', null)
     .in('status', ['connected', 'qr_pending', 'disconnected', 'error'])
 
@@ -70,8 +75,12 @@ export async function GET(req: NextRequest) {
     webhook_drift_fixed: 0,
     webhook_drift_failed: 0,
     skipped: 0,
+    whatsapp_alerts_sent: 0,
+    whatsapp_alerts_failed: 0,
     errors: [] as Array<{ clinic_id: string; error: string }>,
   }
+
+  const pendingWhatsappAlerts: PendingWhatsappAlert[] = []
 
   const nowMs = Date.now()
 
@@ -231,6 +240,23 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    // ---------------------------------------------------------------
+    // Etapa 3.5: aviso de desconexao via WhatsApp pra propria clinica.
+    // Dispara 1x por episodio de queda (trava: disconnect_whatsapp_sent_at,
+    // zerada na reconexao). Sem delay extra aqui — nextStatus so vira
+    // 'disconnected' depois do debounce anti-flapping ja feito na Etapa 2.
+    // ---------------------------------------------------------------
+    let nextWhatsappSentAt: string | null | undefined
+
+    if (nextStatus === 'disconnected') {
+      if (!r.disconnect_whatsapp_sent_at) {
+        pendingWhatsappAlerts.push({ clinicId: r.clinic_id })
+        nextWhatsappSentAt = new Date(nowMs).toISOString()
+      }
+    } else if (nextStatus === 'connected' && r.disconnect_whatsapp_sent_at) {
+      nextWhatsappSentAt = null
+    }
+
     const updatePayload: Record<string, unknown> = {
       status: nextStatus,
       health_warning: nextWarning,
@@ -241,6 +267,7 @@ export async function GET(req: NextRequest) {
     if (webhookExpected !== null) updatePayload.webhook_expected_url = webhookExpected
     if (webhookFixed) updatePayload.webhook_last_fixed_at = new Date().toISOString()
     if (nextPhoneNumber) updatePayload.phone_number = nextPhoneNumber
+    if (nextWhatsappSentAt !== undefined) updatePayload.disconnect_whatsapp_sent_at = nextWhatsappSentAt
 
     const { error: errUpd } = await svc
       .from('clinic_whatsapp')
@@ -249,6 +276,77 @@ export async function GET(req: NextRequest) {
 
     if (errUpd) {
       summary.errors.push({ clinic_id: r.clinic_id, error: `update: ${errUpd.message}` })
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // Etapa 4: envio dos avisos de desconexao via WhatsApp — manda pro
+  // telefone da propria clinica, pela instancia admin (clinike_billing_instance),
+  // ja que a instancia da clinica esta caida. So dispara na queda, nunca na
+  // reconexao (o banner do painel ja mostra o status atual).
+  // -------------------------------------------------------------------
+  if (pendingWhatsappAlerts.length > 0) {
+    try {
+      const clinicIds = Array.from(new Set(pendingWhatsappAlerts.map((a) => a.clinicId)))
+
+      const [{ data: clinicRows }, { data: settingsRows }] = await Promise.all([
+        svc
+          .from('clinics')
+          .select('id, name, clinic_phone')
+          .in('id', clinicIds)
+          .is('deleted_at', null),
+        svc
+          .from('app_settings')
+          .select('key, value')
+          .in('key', ['evolution_url', 'evolution_master_key', 'clinike_billing_instance']),
+      ])
+
+      const cfg: Record<string, string> = {}
+      for (const s of (settingsRows as Array<{ key: string; value: string }> | null) ?? []) {
+        cfg[s.key] = s.value
+      }
+      const evUrl = cfg['evolution_url'] || 'https://evolution-api-production-7853.up.railway.app'
+      const evKey = cfg['evolution_master_key'] || ''
+      const instance = cfg['clinike_billing_instance'] || ''
+
+      if (!instance) {
+        summary.whatsapp_alerts_failed += clinicIds.length
+        console.error('[cron/whatsapp-health] clinike_billing_instance nao configurada, pulando avisos WhatsApp')
+      } else {
+        const clinics = (clinicRows as Array<{ id: string; name: string; clinic_phone: string | null }> | null) ?? []
+
+        const jobs = clinics.map(async (c) => {
+          if (!c.clinic_phone) return
+          const phone = String(c.clinic_phone).replace(/\D/g, '')
+          const phoneFmt = phone.startsWith('55') ? phone : `55${phone}`
+          const texto =
+            `⚠️ Seu WhatsApp da Clinike foi desconectado. ` +
+            `Reconecte para que os lembretes e automações voltem a funcionar.`
+
+          const resp = await fetch(`${evUrl}/message/sendText/${instance}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: evKey },
+            body: JSON.stringify({ number: phoneFmt, text: texto }),
+          })
+          if (!resp.ok) {
+            const err = await resp.text()
+            throw new Error(`Evolution API: ${err.slice(0, 200)}`)
+          }
+        })
+
+        const results = await Promise.allSettled(jobs)
+        for (const res of results) {
+          if (res.status === 'fulfilled') {
+            summary.whatsapp_alerts_sent++
+          } else {
+            summary.whatsapp_alerts_failed++
+            console.error('[cron/whatsapp-health] falha ao enviar aviso WhatsApp:', res.reason)
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[cron/whatsapp-health] bloco de avisos WhatsApp falhou:', e)
+      summary.whatsapp_alerts_failed += pendingWhatsappAlerts.length
     }
   }
 
